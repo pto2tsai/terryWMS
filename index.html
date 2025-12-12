@@ -1017,6 +1017,9 @@
                         <p class="text-blue-200 text-xs mt-1">產生調度工單，指導現場人員執行庫存整理</p>
                     </div>
                     <div class="flex gap-2">
+                        <button onclick="publishDispatchToMobile()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-bold text-sm">
+                            <i class="fa-solid fa-mobile-screen mr-1"></i>發布到手機
+                        </button>
                         <button onclick="openDispatchExecuteModal()" class="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-bold text-sm">
                             <i class="fa-solid fa-play mr-1"></i>執行工單
                         </button>
@@ -5356,6 +5359,96 @@
         };
         
         // 列印全部調度工單
+        // ========== 發布調度工單到手機 ==========
+        window.publishDispatchToMobile = async function() {
+            if (!window._dispatchAnalysis || window._dispatchAnalysis.length === 0) {
+                alert('目前沒有調度工單可發布\n\n請先等待系統分析完成');
+                return;
+            }
+            
+            var items = window._dispatchAnalysis;
+            var totalOps = 0;
+            items.forEach(function(item) {
+                if (item.partialMerges) {
+                    item.partialMerges.forEach(function(g) { totalOps += g.sources.length; });
+                }
+                if (item.isolatedMoves) totalOps += item.isolatedMoves.length;
+            });
+            
+            if (!confirm('確定要發布 ' + items.length + ' 個調度工單到手機？\n\n共 ' + totalOps + ' 項操作\n\n發布後，堆高機手的手機會立即收到通知')) {
+                return;
+            }
+            
+            var successCount = 0;
+            var timestamp = new Date().toISOString();
+            var batchNo = 'DSP-' + Date.now().toString().slice(-8);
+            
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
+                var operations = [];
+                var opIndex = 0;
+                
+                // 合併操作
+                if (item.partialMerges) {
+                    item.partialMerges.forEach(function(group) {
+                        group.sources.forEach(function(src) {
+                            operations.push({
+                                id: 'op-' + opIndex++,
+                                type: '合併',
+                                from: src.location,
+                                palletId: src.palletId || '',
+                                qty: src.qty,
+                                to: group.keep.location
+                            });
+                        });
+                    });
+                }
+                
+                // 移位操作
+                if (item.isolatedMoves) {
+                    item.isolatedMoves.forEach(function(m) {
+                        operations.push({
+                            id: 'op-' + opIndex++,
+                            type: '移位',
+                            from: m.from,
+                            palletId: m.palletId || '',
+                            qty: m.qty,
+                            to: m.toSlot,
+                            reason: m.reason
+                        });
+                    });
+                }
+                
+                if (operations.length === 0) continue;
+                
+                var order = {
+                    orderNo: batchNo + '-' + String(i + 1).padStart(3, '0'),
+                    batchNo: batchNo,
+                    productName: item.name,
+                    spec: item.spec || '',
+                    operations: operations,
+                    totalOps: operations.length,
+                    completedOps: [],
+                    status: 'pending',
+                    createdAt: timestamp,
+                    createdBy: window.getOperatorName ? window.getOperatorName() : 'system'
+                };
+                
+                try {
+                    await window.addDoc(window.collection(window.db, 'dispatchOrders'), order);
+                    successCount++;
+                } catch (err) {
+                    console.error('發布工單失敗:', err);
+                }
+            }
+            
+            if (successCount > 0) {
+                alert('✅ 已發布 ' + successCount + ' 個調度工單到手機！\n\n批次編號：' + batchNo + '\n\n📱 堆高機手的手機會收到通知');
+            } else {
+                alert('❌ 發布失敗，請檢查網路連線');
+            }
+        };
+        
         window.printAllDispatchOrders = function() {
             if (!window._dispatchAnalysis) {
                 alert('請先執行調度分析（點擊「重新分析」按鈕）');
