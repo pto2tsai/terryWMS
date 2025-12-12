@@ -266,7 +266,7 @@
             <i class="fa-solid fa-cube text-blue-500 text-xl mr-2"></i>
             <div>
                 <span class="font-black text-lg text-white tracking-wide">TERRY WMS</span>
-                <span class="text-[10px] text-slate-500 ml-1">v9.1.0</span>
+                <span class="text-[10px] text-slate-500 ml-1">v9.2.0</span>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-1" id="main-nav">
@@ -341,7 +341,7 @@
         </nav>
         <!-- 版本資訊 -->
         <div class="p-3 border-t border-slate-800 text-center">
-            <div class="text-[10px] text-slate-600">Version 9.1.0 | 2024-12-12</div>
+            <div class="text-[10px] text-slate-600">Version 9.2.0 | 2024-12-12</div>
         </div>
     </aside>
 
@@ -4654,7 +4654,7 @@
         };
         
         // 確認並生成正式調度單
-        window.confirmAndGenerate = function() {
+        window.confirmAndGenerate = async function() {
             if (!window.currentPreviewData) return;
             
             var previewData = window.currentPreviewData;
@@ -4665,10 +4665,29 @@
                 productName: previewData.productName,
                 createdAt: previewData.createdAt,
                 tasks: previewData.tasks,
+                operations: previewData.tasks.map(function(t, idx) {
+                    return {
+                        id: 'op-' + idx,
+                        type: t.toLane ? '合併' : '移位',
+                        from: t.fromLocation,
+                        palletId: t.fromPalletId,
+                        to: t.toLocation,
+                        qty: t.quantity
+                    };
+                }),
                 totalTasks: previewData.tasks.length,
                 completedTasks: 0,
-                status: 'active'
+                completedOps: [],
+                status: 'pending',
+                createdBy: window.getOperatorName ? window.getOperatorName() : 'system'
             };
+            
+            // 存到 Firebase
+            try {
+                await window.addDoc(window.collection(window.db, 'dispatchOrders'), order);
+            } catch (err) {
+                console.error('存到 Firebase 失敗:', err);
+            }
             
             // 保存到全局
             if (!window.dispatchOrders) window.dispatchOrders = [];
@@ -4679,7 +4698,7 @@
             
             // 顯示成功訊息並展示調度單
             setTimeout(function() {
-                alert('✅ 調度單已生成！\n\n編號：' + order.orderNo + '\n任務數：' + order.totalTasks + ' 項\n\n司機 PDA 將收到通知');
+                alert('✅ 調度單已生成！\n\n編號：' + order.orderNo + '\n任務數：' + order.totalTasks + ' 項\n\n📱 手機版已同步，堆高機手可立即執行');
                 showDispatchOrder(order);
             }, 300);
         };
@@ -6056,7 +6075,7 @@
         }
         
         // 建立波次
-        window.createWave = function() {
+        window.createWave = async function() {
             var selectedIds = [];
             document.querySelectorAll('.wave-order-check:checked').forEach(function(cb) {
                 selectedIds.push(cb.dataset.id);
@@ -6096,18 +6115,37 @@
                 createdBy: window.getOperatorName ? window.getOperatorName() : 'system'
             };
             
+            // 存到 Firebase
+            try {
+                await window.addDoc(window.collection(window.db, 'waves'), wave);
+            } catch (err) {
+                console.error('存到 Firebase 失敗:', err);
+            }
+            
+            // 也存到 localStorage（備用）
             window._waveData.waves.push(wave);
             saveWaves();
             
             closeCreateWaveModal();
             refreshWaveList();
             
-            alert('✅ 波次 ' + wave.waveNo + ' 建立成功！\n\n包含 ' + itemCount + ' 筆訂單，共 ' + totalQty + ' 件');
+            alert('✅ 波次 ' + wave.waveNo + ' 建立成功！\n\n包含 ' + itemCount + ' 筆訂單，共 ' + totalQty + ' 件\n\n📱 手機版已同步');
         };
         
         // 刪除波次
-        window.deleteWave = function(waveNo) {
+        window.deleteWave = async function(waveNo) {
             if (!confirm('確定要刪除波次 ' + waveNo + '？')) return;
+            
+            // 從 Firebase 刪除
+            try {
+                var q = window.query(window.collection(window.db, 'waves'), window.where('waveNo', '==', waveNo));
+                var snap = await window.getDocs(q);
+                snap.forEach(async function(doc) {
+                    await window.deleteDoc(doc.ref);
+                });
+            } catch (err) {
+                console.error('Firebase 刪除失敗:', err);
+            }
             
             window._waveData.waves = window._waveData.waves.filter(function(w) { return w.waveNo !== waveNo; });
             saveWaves();
@@ -9217,10 +9255,13 @@
                     expiryWarningText = '\n\n⚠️ 效期較短，已記錄';
                 }
                 
+                // 同時發布入庫任務到手機版
+                await window.publishInboundTask(order);
+                
                 if (needsApproval) {
-                    alert('✅ 入庫單建立成功！\n單號：' + docNo + '\n儲位：' + loc + expiryWarningText + '\n\n⚠️ 採購進貨已通知財務審核\n請列印指令單交給堆高機手執行');
+                    alert('✅ 入庫單建立成功！\n單號：' + docNo + '\n儲位：' + loc + expiryWarningText + '\n\n⚠️ 採購進貨已通知財務審核\n📱 堆高機手機已收到任務通知');
                 } else {
-                    alert('✅ 入庫單建立成功！\n單號：' + docNo + '\n儲位：' + loc + expiryWarningText + '\n\n請列印指令單交給堆高機手執行');
+                    alert('✅ 入庫單建立成功！\n單號：' + docNo + '\n儲位：' + loc + expiryWarningText + '\n\n📱 堆高機手機已收到任務通知');
                 }
                 
                 clearInboundForm();
@@ -9990,6 +10031,7 @@
                     vendor: order.vendor || '',
                     source: 'Inbound',
                     inboundDate: new Date().toISOString(),
+                    createdAt: new Date().toISOString(),
                     status: 'Available'
                 });
                 
@@ -10028,6 +10070,28 @@
                 return false;
             }
         }
+        
+        // 發布入庫任務到手機版（堆高機確認用）
+        window.publishInboundTask = async function(order) {
+            try {
+                await window.addDoc(window.collection(window.db, 'inboundTasks'), {
+                    orderNo: order.docNo,
+                    palletId: order.docNo,
+                    productName: order.productName,
+                    spec: order.spec || '',
+                    batchNo: order.batchNo || '',
+                    quantity: order.quantity,
+                    locationId: order.locationId,
+                    status: 'pending',
+                    createdAt: new Date().toISOString(),
+                    createdBy: window.getOperatorName ? window.getOperatorName() : 'system'
+                });
+                return true;
+            } catch (err) {
+                console.error('發布入庫任務失敗:', err);
+                return false;
+            }
+        };
         
         // 初始化時更新待執行數量
         setTimeout(function() { updatePendingInboundCount(); }, 2000);
