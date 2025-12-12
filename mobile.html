@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
+    <title>Terry WMS 手機版</title>
+    <link rel="manifest" href="data:application/json,{'name':'Terry WMS','short_name':'WMS','start_url':'.','display':'standalone','background_color':'%230f172a','theme_color':'%230f172a'}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* 登入頁 */
+        .login-page {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+        }
+        .login-logo { font-size: 48px; color: #3b82f6; margin-bottom: 10px; }
+        .login-title { font-size: 28px; font-weight: bold; margin-bottom: 5px; }
+        .login-subtitle { color: #64748b; font-size: 14px; margin-bottom: 30px; }
+        .login-box {
+            width: 100%;
+            max-width: 320px;
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 24px;
+        }
+        .login-input {
+            width: 100%;
+            padding: 14px 16px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+        .login-input:focus { outline: none; border-color: #3b82f6; }
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: #3b82f6;
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .login-btn:active { background: #2563eb; }
+        .login-error { color: #f87171; font-size: 14px; margin-bottom: 12px; display: none; }
+        
+        /* 主頁面 */
+        .app-container { display: none; min-height: 100vh; flex-direction: column; }
+        .app-container.active { display: flex; }
+        
+        /* 頂部 */
+        .app-header {
+            background: #1e293b;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #334155;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .app-logo { display: flex; align-items: center; gap: 8px; }
+        .app-logo i { color: #3b82f6; font-size: 20px; }
+        .app-logo span { font-weight: bold; font-size: 16px; }
+        .user-info { display: flex; align-items: center; gap: 8px; }
+        .user-name { font-size: 12px; color: #94a3b8; }
+        .logout-btn {
+            background: rgba(239, 68, 68, 0.2);
+            border: none;
+            color: #f87171;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        
+        /* 主選單 */
+        .main-menu {
+            flex: 1;
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .menu-card {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border: 1px solid #475569;
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .menu-card:active {
+            transform: scale(0.98);
+        }
+        .menu-card.picking { border-color: #3b82f6; }
+        .menu-card.inbound { border-color: #10b981; }
+        .menu-card.dispatch { border-color: #f59e0b; }
+        .menu-card.query { border-color: #8b5cf6; }
+        
+        .menu-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        .menu-card.picking .menu-icon { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        .menu-card.inbound .menu-icon { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .menu-card.dispatch .menu-icon { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .menu-card.query .menu-icon { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; }
+        
+        .menu-text h3 { font-size: 18px; margin-bottom: 4px; }
+        .menu-text p { font-size: 13px; color: #94a3b8; }
+        .menu-arrow { margin-left: auto; color: #475569; font-size: 20px; }
+        
+        /* 功能頁面 */
+        .func-page {
+            display: none;
+            flex-direction: column;
+            min-height: 100vh;
+            background: #0f172a;
+        }
+        .func-page.active { display: flex; }
+        
+        .func-header {
+            background: #1e293b;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid #334155;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .back-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 20px;
+            padding: 8px;
+            cursor: pointer;
+        }
+        .func-title { font-size: 18px; font-weight: bold; }
+        
+        /* 掃描區 */
+        .scan-section {
+            background: linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%);
+            padding: 20px 16px;
+            text-align: center;
+        }
+        .scan-input-wrap {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .scan-input {
+            flex: 1;
+            padding: 14px 16px;
+            background: #0f172a;
+            border: 2px solid #3b82f6;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 18px;
+            text-align: center;
+        }
+        .scan-input:focus { outline: none; border-color: #60a5fa; }
+        .scan-btn {
+            padding: 14px 20px;
+            background: #3b82f6;
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+        }
+        .scan-btn:active { background: #2563eb; }
+        .scan-hint { color: #64748b; font-size: 13px; }
+        .scan-result {
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+        .scan-result.success { display: block; background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .scan-result.error { display: block; background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        
+        /* 清單區 */
+        .list-section {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .list-header h4 { font-size: 16px; color: #94a3b8; }
+        .list-progress { font-size: 14px; color: #10b981; font-weight: bold; }
+        
+        .list-item {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 10px;
+        }
+        .list-item.completed { border-color: #10b981; background: rgba(16, 185, 129, 0.1); }
+        .list-item.shortage { border-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+        
+        .item-row { display: flex; justify-content: space-between; align-items: center; }
+        .item-location { font-size: 20px; font-weight: bold; color: #3b82f6; font-family: monospace; }
+        .item-status { font-size: 12px; padding: 4px 8px; border-radius: 6px; }
+        .item-status.pending { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .item-status.done { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .item-status.shortage { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        
+        .item-product { font-size: 15px; color: #fff; margin: 8px 0 4px; }
+        .item-detail { font-size: 13px; color: #64748b; }
+        .item-qty { font-size: 24px; font-weight: bold; color: #fbbf24; text-align: right; }
+        
+        /* 選擇器 */
+        .selector-section { padding: 16px; }
+        .selector-label { font-size: 14px; color: #94a3b8; margin-bottom: 8px; }
+        .selector-input {
+            width: 100%;
+            padding: 14px 16px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+        }
+        
+        /* 庫存查詢結果 */
+        .query-result {
+            padding: 16px;
+        }
+        .result-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .result-product { font-size: 18px; font-weight: bold; margin-bottom: 8px; }
+        .result-spec { font-size: 14px; color: #64748b; margin-bottom: 12px; }
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-top: 1px solid #334155;
+        }
+        .result-loc { font-family: monospace; color: #3b82f6; font-weight: bold; }
+        .result-qty { color: #fbbf24; font-weight: bold; }
+        
+        /* 底部操作 */
+        .bottom-actions {
+            padding: 16px;
+            background: #1e293b;
+            border-top: 1px solid #334155;
+        }
+        .action-btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        .action-btn:last-child { margin-bottom: 0; }
+        .action-btn.primary { background: #3b82f6; color: #fff; }
+        .action-btn.success { background: #10b981; color: #fff; }
+        .action-btn.secondary { background: #334155; color: #fff; }
+        .action-btn:active { opacity: 0.8; }
+        
+        /* 空狀態 */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+        .empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        .empty-state p { font-size: 14px; }
+        
+        /* 載入中 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+        .loading i { font-size: 32px; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* 隱藏 */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <!-- 登入頁 -->
+    <div id="login-page" class="login-page">
+        <i class="fa-solid fa-warehouse login-logo"></i>
+        <h1 class="login-title">Terry WMS</h1>
+        <p class="login-subtitle">倉儲管理系統 - 手機版</p>
+        <div class="login-box">
+            <input type="email" id="login-email" class="login-input" placeholder="Email" value="admin@bafang.com">
+            <input type="password" id="login-pwd" class="login-input" placeholder="密碼" value="123456">
+            <div id="login-error" class="login-error"></div>
+            <button onclick="doLogin()" class="login-btn">
+                <i class="fa-solid fa-right-to-bracket"></i> 登入
+            </button>
+        </div>
+    </div>
+    
+    <!-- 主頁面 -->
+    <div id="app-main" class="app-container">
+        <header class="app-header">
+            <div class="app-logo">
+                <i class="fa-solid fa-warehouse"></i>
+                <span>Terry WMS</span>
+            </div>
+            <div class="user-info">
+                <span class="user-name" id="display-user">-</span>
+                <button onclick="doLogout()" class="logout-btn">
+                    <i class="fa-solid fa-power-off"></i>
+                </button>
+            </div>
+        </header>
+        
+        <div class="main-menu">
+            <div class="menu-card picking" onclick="openPage('picking')">
+                <div class="menu-icon"><i class="fa-solid fa-barcode"></i></div>
+                <div class="menu-text">
+                    <h3>揀貨掃描</h3>
+                    <p>波次揀貨確認</p>
+                </div>
+                <i class="fa-solid fa-chevron-right menu-arrow"></i>
+            </div>
+            
+            <div class="menu-card inbound" onclick="openPage('inbound')">
+                <div class="menu-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+                <div class="menu-text">
+                    <h3>入庫確認</h3>
+                    <p>掃描板號確認入庫</p>
+                </div>
+                <i class="fa-solid fa-chevron-right menu-arrow"></i>
+            </div>
+            
+            <div class="menu-card dispatch" onclick="openPage('dispatch')">
+                <div class="menu-icon"><i class="fa-solid fa-truck-moving"></i></div>
+                <div class="menu-text">
+                    <h3>調度執行</h3>
+                    <p>移位/合併作業</p>
+                </div>
+                <i class="fa-solid fa-chevron-right menu-arrow"></i>
+            </div>
+            
+            <div class="menu-card query" onclick="openPage('query')">
+                <div class="menu-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
+                <div class="menu-text">
+                    <h3>庫存快查</h3>
+                    <p>查詢品項位置</p>
+                </div>
+                <i class="fa-solid fa-chevron-right menu-arrow"></i>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 揀貨掃描頁 -->
+    <div id="page-picking" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">揀貨掃描</span>
+        </header>
+        
+        <div class="selector-section">
+            <div class="selector-label">選擇波次</div>
+            <select id="picking-wave-select" class="selector-input" onchange="loadPickingWave()">
+                <option value="">-- 請選擇 --</option>
+            </select>
+        </div>
+        
+        <div class="scan-section" id="picking-scan-area" style="display:none">
+            <div class="scan-input-wrap">
+                <input type="text" id="picking-scan" class="scan-input" placeholder="掃描儲位或板號">
+                <button class="scan-btn" onclick="confirmPickingScan()"><i class="fa-solid fa-check"></i></button>
+            </div>
+            <p class="scan-hint">掃描後自動確認揀貨</p>
+            <div id="picking-scan-result" class="scan-result"></div>
+        </div>
+        
+        <div class="list-section" id="picking-list-area">
+            <div class="list-header">
+                <h4>揀貨清單</h4>
+                <span class="list-progress" id="picking-progress">0/0</span>
+            </div>
+            <div id="picking-list">
+                <div class="empty-state">
+                    <i class="fa-solid fa-clipboard-list"></i>
+                    <p>請先選擇波次</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bottom-actions" id="picking-actions" style="display:none">
+            <button class="action-btn success" onclick="completePickingWave()">
+                <i class="fa-solid fa-flag-checkered"></i> 完成波次
+            </button>
+        </div>
+    </div>
+    
+    <!-- 入庫確認頁 -->
+    <div id="page-inbound" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">入庫確認</span>
+        </header>
+        
+        <div class="scan-section">
+            <div class="scan-input-wrap">
+                <input type="text" id="inbound-scan" class="scan-input" placeholder="掃描入庫板號">
+                <button class="scan-btn" onclick="confirmInboundScan()"><i class="fa-solid fa-check"></i></button>
+            </div>
+            <p class="scan-hint">掃描板號確認實際入庫</p>
+            <div id="inbound-scan-result" class="scan-result"></div>
+        </div>
+        
+        <div class="list-section">
+            <div class="list-header">
+                <h4>今日入庫記錄</h4>
+                <span class="list-progress" id="inbound-count">0 筆</span>
+            </div>
+            <div id="inbound-list">
+                <div class="loading"><i class="fa-solid fa-spinner"></i></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 調度執行頁 -->
+    <div id="page-dispatch" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">調度執行</span>
+        </header>
+        
+        <div class="selector-section">
+            <div class="selector-label">選擇工單</div>
+            <select id="dispatch-order-select" class="selector-input" onchange="loadDispatchOrder()">
+                <option value="">-- 請選擇 --</option>
+            </select>
+        </div>
+        
+        <div class="scan-section" id="dispatch-scan-area" style="display:none">
+            <div class="scan-input-wrap">
+                <input type="text" id="dispatch-scan" class="scan-input" placeholder="掃描板號確認">
+                <button class="scan-btn" onclick="confirmDispatchScan()"><i class="fa-solid fa-check"></i></button>
+            </div>
+            <p class="scan-hint">掃描板號確認執行</p>
+            <div id="dispatch-scan-result" class="scan-result"></div>
+        </div>
+        
+        <div class="list-section" id="dispatch-list-area">
+            <div class="list-header">
+                <h4>調度清單</h4>
+                <span class="list-progress" id="dispatch-progress">0/0</span>
+            </div>
+            <div id="dispatch-list">
+                <div class="empty-state">
+                    <i class="fa-solid fa-clipboard-list"></i>
+                    <p>請先選擇工單</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bottom-actions" id="dispatch-actions" style="display:none">
+            <button class="action-btn success" onclick="completeDispatchOrder()">
+                <i class="fa-solid fa-flag-checkered"></i> 完成工單
+            </button>
+        </div>
+    </div>
+    
+    <!-- 庫存快查頁 -->
+    <div id="page-query" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">庫存快查</span>
+        </header>
+        
+        <div class="scan-section">
+            <div class="scan-input-wrap">
+                <input type="text" id="query-input" class="scan-input" placeholder="輸入品名或板號">
+                <button class="scan-btn" onclick="doInventoryQuery()"><i class="fa-solid fa-search"></i></button>
+            </div>
+            <p class="scan-hint">支援模糊搜尋</p>
+        </div>
+        
+        <div class="query-result" id="query-result">
+            <div class="empty-state">
+                <i class="fa-solid fa-box-open"></i>
+                <p>輸入關鍵字搜尋庫存</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        const firebaseConfig = { 
+            apiKey: "AIzaSyBEWzyRMJQirGbh28ANkE6aN42GzUBuw2s", 
+            authDomain: "terrywms-2345f.firebaseapp.com", 
+            projectId: "terrywms-2345f", 
+            storageBucket: "terrywms-2345f.firebasestorage.app", 
+            messagingSenderId: "75589714942", 
+            appId: "1:75589714942:web:3a7f723c3d1449df78f6af" 
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        window.db = db;
+        window.collection = collection;
+        window.getDocs = getDocs;
+        window.doc = doc;
+        window.updateDoc = updateDoc;
+        window.deleteDoc = deleteDoc;
+        window.query = query;
+        window.where = where;
+        window.orderBy = orderBy;
+        window.onSnapshot = onSnapshot;
+        
+        // 庫存資料
+        window.pallets = [];
+        
+        // 監聽認證狀態
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                document.getElementById('login-page').style.display = 'none';
+                document.getElementById('app-main').classList.add('active');
+                document.getElementById('display-user').innerText = user.email.split('@')[0];
+                initData();
+            } else {
+                document.getElementById('login-page').style.display = 'flex';
+                document.getElementById('app-main').classList.remove('active');
+            }
+        });
+        
+        // 登入
+        window.doLogin = async function() {
+            const email = document.getElementById('login-email').value;
+            const pwd = document.getElementById('login-pwd').value;
+            const errorEl = document.getElementById('login-error');
+            
+            try {
+                errorEl.style.display = 'none';
+                await signInWithEmailAndPassword(auth, email, pwd);
+            } catch (err) {
+                errorEl.style.display = 'block';
+                if (err.code === 'auth/user-not-found') errorEl.innerText = '帳號不存在';
+                else if (err.code === 'auth/wrong-password') errorEl.innerText = '密碼錯誤';
+                else errorEl.innerText = '登入失敗';
+            }
+        };
+        
+        // 登出
+        window.doLogout = function() {
+            signOut(auth);
+        };
+        
+        // 初始化資料
+        function initData() {
+            // 監聽庫存
+            onSnapshot(collection(db, 'pallets'), (snap) => {
+                window.pallets = [];
+                snap.forEach(d => window.pallets.push({ id: d.id, ...d.data() }));
+            });
+        }
+    </script>
+    
+    <script>
+        // 頁面切換
+        function openPage(page) {
+            document.getElementById('app-main').classList.remove('active');
+            document.getElementById('page-' + page).classList.add('active');
+            
+            if (page === 'picking') loadPickingWaves();
+            if (page === 'inbound') loadInboundRecords();
+            if (page === 'dispatch') loadDispatchOrders();
+        }
+        
+        function goBack() {
+            document.querySelectorAll('.func-page').forEach(p => p.classList.remove('active'));
+            document.getElementById('app-main').classList.add('active');
+        }
+        
+        // ========== 揀貨掃描 ==========
+        let currentWave = null;
+        let pickingItems = [];
+        
+        function loadPickingWaves() {
+            const waves = JSON.parse(localStorage.getItem('wms_waves') || '[]');
+            const select = document.getElementById('picking-wave-select');
+            select.innerHTML = '<option value="">-- 請選擇 --</option>';
+            
+            waves.filter(w => w.status !== 'done').forEach(w => {
+                select.innerHTML += `<option value="${w.waveNo}">${w.waveNo} - ${w.logistics} (${w.totalQty}件)</option>`;
+            });
+        }
+        
+        window.loadPickingWave = function() {
+            const waveNo = document.getElementById('picking-wave-select').value;
+            if (!waveNo) {
+                document.getElementById('picking-scan-area').style.display = 'none';
+                document.getElementById('picking-actions').style.display = 'none';
+                return;
+            }
+            
+            const waves = JSON.parse(localStorage.getItem('wms_waves') || '[]');
+            currentWave = waves.find(w => w.waveNo === waveNo);
+            if (!currentWave) return;
+            
+            // 產生揀貨清單
+            pickingItems = [];
+            (currentWave.orders || []).forEach(order => {
+                let needed = parseInt(order.quantity) || 0;
+                const matching = window.pallets.filter(p => p.productName === order.productName)
+                    .sort((a, b) => (a.expDate || '').localeCompare(b.expDate || ''));
+                
+                matching.forEach(p => {
+                    if (needed <= 0) return;
+                    const pick = Math.min(p.quantity, needed);
+                    pickingItems.push({
+                        id: p.palletId + '-' + order.id,
+                        palletId: p.palletId,
+                        locationId: p.locationId,
+                        productName: p.productName,
+                        pickQty: pick,
+                        orderNo: order.orderNo,
+                        customer: order.customer,
+                        completed: false
+                    });
+                    needed -= pick;
+                });
+                
+                if (needed > 0) {
+                    pickingItems.push({
+                        id: 'shortage-' + order.id,
+                        locationId: '庫存不足',
+                        productName: order.productName,
+                        pickQty: needed,
+                        shortage: true
+                    });
+                }
+            });
+            
+            // 標記已完成
+            const completed = currentWave.completedItems || [];
+            pickingItems.forEach(item => {
+                if (completed.includes(item.id)) item.completed = true;
+            });
+            
+            renderPickingList();
+            document.getElementById('picking-scan-area').style.display = 'block';
+            document.getElementById('picking-actions').style.display = 'block';
+            document.getElementById('picking-scan').focus();
+        };
+        
+        function renderPickingList() {
+            const list = document.getElementById('picking-list');
+            const completed = pickingItems.filter(i => i.completed).length;
+            const total = pickingItems.filter(i => !i.shortage).length;
+            document.getElementById('picking-progress').innerText = completed + '/' + total;
+            
+            if (pickingItems.length === 0) {
+                list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-clipboard-list"></i><p>無揀貨項目</p></div>';
+                return;
+            }
+            
+            // 按儲位排序
+            pickingItems.sort((a, b) => (a.locationId || '').localeCompare(b.locationId || ''));
+            
+            list.innerHTML = pickingItems.map(item => {
+                const cls = item.completed ? 'completed' : item.shortage ? 'shortage' : '';
+                const status = item.completed ? '<span class="item-status done">✓ 完成</span>' :
+                              item.shortage ? '<span class="item-status shortage">缺貨</span>' :
+                              '<span class="item-status pending">待揀</span>';
+                return `
+                    <div class="list-item ${cls}">
+                        <div class="item-row">
+                            <span class="item-location">${item.locationId}</span>
+                            ${status}
+                        </div>
+                        <div class="item-product">${item.productName}</div>
+                        <div class="item-row">
+                            <span class="item-detail">${item.palletId || '-'} | ${item.customer || ''}</span>
+                            <span class="item-qty">${item.pickQty}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        window.confirmPickingScan = function() {
+            const input = document.getElementById('picking-scan');
+            const result = document.getElementById('picking-scan-result');
+            const scanned = input.value.trim();
+            
+            if (!scanned) return;
+            
+            const found = pickingItems.find(i => !i.completed && !i.shortage && 
+                (i.palletId === scanned || i.locationId === scanned));
+            
+            if (!found) {
+                result.className = 'scan-result error';
+                result.innerText = '❌ 找不到：' + scanned;
+                input.select();
+                return;
+            }
+            
+            found.completed = true;
+            
+            // 儲存進度
+            if (!currentWave.completedItems) currentWave.completedItems = [];
+            currentWave.completedItems.push(found.id);
+            const waves = JSON.parse(localStorage.getItem('wms_waves') || '[]');
+            const idx = waves.findIndex(w => w.waveNo === currentWave.waveNo);
+            if (idx >= 0) waves[idx] = currentWave;
+            localStorage.setItem('wms_waves', JSON.stringify(waves));
+            
+            result.className = 'scan-result success';
+            result.innerText = '✓ ' + found.productName + ' x ' + found.pickQty;
+            
+            renderPickingList();
+            input.value = '';
+            input.focus();
+            
+            // 震動反饋
+            if (navigator.vibrate) navigator.vibrate(100);
+        };
+        
+        window.completePickingWave = function() {
+            const completed = pickingItems.filter(i => i.completed).length;
+            const total = pickingItems.filter(i => !i.shortage).length;
+            
+            if (completed === 0) {
+                alert('尚未揀貨任何項目');
+                return;
+            }
+            
+            if (!confirm(`完成波次？\n\n已揀：${completed}/${total}`)) return;
+            
+            currentWave.status = 'done';
+            currentWave.completedAt = new Date().toISOString();
+            
+            const waves = JSON.parse(localStorage.getItem('wms_waves') || '[]');
+            const idx = waves.findIndex(w => w.waveNo === currentWave.waveNo);
+            if (idx >= 0) waves[idx] = currentWave;
+            localStorage.setItem('wms_waves', JSON.stringify(waves));
+            
+            alert('✅ 波次完成！');
+            goBack();
+        };
+        
+        // ========== 入庫確認 ==========
+        let inboundRecords = [];
+        
+        function loadInboundRecords() {
+            // 從今日庫存中找
+            const today = new Date().toISOString().split('T')[0];
+            inboundRecords = window.pallets.filter(p => 
+                p.createdAt && p.createdAt.indexOf(today) === 0
+            );
+            
+            document.getElementById('inbound-count').innerText = inboundRecords.length + ' 筆';
+            
+            const list = document.getElementById('inbound-list');
+            if (inboundRecords.length === 0) {
+                list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-inbox"></i><p>今日尚無入庫記錄</p></div>';
+                return;
+            }
+            
+            list.innerHTML = inboundRecords.map(r => `
+                <div class="list-item completed">
+                    <div class="item-row">
+                        <span class="item-location">${r.locationId}</span>
+                        <span class="item-status done">已入庫</span>
+                    </div>
+                    <div class="item-product">${r.productName}</div>
+                    <div class="item-row">
+                        <span class="item-detail">${r.palletId} | ${r.batchNo || '-'}</span>
+                        <span class="item-qty">${r.quantity}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        window.confirmInboundScan = function() {
+            const input = document.getElementById('inbound-scan');
+            const result = document.getElementById('inbound-scan-result');
+            const scanned = input.value.trim();
+            
+            if (!scanned) return;
+            
+            const found = window.pallets.find(p => p.palletId === scanned);
+            
+            if (found) {
+                result.className = 'scan-result success';
+                result.innerText = '✓ 已存在：' + found.productName + ' @ ' + found.locationId;
+            } else {
+                result.className = 'scan-result error';
+                result.innerText = '❌ 板號不存在：' + scanned;
+            }
+            
+            input.value = '';
+            input.focus();
+            if (navigator.vibrate) navigator.vibrate(found ? 100 : [100, 50, 100]);
+        };
+        
+        // ========== 調度執行 ==========
+        let dispatchOrders = [];
+        let currentDispatch = null;
+        let dispatchItems = [];
+        
+        function loadDispatchOrders() {
+            // 從 localStorage 讀取調度分析結果
+            const analysis = JSON.parse(localStorage.getItem('wms_dispatch_analysis') || '[]');
+            dispatchOrders = analysis;
+            
+            const select = document.getElementById('dispatch-order-select');
+            select.innerHTML = '<option value="">-- 請選擇 --</option>';
+            
+            dispatchOrders.forEach((item, idx) => {
+                const ops = (item.partialMerges ? item.partialMerges.reduce((s, m) => s + m.sources.length, 0) : 0) +
+                           (item.isolatedMoves ? item.isolatedMoves.length : 0);
+                select.innerHTML += `<option value="${idx}">工單 #${String(idx+1).padStart(3,'0')} - ${item.name} (${ops}項)</option>`;
+            });
+        }
+        
+        window.loadDispatchOrder = function() {
+            const idx = parseInt(document.getElementById('dispatch-order-select').value);
+            if (isNaN(idx) || idx < 0) {
+                document.getElementById('dispatch-scan-area').style.display = 'none';
+                document.getElementById('dispatch-actions').style.display = 'none';
+                return;
+            }
+            
+            currentDispatch = dispatchOrders[idx];
+            dispatchItems = [];
+            
+            // 合併操作
+            if (currentDispatch.partialMerges) {
+                currentDispatch.partialMerges.forEach((g, gIdx) => {
+                    g.sources.forEach((src, sIdx) => {
+                        dispatchItems.push({
+                            id: 'merge-' + gIdx + '-' + sIdx,
+                            type: '合併',
+                            from: src.location,
+                            palletId: src.palletId || '',
+                            qty: src.qty,
+                            to: g.keep.location,
+                            completed: false
+                        });
+                    });
+                });
+            }
+            
+            // 移位操作
+            if (currentDispatch.isolatedMoves) {
+                currentDispatch.isolatedMoves.forEach((m, mIdx) => {
+                    dispatchItems.push({
+                        id: 'move-' + mIdx,
+                        type: '移位',
+                        from: m.from,
+                        palletId: m.palletId || '',
+                        qty: m.qty,
+                        to: m.toSlot,
+                        completed: false
+                    });
+                });
+            }
+            
+            renderDispatchList();
+            document.getElementById('dispatch-scan-area').style.display = 'block';
+            document.getElementById('dispatch-actions').style.display = 'block';
+            document.getElementById('dispatch-scan').focus();
+        };
+        
+        function renderDispatchList() {
+            const list = document.getElementById('dispatch-list');
+            const completed = dispatchItems.filter(i => i.completed).length;
+            document.getElementById('dispatch-progress').innerText = completed + '/' + dispatchItems.length;
+            
+            if (dispatchItems.length === 0) {
+                list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-clipboard-list"></i><p>無調度項目</p></div>';
+                return;
+            }
+            
+            list.innerHTML = dispatchItems.map(item => {
+                const cls = item.completed ? 'completed' : '';
+                const status = item.completed ? '<span class="item-status done">✓ 完成</span>' :
+                              '<span class="item-status pending">' + item.type + '</span>';
+                return `
+                    <div class="list-item ${cls}">
+                        <div class="item-row">
+                            <span class="item-location">${item.from}</span>
+                            ${status}
+                        </div>
+                        <div class="item-product">${item.palletId || '-'} → ${item.to}</div>
+                        <div class="item-row">
+                            <span class="item-detail">${item.type}</span>
+                            <span class="item-qty">${item.qty}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        window.confirmDispatchScan = function() {
+            const input = document.getElementById('dispatch-scan');
+            const result = document.getElementById('dispatch-scan-result');
+            const scanned = input.value.trim();
+            
+            if (!scanned) return;
+            
+            const found = dispatchItems.find(i => !i.completed && 
+                (i.palletId === scanned || i.from === scanned));
+            
+            if (!found) {
+                result.className = 'scan-result error';
+                result.innerText = '❌ 找不到：' + scanned;
+                input.select();
+                return;
+            }
+            
+            found.completed = true;
+            
+            result.className = 'scan-result success';
+            result.innerText = '✓ ' + found.from + ' → ' + found.to;
+            
+            renderDispatchList();
+            input.value = '';
+            input.focus();
+            if (navigator.vibrate) navigator.vibrate(100);
+        };
+        
+        window.completeDispatchOrder = function() {
+            const completed = dispatchItems.filter(i => i.completed).length;
+            
+            if (completed === 0) {
+                alert('尚未執行任何操作');
+                return;
+            }
+            
+            if (!confirm(`完成工單？\n\n已執行：${completed}/${dispatchItems.length}`)) return;
+            
+            alert('✅ 工單完成！');
+            goBack();
+        };
+        
+        // ========== 庫存快查 ==========
+        window.doInventoryQuery = function() {
+            const input = document.getElementById('query-input');
+            const result = document.getElementById('query-result');
+            const keyword = input.value.trim().toLowerCase();
+            
+            if (!keyword) return;
+            
+            const matches = window.pallets.filter(p => 
+                (p.productName && p.productName.toLowerCase().includes(keyword)) ||
+                (p.palletId && p.palletId.toLowerCase().includes(keyword)) ||
+                (p.batchNo && p.batchNo.toLowerCase().includes(keyword))
+            );
+            
+            if (matches.length === 0) {
+                result.innerHTML = '<div class="empty-state"><i class="fa-solid fa-search"></i><p>找不到：' + keyword + '</p></div>';
+                return;
+            }
+            
+            // 按品名分組
+            const grouped = {};
+            matches.forEach(p => {
+                const key = p.productName;
+                if (!grouped[key]) grouped[key] = { name: p.productName, spec: p.spec, items: [] };
+                grouped[key].items.push(p);
+            });
+            
+            result.innerHTML = Object.values(grouped).map(g => `
+                <div class="result-card">
+                    <div class="result-product">${g.name}</div>
+                    <div class="result-spec">${g.spec || ''}</div>
+                    ${g.items.map(p => `
+                        <div class="result-row">
+                            <span class="result-loc">${p.locationId}</span>
+                            <span class="result-qty">${p.quantity} 件</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `).join('');
+        };
+        
+        // Enter 鍵觸發
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const active = document.activeElement;
+                if (active.id === 'picking-scan') confirmPickingScan();
+                if (active.id === 'inbound-scan') confirmInboundScan();
+                if (active.id === 'dispatch-scan') confirmDispatchScan();
+                if (active.id === 'query-input') doInventoryQuery();
+            }
+        });
+    </script>
+</body>
+</html>
