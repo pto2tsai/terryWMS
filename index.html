@@ -211,8 +211,8 @@
 
         @media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position: absolute; left: 0; top: 0; width: 100%; } .print-page { page-break-after: always; width: 100mm; height: 148mm; border: 3px solid black; padding: 15px; margin: 0 auto; color: black !important; background: white !important; display: flex; flex-direction: column; } .print-header { text-align: center; font-size: 24px; font-weight: 900; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; } .print-row { display: flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 5px; } .print-label { font-size: 14px; color: #333; font-weight: bold; } .print-val { font-size: 18px; font-weight: bold; text-align: right; } .print-big { font-size: 32px; font-weight: 900; } .print-footer { margin-top: auto; text-align: center; } }
     </style>
-
-    <script src="enhancements-v10.js"></script>
+    <!-- 🆕 條碼掃描庫 (相機掃描用) -->
+    <script src="https://unpkg.com/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 </head>
 <body class="flex h-screen overflow-hidden">
 
@@ -221,7 +221,7 @@
             <div class="mb-8">
                 <i class="fa-solid fa-warehouse text-blue-500 text-6xl mb-4"></i>
                 <h1 class="text-4xl font-black text-white">TERRY <span class="text-blue-400">WMS</span></h1>
-                <p class="text-slate-400 mt-2">倉儲管理系統 v10.0.0</p>
+                <p class="text-slate-400 mt-2">倉儲管理系統 v8.7.0</p>
             </div>
             <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 space-y-4">
                 <div class="text-left">
@@ -268,7 +268,7 @@
             <i class="fa-solid fa-cube text-blue-500 text-xl mr-2"></i>
             <div>
                 <span class="font-black text-lg text-white tracking-wide">TERRY WMS</span>
-                <span class="text-[10px] text-slate-500 ml-1">v10.0.0</span>
+                <span class="text-[10px] text-slate-500 ml-1">v9.2.0</span>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-1" id="main-nav">
@@ -329,30 +329,6 @@
                 <div class="nav-item" onclick="switchTab('inventory-log', event)"><i class="fa-solid fa-clock-rotate-left w-4 text-center mr-2"></i>異動查詢</div>
                 <div class="nav-item" onclick="switchTab('product-analysis', event)"><i class="fa-solid fa-chart-bar w-4 text-center mr-2"></i>出貨分析</div>
                 <div class="nav-item" onclick="switchTab('warehouse-heatmap', event)"><i class="fa-solid fa-fire w-4 text-center mr-2"></i>熱力圖</div>
-                <div class="nav-item" onclick="switchTab('turnover-analysis', event)"><i class="fa-solid fa-sync-alt w-4 text-center mr-2"></i>週轉率分析</div>
-                <div class="nav-item" onclick="switchTab('alert-system', event)"><i class="fa-solid fa-exclamation-triangle w-4 text-center mr-2 text-yellow-400"></i>異常預警</div>
-                <div class="nav-item" onclick="switchTab('custom-report', event)"><i class="fa-solid fa-file-alt w-4 text-center mr-2"></i>自訂報表</div>
-            </div>
-
-            
-            <!-- 生產管理 -->
-            <div class="nav-group-header" onclick="toggleNavGroup('grp-production')">
-                <span><i class="fa-solid fa-industry w-4 text-center mr-1 text-green-400"></i>生產管理</span>
-                <i class="fa-solid fa-chevron-down nav-chevron"></i>
-            </div>
-            <div class="nav-group-items collapsed" id="grp-production">
-                <div class="nav-item" onclick="switchTab('production-schedule', event)"><i class="fa-solid fa-calendar-alt w-4 text-center mr-2"></i>生產排程</div>
-                <div class="nav-item" onclick="switchTab('efficiency-analysis', event)"><i class="fa-solid fa-tachometer-alt w-4 text-center mr-2"></i>效率分析</div>
-            </div>
-
-            <!-- 通知設定 -->
-            <div class="nav-group-header" onclick="toggleNavGroup('grp-notifications')">
-                <span><i class="fa-solid fa-bell w-4 text-center mr-1 text-yellow-400"></i>通知設定</span>
-                <i class="fa-solid fa-chevron-down nav-chevron"></i>
-            </div>
-            <div class="nav-group-items collapsed" id="grp-notifications">
-                <div class="nav-item" onclick="switchTab('line-notify', event)"><i class="fa-brands fa-line w-4 text-center mr-2 text-green-400"></i>LINE 通知</div>
-                <div class="nav-item" onclick="switchTab('email-notify', event)"><i class="fa-solid fa-envelope w-4 text-center mr-2"></i>Email 通知</div>
             </div>
 
             <!-- 系統設定 -->
@@ -11781,19 +11757,200 @@
 
         setInboundMode('Raw');
         switchTab('dashboard', null);
-    
-        // v10.0 功能初始化
-        window.productionScheduler = new ProductionScheduler();
-        window.inboundSuggester = new SmartInboundSuggester();
-        window.dispatchAnalyzer = new EnhancedDispatchAnalyzer();
-        window.turnoverAnalyzer = new TurnoverAnalyzer();
-        window.efficiencyAnalyzer = new EfficiencyAnalyzer();
-        window.alertSystem = new AlertSystem();
-        window.lineNotifier = new LineNotifier();
-        window.emailNotifier = new EmailNotifier();
-        window.reportGenerator = new CustomReportGenerator();
-        console.log('Terry WMS v10.0 ready');
-
     </script>
+
+    <!-- 🆕 條碼槍優化腳本 v1.0 -->
+    <script>
+    (function() {
+        'use strict';
+        const CONFIG = { enableSound: true, autoConfirm: true, scanCooldown: 300, barcodeTimeout: 150, minBarcodeLength: 3, maxBarcodeLength: 50 };
+        let barcodeBuffer = '', barcodeTimeout = null, lastScanTime = 0, scanHistory = [], audioContext = null;
+        
+        function initAudio() { try { audioContext = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} }
+        
+        function playSuccessSound() {
+            if (!CONFIG.enableSound || !audioContext) return;
+            try {
+                const osc = audioContext.createOscillator(), gain = audioContext.createGain();
+                osc.connect(gain); gain.connect(audioContext.destination);
+                osc.frequency.value = 1200; osc.type = 'sine';
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+                osc.start(audioContext.currentTime); osc.stop(audioContext.currentTime + 0.1);
+            } catch(e) {}
+        }
+        
+        function playErrorSound() {
+            if (!CONFIG.enableSound || !audioContext) return;
+            try {
+                const osc = audioContext.createOscillator(), gain = audioContext.createGain();
+                osc.connect(gain); gain.connect(audioContext.destination);
+                osc.frequency.value = 300; osc.type = 'sine';
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+                osc.start(audioContext.currentTime); osc.stop(audioContext.currentTime + 0.15);
+            } catch(e) {}
+        }
+        
+        function playDoubleBeep() {
+            if (!CONFIG.enableSound || !audioContext) return;
+            try {
+                const osc1 = audioContext.createOscillator(), gain1 = audioContext.createGain();
+                osc1.connect(gain1); gain1.connect(audioContext.destination);
+                osc1.frequency.value = 880; osc1.type = 'sine';
+                gain1.gain.setValueAtTime(0.15, audioContext.currentTime);
+                gain1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.08);
+                osc1.start(audioContext.currentTime); osc1.stop(audioContext.currentTime + 0.08);
+                const osc2 = audioContext.createOscillator(), gain2 = audioContext.createGain();
+                osc2.connect(gain2); gain2.connect(audioContext.destination);
+                osc2.frequency.value = 1100; osc2.type = 'sine';
+                gain2.gain.setValueAtTime(0.15, audioContext.currentTime + 0.1);
+                gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.18);
+                osc2.start(audioContext.currentTime + 0.1); osc2.stop(audioContext.currentTime + 0.18);
+            } catch(e) {}
+        }
+        
+        function addToHistory(barcode, source) {
+            scanHistory.unshift({ barcode, source, time: new Date().toISOString() });
+            if (scanHistory.length > 100) scanHistory = scanHistory.slice(0, 100);
+        }
+        
+        function findVisibleScanInput() {
+            const scanInputs = document.querySelectorAll('.scan-input:not([disabled]):not([readonly])');
+            for (const input of scanInputs) { if (isElementVisible(input)) return input; }
+            const inputs = document.querySelectorAll('input[type="text"]:not([disabled]):not([readonly])');
+            for (const input of inputs) { if (isElementVisible(input) && isScanRelated(input)) return input; }
+            return null;
+        }
+        
+        function isElementVisible(el) {
+            if (!el) return false;
+            const rect = el.getBoundingClientRect(), style = window.getComputedStyle(el);
+            return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && el.offsetParent !== null;
+        }
+        
+        function isScanRelated(input) {
+            const id = (input.id || '').toLowerCase(), placeholder = (input.placeholder || '').toLowerCase(), className = (input.className || '').toLowerCase();
+            const keywords = ['scan', 'barcode', 'pallet', '掃描', '板號', '條碼', 'location', '儲位'];
+            for (const kw of keywords) { if (id.includes(kw) || placeholder.includes(kw) || className.includes(kw)) return true; }
+            return false;
+        }
+        
+        function processBarcode(barcode) {
+            const now = Date.now();
+            if (now - lastScanTime < CONFIG.scanCooldown) return;
+            lastScanTime = now;
+            if (barcode.length < CONFIG.minBarcodeLength || barcode.length > CONFIG.maxBarcodeLength) return;
+            console.log('🔫 條碼槍掃描:', barcode);
+            addToHistory(barcode, 'barcode_gun');
+            const targetInput = findVisibleScanInput();
+            if (targetInput) {
+                targetInput.value = barcode;
+                targetInput.focus();
+                targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+                targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                playSuccessSound();
+                if (CONFIG.autoConfirm) setTimeout(() => triggerConfirm(targetInput), 50);
+                showScanToast('✓ ' + barcode, 'success');
+            } else {
+                playErrorSound();
+                showScanToast('找不到掃描輸入框', 'error');
+            }
+            document.dispatchEvent(new CustomEvent('barcodescanned', { detail: { barcode, source: 'barcode_gun' } }));
+        }
+        
+        function triggerConfirm(input) {
+            const id = input.id || '';
+            const confirmFunctions = ['confirm' + capitalize(id.replace(/-/g, '')), 'confirm' + capitalize(id), 'confirmScan', 'confirmPickingScan', 'confirmInboundScan', 'confirmDispatchScan', 'doInventoryQuery', 'handleScan', 'processScan'];
+            for (const fnName of confirmFunctions) { if (typeof window[fnName] === 'function') { window[fnName](); return; } }
+            const parent = input.parentElement;
+            if (parent) { const btn = parent.querySelector('button'); if (btn && isElementVisible(btn)) { btn.click(); return; } }
+            input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+        }
+        
+        function capitalize(str) { return str.charAt(0).toUpperCase() + str.slice(1); }
+        
+        function showScanToast(message, type) {
+            const oldToast = document.getElementById('scanner-toast');
+            if (oldToast) oldToast.remove();
+            const toast = document.createElement('div');
+            toast.id = 'scanner-toast';
+            toast.style.cssText = 'position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:bold;z-index:99999;animation:toastSlideIn 0.3s ease;box-shadow:0 4px 12px rgba(0,0,0,0.3);' + (type === 'success' ? 'background:linear-gradient(135deg,#10b981,#059669);color:white;' : 'background:linear-gradient(135deg,#ef4444,#dc2626);color:white;');
+            toast.textContent = message;
+            if (!document.getElementById('scanner-toast-style')) {
+                const style = document.createElement('style');
+                style.id = 'scanner-toast-style';
+                style.textContent = '@keyframes toastSlideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}@keyframes toastSlideOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(20px)}}';
+                document.head.appendChild(style);
+            }
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.animation = 'toastSlideOut 0.3s ease'; setTimeout(() => toast.remove(), 300); }, 2000);
+        }
+        
+        function initKeyboardListener() {
+            document.addEventListener('keydown', function(e) {
+                const active = document.activeElement;
+                const isInputField = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+                if (isInputField && active.classList && active.classList.contains('scan-input')) {
+                    if (e.key === 'Enter') { e.preventDefault(); const barcode = active.value.trim(); if (barcode) { addToHistory(barcode, 'manual_input'); playDoubleBeep(); triggerConfirm(active); } }
+                    return;
+                }
+                if (isInputField) return;
+                if (e.key === 'Enter') {
+                    if (barcodeBuffer.length >= CONFIG.minBarcodeLength) processBarcode(barcodeBuffer);
+                    barcodeBuffer = ''; clearTimeout(barcodeTimeout);
+                } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                    barcodeBuffer += e.key;
+                    clearTimeout(barcodeTimeout);
+                    barcodeTimeout = setTimeout(() => { barcodeBuffer = ''; }, CONFIG.barcodeTimeout);
+                }
+            }, true);
+        }
+        
+        function enhanceScanInputs() {
+            document.querySelectorAll('.scan-input').forEach(input => {
+                if (input.dataset.enhanced) return;
+                input.dataset.enhanced = 'true';
+                input.setAttribute('autocomplete', 'off');
+                input.setAttribute('autocorrect', 'off');
+                input.setAttribute('autocapitalize', 'off');
+                input.setAttribute('spellcheck', 'false');
+                input.addEventListener('focus', function() { setTimeout(() => this.select(), 50); });
+                input.addEventListener('dblclick', function() { this.value = ''; this.focus(); });
+            });
+        }
+        
+        function initMutationObserver() {
+            const observer = new MutationObserver((mutations) => {
+                let shouldEnhance = false;
+                mutations.forEach(mutation => {
+                    mutation.addedNodes.forEach(node => {
+                        if (node.nodeType === 1 && ((node.classList && node.classList.contains('scan-input')) || (node.querySelector && node.querySelector('.scan-input')))) shouldEnhance = true;
+                    });
+                });
+                if (shouldEnhance) setTimeout(enhanceScanInputs, 100);
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+        
+        window.DesktopScanner = {
+            getHistory: () => scanHistory,
+            clearHistory: () => { scanHistory = []; },
+            updateConfig: (cfg) => Object.assign(CONFIG, cfg),
+            triggerScan: processBarcode,
+            playSuccess: playSuccessSound,
+            playError: playErrorSound
+        };
+        
+        function init() {
+            initAudio(); initKeyboardListener(); enhanceScanInputs(); initMutationObserver();
+            console.log('✅ Terry WMS 條碼槍優化 v1.0 已啟動 | 🔫 全局監聽已啟用 | 🔊 音效已啟用');
+        }
+        
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+        else init();
+    })();
+    </script>
+
 </body>
 </html>
