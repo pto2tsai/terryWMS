@@ -211,6 +211,8 @@
 
         @media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position: absolute; left: 0; top: 0; width: 100%; } .print-page { page-break-after: always; width: 100mm; height: 148mm; border: 3px solid black; padding: 15px; margin: 0 auto; color: black !important; background: white !important; display: flex; flex-direction: column; } .print-header { text-align: center; font-size: 24px; font-weight: 900; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; } .print-row { display: flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 5px; } .print-label { font-size: 14px; color: #333; font-weight: bold; } .print-val { font-size: 18px; font-weight: bold; text-align: right; } .print-big { font-size: 32px; font-weight: 900; } .print-footer { margin-top: auto; text-align: center; } }
     </style>
+
+    <script src="enhancements-v10.js"></script>
 </head>
 <body class="flex h-screen overflow-hidden">
 
@@ -219,7 +221,7 @@
             <div class="mb-8">
                 <i class="fa-solid fa-warehouse text-blue-500 text-6xl mb-4"></i>
                 <h1 class="text-4xl font-black text-white">TERRY <span class="text-blue-400">WMS</span></h1>
-                <p class="text-slate-400 mt-2">倉儲管理系統 v8.7.0</p>
+                <p class="text-slate-400 mt-2">倉儲管理系統 v10.0.0</p>
             </div>
             <div class="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 space-y-4">
                 <div class="text-left">
@@ -266,7 +268,7 @@
             <i class="fa-solid fa-cube text-blue-500 text-xl mr-2"></i>
             <div>
                 <span class="font-black text-lg text-white tracking-wide">TERRY WMS</span>
-                <span class="text-[10px] text-slate-500 ml-1">v9.2.0</span>
+                <span class="text-[10px] text-slate-500 ml-1">v10.0.0</span>
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-1" id="main-nav">
@@ -327,6 +329,30 @@
                 <div class="nav-item" onclick="switchTab('inventory-log', event)"><i class="fa-solid fa-clock-rotate-left w-4 text-center mr-2"></i>異動查詢</div>
                 <div class="nav-item" onclick="switchTab('product-analysis', event)"><i class="fa-solid fa-chart-bar w-4 text-center mr-2"></i>出貨分析</div>
                 <div class="nav-item" onclick="switchTab('warehouse-heatmap', event)"><i class="fa-solid fa-fire w-4 text-center mr-2"></i>熱力圖</div>
+                <div class="nav-item" onclick="switchTab('turnover-analysis', event)"><i class="fa-solid fa-sync-alt w-4 text-center mr-2"></i>週轉率分析</div>
+                <div class="nav-item" onclick="switchTab('alert-system', event)"><i class="fa-solid fa-exclamation-triangle w-4 text-center mr-2 text-yellow-400"></i>異常預警</div>
+                <div class="nav-item" onclick="switchTab('custom-report', event)"><i class="fa-solid fa-file-alt w-4 text-center mr-2"></i>自訂報表</div>
+            </div>
+
+            
+            <!-- 生產管理 -->
+            <div class="nav-group-header" onclick="toggleNavGroup('grp-production')">
+                <span><i class="fa-solid fa-industry w-4 text-center mr-1 text-green-400"></i>生產管理</span>
+                <i class="fa-solid fa-chevron-down nav-chevron"></i>
+            </div>
+            <div class="nav-group-items collapsed" id="grp-production">
+                <div class="nav-item" onclick="switchTab('production-schedule', event)"><i class="fa-solid fa-calendar-alt w-4 text-center mr-2"></i>生產排程</div>
+                <div class="nav-item" onclick="switchTab('efficiency-analysis', event)"><i class="fa-solid fa-tachometer-alt w-4 text-center mr-2"></i>效率分析</div>
+            </div>
+
+            <!-- 通知設定 -->
+            <div class="nav-group-header" onclick="toggleNavGroup('grp-notifications')">
+                <span><i class="fa-solid fa-bell w-4 text-center mr-1 text-yellow-400"></i>通知設定</span>
+                <i class="fa-solid fa-chevron-down nav-chevron"></i>
+            </div>
+            <div class="nav-group-items collapsed" id="grp-notifications">
+                <div class="nav-item" onclick="switchTab('line-notify', event)"><i class="fa-brands fa-line w-4 text-center mr-2 text-green-400"></i>LINE 通知</div>
+                <div class="nav-item" onclick="switchTab('email-notify', event)"><i class="fa-solid fa-envelope w-4 text-center mr-2"></i>Email 通知</div>
             </div>
 
             <!-- 系統設定 -->
@@ -11755,6 +11781,19 @@
 
         setInboundMode('Raw');
         switchTab('dashboard', null);
+    
+        // v10.0 功能初始化
+        window.productionScheduler = new ProductionScheduler();
+        window.inboundSuggester = new SmartInboundSuggester();
+        window.dispatchAnalyzer = new EnhancedDispatchAnalyzer();
+        window.turnoverAnalyzer = new TurnoverAnalyzer();
+        window.efficiencyAnalyzer = new EfficiencyAnalyzer();
+        window.alertSystem = new AlertSystem();
+        window.lineNotifier = new LineNotifier();
+        window.emailNotifier = new EmailNotifier();
+        window.reportGenerator = new CustomReportGenerator();
+        console.log('Terry WMS v10.0 ready');
+
     </script>
 </body>
 </html>
