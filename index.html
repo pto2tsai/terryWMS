@@ -12032,13 +12032,14 @@ function getLogisticsColor(logistics) {
 window.openCreateWaveModal = function() {
     document.getElementById('modal-create-wave').classList.remove('hidden');
     
-    // 載入物流商選項
+    // 載入物流商選項（只統計待處理的訂單）
     const select = document.getElementById('wave-filter-logistics');
     select.innerHTML = '<option value="">全部物流</option>';
     
     const logisticsSet = new Set();
     window._orderData.orders.forEach(o => {
-        if (o.status === 'pending') {
+        // 只統計待處理且未加入波次的訂單
+        if (o.status === 'pending' && !o.waveNo) {
             logisticsSet.add(o.logistics || '未指定');
         }
     });
@@ -12056,7 +12057,15 @@ window.filterWaveOrders = function() {
     const logistics = document.getElementById('wave-filter-logistics').value;
     const dateFilter = document.getElementById('wave-filter-date').value;
     
-    let orders = window._orderData.orders.filter(o => o.status === 'pending');
+    // 只顯示「待處理」的訂單（排除已加入波次或已出貨的）
+    // status: pending=待處理, inWave=已加入波次, shipped=已出貨
+    let orders = window._orderData.orders.filter(o => {
+        // 只有 pending 狀態才顯示
+        if (o.status !== 'pending') return false;
+        // 有 waveNo 表示已被加入波次
+        if (o.waveNo) return false;
+        return true;
+    });
     
     if (logistics) {
         orders = orders.filter(o => o.logistics === logistics);
