@@ -6363,7 +6363,7 @@
             document.getElementById('wave-stat-done').innerText = done.length;
             
             // 計算待出貨訂單數
-            var orders = window.currentOrders ? window.currentOrders.filter(function(o) { 
+            var orders = (window._orderData && window._orderData.orders) ? window._orderData.orders.filter(function(o) { 
                 return o.status === 'pending' || o.status === 'confirmed'; 
             }) : [];
             document.getElementById('wave-stat-orders').innerText = orders.length;
@@ -6416,7 +6416,7 @@
         // 開啟建立波次 Modal
         window.openCreateWaveModal = function() {
             // 取得待出貨訂單
-            var orders = window.currentOrders ? window.currentOrders.filter(function(o) { 
+            var orders = (window._orderData && window._orderData.orders) ? window._orderData.orders.filter(function(o) { 
                 return o.status === 'pending' || o.status === 'confirmed'; 
             }) : [];
             
@@ -7037,7 +7037,7 @@
                 }
             });
             
-            var availableOrders = (window.currentOrders || []).filter(function(o) {
+            var availableOrders = (window.currentOrders ? window.currentOrders() : []).filter(function(o) {
                 return (o.status === 'pending' || o.status === 'confirmed') && 
                        existingOrderIds.indexOf(o.id) < 0;
             });
