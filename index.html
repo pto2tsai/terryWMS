@@ -304,7 +304,7 @@
             <div class="nav-group-items" id="grp-outbound">
                 <div class="nav-item" onclick="switchTab('wave-picking', event)"><i class="fa-solid fa-layer-group w-4 text-center mr-2 text-orange-400"></i>波次揀貨</div>
                 <div class="nav-item" onclick="switchTab('picking-rm', event)"><i class="fa-solid fa-fish w-4 text-center mr-2"></i>原料領用</div>
-                <div class="nav-item" onclick="switchTab('shipping', event)"><i class="fa-solid fa-truck-ramp-box w-4 text-center mr-2"></i>訂單出貨</div>
+                <div class="nav-item" onclick="switchTab('shipping', event)" style="display:none"><i class="fa-solid fa-truck-ramp-box w-4 text-center mr-2"></i>訂單出貨</div>
             </div>
 
             <!-- 外部倉庫 -->
@@ -661,6 +661,10 @@
                         <p class="text-orange-200 text-sm mt-1">依物流商分波次，產生揀貨單與分貨標籤</p>
                     </div>
                     <div class="flex gap-2">
+                        <input type="file" id="order-excel-import" accept=".xlsx,.xls" class="hidden" onchange="importERPExcel(event)">
+                        <button onclick="document.getElementById('order-excel-import').click()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-bold mr-2">
+                            <i class="fa-solid fa-file-excel mr-1"></i>匯入訂單
+                        </button>
                         <button onclick="openCreateWaveModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold">
                             <i class="fa-solid fa-plus mr-1"></i>建立波次
                         </button>
@@ -747,12 +751,12 @@
                             <thead class="bg-slate-800 sticky top-0">
                                 <tr>
                                     <th class="p-2 text-left w-10"><input type="checkbox" id="wave-check-all" onchange="toggleWaveCheckAll()"></th>
-                                    <th class="p-2 text-left">訂單號</th>
-                                    <th class="p-2 text-left">客戶</th>
+                                    <th class="p-2 text-left">批號</th>
+                                    <th class="p-2 text-left">訂單歸屬</th>
                                     <th class="p-2 text-left">物流商</th>
-                                    <th class="p-2 text-left">品名</th>
+                                    <th class="p-2 text-left">品名/規格</th>
                                     <th class="p-2 text-right">數量</th>
-                                    <th class="p-2 text-left">出貨日</th>
+                                    <th class="p-2 text-left">銷貨日期</th>
                                 </tr>
                             </thead>
                             <tbody id="wave-orders-body">
@@ -817,11 +821,11 @@
                                     <th class="p-2 text-left w-16">狀態</th>
                                     <th class="p-2 text-left">儲位</th>
                                     <th class="p-2 text-left">板號</th>
-                                    <th class="p-2 text-left">品名</th>
+                                    <th class="p-2 text-left">品名/規格</th>
                                     <th class="p-2 text-left">規格</th>
                                     <th class="p-2 text-right">揀貨數</th>
-                                    <th class="p-2 text-left">訂單號</th>
-                                    <th class="p-2 text-left">客戶</th>
+                                    <th class="p-2 text-left">批號</th>
+                                    <th class="p-2 text-left">訂單歸屬</th>
                                 </tr>
                             </thead>
                             <tbody id="wave-picking-list">
@@ -2435,7 +2439,7 @@
                             <th class="p-2 text-left">單號</th>
                             <th class="p-2 text-left">類型</th>
                             <th class="p-2 text-left">儲位</th>
-                            <th class="p-2 text-left">品名</th>
+                            <th class="p-2 text-left">品名/規格</th>
                             <th class="p-2 text-left">批號</th>
                             <th class="p-2 text-left">效期</th>
                             <th class="p-2 text-right">數量</th>
@@ -10201,27 +10205,13 @@
             }
             
             try {
-                // 更新入庫單狀態
                 await window.updateDoc(window.doc(window.db, 'inboundOrders', order.id), {
                     approvalStatus: 'approved',
                     approvedBy: window.currentUser ? window.currentUser.email : 'admin',
                     approvedAt: new Date().toISOString()
                 });
                 
-                // 🔴 關鍵：更新 inboundTasks 中的任務狀態，讓堆高機手可以看到
-                var taskQuery = window.query(window.collection(window.db, 'inboundTasks'), 
-                    window.where('orderNo', '==', order.docNo));
-                var taskSnap = await window.getDocs(taskQuery);
-                for (var i = 0; i < taskSnap.docs.length; i++) {
-                    await window.updateDoc(taskSnap.docs[i].ref, {
-                        status: 'pending',  // 從 pending_approval 改為 pending
-                        approvalStatus: 'approved',
-                        approvedAt: new Date().toISOString(),
-                        approvedBy: window.currentUser ? window.currentUser.email : 'finance'
-                    });
-                }
-                
-                alert('✅ 審核通過！\n\n📱 已通知堆高機手可以執行入庫');
+                alert('✅ 審核通過！');
                 loadApprovalList();
                 updateApprovalCount();
             } catch(e) {
@@ -10255,10 +10245,6 @@
             }
             
             try {
-                // 先取得入庫單資訊
-                var orderDoc = await window.getDoc(window.doc(window.db, 'inboundOrders', orderId));
-                var orderData = orderDoc.data();
-                
                 await window.updateDoc(window.doc(window.db, 'inboundOrders', orderId), {
                     approvalStatus: 'rejected',
                     rejectReason: reason,
@@ -10266,22 +10252,7 @@
                     rejectedAt: new Date().toISOString()
                 });
                 
-                // 🔴 關鍵：更新/刪除 inboundTasks 中的任務
-                if (orderData && orderData.docNo) {
-                    var taskQuery = window.query(window.collection(window.db, 'inboundTasks'), 
-                        window.where('orderNo', '==', orderData.docNo));
-                    var taskSnap = await window.getDocs(taskQuery);
-                    for (var i = 0; i < taskSnap.docs.length; i++) {
-                        await window.updateDoc(taskSnap.docs[i].ref, {
-                            status: 'rejected',
-                            approvalStatus: 'rejected',
-                            rejectedAt: new Date().toISOString(),
-                            rejectReason: reason
-                        });
-                    }
-                }
-                
-                alert('❌ 已駁回！\n\n原因：' + reason + '\n\n倉管將收到通知進行修改');
+                alert('✅ 已駁回！倉管將收到通知進行修改');
                 closeRejectModal();
                 loadApprovalList();
                 updateApprovalCount();
@@ -10552,15 +10523,6 @@
         // 發布入庫任務到手機版（堆高機確認用）
         window.publishInboundTask = async function(order) {
             try {
-                // 檢查是否需要審核 - 如果需要審核且尚未審核，則標記為待審核狀態
-                var taskStatus = 'pending';
-                var approvalStatus = order.approvalStatus || 'not_required';
-                
-                // 如果需要審核但尚未審核，任務狀態設為 pending_approval
-                if (order.needsApproval && approvalStatus === 'pending') {
-                    taskStatus = 'pending_approval';
-                }
-                
                 await window.addDoc(window.collection(window.db, 'inboundTasks'), {
                     orderNo: order.docNo,
                     palletId: order.docNo,
@@ -10569,9 +10531,7 @@
                     batchNo: order.batchNo || '',
                     quantity: order.quantity,
                     locationId: order.locationId,
-                    status: taskStatus,
-                    approvalStatus: approvalStatus,
-                    needsApproval: order.needsApproval || false,
+                    status: 'pending',
                     createdAt: new Date().toISOString(),
                     createdBy: window.getOperatorName ? window.getOperatorName() : 'system'
                 });
@@ -11800,5 +11760,927 @@
         setInboundMode('Raw');
         switchTab('dashboard', null);
     </script>
+        <script>
+        // ========== 波次理貨升級版 ==========
+        </script>
+
+
+        <script>
+        // ========== 訂單管理系統 (升級版) ==========
+
+// 物流商識別規則
+const LOGISTICS_KEYWORDS = {
+    '全日物流': ['全日物流', '全日'],
+    '合順貨運': ['合順貨運', '合順'],
+    '大榮貨運': ['大榮'],
+    '裕鵬物流': ['裕鵬物流', '裕鵬'],
+    '黑貓宅急便': ['黑貓'],
+    '新竹物流': ['新竹物流', '新竹'],
+    '崇文自送': ['崇文司機', '崇文'],
+    '科技物流': ['科技'],
+    '阿誠': ['阿誠'],
+    '文生': ['文生'],
+    '金東石': ['金東石'],
+    '奧林': ['奧林'],
+    '自取': ['自取']
+};
+
+// 從備註欄解析物流商
+function parseLogistics(remark) {
+    if (!remark) return '未指定';
+    remark = String(remark);
+    
+    for (const [logistics, keywords] of Object.entries(LOGISTICS_KEYWORDS)) {
+        for (const keyword of keywords) {
+            if (remark.includes(keyword)) {
+                return logistics;
+            }
+        }
+    }
+    return '未指定';
+}
+
+// 訂單資料
+window._orderData = {
+    orders: [],  // 所有訂單
+    lastImportTime: null
+};
+
+// 從 Firebase 載入訂單
+async function loadOrdersFromFirebase() {
+    try {
+        const snap = await window.getDocs(window.collection(window.db, 'salesOrders'));
+        window._orderData.orders = [];
+        snap.forEach(doc => {
+            window._orderData.orders.push({ id: doc.id, ...doc.data() });
+        });
+        console.log('載入訂單:', window._orderData.orders.length, '筆');
+        renderOrderList();
+    } catch (err) {
+        console.error('載入訂單失敗:', err);
+    }
+}
+
+// 匯入 ERP Excel
+window.importERPExcel = async function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            
+            // 跳過前 5 行標題
+            const dataRows = rows.slice(5);
+            
+            // 欄位索引 (根據你們的 ERP 格式)
+            const COL = {
+                DATE: 0,        // 銷貨日期
+                ORDER_NO: 1,    // 銷貨單號
+                CUST_CODE: 2,   // 客戶代號
+                CUST_NAME: 3,   // 客戶全名
+                PRODUCT: 4,     // 品名
+                SPEC: 5,        // 規格
+                PKG_QTY: 6,     // 包裝數量
+                PKG_UNIT: 7,    // 包裝單位
+                QTY: 8,         // 銷貨數量
+                UNIT: 9,        // 單位
+                PRICE: 10,      // 單價
+                REMARK: 11,     // 備註 (物流商)
+                BATCH: 12,      // 批號
+                ADDR1: 13,      // 送貨地址一
+                ADDR2: 14       // 送貨地址二
+            };
+            
+            // 解析訂單
+            const orders = [];
+            let currentOrder = null;
+            
+            for (const row of dataRows) {
+                // 跳過空行或小計行
+                if (!row[COL.PRODUCT]) continue;
+                if (String(row[COL.DATE]).includes('小計') || String(row[COL.DATE]).includes('合計')) continue;
+                
+                // 有銷貨單號 = 新訂單
+                if (row[COL.ORDER_NO]) {
+                    // 儲存前一筆訂單
+                    if (currentOrder) {
+                        orders.push(currentOrder);
+                    }
+                    
+                    // 建立新訂單
+                    currentOrder = {
+                        orderNo: String(row[COL.ORDER_NO]).trim(),
+                        orderDate: row[COL.DATE] ? String(row[COL.DATE]).trim() : '',
+                        customerCode: row[COL.CUST_CODE] ? String(row[COL.CUST_CODE]).trim() : '',
+                        customer: row[COL.CUST_NAME] ? String(row[COL.CUST_NAME]).trim() : '',
+                        logistics: parseLogistics(row[COL.REMARK]),
+                        address: row[COL.ADDR1] ? String(row[COL.ADDR1]).trim() : '',
+                        address2: row[COL.ADDR2] ? String(row[COL.ADDR2]).trim() : '',
+                        remark: row[COL.REMARK] ? String(row[COL.REMARK]).trim() : '',
+                        status: 'pending',
+                        items: [],
+                        createdAt: new Date().toISOString(),
+                        importedAt: new Date().toISOString()
+                    };
+                }
+                
+                // 品項資料
+                if (currentOrder && row[COL.PRODUCT]) {
+                    currentOrder.items.push({
+                        productName: String(row[COL.PRODUCT]).trim(),
+                        spec: row[COL.SPEC] ? String(row[COL.SPEC]).trim() : '',
+                        quantity: parseInt(row[COL.QTY]) || 0,
+                        unit: row[COL.UNIT] ? String(row[COL.UNIT]).trim() : '',
+                        packageQty: parseInt(row[COL.PKG_QTY]) || 0,
+                        packageUnit: row[COL.PKG_UNIT] ? String(row[COL.PKG_UNIT]).trim() : '',
+                        batchNo: row[COL.BATCH] ? String(row[COL.BATCH]).trim() : '',
+                        price: parseFloat(row[COL.PRICE]) || 0
+                    });
+                }
+            }
+            
+            // 加入最後一筆
+            if (currentOrder) {
+                orders.push(currentOrder);
+            }
+            
+            console.log('解析訂單:', orders.length, '筆');
+            
+            // 儲存到 Firebase
+            let savedCount = 0;
+            let skipCount = 0;
+            
+            for (const order of orders) {
+                // 檢查是否已存在
+                const existing = window._orderData.orders.find(o => o.orderNo === order.orderNo);
+                if (existing) {
+                    skipCount++;
+                    continue;
+                }
+                
+                try {
+                    await window.addDoc(window.collection(window.db, 'salesOrders'), order);
+                    window._orderData.orders.push(order);
+                    savedCount++;
+                } catch (err) {
+                    console.error('儲存訂單失敗:', order.orderNo, err);
+                }
+            }
+            
+            window._orderData.lastImportTime = new Date().toISOString();
+            
+            alert('✅ 匯入完成！\n\n' +
+                  '新增：' + savedCount + ' 筆\n' +
+                  '略過（已存在）：' + skipCount + ' 筆\n' +
+                  '總訂單數：' + window._orderData.orders.length + ' 筆');
+            
+            renderOrderList();
+            refreshWaveList();
+            
+        } catch (err) {
+            console.error('匯入失敗:', err);
+            alert('❌ 匯入失敗：' + err.message);
+        }
+    };
+    
+    reader.readAsArrayBuffer(file);
+    event.target.value = '';
+};
+
+// 渲染訂單列表（用於建立波次 Modal）
+function renderWaveOrderList(orders) {
+    const tbody = document.getElementById('wave-orders-body');
+    if (!tbody) return;
+    
+    if (!orders || orders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-slate-500 py-8">沒有待出貨的訂單</td></tr>';
+        return;
+    }
+    
+    // 展開每個訂單的品項
+    let html = '';
+    orders.forEach(order => {
+        const items = order.items || [];
+        items.forEach((item, idx) => {
+            const rowClass = idx === 0 ? 'border-t border-slate-600' : '';
+            html += `<tr class="hover:bg-slate-800/50 ${rowClass}">`;
+            
+            if (idx === 0) {
+                html += `<td class="p-2" rowspan="${items.length}">
+                    <input type="checkbox" class="wave-order-check" data-order-id="${order.id}" data-order-no="${order.orderNo}">
+                </td>`;
+                html += `<td class="p-2 text-cyan-400 font-mono text-xs" rowspan="${items.length}">${order.orderNo}</td>`;
+                html += `<td class="p-2 text-white" rowspan="${items.length}">${order.customer}</td>`;
+                html += `<td class="p-2" rowspan="${items.length}">
+                    <span class="px-2 py-1 rounded text-xs ${getLogisticsColor(order.logistics)}">${order.logistics}</span>
+                </td>`;
+            }
+            
+            html += `<td class="p-2 text-slate-300">${item.productName} ${item.spec || ''}</td>`;
+            html += `<td class="p-2 text-right text-yellow-400 font-bold">${item.quantity}</td>`;
+            html += `<td class="p-2 text-slate-400 text-xs">${order.orderDate || ''}</td>`;
+            html += '</tr>';
+        });
+    });
+    
+    tbody.innerHTML = html;
+    
+    // 綁定 checkbox 事件
+    document.querySelectorAll('.wave-order-check').forEach(cb => {
+        cb.addEventListener('change', updateWaveSelectedCount);
+    });
+}
+
+// 物流商顏色
+function getLogisticsColor(logistics) {
+    const colors = {
+        '全日物流': 'bg-blue-600',
+        '合順貨運': 'bg-green-600',
+        '大榮貨運': 'bg-orange-600',
+        '裕鵬物流': 'bg-purple-600',
+        '黑貓宅急便': 'bg-yellow-600 text-black',
+        '新竹物流': 'bg-red-600',
+        '崇文自送': 'bg-cyan-600',
+        '科技物流': 'bg-indigo-600',
+        '阿誠': 'bg-pink-600',
+        '文生': 'bg-teal-600',
+        '金東石': 'bg-amber-600',
+        '奧林': 'bg-lime-600',
+        '自取': 'bg-slate-600',
+        '未指定': 'bg-slate-700'
+    };
+    return colors[logistics] || 'bg-slate-600';
+}
+
+// 開啟建立波次 Modal
+window.openCreateWaveModal = function() {
+    document.getElementById('modal-create-wave').classList.remove('hidden');
+    
+    // 載入物流商選項
+    const select = document.getElementById('wave-filter-logistics');
+    select.innerHTML = '<option value="">全部物流</option>';
+    
+    const logisticsSet = new Set();
+    window._orderData.orders.forEach(o => {
+        if (o.status === 'pending') {
+            logisticsSet.add(o.logistics || '未指定');
+        }
+    });
+    
+    logisticsSet.forEach(l => {
+        select.innerHTML += `<option value="${l}">${l}</option>`;
+    });
+    
+    // 載入訂單
+    filterWaveOrders();
+};
+
+// 篩選訂單
+window.filterWaveOrders = function() {
+    const logistics = document.getElementById('wave-filter-logistics').value;
+    const dateFilter = document.getElementById('wave-filter-date').value;
+    
+    let orders = window._orderData.orders.filter(o => o.status === 'pending');
+    
+    if (logistics) {
+        orders = orders.filter(o => o.logistics === logistics);
+    }
+    
+    if (dateFilter) {
+        orders = orders.filter(o => o.orderDate && o.orderDate.includes(dateFilter.replace(/-/g, '/')));
+    }
+    
+    renderWaveOrderList(orders);
+    updateWaveSelectedCount();
+};
+
+// 更新已選數量
+function updateWaveSelectedCount() {
+    const checked = document.querySelectorAll('.wave-order-check:checked');
+    const uniqueOrders = new Set();
+    checked.forEach(cb => uniqueOrders.add(cb.dataset.orderNo));
+    document.getElementById('wave-selected-count').innerText = uniqueOrders.size;
+}
+
+// 全選
+window.selectAllWaveOrders = function() {
+    document.querySelectorAll('.wave-order-check').forEach(cb => cb.checked = true);
+    updateWaveSelectedCount();
+};
+
+// 取消全選
+window.deselectAllWaveOrders = function() {
+    document.querySelectorAll('.wave-order-check').forEach(cb => cb.checked = false);
+    updateWaveSelectedCount();
+};
+
+// 切換全選
+window.toggleWaveCheckAll = function() {
+    const checkAll = document.getElementById('wave-check-all').checked;
+    document.querySelectorAll('.wave-order-check').forEach(cb => cb.checked = checkAll);
+    updateWaveSelectedCount();
+};
+
+// 關閉建立波次 Modal
+window.closeCreateWaveModal = function() {
+    document.getElementById('modal-create-wave').classList.add('hidden');
+};
+
+// 建立波次 (升級版 - 彙總揀貨清單)
+window.createWave = async function() {
+    const checked = document.querySelectorAll('.wave-order-check:checked');
+    if (checked.length === 0) {
+        alert('請選擇至少一筆訂單');
+        return;
+    }
+    
+    // 收集選中的訂單
+    const selectedOrderNos = new Set();
+    checked.forEach(cb => selectedOrderNos.add(cb.dataset.orderNo));
+    
+    const selectedOrders = window._orderData.orders.filter(o => selectedOrderNos.has(o.orderNo));
+    
+    // 統計物流商
+    const logisticsSet = new Set();
+    selectedOrders.forEach(o => logisticsSet.add(o.logistics || '未指定'));
+    const logisticsStr = Array.from(logisticsSet).join(', ');
+    
+    // 彙總品項 (相同品名+規格 合併數量)
+    const summary = {};
+    let totalQty = 0;
+    
+    selectedOrders.forEach(order => {
+        (order.items || []).forEach(item => {
+            const key = `${item.productName}|||${item.spec || ''}`;
+            if (!summary[key]) {
+                summary[key] = {
+                    productName: item.productName,
+                    spec: item.spec || '',
+                    unit: item.unit || '',
+                    totalQty: 0,
+                    orders: []  // 記錄哪些訂單需要這個品項
+                };
+            }
+            summary[key].totalQty += item.quantity || 0;
+            summary[key].orders.push({
+                orderNo: order.orderNo,
+                orderId: order.id,
+                customer: order.customer,
+                quantity: item.quantity
+            });
+            totalQty += item.quantity || 0;
+        });
+    });
+    
+    // 轉換為陣列
+    const summaryList = Object.values(summary);
+    
+    // 建立波次
+    const wave = {
+        waveNo: generateWaveNo(),
+        logistics: logisticsStr,
+        status: 'pending',
+        orders: selectedOrders.map(o => ({
+            id: o.id,
+            orderNo: o.orderNo,
+            customer: o.customer,
+            logistics: o.logistics,
+            address: o.address,
+            items: o.items
+        })),
+        summary: summaryList,  // 彙總揀貨清單
+        orderCount: selectedOrders.length,
+        itemCount: summaryList.length,
+        totalQty: totalQty,
+        createdAt: new Date().toISOString(),
+        createdBy: window.getOperatorName ? window.getOperatorName() : 'system'
+    };
+    
+    // 存到 Firebase
+    try {
+        const docRef = await window.addDoc(window.collection(window.db, 'waves'), wave);
+        wave.id = docRef.id;
+        
+        // 更新訂單狀態
+        for (const order of selectedOrders) {
+            if (order.id) {
+                await window.updateDoc(window.doc(window.db, 'salesOrders', order.id), {
+                    status: 'inWave',
+                    waveNo: wave.waveNo
+                });
+            }
+        }
+        
+    } catch (err) {
+        console.error('儲存波次失敗:', err);
+    }
+    
+    // 也存到 localStorage
+    window._waveData.waves.push(wave);
+    saveWaves();
+    
+    closeCreateWaveModal();
+    refreshWaveList();
+    
+    alert('✅ 波次 ' + wave.waveNo + ' 建立成功！\n\n' +
+          '訂單數：' + selectedOrders.length + ' 筆\n' +
+          '品項數：' + summaryList.length + ' 項\n' +
+          '總件數：' + totalQty + ' 件\n\n' +
+          '📱 手機版已同步');
+};
+
+// 開啟波次執行 (升級版)
+window.openWaveExecute = function(waveNo) {
+    const wave = window._waveData.waves.find(w => w.waveNo === waveNo);
+    if (!wave) {
+        alert('找不到波次 ' + waveNo);
+        return;
+    }
+    
+    // 更新狀態
+    if (wave.status === 'pending') {
+        wave.status = 'picking';
+        wave.startedAt = new Date().toISOString();
+        saveWaves();
+        
+        // 同步到 Firebase
+        if (wave.id) {
+            window.updateDoc(window.doc(window.db, 'waves', wave.id), {
+                status: 'picking',
+                startedAt: wave.startedAt
+            }).catch(err => console.error('更新波次狀態失敗:', err));
+        }
+    }
+    
+    window._waveData.currentWave = wave;
+    window._waveData.pickingList = [];
+    window._waveData.completedItems = wave.completedItems || [];
+    
+    // 顯示資訊
+    document.getElementById('wave-exec-no').innerText = wave.waveNo;
+    document.getElementById('wave-exec-logistics').innerText = '物流商：' + wave.logistics;
+    
+    // 產生揀貨清單 (使用彙總清單)
+    generatePickingListV2(wave);
+    
+    document.getElementById('modal-wave-execute').classList.remove('hidden');
+    
+    setTimeout(function() {
+        document.getElementById('wave-scan-input').focus();
+    }, 100);
+};
+
+// 產生揀貨清單 V2 (彙總版)
+function generatePickingListV2(wave) {
+    const pickingList = [];
+    const pallets = window.currentPallets ? window.currentPallets() : [];
+    
+    // 為每個彙總品項分配庫存
+    (wave.summary || []).forEach(item => {
+        let needed = item.totalQty;
+        const productName = item.productName;
+        const spec = item.spec || '';
+        
+        // 找符合的庫存 (FIFO - 效期近的優先)
+        const matchingPallets = pallets.filter(p => {
+            const pName = p.productName || '';
+            const pSpec = p.spec || '';
+            return pName === productName && (spec === '' || pSpec.includes(spec) || spec.includes(pSpec));
+        }).sort((a, b) => {
+            const dateA = a.expDate || '9999-12-31';
+            const dateB = b.expDate || '9999-12-31';
+            return dateA.localeCompare(dateB);
+        });
+        
+        matchingPallets.forEach(pallet => {
+            if (needed <= 0) return;
+            
+            const available = parseInt(pallet.quantity) || 0;
+            const pick = Math.min(available, needed);
+            
+            if (pick > 0) {
+                pickingList.push({
+                    id: pallet.palletId + '-' + item.productName,
+                    palletId: pallet.palletId,
+                    locationId: pallet.locationId,
+                    productName: pallet.productName,
+                    spec: pallet.spec || '',
+                    batchNo: pallet.batchNo || '',
+                    expDate: pallet.expDate || '',
+                    pickQty: pick,
+                    availableQty: available,
+                    orders: item.orders,  // 需要這個品項的訂單列表
+                    completed: false
+                });
+                needed -= pick;
+            }
+        });
+        
+        // 庫存不足
+        if (needed > 0) {
+            pickingList.push({
+                id: 'shortage-' + item.productName,
+                palletId: '-',
+                locationId: '⚠️ 庫存不足',
+                productName: item.productName,
+                spec: item.spec || '',
+                batchNo: '',
+                pickQty: needed,
+                availableQty: 0,
+                orders: item.orders,
+                completed: false,
+                shortage: true
+            });
+        }
+    });
+    
+    // 標記已完成項目
+    (wave.completedItems || []).forEach(itemId => {
+        const item = pickingList.find(p => p.id === itemId);
+        if (item) item.completed = true;
+    });
+    
+    // 依儲位排序
+    pickingList.sort((a, b) => {
+        if (a.shortage && !b.shortage) return 1;
+        if (!a.shortage && b.shortage) return -1;
+        return (a.locationId || '').localeCompare(b.locationId || '');
+    });
+    
+    window._waveData.pickingList = pickingList;
+    renderPickingListV2();
+    updateWaveProgress();
+}
+
+// 渲染揀貨清單 V2
+function renderPickingListV2() {
+    const tbody = document.getElementById('wave-picking-list');
+    if (!tbody) return;
+    
+    const list = window._waveData.pickingList;
+    
+    if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-500 py-8">沒有揀貨項目</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    list.forEach(item => {
+        const statusIcon = item.completed ? 
+            '<i class="fa-solid fa-check-circle text-green-500 text-lg"></i>' :
+            (item.shortage ? 
+                '<i class="fa-solid fa-exclamation-triangle text-red-500 text-lg"></i>' :
+                '<i class="fa-regular fa-circle text-slate-500 text-lg"></i>');
+        
+        const rowClass = item.completed ? 'bg-green-900/20' : (item.shortage ? 'bg-red-900/20' : '');
+        const textClass = item.completed ? 'line-through text-slate-500' : '';
+        
+        // 顯示需要此品項的訂單
+        const orderInfo = (item.orders || []).slice(0, 3).map(o => 
+            `${o.customer}(${o.quantity})`
+        ).join(', ');
+        const moreOrders = (item.orders || []).length > 3 ? '...' : '';
+        
+        html += `<tr class="hover:bg-slate-800/50 border-b border-slate-700/50 ${rowClass}">`;
+        html += `<td class="p-2 text-center">${statusIcon}</td>`;
+        html += `<td class="p-2 ${textClass}"><span class="text-cyan-400 font-mono">${item.locationId}</span></td>`;
+        html += `<td class="p-2 ${textClass}"><span class="text-purple-400 font-mono text-xs">${item.palletId}</span></td>`;
+        html += `<td class="p-2 ${textClass} text-white">${item.productName}</td>`;
+        html += `<td class="p-2 ${textClass} text-slate-400 text-xs">${item.spec}</td>`;
+        html += `<td class="p-2 text-right ${textClass}">
+            <span class="text-yellow-400 font-bold text-lg">${item.pickQty}</span>
+            ${!item.shortage ? `<span class="text-slate-500 text-xs ml-1">/ ${item.availableQty}</span>` : ''}
+        </td>`;
+        html += `<td class="p-2 ${textClass} text-xs text-slate-400">${item.batchNo || '-'}</td>`;
+        html += `<td class="p-2 ${textClass} text-xs text-slate-500" title="${(item.orders || []).map(o => o.customer).join(', ')}">${orderInfo}${moreOrders}</td>`;
+        html += '</tr>';
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// 更新揀貨進度
+function updateWaveProgress() {
+    const list = window._waveData.pickingList;
+    const completed = list.filter(i => i.completed).length;
+    const total = list.filter(i => !i.shortage).length;
+    
+    document.getElementById('wave-exec-progress').innerText = completed + '/' + total;
+}
+
+// 確認揀貨掃描
+window.confirmWaveScan = async function() {
+    const input = document.getElementById('wave-scan-input');
+    const result = document.getElementById('wave-scan-result');
+    const scanned = input.value.trim().toUpperCase();
+    
+    if (!scanned) return;
+    
+    const list = window._waveData.pickingList;
+    
+    // 找到符合的項目 (板號或儲位)
+    const found = list.find(i => !i.completed && !i.shortage && 
+        (i.palletId === scanned || i.palletId.toUpperCase() === scanned ||
+         i.locationId === scanned || i.locationId.toUpperCase() === scanned));
+    
+    if (!found) {
+        result.className = 'mt-2 text-sm p-2 rounded bg-red-900/50 text-red-300';
+        result.innerText = '❌ 找不到匹配項目：' + scanned;
+        result.classList.remove('hidden');
+        input.select();
+        return;
+    }
+    
+    // 標記完成
+    found.completed = true;
+    
+    // 儲存進度
+    const wave = window._waveData.currentWave;
+    if (!wave.completedItems) wave.completedItems = [];
+    wave.completedItems.push(found.id);
+    
+    // 同步到 Firebase
+    if (wave.id) {
+        try {
+            await window.updateDoc(window.doc(window.db, 'waves', wave.id), {
+                completedItems: wave.completedItems,
+                status: 'picking'
+            });
+        } catch (err) {
+            console.error('更新進度失敗:', err);
+        }
+    }
+    
+    saveWaves();
+    
+    result.className = 'mt-2 text-sm p-2 rounded bg-green-900/50 text-green-300';
+    result.innerText = '✅ ' + found.locationId + ' → ' + found.productName + ' x ' + found.pickQty;
+    result.classList.remove('hidden');
+    
+    renderPickingListV2();
+    updateWaveProgress();
+    
+    input.value = '';
+    input.focus();
+};
+
+// 列印揀貨單
+window.printPickingList = function() {
+    const wave = window._waveData.currentWave;
+    const list = window._waveData.pickingList;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>揀貨單 - ${wave.waveNo}</title>
+            <style>
+                body { font-family: 'Microsoft JhengHei', sans-serif; padding: 20px; }
+                h1 { font-size: 24px; margin-bottom: 10px; }
+                .info { margin-bottom: 20px; color: #666; }
+                table { width: 100%; border-collapse: collapse; }
+                th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+                th { background: #f0f0f0; }
+                .qty { text-align: right; font-weight: bold; font-size: 18px; }
+                .location { font-family: monospace; font-size: 14px; }
+                .shortage { background: #fee; color: #c00; }
+                @media print { body { padding: 0; } }
+            </style>
+        </head>
+        <body>
+            <h1>📦 揀貨單 - ${wave.waveNo}</h1>
+            <div class="info">
+                物流商：${wave.logistics} | 
+                訂單數：${wave.orderCount} | 
+                品項數：${wave.itemCount} | 
+                總件數：${wave.totalQty} |
+                列印時間：${new Date().toLocaleString('zh-TW')}
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:40px">✓</th>
+                        <th>儲位</th>
+                        <th>板號</th>
+                        <th>品名</th>
+                        <th>規格</th>
+                        <th>批號</th>
+                        <th class="qty">數量</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${list.map(item => `
+                        <tr class="${item.shortage ? 'shortage' : ''}">
+                            <td>☐</td>
+                            <td class="location">${item.locationId}</td>
+                            <td style="font-size:12px">${item.palletId}</td>
+                            <td>${item.productName}</td>
+                            <td style="font-size:12px">${item.spec}</td>
+                            <td style="font-size:12px">${item.batchNo || '-'}</td>
+                            <td class="qty">${item.pickQty}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+};
+
+// 列印分貨標籤
+window.printSortingLabels = function() {
+    const wave = window._waveData.currentWave;
+    if (!wave || !wave.orders) {
+        alert('沒有訂單資料');
+        return;
+    }
+    
+    const printWindow = window.open('', '_blank');
+    let labelsHtml = '';
+    
+    wave.orders.forEach(order => {
+        labelsHtml += `
+            <div class="label">
+                <div class="logistics">${order.logistics || wave.logistics}</div>
+                <div class="order-no">📦 ${order.orderNo}</div>
+                <div class="customer">👤 ${order.customer}</div>
+                <div class="items">
+                    ${(order.items || []).map(item => 
+                        `<div class="item">${item.productName} ${item.spec || ''} <strong>x ${item.quantity}</strong></div>`
+                    ).join('')}
+                </div>
+                ${order.address ? `<div class="address">📍 ${order.address}</div>` : ''}
+            </div>
+        `;
+    });
+    
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>分貨標籤 - ${wave.waveNo}</title>
+            <style>
+                body { font-family: 'Microsoft JhengHei', sans-serif; }
+                .label {
+                    border: 2px solid #333;
+                    padding: 15px;
+                    margin: 10px;
+                    page-break-inside: avoid;
+                    width: 300px;
+                    display: inline-block;
+                    vertical-align: top;
+                }
+                .logistics { 
+                    background: #333; 
+                    color: white; 
+                    padding: 5px 10px; 
+                    font-weight: bold;
+                    margin: -15px -15px 10px -15px;
+                }
+                .order-no { font-size: 14px; color: #666; margin-bottom: 5px; }
+                .customer { font-size: 20px; font-weight: bold; margin-bottom: 10px; }
+                .items { border-top: 1px dashed #ccc; padding-top: 10px; }
+                .item { margin: 5px 0; }
+                .address { 
+                    font-size: 12px; 
+                    color: #666; 
+                    margin-top: 10px; 
+                    border-top: 1px dashed #ccc; 
+                    padding-top: 10px; 
+                }
+                @media print { 
+                    .label { break-inside: avoid; }
+                }
+            </style>
+        </head>
+        <body>
+            ${labelsHtml}
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+};
+
+// 完成波次
+window.completeWave = async function() {
+    const wave = window._waveData.currentWave;
+    const list = window._waveData.pickingList;
+    
+    const completed = list.filter(i => i.completed).length;
+    const total = list.filter(i => !i.shortage).length;
+    
+    if (completed === 0) {
+        alert('尚未揀貨任何項目');
+        return;
+    }
+    
+    if (completed < total) {
+        if (!confirm(`尚有 ${total - completed} 項未完成，確定要結束波次嗎？`)) {
+            return;
+        }
+    }
+    
+    if (!confirm(`確定完成波次 ${wave.waveNo}？\n\n已揀：${completed}/${total} 項`)) {
+        return;
+    }
+    
+    // 更新波次狀態
+    wave.status = 'done';
+    wave.completedAt = new Date().toISOString();
+    
+    // 扣減庫存並記錄
+    const pallets = window.currentPallets ? window.currentPallets() : [];
+    
+    for (const item of list.filter(i => i.completed)) {
+        const pallet = pallets.find(p => p.palletId === item.palletId);
+        if (pallet && pallet.id) {
+            const newQty = Math.max(0, (parseInt(pallet.quantity) || 0) - item.pickQty);
+            
+            try {
+                await window.updateDoc(window.doc(window.db, 'pallets', pallet.id), {
+                    quantity: newQty
+                });
+                
+                // 記錄出庫異動
+                if (window.logInventoryChange) {
+                    await window.logInventoryChange({
+                        type: 'outbound',
+                        productName: item.productName,
+                        spec: item.spec,
+                        quantity: item.pickQty,
+                        quantityChange: -item.pickQty,
+                        locationId: item.locationId,
+                        batchNo: item.batchNo,
+                        palletId: item.palletId,
+                        note: '波次揀貨 ' + wave.waveNo
+                    });
+                }
+            } catch (err) {
+                console.error('扣減庫存失敗:', item.palletId, err);
+            }
+        }
+    }
+    
+    // 更新訂單狀態
+    for (const order of wave.orders || []) {
+        if (order.id) {
+            try {
+                await window.updateDoc(window.doc(window.db, 'salesOrders', order.id), {
+                    status: 'shipped',
+                    shippedAt: new Date().toISOString(),
+                    waveNo: wave.waveNo
+                });
+            } catch (err) {
+                console.error('更新訂單狀態失敗:', order.orderNo, err);
+            }
+        }
+    }
+    
+    // 更新 Firebase
+    if (wave.id) {
+        try {
+            await window.updateDoc(window.doc(window.db, 'waves', wave.id), {
+                status: 'done',
+                completedAt: wave.completedAt
+            });
+        } catch (err) {
+            console.error('更新波次狀態失敗:', err);
+        }
+    }
+    
+    saveWaves();
+    
+    alert('✅ 波次 ' + wave.waveNo + ' 已完成！');
+    
+    closeWaveExecuteModal();
+    refreshWaveList();
+};
+
+// 關閉波次執行 Modal
+window.closeWaveExecuteModal = function() {
+    document.getElementById('modal-wave-execute').classList.add('hidden');
+    refreshWaveList();
+};
+
+// 頁面載入時初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 載入訂單
+    if (window.db) {
+        loadOrdersFromFirebase();
+    }
+});
+
+console.log('✅ 波次理貨升級版載入完成');
+
+        </script>
 </body>
 </html>
