@@ -323,6 +323,7 @@
                 <i class="fa-solid fa-chevron-down nav-chevron"></i>
             </div>
             <div class="nav-group-items collapsed" id="grp-reports">
+                <div class="nav-item" onclick="switchTab('report-center', event)"><i class="fa-solid fa-file-export w-4 text-center mr-2 text-green-400"></i>報表中心</div>
                 <div class="nav-item" onclick="switchTab('expiry-management', event)"><i class="fa-solid fa-calendar-xmark w-4 text-center mr-2 text-red-400"></i>效期管理</div>
                 <div class="nav-item" onclick="switchTab('inventory-log', event)"><i class="fa-solid fa-clock-rotate-left w-4 text-center mr-2"></i>異動查詢</div>
                 <div class="nav-item" onclick="switchTab('product-analysis', event)"><i class="fa-solid fa-chart-bar w-4 text-center mr-2"></i>出貨分析</div>
@@ -665,8 +666,11 @@
                         <button onclick="document.getElementById('order-excel-import').click()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-bold mr-2">
                             <i class="fa-solid fa-file-excel mr-1"></i>匯入訂單
                         </button>
-                        <button onclick="openCreateWaveModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold">
-                            <i class="fa-solid fa-plus mr-1"></i>建立波次
+                        <button onclick="openCreateWaveModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold mr-2">
+                            <i class="fa-solid fa-plus mr-1"></i>手動建立
+                        </button>
+                        <button onclick="autoCreateWavesByLogistics()" class="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-bold mr-2">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>自動建立
                         </button>
                         <button onclick="refreshWaveList()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-bold">
                             <i class="fa-solid fa-sync mr-1"></i>重新整理
@@ -848,6 +852,45 @@
             </div>
 
             <!-- 原料領用（建議+確認） -->
+
+            <!-- 分貨作業 Modal -->
+            <div id="modal-wave-sorting" class="fixed inset-0 z-50 bg-black/80 hidden flex items-center justify-center backdrop-blur-sm">
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl w-[900px] max-h-[90vh] shadow-2xl flex flex-col">
+                    <div class="bg-gradient-to-r from-purple-900 to-pink-900 p-4 rounded-t-2xl border-b border-slate-700 flex justify-between items-center">
+                        <div>
+                            <h3 class="text-white font-bold text-lg"><i class="fa-solid fa-tags mr-2 text-purple-400"></i>分貨作業 - <span id="sorting-wave-no">W001</span></h3>
+                            <p class="text-purple-200 text-xs mt-1">物流商：<span id="sorting-logistics">-</span> | 訂單數：<span id="sorting-order-count">0</span></p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="printSortingLabels()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                                <i class="fa-solid fa-print mr-1"></i>列印全部標籤
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 分貨說明 -->
+                    <div class="p-4 bg-purple-900/20 border-b border-slate-700">
+                        <div class="flex items-center text-purple-300 text-sm">
+                            <i class="fa-solid fa-info-circle mr-2"></i>
+                            請依標籤將貨物分配給各客戶，確認無誤後點擊「完成分貨」
+                        </div>
+                    </div>
+                    
+                    <!-- 訂單清單 -->
+                    <div class="flex-1 overflow-auto p-4" id="sorting-orders-list">
+                        <div class="text-center text-slate-500 py-8">載入中...</div>
+                    </div>
+                    
+                    <!-- 底部按鈕 -->
+                    <div class="p-4 border-t border-slate-700 flex gap-3">
+                        <button onclick="completeSorting()" class="flex-1 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold">
+                            <i class="fa-solid fa-truck mr-2"></i>完成分貨，出貨
+                        </button>
+                        <button onclick="closeSortingModal()" class="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">關閉</button>
+                    </div>
+                </div>
+            </div>
+
             <div id="view-picking-rm" class="view-panel h-full hidden flex flex-col p-4">
                 <div class="bg-gradient-to-r from-cyan-900 to-cyan-800 border border-cyan-600 p-4 rounded-lg mb-4">
                     <h2 class="text-white font-bold text-xl"><i class="fa-solid fa-fish mr-2 text-cyan-400"></i>原料領用 - 建議確認模式</h2>
@@ -2027,6 +2070,177 @@
             </div>
 
             <!-- 庫存異動查詢頁面 -->
+
+            <!-- 報表中心 -->
+            <div id="view-report-center" class="view-panel h-full hidden flex flex-col p-4">
+                <div class="flex items-center justify-between bg-gradient-to-r from-green-900 to-emerald-900 border border-green-600 p-4 rounded-xl mb-4">
+                    <div>
+                        <h2 class="text-white font-bold text-2xl"><i class="fa-solid fa-file-export mr-2 text-green-400"></i>報表中心</h2>
+                        <p class="text-green-200 text-sm mt-1">匯出各類報表，支援 Excel 和列印格式</p>
+                    </div>
+                </div>
+                
+                <!-- 日期選擇 -->
+                <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-4">
+                    <div class="grid grid-cols-4 gap-4">
+                        <div>
+                            <label class="text-slate-400 text-xs mb-1 block">開始日期</label>
+                            <input type="date" id="report-date-from" class="scan-input w-full">
+                        </div>
+                        <div>
+                            <label class="text-slate-400 text-xs mb-1 block">結束日期</label>
+                            <input type="date" id="report-date-to" class="scan-input w-full">
+                        </div>
+                        <div>
+                            <label class="text-slate-400 text-xs mb-1 block">快速選擇</label>
+                            <select id="report-quick-date" class="scan-input w-full" onchange="setQuickDateRange()">
+                                <option value="">自訂</option>
+                                <option value="today">今天</option>
+                                <option value="yesterday">昨天</option>
+                                <option value="week">本週</option>
+                                <option value="month">本月</option>
+                                <option value="lastMonth">上月</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button onclick="refreshReportPreview()" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold w-full">
+                                <i class="fa-solid fa-sync mr-1"></i>更新預覽
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 報表類型選擇 -->
+                <div class="grid grid-cols-3 gap-4 mb-4">
+                    <!-- 出貨報表 -->
+                    <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                        <h3 class="text-white font-bold mb-3"><i class="fa-solid fa-truck text-blue-400 mr-2"></i>出貨報表</h3>
+                        <div class="space-y-2">
+                            <button onclick="generateReport('shipping-logistics')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-truck-fast mr-2 text-blue-400"></i>依物流商統計
+                            </button>
+                            <button onclick="generateReport('shipping-customer')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-users mr-2 text-green-400"></i>依客戶統計
+                            </button>
+                            <button onclick="generateReport('shipping-product')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-box mr-2 text-yellow-400"></i>依產品統計
+                            </button>
+                            <button onclick="generateReport('shipping-detail')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-list mr-2 text-purple-400"></i>出貨明細
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 庫存報表 -->
+                    <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                        <h3 class="text-white font-bold mb-3"><i class="fa-solid fa-warehouse text-orange-400 mr-2"></i>庫存報表</h3>
+                        <div class="space-y-2">
+                            <button onclick="generateReport('inventory-inbound')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-arrow-down mr-2 text-green-400"></i>入庫明細
+                            </button>
+                            <button onclick="generateReport('inventory-outbound')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-arrow-up mr-2 text-red-400"></i>出庫明細
+                            </button>
+                            <button onclick="generateReport('inventory-summary')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-chart-pie mr-2 text-cyan-400"></i>庫存彙總
+                            </button>
+                            <button onclick="generateReport('inventory-expiry')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-calendar-xmark mr-2 text-red-400"></i>效期預警
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 波次報表 -->
+                    <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                        <h3 class="text-white font-bold mb-3"><i class="fa-solid fa-layer-group text-purple-400 mr-2"></i>波次報表</h3>
+                        <div class="space-y-2">
+                            <button onclick="generateReport('wave-summary')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-chart-bar mr-2 text-blue-400"></i>波次統計
+                            </button>
+                            <button onclick="generateReport('wave-efficiency')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-gauge-high mr-2 text-green-400"></i>揀貨效率
+                            </button>
+                            <button onclick="generateReport('wave-shortage')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-exclamation-triangle mr-2 text-yellow-400"></i>缺貨統計
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 第二排報表 -->
+                <div class="grid grid-cols-3 gap-4 mb-4">
+                    <!-- 訂單報表 -->
+                    <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                        <h3 class="text-white font-bold mb-3"><i class="fa-solid fa-file-invoice text-cyan-400 mr-2"></i>訂單報表</h3>
+                        <div class="space-y-2">
+                            <button onclick="generateReport('order-status')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-chart-pie mr-2 text-blue-400"></i>訂單狀態統計
+                            </button>
+                            <button onclick="generateReport('order-logistics')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-truck mr-2 text-green-400"></i>物流商分布
+                            </button>
+                            <button onclick="generateReport('order-pending')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-clock mr-2 text-yellow-400"></i>待處理訂單
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 每日彙總 -->
+                    <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                        <h3 class="text-white font-bold mb-3"><i class="fa-solid fa-calendar-day text-pink-400 mr-2"></i>每日彙總</h3>
+                        <div class="space-y-2">
+                            <button onclick="generateReport('daily-summary')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-calendar-check mr-2 text-blue-400"></i>每日出貨彙總
+                            </button>
+                            <button onclick="generateReport('daily-inbound')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-arrow-down mr-2 text-green-400"></i>每日入庫彙總
+                            </button>
+                            <button onclick="generateReport('daily-trend')" class="w-full text-left px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm text-slate-200">
+                                <i class="fa-solid fa-chart-line mr-2 text-purple-400"></i>出貨趨勢圖
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 快速報表 -->
+                    <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                        <h3 class="text-white font-bold mb-3"><i class="fa-solid fa-bolt text-yellow-400 mr-2"></i>快速報表</h3>
+                        <div class="space-y-2">
+                            <button onclick="generateTodayReport()" class="w-full text-left px-3 py-2 bg-blue-700 hover:bg-blue-600 rounded text-sm text-white font-bold">
+                                <i class="fa-solid fa-sun mr-2"></i>今日出貨報表
+                            </button>
+                            <button onclick="generateWeekReport()" class="w-full text-left px-3 py-2 bg-green-700 hover:bg-green-600 rounded text-sm text-white font-bold">
+                                <i class="fa-solid fa-calendar-week mr-2"></i>本週出貨報表
+                            </button>
+                            <button onclick="generateLowStockReport()" class="w-full text-left px-3 py-2 bg-red-700 hover:bg-red-600 rounded text-sm text-white font-bold">
+                                <i class="fa-solid fa-triangle-exclamation mr-2"></i>低庫存警報
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 報表預覽區 -->
+                <div class="flex-1 bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden flex flex-col">
+                    <div class="bg-slate-900 p-3 border-b border-slate-700 flex justify-between items-center">
+                        <h3 class="text-white font-bold"><i class="fa-solid fa-eye mr-2 text-slate-400"></i>報表預覽</h3>
+                        <div class="flex gap-2">
+                            <button onclick="exportReportExcel()" class="bg-green-600 hover:bg-green-500 text-white px-4 py-1 rounded text-sm font-bold">
+                                <i class="fa-solid fa-file-excel mr-1"></i>匯出 Excel
+                            </button>
+                            <button onclick="printReport()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1 rounded text-sm font-bold">
+                                <i class="fa-solid fa-print mr-1"></i>列印
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-auto p-4" id="report-preview-area">
+                        <div class="text-center text-slate-500 py-20">
+                            <i class="fa-solid fa-chart-simple text-6xl mb-4"></i>
+                            <div class="text-lg">請選擇報表類型</div>
+                            <div class="text-sm mt-2">設定日期區間後點擊報表按鈕產生報表</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="view-inventory-log" class="view-panel h-full hidden flex flex-col p-4">
                 <!-- 頂部標題 -->
                 <div class="flex items-center justify-between bg-gradient-to-r from-purple-900 to-indigo-900 border border-purple-600 p-4 rounded-xl mb-4">
@@ -6355,11 +6569,12 @@
             var todayWaves = waves.filter(function(w) { return w.createdAt && w.createdAt.indexOf(today) === 0; });
             var pending = waves.filter(function(w) { return w.status === 'pending'; });
             var picking = waves.filter(function(w) { return w.status === 'picking'; });
+            var sorting = waves.filter(function(w) { return w.status === 'sorting'; });
             var done = waves.filter(function(w) { return w.status === 'done'; });
             
             document.getElementById('wave-stat-today').innerText = todayWaves.length;
             document.getElementById('wave-stat-pending').innerText = pending.length;
-            document.getElementById('wave-stat-picking').innerText = picking.length;
+            document.getElementById('wave-stat-picking').innerText = picking.length + (sorting.length > 0 ? '+' + sorting.length : '');
             document.getElementById('wave-stat-done').innerText = done.length;
             
             // 計算待出貨訂單數
@@ -6381,30 +6596,60 @@
             var html = '';
             sorted.forEach(function(wave) {
                 var statusBadge = '';
+                var progressInfo = '';
+                
                 if (wave.status === 'pending') {
                     statusBadge = '<span class="badge badge-yellow"><i class="fa-solid fa-clock mr-1"></i>待揀貨</span>';
                 } else if (wave.status === 'picking') {
+                    // 計算揀貨進度
+                    var completed = (wave.completedItems || []).length;
+                    var total = wave.itemCount || 0;
+                    var pct = total > 0 ? Math.round(completed / total * 100) : 0;
                     statusBadge = '<span class="badge badge-blue"><i class="fa-solid fa-spinner fa-spin mr-1"></i>揀貨中</span>';
+                    progressInfo = '<div class="text-xs text-blue-400 mt-1">' + pct + '% (' + completed + '/' + total + ')</div>';
+                } else if (wave.status === 'sorting') {
+                    statusBadge = '<span class="badge badge-purple"><i class="fa-solid fa-tags mr-1"></i>待分貨</span>';
                 } else if (wave.status === 'done') {
-                    statusBadge = '<span class="badge badge-green"><i class="fa-solid fa-check mr-1"></i>已完成</span>';
+                    statusBadge = '<span class="badge badge-green"><i class="fa-solid fa-check mr-1"></i>已出貨</span>';
+                }
+                
+                // 計算耗時
+                var timeInfo = '';
+                if (wave.startedAt && wave.status !== 'pending') {
+                    var startTime = new Date(wave.startedAt);
+                    var endTime = wave.completedAt ? new Date(wave.completedAt) : new Date();
+                    var minutes = Math.round((endTime - startTime) / 60000);
+                    if (wave.status === 'done') {
+                        timeInfo = '<div class="text-xs text-slate-500">耗時 ' + minutes + ' 分鐘</div>';
+                    } else {
+                        timeInfo = '<div class="text-xs text-orange-400">已進行 ' + minutes + ' 分鐘</div>';
+                    }
                 }
                 
                 html += '<tr class="hover:bg-slate-800/50 border-b border-slate-700/50">';
                 html += '<td class="p-3 font-mono text-cyan-400 font-bold">' + wave.waveNo + '</td>';
                 html += '<td class="p-3 text-white">' + (wave.logistics || '混合') + '</td>';
-                html += '<td class="p-3">' + statusBadge + '</td>';
+                html += '<td class="p-3">' + statusBadge + progressInfo + timeInfo + '</td>';
                 html += '<td class="p-3 text-right text-slate-300">' + (wave.orders ? wave.orders.length : 0) + '</td>';
                 html += '<td class="p-3 text-right text-slate-300">' + (wave.itemCount || 0) + '</td>';
                 html += '<td class="p-3 text-right text-yellow-400 font-bold">' + (wave.totalQty || 0) + '</td>';
                 html += '<td class="p-3 text-slate-400 text-xs">' + new Date(wave.createdAt).toLocaleString('zh-TW') + '</td>';
                 html += '<td class="p-3 text-center">';
-                if (wave.status !== 'done') {
-                    html += '<button onclick="openWaveExecute(\'' + wave.waveNo + '\')" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded mr-1"><i class="fa-solid fa-play mr-1"></i>執行</button>';
-                    html += '<button onclick="openAddToWaveModal(\'' + wave.waveNo + '\')" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-2 py-1 rounded mr-1" title="追加訂單"><i class="fa-solid fa-plus"></i></button>';
-                }
-                html += '<button onclick="viewWaveDetail(\'' + wave.waveNo + '\')" class="bg-slate-600 hover:bg-slate-500 text-white text-xs px-2 py-1 rounded mr-1"><i class="fa-solid fa-eye"></i></button>';
+                // 依狀態顯示不同按鈕
                 if (wave.status === 'pending') {
-                    html += '<button onclick="deleteWave(\'' + wave.waveNo + '\')" class="bg-red-600 hover:bg-red-500 text-white text-xs px-2 py-1 rounded"><i class="fa-solid fa-trash"></i></button>';
+                    html += '<button onclick="openWaveExecute(\'' + wave.waveNo + '\')" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded mr-1"><i class="fa-solid fa-play mr-1"></i>開始揀貨</button>';
+                    html += '<button onclick="openAddToWaveModal(\'' + wave.waveNo + '\')" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-2 py-1 rounded mr-1" title="追加訂單"><i class="fa-solid fa-plus"></i></button>';
+                } else if (wave.status === 'picking') {
+                    html += '<button onclick="openWaveExecute(\'' + wave.waveNo + '\')" class="bg-orange-600 hover:bg-orange-500 text-white text-xs px-3 py-1 rounded mr-1"><i class="fa-solid fa-spinner fa-spin mr-1"></i>繼續揀貨</button>';
+                } else if (wave.status === 'sorting') {
+                    html += '<button onclick="openWaveSorting(\'' + wave.waveNo + '\')" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded mr-1"><i class="fa-solid fa-tags mr-1"></i>分貨作業</button>';
+                }
+                html += '<button onclick="viewWaveDetail(\'' + wave.waveNo + '\')" class="bg-slate-600 hover:bg-slate-500 text-white text-xs px-2 py-1 rounded mr-1" title="檢視明細"><i class="fa-solid fa-eye"></i></button>';
+                if (wave.status === 'pending') {
+                    html += '<button onclick="deleteWave(\'' + wave.waveNo + '\')" class="bg-red-600 hover:bg-red-500 text-white text-xs px-2 py-1 rounded" title="刪除波次"><i class="fa-solid fa-trash"></i></button>';
+                }
+                if (wave.status === 'done') {
+                    html += '<button onclick="reprintWaveLabels(\'' + wave.waveNo + '\')" class="bg-slate-600 hover:bg-slate-500 text-white text-xs px-2 py-1 rounded" title="重印標籤"><i class="fa-solid fa-print"></i></button>';
                 }
                 html += '</td>';
                 html += '</tr>';
@@ -11122,7 +11367,7 @@
                 html += '<td class="p-3 font-bold text-white">' + (user.name || '-') + '</td>';
                 html += '<td class="p-3"><span class="badge badge-' + role.color + '"><i class="fa-solid fa-' + role.icon + ' mr-1"></i>' + role.name + '</span></td>';
                 html += '<td class="p-3 text-slate-400">' + (user.dept || '-') + '</td>';
-                html += '<td class="p-3">' + statusBadge + '</td>';
+                html += '<td class="p-3">' + statusBadge + progressInfo + timeInfo + '</td>';
                 html += '<td class="p-3 text-slate-400 text-xs">' + lastLogin + '</td>';
                 html += '<td class="p-3 text-center">';
                 html += '<button onclick="editUser(\'' + user.email + '\')" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2 py-1 rounded mr-1"><i class="fa-solid fa-pen"></i></button>';
@@ -11945,13 +12190,30 @@ window.importERPExcel = async function(event) {
             
             window._orderData.lastImportTime = new Date().toISOString();
             
-            alert('✅ 匯入完成！\n\n' +
-                  '新增：' + savedCount + ' 筆\n' +
-                  '略過（已存在）：' + skipCount + ' 筆\n' +
-                  '總訂單數：' + window._orderData.orders.length + ' 筆');
-            
             renderOrderList();
             refreshWaveList();
+            
+            // 詢問是否自動建立波次
+            if (savedCount > 0) {
+                const autoCreate = confirm(
+                    '✅ 匯入完成！\n\n' +
+                    '新增：' + savedCount + ' 筆\n' +
+                    '略過（已存在）：' + skipCount + ' 筆\n' +
+                    '總訂單數：' + window._orderData.orders.length + ' 筆\n\n' +
+                    '━━━━━━━━━━━━━━━━━━━━━━\n' +
+                    '是否要自動依物流商建立波次？\n' +
+                    '（點擊「確定」自動建立，「取消」稍後手動建立）'
+                );
+                
+                if (autoCreate) {
+                    await autoCreateWavesByLogistics();
+                }
+            } else {
+                alert('✅ 匯入完成！\n\n' +
+                      '新增：' + savedCount + ' 筆\n' +
+                      '略過（已存在）：' + skipCount + ' 筆\n' +
+                      '總訂單數：' + window._orderData.orders.length + ' 筆');
+            }
             
         } catch (err) {
             console.error('匯入失敗:', err);
@@ -12131,8 +12393,10 @@ window.createWave = async function() {
     const logisticsStr = Array.from(logisticsSet).join(', ');
     
     // 彙總品項 (相同品名+規格 合併數量)
+    // 揀貨單位以「件/箱」為主，不是以「盒/包」
     const summary = {};
-    let totalQty = 0;
+    let totalQty = 0;      // 總件數
+    let totalSmallQty = 0; // 總小單位數
     
     selectedOrders.forEach(order => {
         (order.items || []).forEach(item => {
@@ -12141,19 +12405,26 @@ window.createWave = async function() {
                 summary[key] = {
                     productName: item.productName,
                     spec: item.spec || '',
-                    unit: item.unit || '',
-                    totalQty: 0,
+                    unit: item.packageUnit || '件',      // 揀貨單位（件/箱）
+                    smallUnit: item.unit || '',          // 小單位（盒/包）
+                    totalQty: 0,                         // 總件數
+                    totalSmallQty: 0,                    // 總小單位數
                     orders: []  // 記錄哪些訂單需要這個品項
                 };
             }
-            summary[key].totalQty += item.quantity || 0;
+            // 累加件數（packageQty）
+            const pkgQty = item.packageQty || 1;
+            summary[key].totalQty += pkgQty;
+            summary[key].totalSmallQty += item.quantity || 0;
             summary[key].orders.push({
                 orderNo: order.orderNo,
                 orderId: order.id,
                 customer: order.customer,
-                quantity: item.quantity
+                quantity: pkgQty,              // 件數
+                smallQuantity: item.quantity   // 小單位數
             });
-            totalQty += item.quantity || 0;
+            totalQty += pkgQty;
+            totalSmallQty += item.quantity || 0;
         });
     });
     
@@ -12210,7 +12481,8 @@ window.createWave = async function() {
     alert('✅ 波次 ' + wave.waveNo + ' 建立成功！\n\n' +
           '訂單數：' + selectedOrders.length + ' 筆\n' +
           '品項數：' + summaryList.length + ' 項\n' +
-          '總件數：' + totalQty + ' 件\n\n' +
+          '總揀貨：' + totalQty + ' 件\n' +
+          '（含 ' + totalSmallQty + ' 小單位）\n\n' +
           '📱 手機版已同步');
 };
 
@@ -12325,12 +12597,51 @@ function generatePickingListV2(wave) {
         if (item) item.completed = true;
     });
     
-    // 依儲位排序
+    // 依儲位路徑優化排序
+    // 規則：I庫(A→B) → J庫(C→D)，再按列號，最後按欄號
     pickingList.sort((a, b) => {
+        // 缺貨項目排最後
         if (a.shortage && !b.shortage) return 1;
         if (!a.shortage && b.shortage) return -1;
-        return (a.locationId || '').localeCompare(b.locationId || '');
+        
+        // 解析儲位 (格式: A-01-01)
+        const parseLocation = (loc) => {
+            if (!loc) return { warehouse: 9, zone: 'Z', row: 99, col: 99 };
+            const parts = loc.split('-');
+            const zone = (parts[0] || 'Z').toUpperCase();
+            
+            // 判斷庫別：A,B = I庫(1)，C,D = J庫(2)
+            let warehouse = 9;
+            if (zone === 'A' || zone === 'B') {
+                warehouse = 1; // I庫
+            } else if (zone === 'C' || zone === 'D') {
+                warehouse = 2; // J庫
+            }
+            
+            return {
+                warehouse: warehouse,
+                zone: zone,
+                row: parseInt(parts[1]) || 99,
+                col: parseInt(parts[2]) || 99
+            };
+        };
+        
+        const locA = parseLocation(a.locationId);
+        const locB = parseLocation(b.locationId);
+        
+        // 1. 先按庫別排序 (I庫 → J庫)
+        if (locA.warehouse !== locB.warehouse) return locA.warehouse - locB.warehouse;
+        // 2. 再按區域排序 (A→B 或 C→D)
+        if (locA.zone !== locB.zone) return locA.zone.localeCompare(locB.zone);
+        // 3. 再按列號排序
+        if (locA.row !== locB.row) return locA.row - locB.row;
+        // 4. 最後按欄號排序
+        return locA.col - locB.col;
     });
+    
+    // 計算預估揀貨時間 (假設每個品項平均 2 分鐘)
+    const estimatedMinutes = pickingList.filter(i => !i.shortage).length * 2;
+    window._waveData.estimatedTime = estimatedMinutes;
     
     window._waveData.pickingList = pickingList;
     renderPickingListV2();
@@ -12362,9 +12673,13 @@ function renderPickingListV2() {
         
         // 顯示需要此品項的訂單
         const orderInfo = (item.orders || []).slice(0, 3).map(o => 
-            `${o.customer}(${o.quantity})`
+            `${o.customer}(${o.quantity}${item.unit || '件'})`
         ).join(', ');
         const moreOrders = (item.orders || []).length > 3 ? '...' : '';
+        
+        // 顯示單位（件/箱）
+        const unitDisplay = item.unit || '件';
+        const smallInfo = item.totalSmallQty ? `<span class="text-slate-500 text-xs ml-1">(${item.totalSmallQty}${item.smallUnit || ''})</span>` : '';
         
         html += `<tr class="hover:bg-slate-800/50 border-b border-slate-700/50 ${rowClass}">`;
         html += `<td class="p-2 text-center">${statusIcon}</td>`;
@@ -12374,7 +12689,8 @@ function renderPickingListV2() {
         html += `<td class="p-2 ${textClass} text-slate-400 text-xs">${item.spec}</td>`;
         html += `<td class="p-2 text-right ${textClass}">
             <span class="text-yellow-400 font-bold text-lg">${item.pickQty}</span>
-            ${!item.shortage ? `<span class="text-slate-500 text-xs ml-1">/ ${item.availableQty}</span>` : ''}
+            <span class="text-slate-400 text-sm ml-1">${unitDisplay}</span>
+            ${smallInfo}
         </td>`;
         html += `<td class="p-2 ${textClass} text-xs text-slate-400">${item.batchNo || '-'}</td>`;
         html += `<td class="p-2 ${textClass} text-xs text-slate-500" title="${(item.orders || []).map(o => o.customer).join(', ')}">${orderInfo}${moreOrders}</td>`;
@@ -12389,8 +12705,35 @@ function updateWaveProgress() {
     const list = window._waveData.pickingList;
     const completed = list.filter(i => i.completed).length;
     const total = list.filter(i => !i.shortage).length;
+    const shortage = list.filter(i => i.shortage).length;
     
-    document.getElementById('wave-exec-progress').innerText = completed + '/' + total;
+    // 進度
+    const pct = total > 0 ? Math.round(completed / total * 100) : 0;
+    document.getElementById('wave-exec-progress').innerText = completed + '/' + total + ' (' + pct + '%)';
+    
+    // 預估剩餘時間
+    const remaining = total - completed;
+    const estimatedRemaining = remaining * 2; // 每項約 2 分鐘
+    
+    let timeHtml = '';
+    if (completed === 0) {
+        timeHtml = '<span class="text-slate-400 text-xs ml-2">預估 ' + (window._waveData.estimatedTime || total * 2) + ' 分鐘</span>';
+    } else if (completed < total) {
+        timeHtml = '<span class="text-orange-400 text-xs ml-2">剩餘約 ' + estimatedRemaining + ' 分鐘</span>';
+    } else {
+        timeHtml = '<span class="text-green-400 text-xs ml-2">✓ 已完成</span>';
+    }
+    
+    // 缺貨提示
+    if (shortage > 0) {
+        timeHtml += '<span class="text-red-400 text-xs ml-2">(' + shortage + ' 項缺貨)</span>';
+    }
+    
+    // 更新時間顯示
+    const progressEl = document.getElementById('wave-exec-progress');
+    if (progressEl) {
+        progressEl.innerHTML = completed + '/' + total + ' (' + pct + '%)' + timeHtml;
+    }
 }
 
 // 確認揀貨掃描
@@ -12468,6 +12811,8 @@ window.printPickingList = function() {
                 th, td { border: 1px solid #333; padding: 8px; text-align: left; }
                 th { background: #f0f0f0; }
                 .qty { text-align: right; font-weight: bold; font-size: 18px; }
+                .unit { font-size: 12px; color: #666; }
+                .small-qty { font-size: 11px; color: #999; }
                 .location { font-family: monospace; font-size: 14px; }
                 .shortage { background: #fee; color: #c00; }
                 @media print { body { padding: 0; } }
@@ -12479,7 +12824,7 @@ window.printPickingList = function() {
                 物流商：${wave.logistics} | 
                 訂單數：${wave.orderCount} | 
                 品項數：${wave.itemCount} | 
-                總件數：${wave.totalQty} |
+                總揀貨：${wave.totalQty} 件 |
                 列印時間：${new Date().toLocaleString('zh-TW')}
             </div>
             <table>
@@ -12491,7 +12836,7 @@ window.printPickingList = function() {
                         <th>品名</th>
                         <th>規格</th>
                         <th>批號</th>
-                        <th class="qty">數量</th>
+                        <th class="qty">揀貨數量</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -12503,7 +12848,9 @@ window.printPickingList = function() {
                             <td>${item.productName}</td>
                             <td style="font-size:12px">${item.spec}</td>
                             <td style="font-size:12px">${item.batchNo || '-'}</td>
-                            <td class="qty">${item.pickQty}</td>
+                            <td class="qty">${item.pickQty} <span class="unit">${item.unit || '件'}</span>
+                                ${item.totalSmallQty ? '<br><span class="small-qty">(' + item.totalSmallQty + ' ' + (item.smallUnit || '') + ')</span>' : ''}
+                            </td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -12590,13 +12937,14 @@ window.printSortingLabels = function() {
     printWindow.print();
 };
 
-// 完成波次
+// 完成揀貨 - 進入分貨階段
 window.completeWave = async function() {
     const wave = window._waveData.currentWave;
     const list = window._waveData.pickingList;
     
     const completed = list.filter(i => i.completed).length;
     const total = list.filter(i => !i.shortage).length;
+    const shortage = list.filter(i => i.shortage).length;
     
     if (completed === 0) {
         alert('尚未揀貨任何項目');
@@ -12604,18 +12952,32 @@ window.completeWave = async function() {
     }
     
     if (completed < total) {
-        if (!confirm(`尚有 ${total - completed} 項未完成，確定要結束波次嗎？`)) {
+        if (!confirm(`尚有 ${total - completed} 項未完成，確定要結束揀貨嗎？\n\n未完成的項目將標記為缺貨。`)) {
             return;
         }
     }
     
-    if (!confirm(`確定完成波次 ${wave.waveNo}？\n\n已揀：${completed}/${total} 項`)) {
+    let confirmMsg = `確定完成揀貨？\n\n已揀：${completed}/${total} 項`;
+    if (shortage > 0) {
+        confirmMsg += `\n缺貨：${shortage} 項`;
+    }
+    confirmMsg += `\n\n完成後將進入【分貨階段】`;
+    
+    if (!confirm(confirmMsg)) {
         return;
     }
     
-    // 更新波次狀態
-    wave.status = 'done';
-    wave.completedAt = new Date().toISOString();
+    // 更新波次狀態為「待分貨」
+    wave.status = 'sorting';
+    wave.pickedAt = new Date().toISOString();
+    
+    // 記錄缺貨項目
+    wave.shortageItems = list.filter(i => i.shortage || !i.completed).map(i => ({
+        productName: i.productName,
+        spec: i.spec,
+        quantity: i.pickQty,
+        reason: i.shortage ? '庫存不足' : '未揀貨'
+    }));
     
     // 扣減庫存並記錄
     const pallets = window.currentPallets ? window.currentPallets() : [];
@@ -12669,8 +13031,9 @@ window.completeWave = async function() {
     if (wave.id) {
         try {
             await window.updateDoc(window.doc(window.db, 'waves', wave.id), {
-                status: 'done',
-                completedAt: wave.completedAt
+                status: 'sorting',
+                pickedAt: wave.pickedAt,
+                shortageItems: wave.shortageItems || []
             });
         } catch (err) {
             console.error('更新波次狀態失敗:', err);
@@ -12679,10 +13042,332 @@ window.completeWave = async function() {
     
     saveWaves();
     
-    alert('✅ 波次 ' + wave.waveNo + ' 已完成！');
+    alert('✅ 揀貨完成！\n\n波次 ' + wave.waveNo + ' 已進入【分貨階段】\n\n請列印分貨標籤進行分貨作業。');
     
     closeWaveExecuteModal();
     refreshWaveList();
+    
+    // 自動開啟分貨作業
+    setTimeout(function() {
+        openWaveSorting(wave.waveNo);
+    }, 500);
+};
+
+// 開啟分貨作業
+window.openWaveSorting = function(waveNo) {
+    const wave = window._waveData.waves.find(w => w.waveNo === waveNo);
+    if (!wave) {
+        alert('找不到波次 ' + waveNo);
+        return;
+    }
+    
+    window._waveData.currentWave = wave;
+    
+    // 顯示分貨 Modal
+    document.getElementById('sorting-wave-no').innerText = wave.waveNo;
+    document.getElementById('sorting-logistics').innerText = wave.logistics;
+    document.getElementById('sorting-order-count').innerText = (wave.orders || []).length;
+    
+    // 渲染訂單分貨清單
+    renderSortingOrders(wave);
+    
+    document.getElementById('modal-wave-sorting').classList.remove('hidden');
+};
+
+// 渲染分貨訂單清單
+function renderSortingOrders(wave) {
+    const container = document.getElementById('sorting-orders-list');
+    if (!container) return;
+    
+    const orders = wave.orders || [];
+    
+    if (orders.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-500 py-8">沒有訂單</div>';
+        return;
+    }
+    
+    let html = '';
+    orders.forEach((order, idx) => {
+        const itemsHtml = (order.items || []).map(item => 
+            `<div class="flex justify-between text-sm py-1 border-b border-slate-700/50">
+                <span class="text-slate-300">${item.productName} ${item.spec || ''}</span>
+                <span class="text-yellow-400 font-bold">${item.packageQty || item.quantity} ${item.packageUnit || '件'}</span>
+            </div>`
+        ).join('');
+        
+        html += `
+            <div class="bg-slate-800 border border-slate-600 rounded-lg p-4 mb-3">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <div class="text-cyan-400 font-mono text-sm">${order.orderNo}</div>
+                        <div class="text-white font-bold text-lg">${order.customer}</div>
+                        <div class="text-slate-400 text-xs">${order.address || ''}</div>
+                    </div>
+                    <div class="text-right">
+                        <span class="px-2 py-1 rounded text-xs bg-slate-700 text-slate-300">${order.logistics || wave.logistics}</span>
+                        <div class="mt-2">
+                            <button onclick="printSingleOrderLabel('${order.orderNo}')" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded">
+                                <i class="fa-solid fa-tag mr-1"></i>列印標籤
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="border-t border-slate-600 pt-2">
+                    ${itemsHtml}
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// 列印單一訂單標籤
+window.printSingleOrderLabel = function(orderNo) {
+    const wave = window._waveData.currentWave;
+    const order = (wave.orders || []).find(o => o.orderNo === orderNo);
+    if (!order) return;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>分貨標籤 - ${order.orderNo}</title>
+            <style>
+                body { font-family: 'Microsoft JhengHei', sans-serif; padding: 20px; }
+                .label {
+                    border: 2px solid #333;
+                    padding: 15px;
+                    width: 300px;
+                }
+                .logistics { 
+                    background: #333; 
+                    color: white; 
+                    padding: 5px 10px; 
+                    font-weight: bold;
+                    margin: -15px -15px 10px -15px;
+                }
+                .order-no { font-size: 14px; color: #666; }
+                .customer { font-size: 24px; font-weight: bold; margin: 10px 0; }
+                .items { border-top: 1px dashed #ccc; padding-top: 10px; }
+                .item { margin: 5px 0; display: flex; justify-content: space-between; }
+                .address { font-size: 12px; color: #666; margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px; }
+            </style>
+        </head>
+        <body>
+            <div class="label">
+                <div class="logistics">${order.logistics || wave.logistics}</div>
+                <div class="order-no">📦 ${order.orderNo}</div>
+                <div class="customer">👤 ${order.customer}</div>
+                <div class="items">
+                    ${(order.items || []).map(item => 
+                        `<div class="item"><span>${item.productName} ${item.spec || ''}</span><strong>x ${item.packageQty || item.quantity}</strong></div>`
+                    ).join('')}
+                </div>
+                ${order.address ? `<div class="address">📍 ${order.address}</div>` : ''}
+            </div>
+            <script>window.print();</script>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+};
+
+// 完成分貨
+window.completeSorting = async function() {
+    const wave = window._waveData.currentWave;
+    
+    if (!confirm(`確定完成分貨？\n\n波次 ${wave.waveNo} 將標記為【已出貨】`)) {
+        return;
+    }
+    
+    wave.status = 'done';
+    wave.sortedAt = new Date().toISOString();
+    wave.completedAt = new Date().toISOString();
+    
+    // 更新 Firebase
+    if (wave.id) {
+        try {
+            await window.updateDoc(window.doc(window.db, 'waves', wave.id), {
+                status: 'done',
+                sortedAt: wave.sortedAt,
+                completedAt: wave.completedAt
+            });
+        } catch (err) {
+            console.error('更新波次狀態失敗:', err);
+        }
+    }
+    
+    // 更新訂單狀態
+    for (const order of wave.orders || []) {
+        if (order.id) {
+            try {
+                const orderInData = window._orderData.orders.find(o => o.orderNo === order.orderNo);
+                if (orderInData) {
+                    orderInData.status = 'shipped';
+                }
+                await window.updateDoc(window.doc(window.db, 'salesOrders', order.id), {
+                    status: 'shipped',
+                    shippedAt: new Date().toISOString(),
+                    waveNo: wave.waveNo
+                });
+            } catch (err) {
+                console.error('更新訂單狀態失敗:', order.orderNo, err);
+            }
+        }
+    }
+    
+    saveWaves();
+    
+    // 計算耗時
+    const startTime = new Date(wave.createdAt);
+    const endTime = new Date(wave.completedAt);
+    const minutes = Math.round((endTime - startTime) / 60000);
+    
+    alert('✅ 波次 ' + wave.waveNo + ' 已完成出貨！\n\n' +
+          '訂單數：' + (wave.orders || []).length + ' 筆\n' +
+          '總耗時：' + minutes + ' 分鐘');
+    
+    closeSortingModal();
+    refreshWaveList();
+};
+
+// 關閉分貨 Modal
+window.closeSortingModal = function() {
+    document.getElementById('modal-wave-sorting').classList.add('hidden');
+};
+
+// 重印標籤
+window.reprintWaveLabels = function(waveNo) {
+    const wave = window._waveData.waves.find(w => w.waveNo === waveNo);
+    if (!wave) return;
+    
+    window._waveData.currentWave = wave;
+    printSortingLabels();
+};
+
+// 刪除波次
+window.deleteWave = async function(waveNo) {
+    const wave = window._waveData.waves.find(w => w.waveNo === waveNo);
+    if (!wave) {
+        alert('找不到波次 ' + waveNo);
+        return;
+    }
+    
+    if (wave.status !== 'pending') {
+        alert('只能刪除「待揀貨」狀態的波次');
+        return;
+    }
+    
+    if (!confirm('確定要刪除波次 ' + waveNo + '？\n\n' +
+                 '訂單數：' + (wave.orders || []).length + ' 筆\n' +
+                 '刪除後訂單將恢復為待處理狀態。')) {
+        return;
+    }
+    
+    // 恢復訂單狀態
+    for (const order of wave.orders || []) {
+        const orderInData = window._orderData.orders.find(o => o.orderNo === order.orderNo);
+        if (orderInData) {
+            orderInData.status = 'pending';
+            orderInData.waveNo = null;
+        }
+        if (order.id) {
+            try {
+                await window.updateDoc(window.doc(window.db, 'salesOrders', order.id), {
+                    status: 'pending',
+                    waveNo: null
+                });
+            } catch (err) {
+                console.error('恢復訂單狀態失敗:', order.orderNo, err);
+            }
+        }
+    }
+    
+    // 刪除波次
+    if (wave.id) {
+        try {
+            await window.deleteDoc(window.doc(window.db, 'waves', wave.id));
+        } catch (err) {
+            console.error('刪除波次失敗:', err);
+        }
+    }
+    
+    // 從本地移除
+    const idx = window._waveData.waves.findIndex(w => w.waveNo === waveNo);
+    if (idx >= 0) {
+        window._waveData.waves.splice(idx, 1);
+    }
+    saveWaves();
+    
+    alert('✅ 波次 ' + waveNo + ' 已刪除');
+    refreshWaveList();
+};
+
+// 查看波次明細
+window.viewWaveDetail = function(waveNo) {
+    const wave = window._waveData.waves.find(w => w.waveNo === waveNo);
+    if (!wave) {
+        alert('找不到波次 ' + waveNo);
+        return;
+    }
+    
+    // 計算時間資訊
+    let timeInfo = '';
+    if (wave.createdAt) {
+        timeInfo += '建立時間：' + new Date(wave.createdAt).toLocaleString('zh-TW') + '\n';
+    }
+    if (wave.startedAt) {
+        timeInfo += '開始揀貨：' + new Date(wave.startedAt).toLocaleString('zh-TW') + '\n';
+    }
+    if (wave.pickedAt) {
+        timeInfo += '揀貨完成：' + new Date(wave.pickedAt).toLocaleString('zh-TW') + '\n';
+    }
+    if (wave.sortedAt) {
+        timeInfo += '分貨完成：' + new Date(wave.sortedAt).toLocaleString('zh-TW') + '\n';
+    }
+    if (wave.completedAt) {
+        timeInfo += '出貨完成：' + new Date(wave.completedAt).toLocaleString('zh-TW') + '\n';
+    }
+    
+    // 計算總耗時
+    if (wave.completedAt && wave.createdAt) {
+        const minutes = Math.round((new Date(wave.completedAt) - new Date(wave.createdAt)) / 60000);
+        timeInfo += '\n總耗時：' + minutes + ' 分鐘';
+    }
+    
+    // 訂單清單
+    let orderInfo = '\n\n【訂單清單】\n';
+    (wave.orders || []).forEach((o, i) => {
+        orderInfo += (i + 1) + '. ' + o.customer + ' (' + o.orderNo + ')\n';
+    });
+    
+    // 缺貨項目
+    let shortageInfo = '';
+    if (wave.shortageItems && wave.shortageItems.length > 0) {
+        shortageInfo = '\n\n【缺貨項目】\n';
+        wave.shortageItems.forEach(item => {
+            shortageInfo += '- ' + item.productName + ' x ' + item.quantity + ' (' + item.reason + ')\n';
+        });
+    }
+    
+    const statusMap = {
+        'pending': '待揀貨',
+        'picking': '揀貨中',
+        'sorting': '待分貨',
+        'done': '已出貨'
+    };
+    
+    alert('【波次明細】\n\n' +
+          '波次編號：' + wave.waveNo + '\n' +
+          '物流商：' + wave.logistics + '\n' +
+          '狀態：' + (statusMap[wave.status] || wave.status) + '\n' +
+          '訂單數：' + (wave.orders || []).length + ' 筆\n' +
+          '品項數：' + (wave.itemCount || 0) + ' 項\n' +
+          '總件數：' + (wave.totalQty || 0) + ' 件\n\n' +
+          '【時間記錄】\n' + timeInfo +
+          orderInfo + shortageInfo);
 };
 
 // 關閉波次執行 Modal
@@ -12701,6 +13386,866 @@ document.addEventListener('DOMContentLoaded', function() {
 
 console.log('✅ 波次理貨升級版載入完成');
 
-        </script>
+        
+        // ========== 報表中心功能 ==========
+        
+        window._reportData = {
+            currentType: null,
+            currentData: [],
+            dateFrom: null,
+            dateTo: null
+        };
+        
+        // 初始化報表日期
+        function initReportDates() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('report-date-from').value = today;
+            document.getElementById('report-date-to').value = today;
+        }
+        
+        // 快速日期選擇
+        window.setQuickDateRange = function() {
+            const range = document.getElementById('report-quick-date').value;
+            const today = new Date();
+            let from, to;
+            
+            switch(range) {
+                case 'today':
+                    from = to = today;
+                    break;
+                case 'yesterday':
+                    from = to = new Date(today.setDate(today.getDate() - 1));
+                    break;
+                case 'week':
+                    const day = today.getDay();
+                    from = new Date(today.setDate(today.getDate() - day));
+                    to = new Date();
+                    break;
+                case 'month':
+                    from = new Date(today.getFullYear(), today.getMonth(), 1);
+                    to = new Date();
+                    break;
+                case 'lastMonth':
+                    from = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                    to = new Date(today.getFullYear(), today.getMonth(), 0);
+                    break;
+                default:
+                    return;
+            }
+            
+            document.getElementById('report-date-from').value = from.toISOString().split('T')[0];
+            document.getElementById('report-date-to').value = to.toISOString().split('T')[0];
+        };
+        
+        // 產生報表
+        window.generateReport = function(reportType) {
+            const dateFrom = document.getElementById('report-date-from').value;
+            const dateTo = document.getElementById('report-date-to').value;
+            
+            if (!dateFrom || !dateTo) {
+                alert('請選擇日期區間');
+                return;
+            }
+            
+            window._reportData.currentType = reportType;
+            window._reportData.dateFrom = dateFrom;
+            window._reportData.dateTo = dateTo;
+            
+            const preview = document.getElementById('report-preview-area');
+            preview.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-4xl text-blue-400"></i><div class="mt-4 text-slate-400">產生報表中...</div></div>';
+            
+            setTimeout(() => {
+                switch(reportType) {
+                    case 'shipping-logistics':
+                        generateShippingByLogistics(dateFrom, dateTo);
+                        break;
+                    case 'shipping-customer':
+                        generateShippingByCustomer(dateFrom, dateTo);
+                        break;
+                    case 'shipping-product':
+                        generateShippingByProduct(dateFrom, dateTo);
+                        break;
+                    case 'shipping-detail':
+                        generateShippingDetail(dateFrom, dateTo);
+                        break;
+                    case 'inventory-inbound':
+                        generateInventoryInbound(dateFrom, dateTo);
+                        break;
+                    case 'inventory-outbound':
+                        generateInventoryOutbound(dateFrom, dateTo);
+                        break;
+                    case 'inventory-summary':
+                        generateInventorySummary();
+                        break;
+                    case 'inventory-expiry':
+                        generateExpiryReport();
+                        break;
+                    case 'wave-summary':
+                        generateWaveSummary(dateFrom, dateTo);
+                        break;
+                    case 'wave-efficiency':
+                        generateWaveEfficiency(dateFrom, dateTo);
+                        break;
+                    case 'wave-shortage':
+                        generateWaveShortage(dateFrom, dateTo);
+                        break;
+                    case 'order-status':
+                        generateOrderStatus(dateFrom, dateTo);
+                        break;
+                    case 'order-logistics':
+                        generateOrderLogistics(dateFrom, dateTo);
+                        break;
+                    case 'order-pending':
+                        generateOrderPending();
+                        break;
+                    case 'daily-summary':
+                        generateDailySummary(dateFrom, dateTo);
+                        break;
+                    case 'daily-inbound':
+                        generateDailyInbound(dateFrom, dateTo);
+                        break;
+                    case 'daily-trend':
+                        generateDailyTrend(dateFrom, dateTo);
+                        break;
+                    default:
+                        preview.innerHTML = '<div class="text-center text-red-400 py-10">未知的報表類型</div>';
+                }
+            }, 300);
+        };
+        
+        // 依物流商統計
+        function generateShippingByLogistics(dateFrom, dateTo) {
+            const waves = (window._waveData.waves || []).filter(w => {
+                if (w.status !== 'done') return false;
+                const date = (w.completedAt || w.createdAt || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const stats = {};
+            waves.forEach(w => {
+                const logistics = w.logistics || '未指定';
+                if (!stats[logistics]) {
+                    stats[logistics] = { orderCount: 0, itemCount: 0, totalQty: 0, waveCount: 0 };
+                }
+                stats[logistics].waveCount++;
+                stats[logistics].orderCount += (w.orders || []).length;
+                stats[logistics].itemCount += w.itemCount || 0;
+                stats[logistics].totalQty += w.totalQty || 0;
+            });
+            
+            const data = Object.entries(stats).map(([logistics, s]) => ({
+                物流商: logistics,
+                波次數: s.waveCount,
+                訂單數: s.orderCount,
+                品項數: s.itemCount,
+                總件數: s.totalQty
+            }));
+            
+            window._reportData.currentData = data;
+            renderReportTable('出貨統計 - 依物流商', ['物流商', '波次數', '訂單數', '品項數', '總件數'], data);
+        }
+        
+        // 依客戶統計
+        function generateShippingByCustomer(dateFrom, dateTo) {
+            const waves = (window._waveData.waves || []).filter(w => {
+                if (w.status !== 'done') return false;
+                const date = (w.completedAt || w.createdAt || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const stats = {};
+            waves.forEach(w => {
+                (w.orders || []).forEach(order => {
+                    const customer = order.customer || '未知客戶';
+                    if (!stats[customer]) {
+                        stats[customer] = { orderCount: 0, itemCount: 0, totalQty: 0 };
+                    }
+                    stats[customer].orderCount++;
+                    (order.items || []).forEach(item => {
+                        stats[customer].itemCount++;
+                        stats[customer].totalQty += item.packageQty || item.quantity || 0;
+                    });
+                });
+            });
+            
+            const data = Object.entries(stats)
+                .map(([customer, s]) => ({
+                    客戶: customer,
+                    訂單數: s.orderCount,
+                    品項數: s.itemCount,
+                    總件數: s.totalQty
+                }))
+                .sort((a, b) => b.總件數 - a.總件數);
+            
+            window._reportData.currentData = data;
+            renderReportTable('出貨統計 - 依客戶', ['客戶', '訂單數', '品項數', '總件數'], data);
+        }
+        
+        // 依產品統計
+        function generateShippingByProduct(dateFrom, dateTo) {
+            const waves = (window._waveData.waves || []).filter(w => {
+                if (w.status !== 'done') return false;
+                const date = (w.completedAt || w.createdAt || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const stats = {};
+            waves.forEach(w => {
+                (w.orders || []).forEach(order => {
+                    (order.items || []).forEach(item => {
+                        const key = item.productName + '|||' + (item.spec || '');
+                        if (!stats[key]) {
+                            stats[key] = { 
+                                productName: item.productName, 
+                                spec: item.spec || '', 
+                                orderCount: 0, 
+                                totalQty: 0,
+                                totalSmallQty: 0
+                            };
+                        }
+                        stats[key].orderCount++;
+                        stats[key].totalQty += item.packageQty || 0;
+                        stats[key].totalSmallQty += item.quantity || 0;
+                    });
+                });
+            });
+            
+            const data = Object.values(stats)
+                .map(s => ({
+                    品名: s.productName,
+                    規格: s.spec,
+                    出貨次數: s.orderCount,
+                    總件數: s.totalQty,
+                    總小單位數: s.totalSmallQty
+                }))
+                .sort((a, b) => b.總件數 - a.總件數);
+            
+            window._reportData.currentData = data;
+            renderReportTable('出貨統計 - 依產品', ['品名', '規格', '出貨次數', '總件數', '總小單位數'], data);
+        }
+        
+        // 出貨明細
+        function generateShippingDetail(dateFrom, dateTo) {
+            const waves = (window._waveData.waves || []).filter(w => {
+                if (w.status !== 'done') return false;
+                const date = (w.completedAt || w.createdAt || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const data = [];
+            waves.forEach(w => {
+                (w.orders || []).forEach(order => {
+                    (order.items || []).forEach(item => {
+                        data.push({
+                            日期: (w.completedAt || '').split('T')[0],
+                            波次: w.waveNo,
+                            物流商: w.logistics,
+                            訂單號: order.orderNo,
+                            客戶: order.customer,
+                            品名: item.productName,
+                            規格: item.spec || '',
+                            件數: item.packageQty || 0,
+                            小單位數: item.quantity || 0
+                        });
+                    });
+                });
+            });
+            
+            window._reportData.currentData = data;
+            renderReportTable('出貨明細', ['日期', '波次', '物流商', '訂單號', '客戶', '品名', '規格', '件數', '小單位數'], data);
+        }
+        
+        // 入庫明細
+        function generateInventoryInbound(dateFrom, dateTo) {
+            const logs = (window._inventoryLogs || []).filter(log => {
+                if (log.type !== 'inbound') return false;
+                const date = (log.timestamp || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const data = logs.map(log => ({
+                日期時間: new Date(log.timestamp).toLocaleString('zh-TW'),
+                品名: log.productName,
+                規格: log.spec || '',
+                數量: log.quantity,
+                儲位: log.locationId || '',
+                板號: log.palletId || '',
+                批號: log.batchNo || '',
+                操作人員: log.operator || ''
+            }));
+            
+            window._reportData.currentData = data;
+            renderReportTable('入庫明細', ['日期時間', '品名', '規格', '數量', '儲位', '板號', '批號', '操作人員'], data);
+        }
+        
+        // 出庫明細
+        function generateInventoryOutbound(dateFrom, dateTo) {
+            const logs = (window._inventoryLogs || []).filter(log => {
+                if (log.type !== 'outbound') return false;
+                const date = (log.timestamp || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const data = logs.map(log => ({
+                日期時間: new Date(log.timestamp).toLocaleString('zh-TW'),
+                品名: log.productName,
+                規格: log.spec || '',
+                數量: Math.abs(log.quantityChange || log.quantity),
+                儲位: log.locationId || '',
+                板號: log.palletId || '',
+                批號: log.batchNo || '',
+                備註: log.note || ''
+            }));
+            
+            window._reportData.currentData = data;
+            renderReportTable('出庫明細', ['日期時間', '品名', '規格', '數量', '儲位', '板號', '批號', '備註'], data);
+        }
+        
+        // 庫存彙總
+        function generateInventorySummary() {
+            const pallets = window.currentPallets ? window.currentPallets() : [];
+            
+            const stats = {};
+            pallets.forEach(p => {
+                const key = p.productName + '|||' + (p.spec || '');
+                if (!stats[key]) {
+                    stats[key] = {
+                        productName: p.productName,
+                        spec: p.spec || '',
+                        totalQty: 0,
+                        palletCount: 0,
+                        locations: new Set()
+                    };
+                }
+                stats[key].totalQty += parseInt(p.quantity) || 0;
+                stats[key].palletCount++;
+                if (p.locationId) stats[key].locations.add(p.locationId);
+            });
+            
+            const data = Object.values(stats)
+                .map(s => ({
+                    品名: s.productName,
+                    規格: s.spec,
+                    總數量: s.totalQty,
+                    板數: s.palletCount,
+                    儲位數: s.locations.size
+                }))
+                .sort((a, b) => b.總數量 - a.總數量);
+            
+            window._reportData.currentData = data;
+            renderReportTable('庫存彙總', ['品名', '規格', '總數量', '板數', '儲位數'], data);
+        }
+        
+        // 效期預警
+        function generateExpiryReport() {
+            const pallets = window.currentPallets ? window.currentPallets() : [];
+            const today = new Date();
+            const warn30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+            const warn60 = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000);
+            
+            const data = pallets
+                .filter(p => p.expDate)
+                .map(p => {
+                    const expDate = new Date(p.expDate);
+                    const daysLeft = Math.ceil((expDate - today) / (24 * 60 * 60 * 1000));
+                    let status = '正常';
+                    if (daysLeft <= 0) status = '已過期';
+                    else if (daysLeft <= 30) status = '30天內';
+                    else if (daysLeft <= 60) status = '60天內';
+                    
+                    return {
+                        品名: p.productName,
+                        規格: p.spec || '',
+                        批號: p.batchNo || '',
+                        效期: p.expDate,
+                        剩餘天數: daysLeft,
+                        狀態: status,
+                        數量: p.quantity,
+                        儲位: p.locationId || ''
+                    };
+                })
+                .filter(p => p.剩餘天數 <= 60)
+                .sort((a, b) => a.剩餘天數 - b.剩餘天數);
+            
+            window._reportData.currentData = data;
+            renderReportTable('效期預警報表', ['品名', '規格', '批號', '效期', '剩餘天數', '狀態', '數量', '儲位'], data);
+        }
+        
+        // 波次統計
+        function generateWaveSummary(dateFrom, dateTo) {
+            const waves = (window._waveData.waves || []).filter(w => {
+                const date = (w.createdAt || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const statusMap = { pending: '待揀貨', picking: '揀貨中', sorting: '待分貨', done: '已出貨' };
+            
+            const data = waves.map(w => {
+                let duration = '-';
+                if (w.completedAt && w.createdAt) {
+                    const minutes = Math.round((new Date(w.completedAt) - new Date(w.createdAt)) / 60000);
+                    duration = minutes + ' 分鐘';
+                }
+                return {
+                    波次編號: w.waveNo,
+                    物流商: w.logistics,
+                    狀態: statusMap[w.status] || w.status,
+                    訂單數: (w.orders || []).length,
+                    品項數: w.itemCount || 0,
+                    總件數: w.totalQty || 0,
+                    建立時間: new Date(w.createdAt).toLocaleString('zh-TW'),
+                    耗時: duration
+                };
+            });
+            
+            window._reportData.currentData = data;
+            renderReportTable('波次統計', ['波次編號', '物流商', '狀態', '訂單數', '品項數', '總件數', '建立時間', '耗時'], data);
+        }
+        
+        // 揀貨效率
+        function generateWaveEfficiency(dateFrom, dateTo) {
+            const waves = (window._waveData.waves || []).filter(w => {
+                if (w.status !== 'done') return false;
+                const date = (w.completedAt || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const data = waves.map(w => {
+                const minutes = w.completedAt && w.createdAt ? 
+                    Math.round((new Date(w.completedAt) - new Date(w.createdAt)) / 60000) : 0;
+                const efficiency = minutes > 0 ? ((w.totalQty || 0) / minutes).toFixed(1) : '-';
+                
+                return {
+                    波次編號: w.waveNo,
+                    物流商: w.logistics,
+                    品項數: w.itemCount || 0,
+                    總件數: w.totalQty || 0,
+                    耗時分鐘: minutes,
+                    效率: efficiency + ' 件/分'
+                };
+            }).sort((a, b) => b.耗時分鐘 - a.耗時分鐘);
+            
+            // 計算平均
+            const totalMinutes = data.reduce((sum, d) => sum + d.耗時分鐘, 0);
+            const totalQty = data.reduce((sum, d) => sum + d.總件數, 0);
+            const avgEfficiency = totalMinutes > 0 ? (totalQty / totalMinutes).toFixed(1) : '-';
+            
+            data.push({
+                波次編號: '【平均】',
+                物流商: '-',
+                品項數: '-',
+                總件數: totalQty,
+                耗時分鐘: totalMinutes,
+                效率: avgEfficiency + ' 件/分'
+            });
+            
+            window._reportData.currentData = data;
+            renderReportTable('揀貨效率分析', ['波次編號', '物流商', '品項數', '總件數', '耗時分鐘', '效率'], data);
+        }
+        
+        // 缺貨統計
+        function generateWaveShortage(dateFrom, dateTo) {
+            const waves = (window._waveData.waves || []).filter(w => {
+                const date = (w.createdAt || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo && w.shortageItems && w.shortageItems.length > 0;
+            });
+            
+            const data = [];
+            waves.forEach(w => {
+                (w.shortageItems || []).forEach(item => {
+                    data.push({
+                        日期: (w.createdAt || '').split('T')[0],
+                        波次編號: w.waveNo,
+                        品名: item.productName,
+                        規格: item.spec || '',
+                        缺貨數量: item.quantity,
+                        原因: item.reason || ''
+                    });
+                });
+            });
+            
+            window._reportData.currentData = data;
+            
+            if (data.length === 0) {
+                document.getElementById('report-preview-area').innerHTML = 
+                    '<div class="text-center text-green-400 py-20"><i class="fa-solid fa-check-circle text-6xl mb-4"></i><div class="text-lg">太棒了！期間內沒有缺貨記錄</div></div>';
+                return;
+            }
+            
+            renderReportTable('缺貨統計', ['日期', '波次編號', '品名', '規格', '缺貨數量', '原因'], data);
+        }
+        
+        // 訂單狀態統計
+        function generateOrderStatus(dateFrom, dateTo) {
+            const orders = window._orderData.orders || [];
+            
+            const filteredOrders = orders.filter(o => {
+                const date = (o.orderDate || o.createdAt || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const statusMap = { 
+                pending: '待處理', 
+                inWave: '已建波次', 
+                shipped: '已出貨',
+                confirmed: '已確認'
+            };
+            
+            const stats = {};
+            filteredOrders.forEach(o => {
+                const status = statusMap[o.status] || o.status || '未知';
+                if (!stats[status]) stats[status] = { count: 0, items: 0 };
+                stats[status].count++;
+                stats[status].items += (o.items || []).length;
+            });
+            
+            const data = Object.entries(stats).map(([status, s]) => ({
+                狀態: status,
+                訂單數: s.count,
+                品項數: s.items,
+                佔比: (s.count / filteredOrders.length * 100).toFixed(1) + '%'
+            }));
+            
+            // 加入總計
+            data.push({
+                狀態: '【總計】',
+                訂單數: filteredOrders.length,
+                品項數: data.reduce((sum, d) => sum + (d.品項數 || 0), 0),
+                佔比: '100%'
+            });
+            
+            window._reportData.currentData = data;
+            renderReportTable('訂單狀態統計', ['狀態', '訂單數', '品項數', '佔比'], data);
+        }
+        
+        // 訂單物流商分布
+        function generateOrderLogistics(dateFrom, dateTo) {
+            const orders = window._orderData.orders || [];
+            
+            const filteredOrders = orders.filter(o => {
+                const date = (o.orderDate || o.createdAt || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const stats = {};
+            filteredOrders.forEach(o => {
+                const logistics = o.logistics || '未指定';
+                if (!stats[logistics]) stats[logistics] = { count: 0, items: 0, qty: 0 };
+                stats[logistics].count++;
+                (o.items || []).forEach(item => {
+                    stats[logistics].items++;
+                    stats[logistics].qty += item.packageQty || item.quantity || 0;
+                });
+            });
+            
+            const data = Object.entries(stats)
+                .map(([logistics, s]) => ({
+                    物流商: logistics,
+                    訂單數: s.count,
+                    品項數: s.items,
+                    總件數: s.qty,
+                    佔比: (s.count / filteredOrders.length * 100).toFixed(1) + '%'
+                }))
+                .sort((a, b) => b.訂單數 - a.訂單數);
+            
+            window._reportData.currentData = data;
+            renderReportTable('訂單物流商分布', ['物流商', '訂單數', '品項數', '總件數', '佔比'], data);
+        }
+        
+        // 待處理訂單
+        function generateOrderPending() {
+            const orders = (window._orderData.orders || []).filter(o => 
+                o.status === 'pending' && !o.waveNo
+            );
+            
+            const data = orders.map(o => ({
+                訂單日期: o.orderDate || '',
+                訂單編號: o.orderNo,
+                客戶: o.customer,
+                物流商: o.logistics || '未指定',
+                品項數: (o.items || []).length,
+                總件數: (o.items || []).reduce((sum, i) => sum + (i.packageQty || i.quantity || 0), 0),
+                地址: o.address || ''
+            }));
+            
+            window._reportData.currentData = data;
+            renderReportTable('待處理訂單', ['訂單日期', '訂單編號', '客戶', '物流商', '品項數', '總件數', '地址'], data);
+        }
+        
+        // 每日出貨彙總
+        function generateDailySummary(dateFrom, dateTo) {
+            const waves = (window._waveData.waves || []).filter(w => {
+                if (w.status !== 'done') return false;
+                const date = (w.completedAt || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const stats = {};
+            waves.forEach(w => {
+                const date = (w.completedAt || '').split('T')[0];
+                if (!stats[date]) stats[date] = { waveCount: 0, orderCount: 0, itemCount: 0, totalQty: 0 };
+                stats[date].waveCount++;
+                stats[date].orderCount += (w.orders || []).length;
+                stats[date].itemCount += w.itemCount || 0;
+                stats[date].totalQty += w.totalQty || 0;
+            });
+            
+            const data = Object.entries(stats)
+                .map(([date, s]) => ({
+                    日期: date,
+                    波次數: s.waveCount,
+                    訂單數: s.orderCount,
+                    品項數: s.itemCount,
+                    總件數: s.totalQty
+                }))
+                .sort((a, b) => a.日期.localeCompare(b.日期));
+            
+            // 加入總計
+            const total = {
+                日期: '【總計】',
+                波次數: data.reduce((s, d) => s + d.波次數, 0),
+                訂單數: data.reduce((s, d) => s + d.訂單數, 0),
+                品項數: data.reduce((s, d) => s + d.品項數, 0),
+                總件數: data.reduce((s, d) => s + d.總件數, 0)
+            };
+            data.push(total);
+            
+            window._reportData.currentData = data;
+            renderReportTable('每日出貨彙總', ['日期', '波次數', '訂單數', '品項數', '總件數'], data);
+        }
+        
+        // 每日入庫彙總
+        function generateDailyInbound(dateFrom, dateTo) {
+            const logs = (window._inventoryLogs || []).filter(log => {
+                if (log.type !== 'inbound') return false;
+                const date = (log.timestamp || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const stats = {};
+            logs.forEach(log => {
+                const date = (log.timestamp || '').split('T')[0];
+                if (!stats[date]) stats[date] = { count: 0, totalQty: 0, products: new Set() };
+                stats[date].count++;
+                stats[date].totalQty += log.quantity || 0;
+                stats[date].products.add(log.productName);
+            });
+            
+            const data = Object.entries(stats)
+                .map(([date, s]) => ({
+                    日期: date,
+                    入庫筆數: s.count,
+                    總數量: s.totalQty,
+                    品項種類: s.products.size
+                }))
+                .sort((a, b) => a.日期.localeCompare(b.日期));
+            
+            window._reportData.currentData = data;
+            renderReportTable('每日入庫彙總', ['日期', '入庫筆數', '總數量', '品項種類'], data);
+        }
+        
+        // 出貨趨勢圖（文字版）
+        function generateDailyTrend(dateFrom, dateTo) {
+            const waves = (window._waveData.waves || []).filter(w => {
+                if (w.status !== 'done') return false;
+                const date = (w.completedAt || '').split('T')[0];
+                return date >= dateFrom && date <= dateTo;
+            });
+            
+            const stats = {};
+            waves.forEach(w => {
+                const date = (w.completedAt || '').split('T')[0];
+                if (!stats[date]) stats[date] = 0;
+                stats[date] += w.totalQty || 0;
+            });
+            
+            const dates = Object.keys(stats).sort();
+            const maxQty = Math.max(...Object.values(stats));
+            
+            const data = dates.map(date => {
+                const qty = stats[date];
+                const barLength = Math.round(qty / maxQty * 30);
+                const bar = '█'.repeat(barLength);
+                return {
+                    日期: date,
+                    件數: qty,
+                    趨勢: bar
+                };
+            });
+            
+            window._reportData.currentData = data.map(d => ({ 日期: d.日期, 件數: d.件數 }));
+            renderReportTable('出貨趨勢', ['日期', '件數', '趨勢'], data);
+        }
+        
+        // 快速報表 - 今日
+        window.generateTodayReport = function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('report-date-from').value = today;
+            document.getElementById('report-date-to').value = today;
+            generateReport('daily-summary');
+        };
+        
+        // 快速報表 - 本週
+        window.generateWeekReport = function() {
+            const today = new Date();
+            const dayOfWeek = today.getDay();
+            const startOfWeek = new Date(today);
+            startOfWeek.setDate(today.getDate() - dayOfWeek);
+            
+            document.getElementById('report-date-from').value = startOfWeek.toISOString().split('T')[0];
+            document.getElementById('report-date-to').value = today.toISOString().split('T')[0];
+            generateReport('daily-summary');
+        };
+        
+        // 快速報表 - 低庫存
+        window.generateLowStockReport = function() {
+            const pallets = window.currentPallets ? window.currentPallets() : [];
+            
+            // 計算每個產品的庫存
+            const stats = {};
+            pallets.forEach(p => {
+                const key = p.productName + '|||' + (p.spec || '');
+                if (!stats[key]) {
+                    stats[key] = {
+                        productName: p.productName,
+                        spec: p.spec || '',
+                        totalQty: 0
+                    };
+                }
+                stats[key].totalQty += parseInt(p.quantity) || 0;
+            });
+            
+            // 低庫存警戒（假設 50 以下為低庫存）
+            const data = Object.values(stats)
+                .filter(s => s.totalQty < 50)
+                .map(s => ({
+                    品名: s.productName,
+                    規格: s.spec,
+                    庫存數量: s.totalQty,
+                    狀態: s.totalQty < 10 ? '⚠️ 緊急' : '⚡ 偏低'
+                }))
+                .sort((a, b) => a.庫存數量 - b.庫存數量);
+            
+            window._reportData.currentData = data;
+            window._reportData.currentType = 'low-stock';
+            window._reportData.dateFrom = '-';
+            window._reportData.dateTo = '-';
+            
+            if (data.length === 0) {
+                document.getElementById('report-preview-area').innerHTML = 
+                    '<div class="text-center text-green-400 py-20"><i class="fa-solid fa-check-circle text-6xl mb-4"></i><div class="text-lg">太棒了！目前沒有低庫存品項</div></div>';
+                return;
+            }
+            
+            renderReportTable('低庫存警報', ['品名', '規格', '庫存數量', '狀態'], data);
+        };
+        
+        // 渲染報表表格
+        function renderReportTable(title, columns, data) {
+            const preview = document.getElementById('report-preview-area');
+            
+            if (data.length === 0) {
+                preview.innerHTML = '<div class="text-center text-slate-500 py-20"><i class="fa-solid fa-inbox text-6xl mb-4"></i><div class="text-lg">查無資料</div></div>';
+                return;
+            }
+            
+            let html = `
+                <div class="mb-4">
+                    <h3 class="text-white text-lg font-bold">${title}</h3>
+                    <p class="text-slate-400 text-sm">${window._reportData.dateFrom} ~ ${window._reportData.dateTo} | 共 ${data.length} 筆</p>
+                </div>
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-700 sticky top-0">
+                        <tr>
+                            ${columns.map(col => `<th class="p-2 text-left text-slate-300">${col}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            data.forEach((row, idx) => {
+                const bgClass = idx % 2 === 0 ? 'bg-slate-800/30' : '';
+                html += `<tr class="${bgClass} hover:bg-slate-700/50 border-b border-slate-700/50">`;
+                columns.forEach(col => {
+                    let value = row[col] !== undefined ? row[col] : '';
+                    let cellClass = 'text-slate-300';
+                    
+                    // 特殊樣式
+                    if (col === '狀態') {
+                        if (value === '已過期') cellClass = 'text-red-400 font-bold';
+                        else if (value === '30天內') cellClass = 'text-orange-400';
+                        else if (value === '60天內') cellClass = 'text-yellow-400';
+                    }
+                    if (typeof value === 'number') {
+                        cellClass = 'text-right text-yellow-400';
+                    }
+                    
+                    html += `<td class="p-2 ${cellClass}">${value}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            preview.innerHTML = html;
+        }
+        
+        // 匯出 Excel
+        window.exportReportExcel = function() {
+            const data = window._reportData.currentData;
+            if (!data || data.length === 0) {
+                alert('沒有資料可匯出');
+                return;
+            }
+            
+            // 使用 SheetJS
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '報表');
+            
+            const fileName = window._reportData.currentType + '_' + 
+                            window._reportData.dateFrom + '_' + 
+                            window._reportData.dateTo + '.xlsx';
+            
+            XLSX.writeFile(wb, fileName);
+        };
+        
+        // 列印報表
+        window.printReport = function() {
+            const preview = document.getElementById('report-preview-area');
+            if (!preview.innerHTML.includes('<table')) {
+                alert('沒有報表可列印');
+                return;
+            }
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>報表列印</title>
+                    <style>
+                        body { font-family: 'Microsoft JhengHei', sans-serif; padding: 20px; }
+                        h3 { margin-bottom: 5px; }
+                        p { color: #666; margin-bottom: 15px; }
+                        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                        th, td { border: 1px solid #333; padding: 6px; text-align: left; }
+                        th { background: #f0f0f0; }
+                        tr:nth-child(even) { background: #f9f9f9; }
+                        @media print { body { padding: 0; } }
+                    </style>
+                </head>
+                <body>
+                    ${preview.innerHTML.replace(/bg-slate-\d+/g, '').replace(/text-slate-\d+/g, '').replace(/text-yellow-\d+/g, '')}
+                    <script>window.print();</script>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        };
+        
+        // 頁面載入時初始化日期
+        document.addEventListener('DOMContentLoaded', initReportDates);
+
+</script>
 </body>
 </html>
