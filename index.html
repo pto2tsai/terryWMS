@@ -11821,6 +11821,17 @@ async function loadOrdersFromFirebase() {
     }
 }
 
+// 渲染訂單列表 (目前僅更新統計)
+function renderOrderList() {
+    // 更新待出貨訂單統計
+    const pendingOrders = window._orderData.orders.filter(o => o.status === 'pending');
+    const statEl = document.getElementById('wave-stat-orders');
+    if (statEl) {
+        statEl.innerText = pendingOrders.length;
+    }
+    console.log('訂單列表更新:', pendingOrders.length, '筆待出貨');
+}
+
 // 匯入 ERP Excel
 window.importERPExcel = async function(event) {
     const file = event.target.files[0];
