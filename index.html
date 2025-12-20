@@ -554,7 +554,100 @@
                 </div>
             </div>
 
-            <div id="view-dashboard" class="view-panel h-full hidden flex flex-col p-6 overflow-y-auto"><div class="grid grid-cols-4 gap-4 mb-4"><div class="glass-panel kpi-card p-5 border-l-4 border-blue-500" onclick="openAnalytics('Total')"><div class="text-slate-400 text-xs">總庫存 (板)</div><div class="text-3xl font-bold text-white mt-1" id="kpi-total-pallets">0</div></div><div class="glass-panel kpi-card p-5 border-l-4 border-purple-500" onclick="openAnalytics('FG')"><div class="text-slate-400 text-xs">成品庫存 (板)</div><div class="text-3xl font-bold text-white mt-1" id="kpi-fg-count">0</div></div><div class="glass-panel kpi-card p-5 border-l-4 border-orange-500" onclick="openAnalytics('WIP')"><div class="text-slate-400 text-xs">半成品/餘料</div><div class="text-3xl font-bold text-white mt-1" id="kpi-return-count">0</div></div><div class="glass-panel kpi-card p-5 border-l-4 border-red-500" onclick="openAnalytics('Alert')"><div class="text-slate-400 text-xs">效期警示</div><div class="text-3xl font-bold text-white mt-1">0</div></div></div><div class="glass-panel p-5 h-64 w-1/2"><canvas id="stockChart"></canvas></div></div>
+            <div id="view-dashboard" class="view-panel h-full hidden flex flex-col p-4 overflow-y-auto">
+                <!-- 頂部 KPI 卡片 -->
+                <div class="grid grid-cols-5 gap-3 mb-4">
+                    <div class="glass-panel kpi-card p-4 border-l-4 border-blue-500" onclick="openAnalytics('Total')">
+                        <div class="text-slate-400 text-xs">總庫存 (板)</div>
+                        <div class="text-2xl font-bold text-white mt-1" id="kpi-total-pallets">0</div>
+                    </div>
+                    <div class="glass-panel kpi-card p-4 border-l-4 border-emerald-500">
+                        <div class="text-slate-400 text-xs">崇文庫存</div>
+                        <div class="text-2xl font-bold text-emerald-400 mt-1" id="kpi-cw-count">0</div>
+                    </div>
+                    <div class="glass-panel kpi-card p-4 border-l-4 border-cyan-500">
+                        <div class="text-slate-400 text-xs">八方庫存</div>
+                        <div class="text-2xl font-bold text-cyan-400 mt-1" id="kpi-bf-count">0</div>
+                    </div>
+                    <div class="glass-panel kpi-card p-4 border-l-4 border-amber-500">
+                        <div class="text-slate-400 text-xs">暫存區</div>
+                        <div class="text-2xl font-bold text-amber-400 mt-1" id="kpi-virtual-count">0</div>
+                    </div>
+                    <div class="glass-panel kpi-card p-4 border-l-4 border-red-500" onclick="switchTab('expiry-management', event)">
+                        <div class="text-slate-400 text-xs">效期警示</div>
+                        <div class="text-2xl font-bold text-red-400 mt-1" id="kpi-expiry-alert">0</div>
+                    </div>
+                </div>
+                
+                <!-- 中間圖表區 -->
+                <div class="grid grid-cols-3 gap-4 mb-4">
+                    <!-- 倉庫分布圓餅圖 -->
+                    <div class="glass-panel p-4">
+                        <h3 class="text-white font-bold text-sm mb-3"><i class="fa-solid fa-warehouse mr-2 text-blue-400"></i>倉庫分布</h3>
+                        <div class="h-48 flex items-center justify-center">
+                            <canvas id="stockChart" style="max-height: 180px; max-width: 180px;"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- 公司分布圓餅圖 -->
+                    <div class="glass-panel p-4">
+                        <h3 class="text-white font-bold text-sm mb-3"><i class="fa-solid fa-building mr-2 text-emerald-400"></i>公司分布</h3>
+                        <div class="h-48 flex items-center justify-center">
+                            <canvas id="companyChart" style="max-height: 180px; max-width: 180px;"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- 效期分布 -->
+                    <div class="glass-panel p-4">
+                        <h3 class="text-white font-bold text-sm mb-3"><i class="fa-solid fa-clock mr-2 text-orange-400"></i>效期分布</h3>
+                        <div class="h-48 flex items-center justify-center">
+                            <canvas id="expiryChart" style="max-height: 180px; max-width: 180px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 底部詳情區 -->
+                <div class="grid grid-cols-2 gap-4 flex-1 min-h-0">
+                    <!-- 各倉庫庫存明細 -->
+                    <div class="glass-panel p-4 flex flex-col overflow-hidden">
+                        <h3 class="text-white font-bold text-sm mb-3"><i class="fa-solid fa-boxes-stacked mr-2 text-purple-400"></i>各區庫存統計</h3>
+                        <div class="flex-1 overflow-y-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="text-slate-400 border-b border-slate-700">
+                                        <th class="text-left p-2">區域</th>
+                                        <th class="text-right p-2">棧板數</th>
+                                        <th class="text-right p-2">使用率</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="zone-stats-body">
+                                    <tr><td colspan="3" class="text-center text-slate-500 py-4">載入中...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- 近期效期品項 -->
+                    <div class="glass-panel p-4 flex flex-col overflow-hidden">
+                        <h3 class="text-white font-bold text-sm mb-3"><i class="fa-solid fa-triangle-exclamation mr-2 text-red-400"></i>效期警示品項 (30天內)</h3>
+                        <div class="flex-1 overflow-y-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="text-slate-400 border-b border-slate-700">
+                                        <th class="text-left p-2">品名</th>
+                                        <th class="text-left p-2">儲位</th>
+                                        <th class="text-right p-2">數量</th>
+                                        <th class="text-left p-2">效期</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="expiry-alert-body">
+                                    <tr><td colspan="4" class="text-center text-slate-500 py-4">載入中...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <div id="view-unified-inbound" class="view-panel h-full hidden flex flex-col p-3">
                 <input type="hidden" id="in-category" value="Raw">
@@ -3610,7 +3703,15 @@
                         if(tbody) tbody.innerHTML += `<tr class="border-b border-slate-700 hover:bg-slate-800"><td class="font-mono text-blue-400 p-2">${d.id}</td><td class="text-white p-2">${data.productName}</td><td class="text-yellow-400 p-2">${data.spec||'-'}</td><td class="text-slate-400 font-mono p-2">${data.batchNo}</td><td class="text-right text-white p-2">${data.quantity||'-'}</td><td class="p-2">${data.locationId}</td><td class="p-2 text-right"><button onclick="deletePallet('${d.id}')" class="text-red-500 hover:bg-red-500/20 rounded px-2"><i class="fa-solid fa-trash"></i></button></td></tr>`;
                     }
                 });
-                if(document.getElementById('kpi-total-pallets')) { document.getElementById('kpi-total-pallets').innerText = stats.total; document.getElementById('kpi-fg-count').innerText = stats.fg; document.getElementById('kpi-return-count').innerText = stats.ret; updateChart(stats.chart); }
+                if(document.getElementById('kpi-total-pallets')) { 
+                    document.getElementById('kpi-total-pallets').innerText = stats.total; 
+                    document.getElementById('kpi-fg-count').innerText = stats.fg; 
+                    document.getElementById('kpi-return-count').innerText = stats.ret; 
+                    updateChart(stats.chart); 
+                }
+                // 更新戰情分析的統計資料
+                updateDashboardStats(currentInventory);
+                
                 renderAllMaps();
                 
                 // 效期警示檢查（首次載入時）
@@ -3626,11 +3727,220 @@
             if (window.updatePendingInboundCount) updatePendingInboundCount();
         }
         let myChart = null;
+        let companyChart = null;
+        let expiryChart = null;
+        
         function updateChart(data) {
             const ctx = document.getElementById('stockChart'); if(!ctx) return;
-            if(myChart) { myChart.data.datasets[0].data = [data.raw, data.fg, data.wip]; myChart.update(); }
-            else { myChart = new Chart(ctx, { type: 'doughnut', data: { labels: ['原料', '成品', '半成品'], datasets: [{ data: [data.raw, data.fg, data.wip], backgroundColor: ['#10b981', '#a855f7', '#facc15'], borderWidth: 0 }] }, options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: 'white' } } } } }); }
+            const chartConfig = {
+                type: 'doughnut',
+                data: {
+                    labels: ['原料', '成品', '半成品'],
+                    datasets: [{
+                        data: [data.raw, data.fg, data.wip],
+                        backgroundColor: ['#10b981', '#a855f7', '#facc15'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: 'white', boxWidth: 12, padding: 8, font: { size: 11 } } }
+                    }
+                }
+            };
+            
+            if(myChart) {
+                myChart.data.datasets[0].data = [data.raw, data.fg, data.wip];
+                myChart.update();
+            } else {
+                myChart = new Chart(ctx, chartConfig);
+            }
         }
+        
+        // 更新戰情分析統計
+        function updateDashboardStats(inventory) {
+            if (!inventory || inventory.length === 0) return;
+            
+            // 統計變數
+            let cwCount = 0, bfCount = 0, virtualCount = 0;
+            let expiryAlerts = [];
+            const zoneStats = {};
+            const VIRTUAL_LOCS = ['TEMP-IN', 'TEMP-OUT', 'A00', 'A99', 'B00', 'B99', 'C00', 'C99', 'D00', 'D99', 'OTHER'];
+            const zoneCapacity = { 'I-A': 638, 'I-B': 638, 'J-C': 638, 'J-D': 638, 'K-E': 638, 'K-F': 638, 'K-G': 638, 'K-H': 638 };
+            
+            const today = new Date();
+            const thirtyDays = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+            
+            inventory.forEach(item => {
+                // 公司統計
+                if (item.company === '崇文') cwCount++;
+                else if (item.company === '八方') bfCount++;
+                
+                // 虛擬儲位統計
+                if (VIRTUAL_LOCS.includes(item.locationId)) virtualCount++;
+                
+                // 區域統計
+                if (item.locationId && !VIRTUAL_LOCS.includes(item.locationId)) {
+                    const parsed = window.parseLocationId ? window.parseLocationId(item.locationId) : null;
+                    if (parsed && parsed.zone) {
+                        if (!zoneStats[parsed.zone]) zoneStats[parsed.zone] = 0;
+                        zoneStats[parsed.zone]++;
+                    }
+                }
+                
+                // 效期警示
+                if (item.expiryDate) {
+                    const expDate = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
+                    if (expDate <= thirtyDays) {
+                        expiryAlerts.push({
+                            productName: item.productName,
+                            locationId: item.locationId,
+                            quantity: item.quantity,
+                            expiryDate: expDate,
+                            isExpired: expDate < today
+                        });
+                    }
+                }
+            });
+            
+            // 更新 KPI
+            const cwEl = document.getElementById('kpi-cw-count');
+            const bfEl = document.getElementById('kpi-bf-count');
+            const virtualEl = document.getElementById('kpi-virtual-count');
+            const expiryEl = document.getElementById('kpi-expiry-alert');
+            
+            if (cwEl) cwEl.textContent = cwCount;
+            if (bfEl) bfEl.textContent = bfCount;
+            if (virtualEl) virtualEl.textContent = virtualCount;
+            if (expiryEl) expiryEl.textContent = expiryAlerts.length;
+            
+            // 更新公司分布圖
+            updateCompanyChart(cwCount, bfCount);
+            
+            // 更新效期分布圖
+            const expired = expiryAlerts.filter(e => e.isExpired).length;
+            const nearExpiry = expiryAlerts.filter(e => !e.isExpired).length;
+            const normal = inventory.length - expired - nearExpiry;
+            updateExpiryChart(expired, nearExpiry, normal);
+            
+            // 更新區域統計表格
+            updateZoneStatsTable(zoneStats, zoneCapacity);
+            
+            // 更新效期警示表格
+            updateExpiryAlertTable(expiryAlerts);
+        }
+        
+        function updateCompanyChart(cw, bf) {
+            const ctx = document.getElementById('companyChart'); if(!ctx) return;
+            const chartConfig = {
+                type: 'doughnut',
+                data: {
+                    labels: ['崇文', '八方'],
+                    datasets: [{
+                        data: [cw, bf],
+                        backgroundColor: ['#10b981', '#06b6d4'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: 'white', boxWidth: 12, padding: 8, font: { size: 11 } } }
+                    }
+                }
+            };
+            
+            if (companyChart) {
+                companyChart.data.datasets[0].data = [cw, bf];
+                companyChart.update();
+            } else {
+                companyChart = new Chart(ctx, chartConfig);
+            }
+        }
+        
+        function updateExpiryChart(expired, nearExpiry, normal) {
+            const ctx = document.getElementById('expiryChart'); if(!ctx) return;
+            const chartConfig = {
+                type: 'doughnut',
+                data: {
+                    labels: ['已過期', '30天內', '正常'],
+                    datasets: [{
+                        data: [expired, nearExpiry, normal],
+                        backgroundColor: ['#ef4444', '#f97316', '#22c55e'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: 'white', boxWidth: 12, padding: 8, font: { size: 11 } } }
+                    }
+                }
+            };
+            
+            if (expiryChart) {
+                expiryChart.data.datasets[0].data = [expired, nearExpiry, normal];
+                expiryChart.update();
+            } else {
+                expiryChart = new Chart(ctx, chartConfig);
+            }
+        }
+        
+        function updateZoneStatsTable(zoneStats, zoneCapacity) {
+            const tbody = document.getElementById('zone-stats-body');
+            if (!tbody) return;
+            
+            const zones = ['I-A', 'I-B', 'J-C', 'J-D', 'K-E', 'K-F', 'K-G', 'K-H'];
+            let html = '';
+            
+            zones.forEach(zone => {
+                const count = zoneStats[zone] || 0;
+                const capacity = zoneCapacity[zone] || 638;
+                const percent = Math.round((count / capacity) * 100);
+                const colorClass = percent >= 90 ? 'text-red-400' : percent >= 70 ? 'text-yellow-400' : 'text-emerald-400';
+                
+                html += '<tr class="border-b border-slate-700/50 hover:bg-slate-800/50">';
+                html += '<td class="p-2 font-bold text-white">' + zone + '</td>';
+                html += '<td class="p-2 text-right text-white">' + count + '</td>';
+                html += '<td class="p-2 text-right ' + colorClass + '">' + percent + '%</td>';
+                html += '</tr>';
+            });
+            
+            tbody.innerHTML = html || '<tr><td colspan="3" class="text-center text-slate-500 py-4">無資料</td></tr>';
+        }
+        
+        function updateExpiryAlertTable(alerts) {
+            const tbody = document.getElementById('expiry-alert-body');
+            if (!tbody) return;
+            
+            // 排序：過期的排前面，然後按效期排序
+            alerts.sort((a, b) => a.expiryDate - b.expiryDate);
+            
+            let html = '';
+            alerts.slice(0, 10).forEach(item => {
+                const dateStr = item.expiryDate.toLocaleDateString('zh-TW');
+                const colorClass = item.isExpired ? 'text-red-400' : 'text-orange-400';
+                const badge = item.isExpired ? '<span class="text-[10px] bg-red-600 px-1 rounded">過期</span>' : '';
+                
+                html += '<tr class="border-b border-slate-700/50 hover:bg-slate-800/50">';
+                html += '<td class="p-2 text-white">' + (item.productName || '-') + '</td>';
+                html += '<td class="p-2 text-slate-400 font-mono text-xs">' + (item.locationId || '-') + '</td>';
+                html += '<td class="p-2 text-right text-white">' + (item.quantity || 0) + '</td>';
+                html += '<td class="p-2 ' + colorClass + '">' + dateStr + ' ' + badge + '</td>';
+                html += '</tr>';
+            });
+            
+            if (alerts.length > 10) {
+                html += '<tr><td colspan="4" class="text-center text-slate-500 py-2 text-xs">還有 ' + (alerts.length - 10) + ' 筆...</td></tr>';
+            }
+            
+            tbody.innerHTML = html || '<tr><td colspan="4" class="text-center text-emerald-400 py-4"><i class="fa-solid fa-check-circle mr-1"></i>目前沒有效期警示</td></tr>';
+        }
+        
         window.currentInventory = () => currentInventory; window.currentOrders = () => currentOrders; window.currentPallets = () => currentInventory;
     </script>
 
@@ -17028,7 +17338,8 @@ window.clearLocalStorage = function() {
         setTimeout(function() { loadProductMasterList(); }, 500);
 
         setInboundMode('Raw');
-        switchTab('dashboard', null);
+        // 預設顯示數位倉庫頁面
+        switchTab('visual-map', null);
     </script>
 
         <script>
