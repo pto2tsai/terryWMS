@@ -336,7 +336,7 @@
                 <span><i class="fa-solid fa-gear w-4 text-center mr-1 text-slate-400"></i>系統設定</span>
                 <i class="fa-solid fa-chevron-down nav-chevron"></i>
             </div>
-            <div class="nav-group-items collapsed" id="grp-settings">
+            <div class="nav-group-items" id="grp-settings">
                 <div class="nav-item" onclick="switchTab('user-management', event)"><i class="fa-solid fa-users-gear w-4 text-center mr-2 text-blue-400"></i>使用者管理</div>
                 <div class="nav-item" onclick="switchTab('product-master', event)"><i class="fa-solid fa-box w-4 text-center mr-2"></i>品項主檔</div>
             </div>
@@ -1203,11 +1203,29 @@
             
             
             <div id="view-move" class="view-panel h-full hidden flex flex-col p-3 gap-2">
-                <!-- 頂部標題 -->
-                <div class="flex items-center justify-between bg-gradient-to-r from-blue-900 to-indigo-900 border border-blue-600 p-3 rounded-lg">
-                    <div>
-                        <h2 class="text-white font-bold text-xl"><i class="fa-solid fa-clipboard-list mr-2 text-blue-400"></i>智能調度中心</h2>
-                        <p class="text-blue-200 text-xs mt-1">分析庫存 → 產生工單 → 發布執行</p>
+                <!-- 頂部標題 + 統計資訊 -->
+                <div class="flex items-center justify-between bg-gradient-to-r from-blue-900 to-indigo-900 border border-blue-600 px-4 py-2 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-white font-bold text-lg"><i class="fa-solid fa-clipboard-list mr-2 text-blue-400"></i>智能調度中心</h2>
+                        <span class="text-blue-300 text-xs">分析庫存 → 產生工單 → 發布執行</span>
+                    </div>
+                    <div class="flex items-center gap-3" id="dispatch-stats-bar">
+                        <div class="flex items-center gap-1.5 bg-orange-900/50 border border-orange-600/50 rounded px-2 py-1">
+                            <span class="text-orange-400 text-xs">合併</span>
+                            <span class="text-white font-bold" id="stat-bar-merge">0</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 bg-blue-900/50 border border-blue-600/50 rounded px-2 py-1">
+                            <span class="text-blue-400 text-xs">移位</span>
+                            <span class="text-white font-bold" id="stat-bar-move">0</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 bg-purple-900/50 border border-purple-600/50 rounded px-2 py-1">
+                            <span class="text-purple-400 text-xs">操作</span>
+                            <span class="text-white font-bold" id="stat-bar-ops">0</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 bg-emerald-900/50 border border-emerald-600/50 rounded px-2 py-1">
+                            <span class="text-emerald-400 text-xs">釋放</span>
+                            <span class="text-white font-bold" id="stat-bar-free">0</span>
+                        </div>
                     </div>
                 </div>
                 
@@ -1262,26 +1280,6 @@
                 
                 <!-- ========== Step 2: 確認工單 ========== -->
                 <div id="dispatch-step-2" class="dispatch-step hidden">
-                    <!-- 統計摘要 -->
-                    <div class="grid grid-cols-4 gap-3 mb-4">
-                        <div class="bg-gradient-to-br from-orange-900/50 to-orange-800/30 border border-orange-600/50 rounded-lg p-3 text-center">
-                            <div class="text-orange-400 text-xs mb-1">合併工單</div>
-                            <div class="text-2xl font-black text-white" id="stat-need-partial">0</div>
-                        </div>
-                        <div class="bg-gradient-to-br from-blue-900/50 to-blue-800/30 border border-blue-600/50 rounded-lg p-3 text-center">
-                            <div class="text-blue-400 text-xs mb-1">移位工單</div>
-                            <div class="text-2xl font-black text-white" id="stat-need-dispatch">0</div>
-                        </div>
-                        <div class="bg-gradient-to-br from-purple-900/50 to-purple-800/30 border border-purple-600/50 rounded-lg p-3 text-center">
-                            <div class="text-purple-400 text-xs mb-1">總操作數</div>
-                            <div class="text-2xl font-black text-white" id="stat-total-ops">0</div>
-                        </div>
-                        <div class="bg-gradient-to-br from-emerald-900/50 to-emerald-800/30 border border-emerald-600/50 rounded-lg p-3 text-center">
-                            <div class="text-emerald-400 text-xs mb-1">可釋放儲位</div>
-                            <div class="text-2xl font-black text-white" id="stat-freed-slots">0</div>
-                        </div>
-                    </div>
-                    
                     <!-- 工單列表標題 + 操作區 -->
                     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
                         <div class="flex items-center gap-4">
@@ -7230,6 +7228,16 @@ console.log('✅ WMS 工具函數庫已載入');
             if (el5) el5.innerText = optimized;
             if (el6) el6.innerText = totalProducts;
             
+            // 同步更新標題列統計
+            var barMerge = document.getElementById('stat-bar-merge');
+            var barMove = document.getElementById('stat-bar-move');
+            var barOps = document.getElementById('stat-bar-ops');
+            var barFree = document.getElementById('stat-bar-free');
+            if (barMerge) barMerge.innerText = totalPartialOps;
+            if (barMove) barMove.innerText = totalMoveOps;
+            if (barOps) barOps.innerText = totalOps;
+            if (barFree) barFree.innerText = totalFreedSlots;
+            
             console.log('調度分析完成:', {
                 totalProducts: totalProducts,
                 needDispatch: dispatchItems.length,
@@ -7271,128 +7279,102 @@ console.log('✅ WMS 工具函數庫已載入');
                 return;
             }
             
-            var html = '<div class="space-y-3" style="max-width: 900px;">';
+            var html = '<div class="space-y-2">';
             var orderNo = 1;
             
             items.forEach(function(item, idx) {
                 var hasMerge = item.partialMerges && item.partialMerges.length > 0;
                 var hasMove = item.isolatedMoves && item.isolatedMoves.length > 0;
                 var opsCount = 0;
-                if (hasMerge) item.partialMerges.forEach(function(g) { opsCount += g.sources.length; });
-                if (hasMove) opsCount += item.isolatedMoves.length;
+                var mergeCount = 0;
+                var moveCount = 0;
+                if (hasMerge) item.partialMerges.forEach(function(g) { opsCount += g.sources.length; mergeCount += g.sources.length; });
+                if (hasMove) { opsCount += item.isolatedMoves.length; moveCount = item.isolatedMoves.length; }
                 
-                html += '<div class="bg-slate-900/80 border border-slate-600 rounded-lg overflow-hidden dispatch-order-item" data-idx="' + idx + '">';
+                html += '<div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden dispatch-order-item" data-idx="' + idx + '">';
                 
-                // 工單標題 - 加入勾選框
-                html += '<div class="bg-slate-800 px-4 py-2 flex items-center justify-between border-b border-slate-700">';
-                html += '<div class="flex items-center gap-3">';
-                html += '<input type="checkbox" class="dispatch-order-checkbox w-5 h-5 rounded accent-purple-500 cursor-pointer" data-idx="' + idx + '" onchange="updateDispatchSelectionUI()">';
-                html += '<span class="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">工單 #' + String(orderNo).padStart(3, '0') + '</span>';
-                html += '<span class="text-white font-bold">' + item.name + '</span>';
-                if (item.spec) html += '<span class="text-slate-400 text-sm">(' + item.spec + ')</span>';
-                html += '<span class="text-purple-400 text-xs ml-2">(' + opsCount + ' 項操作)</span>';
+                // 工單標題列 - 更緊湊
+                html += '<div class="bg-gradient-to-r from-slate-800 to-slate-800/50 px-3 py-2 flex items-center justify-between">';
+                html += '<div class="flex items-center gap-2">';
+                html += '<input type="checkbox" class="dispatch-order-checkbox w-4 h-4 rounded accent-purple-500 cursor-pointer" data-idx="' + idx + '" onchange="updateDispatchSelectionUI()">';
+                html += '<span class="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded">#' + String(orderNo).padStart(3, '0') + '</span>';
+                html += '<span class="text-white font-bold text-sm">' + item.name + '</span>';
+                if (item.spec) html += '<span class="text-slate-500 text-xs">(' + item.spec + ')</span>';
                 html += '</div>';
-                html += '<button onclick="printSingleDispatchOrder(' + idx + ');" class="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-1 rounded"><i class="fa-solid fa-print mr-1"></i>列印</button>';
+                html += '<div class="flex items-center gap-2">';
+                if (mergeCount > 0) html += '<span class="bg-orange-900/50 text-orange-400 text-xs px-2 py-0.5 rounded border border-orange-700">合併 ' + mergeCount + '</span>';
+                if (moveCount > 0) html += '<span class="bg-blue-900/50 text-blue-400 text-xs px-2 py-0.5 rounded border border-blue-700">移位 ' + moveCount + '</span>';
+                html += '<button onclick="printSingleDispatchOrder(' + idx + ');" class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-2 py-1 rounded"><i class="fa-solid fa-print"></i></button>';
+                html += '</div>';
                 html += '</div>';
                 
-                // 品項資訊
-                html += '<div class="px-4 py-2 bg-slate-800/50 border-b border-slate-700 flex items-center gap-6 text-sm">';
-                html += '<span class="text-slate-400">板容量：<span class="text-white font-bold">' + item.palletCapacity + '</span> 件/板</span>';
-                html += '<span class="text-slate-400">餘板標準：<span class="text-orange-400">&lt;' + Math.floor(item.palletCapacity * 0.5) + '件 (50%)</span></span>';
-                html += '<span class="text-slate-400">總庫存：<span class="text-cyan-400 font-bold">' + item.totalQty + '</span> 件</span>';
-                html += '<span class="text-slate-400">分布：<span class="text-purple-400 font-bold">' + item.laneCount + '</span> 巷道</span>';
-                html += '<span class="text-slate-400">主巷道：<span class="text-emerald-400 font-bold font-mono">' + (item.mainLane || '-') + '</span></span>';
-                if (item.useAutoDetect) {
-                    html += '<span class="text-yellow-400 text-xs"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>板容量自動偵測</span>';
-                }
+                // 品項摘要 - 簡化為一行
+                html += '<div class="px-3 py-1.5 bg-slate-800/30 border-b border-slate-700/50 flex items-center gap-4 text-xs">';
+                html += '<span class="text-slate-500">容量 <span class="text-white">' + item.palletCapacity + '</span></span>';
+                html += '<span class="text-slate-500">庫存 <span class="text-cyan-400">' + item.totalQty + '</span></span>';
+                html += '<span class="text-slate-500">巷道 <span class="text-purple-400">' + item.laneCount + '</span></span>';
+                html += '<span class="text-slate-500">主巷 <span class="text-emerald-400 font-mono">' + (item.mainLane || '-') + '</span></span>';
                 html += '</div>';
                 
                 // ========== 合併操作 ==========
                 if (hasMerge) {
                     item.partialMerges.forEach(function(group, gIdx) {
-                        html += '<div class="border-b border-slate-700">';
-                        html += '<div class="px-4 py-2 bg-orange-900/30 flex items-center gap-2">';
-                        html += '<span class="bg-orange-600 text-white text-xs font-bold px-2 py-0.5 rounded">合併</span>';
-                        html += '<span class="text-orange-300 font-bold">餘板合併作業 #' + (gIdx + 1) + '</span>';
-                        html += '<span class="text-emerald-400 text-sm ml-auto"><i class="fa-solid fa-arrow-up mr-1"></i>完成後釋放 ' + group.sources.length + ' 個儲位</span>';
+                        html += '<div class="border-t border-slate-700">';
+                        html += '<div class="px-3 py-1.5 bg-orange-900/20 flex items-center justify-between">';
+                        html += '<div class="flex items-center gap-2">';
+                        html += '<span class="bg-orange-600 text-white text-xs font-bold px-1.5 py-0.5 rounded">合併 #' + (gIdx + 1) + '</span>';
+                        html += '<span class="text-orange-300 text-xs">將 ' + group.sources.length + ' 板合併至 <span class="font-mono font-bold">' + group.keep.location + '</span></span>';
+                        html += '</div>';
+                        html += '<span class="text-emerald-400 text-xs"><i class="fa-solid fa-unlock mr-1"></i>釋放 ' + group.sources.length + ' 位</span>';
                         html += '</div>';
                         
-                        // 操作表格
-                        html += '<table class="w-full text-sm">';
-                        html += '<thead class="bg-slate-800/80"><tr>';
-                        html += '<th class="text-left px-4 py-2 text-slate-400 font-normal w-16">步驟</th>';
-                        html += '<th class="text-left px-4 py-2 text-slate-400 font-normal">來源儲位</th>';
-                        html += '<th class="text-left px-4 py-2 text-slate-400 font-normal">板號</th>';
-                        html += '<th class="text-right px-4 py-2 text-slate-400 font-normal">數量</th>';
-                        html += '<th class="text-center px-4 py-2 text-slate-400 font-normal w-16">→</th>';
-                        html += '<th class="text-left px-4 py-2 text-slate-400 font-normal">目標儲位</th>';
-                        html += '<th class="text-left px-4 py-2 text-slate-400 font-normal">說明</th>';
-                        html += '<th class="text-center px-4 py-2 text-slate-400 font-normal w-16">完成</th>';
-                        html += '</tr></thead><tbody>';
-                        
+                        // 緊湊操作列表
+                        html += '<div class="px-3 py-2 space-y-1">';
                         group.sources.forEach(function(src, sIdx) {
-                            html += '<tr class="border-t border-slate-700/50 hover:bg-slate-800/50">';
-                            html += '<td class="px-4 py-2 text-slate-500">' + (sIdx + 1) + '</td>';
-                            html += '<td class="px-4 py-2 font-mono text-red-400 font-bold">' + src.location + '</td>';
-                            html += '<td class="px-4 py-2 font-mono text-slate-300">' + (src.palletId || '-') + '</td>';
-                            html += '<td class="px-4 py-2 text-right text-yellow-400 font-bold">' + src.qty + ' 件</td>';
-                            html += '<td class="px-4 py-2 text-center text-slate-500"><i class="fa-solid fa-arrow-right"></i></td>';
-                            html += '<td class="px-4 py-2 font-mono text-emerald-400 font-bold">' + group.keep.location + '</td>';
-                            html += '<td class="px-4 py-2 text-slate-400 text-xs">合併至此板，來源儲位清空</td>';
-                            html += '<td class="px-4 py-2 text-center"><span class="inline-block w-5 h-5 border-2 border-slate-500 rounded"></span></td>';
-                            html += '</tr>';
+                            html += '<div class="flex items-center gap-2 text-xs bg-slate-800/50 rounded px-2 py-1">';
+                            html += '<span class="text-slate-500 w-4">' + (sIdx + 1) + '</span>';
+                            html += '<span class="font-mono text-red-400 font-bold w-24">' + src.location + '</span>';
+                            html += '<span class="text-yellow-400 font-bold w-16 text-right">' + src.qty + '件</span>';
+                            html += '<i class="fa-solid fa-arrow-right text-slate-600 mx-2"></i>';
+                            html += '<span class="font-mono text-emerald-400 font-bold">' + group.keep.location + '</span>';
+                            html += '<span class="text-slate-500 ml-auto">□</span>';
+                            html += '</div>';
                         });
-                        
-                        // 合併結果摘要
-                        html += '<tr class="border-t-2 border-slate-600 bg-slate-800/80">';
-                        html += '<td colspan="3" class="px-4 py-2 text-slate-400">合併後結果</td>';
-                        html += '<td class="px-4 py-2 text-right text-emerald-400 font-bold">' + group.totalAfterMerge + ' 件</td>';
-                        html += '<td class="px-4 py-2"></td>';
-                        html += '<td class="px-4 py-2 font-mono text-emerald-400">' + group.keep.location + '</td>';
-                        html += '<td class="px-4 py-2 text-emerald-400 text-xs">' + Math.round(group.totalAfterMerge / item.palletCapacity * 100) + '% 板容量</td>';
-                        html += '<td class="px-4 py-2"></td>';
-                        html += '</tr>';
-                        
-                        html += '</tbody></table>';
+                        html += '<div class="flex items-center gap-2 text-xs bg-emerald-900/30 rounded px-2 py-1 mt-1 border border-emerald-800/50">';
+                        html += '<span class="text-emerald-400">合併後：</span>';
+                        html += '<span class="font-mono text-emerald-300 font-bold">' + group.keep.location + '</span>';
+                        html += '<span class="text-emerald-400 font-bold">' + group.totalAfterMerge + '件</span>';
+                        html += '<span class="text-emerald-500">(' + Math.round(group.totalAfterMerge / item.palletCapacity * 100) + '%)</span>';
+                        html += '</div>';
+                        html += '</div>';
                         html += '</div>';
                     });
                 }
                 
                 // ========== 移位操作 ==========
                 if (hasMove) {
-                    html += '<div class="border-b border-slate-700">';
-                    html += '<div class="px-4 py-2 bg-blue-900/30 flex items-center gap-2">';
-                    html += '<span class="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded">移位</span>';
-                    html += '<span class="text-blue-300 font-bold">孤立板移位作業</span>';
-                    html += '<span class="text-slate-400 text-sm ml-auto">移至主巷道 <span class="font-mono text-emerald-400">' + item.mainLane + '</span> 集中存放</span>';
+                    html += '<div class="border-t border-slate-700">';
+                    html += '<div class="px-3 py-1.5 bg-blue-900/20 flex items-center justify-between">';
+                    html += '<div class="flex items-center gap-2">';
+                    html += '<span class="bg-blue-600 text-white text-xs font-bold px-1.5 py-0.5 rounded">移位</span>';
+                    html += '<span class="text-blue-300 text-xs">集中至主巷道 <span class="font-mono font-bold">' + item.mainLane + '</span></span>';
+                    html += '</div>';
                     html += '</div>';
                     
-                    html += '<table class="w-full text-sm">';
-                    html += '<thead class="bg-slate-800/80"><tr>';
-                    html += '<th class="text-left px-4 py-2 text-slate-400 font-normal w-16">步驟</th>';
-                    html += '<th class="text-left px-4 py-2 text-slate-400 font-normal">來源儲位</th>';
-                    html += '<th class="text-left px-4 py-2 text-slate-400 font-normal">板號</th>';
-                    html += '<th class="text-right px-4 py-2 text-slate-400 font-normal">數量</th>';
-                    html += '<th class="text-center px-4 py-2 text-slate-400 font-normal w-16">→</th>';
-                    html += '<th class="text-left px-4 py-2 text-slate-400 font-normal">目標儲位</th>';
-                    html += '<th class="text-left px-4 py-2 text-slate-400 font-normal">移位原因</th>';
-                    html += '<th class="text-center px-4 py-2 text-slate-400 font-normal w-16">完成</th>';
-                    html += '</tr></thead><tbody>';
-                    
+                    // 緊湊操作列表
+                    html += '<div class="px-3 py-2 space-y-1">';
                     item.isolatedMoves.forEach(function(m, mIdx) {
-                        html += '<tr class="border-t border-slate-700/50 hover:bg-slate-800/50">';
-                        html += '<td class="px-4 py-2 text-slate-500">' + (mIdx + 1) + '</td>';
-                        html += '<td class="px-4 py-2 font-mono text-red-400 font-bold">' + m.from + '</td>';
-                        html += '<td class="px-4 py-2 font-mono text-slate-300">' + (m.palletId || '-') + '</td>';
-                        html += '<td class="px-4 py-2 text-right text-yellow-400 font-bold">' + m.qty + ' 件</td>';
-                        html += '<td class="px-4 py-2 text-center text-slate-500"><i class="fa-solid fa-arrow-right"></i></td>';
-                        html += '<td class="px-4 py-2 font-mono text-emerald-400 font-bold">' + m.toSlot + '</td>';
-                        html += '<td class="px-4 py-2 text-slate-400 text-xs">' + m.reason + '</td>';
-                        html += '<td class="px-4 py-2 text-center"><span class="inline-block w-5 h-5 border-2 border-slate-500 rounded"></span></td>';
-                        html += '</tr>';
+                        html += '<div class="flex items-center gap-2 text-xs bg-slate-800/50 rounded px-2 py-1">';
+                        html += '<span class="text-slate-500 w-4">' + (mIdx + 1) + '</span>';
+                        html += '<span class="font-mono text-red-400 font-bold w-24">' + m.from + '</span>';
+                        html += '<span class="text-yellow-400 font-bold w-16 text-right">' + m.qty + '件</span>';
+                        html += '<i class="fa-solid fa-arrow-right text-slate-600 mx-2"></i>';
+                        html += '<span class="font-mono text-emerald-400 font-bold w-24">' + m.toSlot + '</span>';
+                        html += '<span class="text-slate-500 text-xs truncate flex-1">' + m.reason + '</span>';
+                        html += '<span class="text-slate-500">□</span>';
+                        html += '</div>';
                     });
-                    
-                    html += '</tbody></table>';
+                    html += '</div>';
                     html += '</div>';
                 }
                 
@@ -14765,7 +14747,7 @@ window.clearLocalStorage = function() {
                     id: email,
                     email: email, 
                     name: email.split('@')[0], 
-                    role: 'operator', 
+                    role: 'admin', 
                     dept: '', 
                     active: true,
                     createdAt: new Date().toISOString()
@@ -14840,8 +14822,8 @@ window.clearLocalStorage = function() {
                 });
             }
             
-            // 非管理員隱藏使用者管理
-            if (level < 100) {
+            // 使用者管理對 supervisor 以上開放 (level >= 80)
+            if (level < 80) {
                 var userMgmtNav = document.querySelector('[onclick*="user-management"]');
                 if (userMgmtNav) userMgmtNav.style.display = 'none';
             }
