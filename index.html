@@ -90,8 +90,10 @@
         .rack-lanes-22 { display: grid; grid-template-columns: repeat(22, 1fr); gap: 3px; flex: 1; padding: 6px; background: rgba(15, 23, 42, 0.5); border: 1px solid #334155; border-radius: 0 4px 4px 0; }
         
         /* Hover 浮動提示卡片 - 超大尺寸版，三層完整顯示 */
-        .hover-tooltip { position: fixed; z-index: 9999; pointer-events: none; width: 620px; max-height: 85vh; overflow-y: auto; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 2px solid #3b82f6; border-radius: 14px; box-shadow: 0 25px 50px rgba(0,0,0,0.7), 0 0 30px rgba(59,130,246,0.4); animation: tooltipIn 0.15s ease-out; }
+        .hover-tooltip { position: fixed; z-index: 9999; pointer-events: none; width: auto; min-width: 650px; max-width: 900px; max-height: 85vh; overflow-y: auto; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 2px solid #3b82f6; border-radius: 14px; box-shadow: 0 25px 50px rgba(0,0,0,0.7), 0 0 30px rgba(59,130,246,0.4); animation: tooltipIn 0.15s ease-out; }
         .hover-tooltip.hidden { display: none; }
+        .hover-tooltip table { white-space: nowrap; }
+        .hover-tooltip table td, .hover-tooltip table th { white-space: nowrap; }
         @keyframes tooltipIn { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
         .tooltip-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%); border-radius: 12px 12px 0 0; }
         .tooltip-title { font-weight: 800; font-size: 15px; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
@@ -198,6 +200,22 @@
         .field-group.hidden { display: none; }
         .kpi-card { cursor: pointer; transition: all 0.2s; }
         .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 12px rgba(0,0,0,0.5); border-color: white; }
+
+        /* 虛擬儲位卡片樣式 */
+        .virtual-loc-card {
+            padding: 8px 6px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .virtual-loc-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .virtual-loc-card .text-xl {
+            line-height: 1.2;
+        }
 
         /* V50 預覽標籤專用樣式 (模擬紙張) */
         .preview-label-card {
@@ -340,6 +358,7 @@
                 <div class="nav-item" onclick="switchTab('user-management', event)"><i class="fa-solid fa-users-gear w-4 text-center mr-2 text-blue-400"></i>使用者管理</div>
                 <div class="nav-item" onclick="switchTab('product-master', event)"><i class="fa-solid fa-box w-4 text-center mr-2"></i>品項主檔</div>
                 <div class="nav-item" onclick="switchTab('label-print', event)"><i class="fa-solid fa-print w-4 text-center mr-2 text-purple-400"></i>標籤列印</div>
+                <div class="nav-item" onclick="switchTab('data-import', event)"><i class="fa-solid fa-file-import w-4 text-center mr-2 text-amber-400"></i>資料匯入</div>
             </div>
         </nav>
         <!-- 版本資訊 -->
@@ -432,6 +451,95 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 暫存區監控區塊 -->
+                <div class="shrink-0 border-t border-slate-700 bg-slate-900/50 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-white font-bold text-sm">
+                            <i class="fa-solid fa-boxes-stacked mr-2 text-amber-400"></i>暫存區監控
+                        </h3>
+                        <span class="text-xs text-slate-500">滑鼠懸停查看詳情</span>
+                    </div>
+                    <div class="grid grid-cols-11 gap-2" id="virtual-locations-grid">
+                        <!-- 進貨暫存區 -->
+                        <div class="virtual-loc-card bg-emerald-900/40 border border-emerald-600/50 hover:border-emerald-400" 
+                             onmouseenter="showVirtualLocTooltip(event, 'TEMP-IN')" onmousemove="moveHoverTooltip(event)" onmouseleave="hideHoverTooltip()" title="進貨暫存區">
+                            <div class="text-emerald-400 text-[10px] font-bold">TEMP-IN</div>
+                            <div class="text-xl font-black text-white" id="vl-count-TEMP-IN">0</div>
+                            <div class="text-[10px] text-emerald-300">進貨暫存</div>
+                        </div>
+                        <!-- 出貨暫存區 -->
+                        <div class="virtual-loc-card bg-orange-900/40 border border-orange-600/50 hover:border-orange-400" 
+                             onmouseenter="showVirtualLocTooltip(event, 'TEMP-OUT')" onmousemove="moveHoverTooltip(event)" onmouseleave="hideHoverTooltip()" title="出貨暫存區">
+                            <div class="text-orange-400 text-[10px] font-bold">TEMP-OUT</div>
+                            <div class="text-xl font-black text-white" id="vl-count-TEMP-OUT">0</div>
+                            <div class="text-[10px] text-orange-300">出貨暫存</div>
+                        </div>
+                        <!-- A區前端 -->
+                        <div class="virtual-loc-card bg-blue-900/40 border border-blue-600/50 hover:border-blue-400" 
+                             onmouseenter="showVirtualLocTooltip(event, 'A00')" onmousemove="moveHoverTooltip(event)" onmouseleave="hideHoverTooltip()" title="A區貨架前端">
+                            <div class="text-blue-400 text-[10px] font-bold">A00</div>
+                            <div class="text-xl font-black text-white" id="vl-count-A00">0</div>
+                            <div class="text-[10px] text-blue-300">A區前端</div>
+                        </div>
+                        <!-- A區末端 -->
+                        <div class="virtual-loc-card bg-blue-900/40 border border-blue-600/50 hover:border-blue-400" 
+                             onmouseenter="showVirtualLocTooltip(event, 'A99')" onmousemove="moveHoverTooltip(event)" onmouseleave="hideHoverTooltip()" title="A區貨架末端">
+                            <div class="text-blue-400 text-[10px] font-bold">A99</div>
+                            <div class="text-xl font-black text-white" id="vl-count-A99">0</div>
+                            <div class="text-[10px] text-blue-300">A區末端</div>
+                        </div>
+                        <!-- B區前端 -->
+                        <div class="virtual-loc-card bg-indigo-900/40 border border-indigo-600/50 hover:border-indigo-400" 
+                             onmouseenter="showVirtualLocTooltip(event, 'B00')" onmousemove="moveHoverTooltip(event)" onmouseleave="hideHoverTooltip()" title="B區貨架前端">
+                            <div class="text-indigo-400 text-[10px] font-bold">B00</div>
+                            <div class="text-xl font-black text-white" id="vl-count-B00">0</div>
+                            <div class="text-[10px] text-indigo-300">B區前端</div>
+                        </div>
+                        <!-- B區末端 -->
+                        <div class="virtual-loc-card bg-indigo-900/40 border border-indigo-600/50 hover:border-indigo-400" 
+                             onmouseenter="showVirtualLocTooltip(event, 'B99')" onmousemove="moveHoverTooltip(event)" onmouseleave="hideHoverTooltip()" title="B區貨架末端">
+                            <div class="text-indigo-400 text-[10px] font-bold">B99</div>
+                            <div class="text-xl font-black text-white" id="vl-count-B99">0</div>
+                            <div class="text-[10px] text-indigo-300">B區末端</div>
+                        </div>
+                        <!-- C區前端 -->
+                        <div class="virtual-loc-card bg-purple-900/40 border border-purple-600/50 hover:border-purple-400" 
+                             onmouseenter="showVirtualLocTooltip(event, 'C00')" onmousemove="moveHoverTooltip(event)" onmouseleave="hideHoverTooltip()" title="C區貨架前端">
+                            <div class="text-purple-400 text-[10px] font-bold">C00</div>
+                            <div class="text-xl font-black text-white" id="vl-count-C00">0</div>
+                            <div class="text-[10px] text-purple-300">C區前端</div>
+                        </div>
+                        <!-- C區末端 -->
+                        <div class="virtual-loc-card bg-purple-900/40 border border-purple-600/50 hover:border-purple-400" 
+                             onmouseenter="showVirtualLocTooltip(event, 'C99')" onmousemove="moveHoverTooltip(event)" onmouseleave="hideHoverTooltip()" title="C區貨架末端">
+                            <div class="text-purple-400 text-[10px] font-bold">C99</div>
+                            <div class="text-xl font-black text-white" id="vl-count-C99">0</div>
+                            <div class="text-[10px] text-purple-300">C區末端</div>
+                        </div>
+                        <!-- D區前端 -->
+                        <div class="virtual-loc-card bg-pink-900/40 border border-pink-600/50 hover:border-pink-400" 
+                             onmouseenter="showVirtualLocTooltip(event, 'D00')" onmousemove="moveHoverTooltip(event)" onmouseleave="hideHoverTooltip()" title="D區貨架前端">
+                            <div class="text-pink-400 text-[10px] font-bold">D00</div>
+                            <div class="text-xl font-black text-white" id="vl-count-D00">0</div>
+                            <div class="text-[10px] text-pink-300">D區前端</div>
+                        </div>
+                        <!-- D區末端 -->
+                        <div class="virtual-loc-card bg-pink-900/40 border border-pink-600/50 hover:border-pink-400" 
+                             onmouseenter="showVirtualLocTooltip(event, 'D99')" onmousemove="moveHoverTooltip(event)" onmouseleave="hideHoverTooltip()" title="D區貨架末端">
+                            <div class="text-pink-400 text-[10px] font-bold">D99</div>
+                            <div class="text-xl font-black text-white" id="vl-count-D99">0</div>
+                            <div class="text-[10px] text-pink-300">D區末端</div>
+                        </div>
+                        <!-- 其他 -->
+                        <div class="virtual-loc-card bg-slate-800/60 border border-slate-600/50 hover:border-slate-400" 
+                             onmouseenter="showVirtualLocTooltip(event, 'OTHER')" onmousemove="moveHoverTooltip(event)" onmouseleave="hideHoverTooltip()" title="其他位置">
+                            <div class="text-slate-400 text-[10px] font-bold">OTHER</div>
+                            <div class="text-xl font-black text-white" id="vl-count-OTHER">0</div>
+                            <div class="text-[10px] text-slate-400">其他位置</div>
                         </div>
                     </div>
                 </div>
@@ -577,6 +685,30 @@
                                         <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>智能建議
                                     </button>
                                     <input type="text" id="in-loc" class="w-40 p-2 bg-slate-800 border-2 border-emerald-500 rounded text-lg font-bold text-emerald-400 text-center focus:outline-none" placeholder="或輸入儲位" oninput="validateLocationInput()" onchange="validateLocationInput()">
+                                </div>
+                            </div>
+                            
+                            <!-- 虛擬儲位快速選擇 -->
+                            <div class="mb-2 p-2 bg-slate-800/50 rounded-lg border border-slate-700">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-xs text-amber-400 font-bold"><i class="fa-solid fa-location-dot mr-1"></i>暫存區快選</span>
+                                </div>
+                                <div class="flex flex-wrap gap-1">
+                                    <button onclick="selectVirtualLocation('TEMP-IN')" class="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold">
+                                        <i class="fa-solid fa-truck-loading mr-1"></i>進貨暫存
+                                    </button>
+                                    <button onclick="selectVirtualLocation('TEMP-OUT')" class="px-2 py-1 bg-orange-700 hover:bg-orange-600 text-white rounded text-xs font-bold">
+                                        <i class="fa-solid fa-truck mr-1"></i>出貨暫存
+                                    </button>
+                                    <button onclick="selectVirtualLocation('A00')" class="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded text-xs">A00</button>
+                                    <button onclick="selectVirtualLocation('A99')" class="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded text-xs">A99</button>
+                                    <button onclick="selectVirtualLocation('B00')" class="px-2 py-1 bg-indigo-700 hover:bg-indigo-600 text-white rounded text-xs">B00</button>
+                                    <button onclick="selectVirtualLocation('B99')" class="px-2 py-1 bg-indigo-700 hover:bg-indigo-600 text-white rounded text-xs">B99</button>
+                                    <button onclick="selectVirtualLocation('C00')" class="px-2 py-1 bg-purple-700 hover:bg-purple-600 text-white rounded text-xs">C00</button>
+                                    <button onclick="selectVirtualLocation('C99')" class="px-2 py-1 bg-purple-700 hover:bg-purple-600 text-white rounded text-xs">C99</button>
+                                    <button onclick="selectVirtualLocation('D00')" class="px-2 py-1 bg-pink-700 hover:bg-pink-600 text-white rounded text-xs">D00</button>
+                                    <button onclick="selectVirtualLocation('D99')" class="px-2 py-1 bg-pink-700 hover:bg-pink-600 text-white rounded text-xs">D99</button>
+                                    <button onclick="selectVirtualLocation('OTHER')" class="px-2 py-1 bg-slate-600 hover:bg-slate-500 text-white rounded text-xs">其他</button>
                                 </div>
                             </div>
                             
@@ -2328,112 +2460,243 @@
                     <p class="text-purple-200 text-sm mt-1">列印儲位條碼、重印棧板單</p>
                 </div>
                 
-                <div class="grid grid-cols-2 gap-6 flex-1 overflow-hidden">
+                <div class="grid grid-cols-2 gap-6 flex-1 min-h-0">
                     <!-- 左側：儲位條碼列印 -->
-                    <div class="glass-panel p-4 flex flex-col">
-                        <h3 class="text-white font-bold text-lg mb-4 border-b border-slate-700 pb-2">
-                            <i class="fa-solid fa-location-dot mr-2 text-blue-400"></i>儲位條碼列印
-                        </h3>
-                        
-                        <div class="space-y-4">
-                            <!-- 倉庫選擇 -->
-                            <div>
-                                <label class="text-sm text-slate-400 mb-1 block">選擇倉庫區域</label>
-                                <div class="grid grid-cols-4 gap-2">
-                                    <button onclick="selectLocZone('I-A')" class="loc-zone-btn px-3 py-2 bg-blue-900/50 border border-blue-700 rounded-lg text-blue-400 font-bold text-sm hover:bg-blue-800/50" data-zone="I-A">I-A</button>
-                                    <button onclick="selectLocZone('I-B')" class="loc-zone-btn px-3 py-2 bg-blue-900/50 border border-blue-700 rounded-lg text-blue-400 font-bold text-sm hover:bg-blue-800/50" data-zone="I-B">I-B</button>
-                                    <button onclick="selectLocZone('J-C')" class="loc-zone-btn px-3 py-2 bg-purple-900/50 border border-purple-700 rounded-lg text-purple-400 font-bold text-sm hover:bg-purple-800/50" data-zone="J-C">J-C</button>
-                                    <button onclick="selectLocZone('J-D')" class="loc-zone-btn px-3 py-2 bg-purple-900/50 border border-purple-700 rounded-lg text-purple-400 font-bold text-sm hover:bg-purple-800/50" data-zone="J-D">J-D</button>
-                                    <button onclick="selectLocZone('K-E')" class="loc-zone-btn px-3 py-2 bg-emerald-900/50 border border-emerald-700 rounded-lg text-emerald-400 font-bold text-sm hover:bg-emerald-800/50" data-zone="K-E">K-E</button>
-                                    <button onclick="selectLocZone('K-F')" class="loc-zone-btn px-3 py-2 bg-emerald-900/50 border border-emerald-700 rounded-lg text-emerald-400 font-bold text-sm hover:bg-emerald-800/50" data-zone="K-F">K-F</button>
-                                    <button onclick="selectLocZone('K-G')" class="loc-zone-btn px-3 py-2 bg-emerald-900/50 border border-emerald-700 rounded-lg text-emerald-400 font-bold text-sm hover:bg-emerald-800/50" data-zone="K-G">K-G</button>
-                                    <button onclick="selectLocZone('K-H')" class="loc-zone-btn px-3 py-2 bg-emerald-900/50 border border-emerald-700 rounded-lg text-emerald-400 font-bold text-sm hover:bg-emerald-800/50" data-zone="K-H">K-H</button>
-                                </div>
-                            </div>
-                            
-                            <!-- 排號範圍 -->
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="text-sm text-slate-400 mb-1 block">起始排號</label>
-                                    <input type="number" id="loc-row-start" class="scan-input" value="1" min="1" max="22">
-                                </div>
-                                <div>
-                                    <label class="text-sm text-slate-400 mb-1 block">結束排號</label>
-                                    <input type="number" id="loc-row-end" class="scan-input" value="22" min="1" max="22">
-                                </div>
-                            </div>
-                            
-                            <!-- 樓層選擇 -->
-                            <div>
-                                <label class="text-sm text-slate-400 mb-1 block">選擇樓層</label>
-                                <div class="flex gap-2">
-                                    <label class="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer">
-                                        <input type="checkbox" id="loc-floor-1f" checked class="w-4 h-4">
-                                        <span class="text-white">1F</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer">
-                                        <input type="checkbox" id="loc-floor-2f" checked class="w-4 h-4">
-                                        <span class="text-white">2F</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg cursor-pointer">
-                                        <input type="checkbox" id="loc-floor-3f" checked class="w-4 h-4">
-                                        <span class="text-white">3F</span>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <!-- 列印預覽 -->
-                            <div class="bg-slate-900 rounded-lg p-3">
-                                <div class="text-slate-400 text-sm mb-2">預覽：</div>
-                                <div class="text-white" id="loc-print-preview">
-                                    請選擇倉庫區域
-                                </div>
-                            </div>
-                            
-                            <button onclick="printLocationLabels()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
-                                <i class="fa-solid fa-print mr-2"></i>列印儲位條碼
+                    <div class="glass-panel p-4 flex flex-col overflow-hidden">
+                        <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-700">
+                            <h3 class="text-white font-bold text-lg">
+                                <i class="fa-solid fa-location-dot mr-2 text-blue-400"></i>儲位條碼列印
+                            </h3>
+                            <button onclick="printLocationLabels()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm">
+                                <i class="fa-solid fa-print mr-1"></i>列印儲位條碼
                             </button>
+                        </div>
+                        
+                        <div class="flex-1 overflow-y-auto space-y-3">
+                            <!-- Step 1: 倉庫選擇 -->
+                            <div class="bg-slate-800/50 rounded-lg p-3">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="bg-blue-600 text-white text-xs px-2 py-0.5 rounded font-bold">1</span>
+                                    <span class="text-sm text-slate-300 font-bold">選擇倉庫區域</span>
+                                </div>
+                                <div class="grid grid-cols-4 gap-2">
+                                    <button onclick="selectLocZone('I-A')" class="loc-zone-btn px-2 py-1.5 bg-blue-900/50 border border-blue-700 rounded text-blue-400 font-bold text-xs hover:bg-blue-800/50 transition-colors" data-zone="I-A">I-A</button>
+                                    <button onclick="selectLocZone('I-B')" class="loc-zone-btn px-2 py-1.5 bg-blue-900/50 border border-blue-700 rounded text-blue-400 font-bold text-xs hover:bg-blue-800/50 transition-colors" data-zone="I-B">I-B</button>
+                                    <button onclick="selectLocZone('J-C')" class="loc-zone-btn px-2 py-1.5 bg-purple-900/50 border border-purple-700 rounded text-purple-400 font-bold text-xs hover:bg-purple-800/50 transition-colors" data-zone="J-C">J-C</button>
+                                    <button onclick="selectLocZone('J-D')" class="loc-zone-btn px-2 py-1.5 bg-purple-900/50 border border-purple-700 rounded text-purple-400 font-bold text-xs hover:bg-purple-800/50 transition-colors" data-zone="J-D">J-D</button>
+                                    <button onclick="selectLocZone('K-E')" class="loc-zone-btn px-2 py-1.5 bg-emerald-900/50 border border-emerald-700 rounded text-emerald-400 font-bold text-xs hover:bg-emerald-800/50 transition-colors" data-zone="K-E">K-E</button>
+                                    <button onclick="selectLocZone('K-F')" class="loc-zone-btn px-2 py-1.5 bg-emerald-900/50 border border-emerald-700 rounded text-emerald-400 font-bold text-xs hover:bg-emerald-800/50 transition-colors" data-zone="K-F">K-F</button>
+                                    <button onclick="selectLocZone('K-G')" class="loc-zone-btn px-2 py-1.5 bg-emerald-900/50 border border-emerald-700 rounded text-emerald-400 font-bold text-xs hover:bg-emerald-800/50 transition-colors" data-zone="K-G">K-G</button>
+                                    <button onclick="selectLocZone('K-H')" class="loc-zone-btn px-2 py-1.5 bg-emerald-900/50 border border-emerald-700 rounded text-emerald-400 font-bold text-xs hover:bg-emerald-800/50 transition-colors" data-zone="K-H">K-H</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Step 2: 排號範圍 + 樓層 -->
+                            <div class="bg-slate-800/50 rounded-lg p-3">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="bg-blue-600 text-white text-xs px-2 py-0.5 rounded font-bold">2</span>
+                                    <span class="text-sm text-slate-300 font-bold">設定範圍</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="text-xs text-slate-500 mb-1 block">排號範圍</label>
+                                        <div class="flex items-center gap-1">
+                                            <input type="number" id="loc-row-start" class="scan-input w-16 text-center py-1" value="1" min="1" max="22">
+                                            <span class="text-slate-500">~</span>
+                                            <input type="number" id="loc-row-end" class="scan-input w-16 text-center py-1" value="22" min="1" max="22">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-slate-500 mb-1 block">樓層</label>
+                                        <div class="flex gap-1">
+                                            <label class="flex items-center gap-1 px-2 py-1 bg-slate-700 rounded cursor-pointer text-xs">
+                                                <input type="checkbox" id="loc-floor-1f" checked class="w-3 h-3">
+                                                <span class="text-white">1F</span>
+                                            </label>
+                                            <label class="flex items-center gap-1 px-2 py-1 bg-slate-700 rounded cursor-pointer text-xs">
+                                                <input type="checkbox" id="loc-floor-2f" checked class="w-3 h-3">
+                                                <span class="text-white">2F</span>
+                                            </label>
+                                            <label class="flex items-center gap-1 px-2 py-1 bg-slate-700 rounded cursor-pointer text-xs">
+                                                <input type="checkbox" id="loc-floor-3f" checked class="w-3 h-3">
+                                                <span class="text-white">3F</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 預覽 -->
+                            <div class="bg-slate-900 rounded-lg p-3">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-xs text-slate-400"><i class="fa-solid fa-eye mr-1"></i>預覽</span>
+                                    <span class="text-xs text-blue-400 font-bold" id="loc-print-count">0 張</span>
+                                </div>
+                                <div class="text-white text-sm" id="loc-print-preview">
+                                    <span class="text-slate-500">請選擇倉庫區域</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
                     <!-- 右側：棧板單重印 -->
-                    <div class="glass-panel p-4 flex flex-col">
-                        <h3 class="text-white font-bold text-lg mb-4 border-b border-slate-700 pb-2">
-                            <i class="fa-solid fa-qrcode mr-2 text-emerald-400"></i>棧板單重印
-                        </h3>
+                    <div class="glass-panel p-4 flex flex-col overflow-hidden">
+                        <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-700">
+                            <h3 class="text-white font-bold text-lg">
+                                <i class="fa-solid fa-qrcode mr-2 text-emerald-400"></i>棧板單重印
+                            </h3>
+                            <button onclick="reprintPalletLabel()" id="btn-reprint-pallet" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                <i class="fa-solid fa-print mr-1"></i>重印棧板單
+                            </button>
+                        </div>
                         
-                        <div class="space-y-4">
-                            <!-- 掃描/輸入棧板編號 -->
-                            <div>
-                                <label class="text-sm text-slate-400 mb-1 block">掃描或輸入棧板編號</label>
+                        <div class="flex-1 overflow-y-auto space-y-3">
+                            <!-- 搜尋 -->
+                            <div class="bg-slate-800/50 rounded-lg p-3">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="bg-emerald-600 text-white text-xs px-2 py-0.5 rounded font-bold">1</span>
+                                    <span class="text-sm text-slate-300 font-bold">輸入棧板編號</span>
+                                </div>
                                 <div class="flex gap-2">
                                     <input type="text" id="reprint-pallet-id" class="scan-input flex-1" placeholder="P20241220001 或掃描 QR Code" onkeyup="if(event.keyCode===13) searchPalletForReprint()">
-                                    <button onclick="searchPalletForReprint()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
+                                    <button onclick="searchPalletForReprint()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
                                         <i class="fa-solid fa-search"></i>
                                     </button>
                                 </div>
                             </div>
                             
                             <!-- 搜尋結果 / 棧板資訊 -->
-                            <div class="bg-slate-900 rounded-lg p-4 min-h-[200px]" id="reprint-pallet-info">
-                                <div class="text-slate-500 text-center py-8">
-                                    <i class="fa-solid fa-qrcode text-4xl mb-2 opacity-30"></i>
-                                    <div>輸入棧板編號進行搜尋</div>
+                            <div class="bg-slate-900 rounded-lg p-3 flex-1 min-h-[150px]" id="reprint-pallet-info">
+                                <div class="text-slate-500 text-center py-6">
+                                    <i class="fa-solid fa-qrcode text-3xl mb-2 opacity-30"></i>
+                                    <div class="text-sm">輸入棧板編號進行搜尋</div>
                                 </div>
                             </div>
-                            
-                            <!-- 重印按鈕 -->
-                            <button onclick="reprintPalletLabel()" id="btn-reprint-pallet" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                                <i class="fa-solid fa-print mr-2"></i>重印棧板單
-                            </button>
                             
                             <!-- 最近重印記錄 -->
-                            <div class="mt-4 pt-4 border-t border-slate-700">
-                                <div class="text-slate-400 text-sm mb-2"><i class="fa-solid fa-history mr-1"></i>最近重印記錄</div>
-                                <div id="reprint-history" class="space-y-2 max-h-32 overflow-y-auto">
-                                    <div class="text-slate-600 text-sm">尚無重印記錄</div>
+                            <div class="bg-slate-800/50 rounded-lg p-3">
+                                <div class="text-xs text-slate-400 mb-2"><i class="fa-solid fa-history mr-1"></i>最近重印記錄</div>
+                                <div id="reprint-history" class="space-y-1 max-h-24 overflow-y-auto text-xs">
+                                    <div class="text-slate-600">尚無重印記錄</div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 資料匯入頁面 -->
+            <div id="view-data-import" class="view-panel h-full hidden flex flex-col p-4">
+                <div class="bg-gradient-to-r from-amber-900 to-amber-800 border border-amber-600 p-3 rounded-lg mb-3">
+                    <h2 class="text-white font-bold text-lg"><i class="fa-solid fa-file-import mr-2 text-amber-400"></i>資料匯入</h2>
+                    <p class="text-amber-200 text-sm mt-1">從 Excel 批次匯入庫存資料</p>
+                </div>
+                
+                <div class="flex gap-4 flex-1 overflow-hidden">
+                    <!-- 左側：上傳區域 -->
+                    <div class="w-80 glass-panel p-4 flex flex-col">
+                        <h3 class="text-white font-bold mb-3 text-sm border-b border-slate-700 pb-2">
+                            <i class="fa-solid fa-upload mr-1 text-amber-400"></i>步驟一：上傳 Excel
+                        </h3>
+                        
+                        <!-- 上傳區 -->
+                        <div id="import-dropzone" class="border-2 border-dashed border-slate-600 rounded-lg p-6 text-center mb-4 hover:border-amber-500 transition-colors cursor-pointer"
+                             onclick="document.getElementById('import-excel-file').click()"
+                             ondrop="handleImportDrop(event)" ondragover="handleImportDragOver(event)" ondragleave="handleImportDragLeave(event)">
+                            <i class="fa-solid fa-cloud-upload-alt text-4xl text-slate-500 mb-3"></i>
+                            <p class="text-slate-400 text-sm">拖曳 Excel 檔案到這裡</p>
+                            <p class="text-slate-500 text-xs mt-1">或點擊選擇檔案</p>
+                            <input type="file" id="import-excel-file" accept=".xlsx,.xls" class="hidden" onchange="handleImportFileSelect(event)">
+                        </div>
+                        
+                        <!-- 下載範本 -->
+                        <div class="bg-slate-800/50 rounded-lg p-3 mb-4">
+                            <div class="text-xs text-slate-400 mb-2">📥 下載範本：</div>
+                            <button onclick="downloadImportTemplate()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-bold">
+                                <i class="fa-solid fa-download mr-1"></i>庫存匯入範本.xlsx
+                            </button>
+                        </div>
+                        
+                        <!-- 匯入選項 -->
+                        <div class="bg-slate-800/50 rounded-lg p-3 mb-4">
+                            <div class="text-xs text-slate-400 mb-2">⚙️ 匯入選項：</div>
+                            <label class="flex items-center gap-2 text-sm text-white mb-2 cursor-pointer">
+                                <input type="checkbox" id="import-opt-create-location" checked class="rounded">
+                                <span>自動建立新儲位</span>
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-white mb-2 cursor-pointer">
+                                <input type="checkbox" id="import-opt-create-product" checked class="rounded">
+                                <span>自動建立新品項</span>
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-white cursor-pointer">
+                                <input type="checkbox" id="import-opt-skip-duplicate" checked class="rounded">
+                                <span>跳過重複資料</span>
+                            </label>
+                        </div>
+                        
+                        <!-- 虛擬儲位說明 -->
+                        <div class="bg-slate-800/50 rounded-lg p-3 text-xs">
+                            <div class="text-slate-400 mb-2">📍 虛擬儲位：</div>
+                            <div class="grid grid-cols-2 gap-1 text-slate-500">
+                                <span>A00~D00 貨架前端</span>
+                                <span>A99~D99 貨架末端</span>
+                                <span>TEMP-IN 進貨暫存</span>
+                                <span>TEMP-OUT 出貨暫存</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 右側：預覽與結果 -->
+                    <div class="flex-1 glass-panel flex flex-col overflow-hidden">
+                        <div class="p-3 border-b border-slate-700 flex justify-between items-center">
+                            <h3 class="text-white font-bold text-sm">
+                                <i class="fa-solid fa-table mr-1 text-amber-400"></i>步驟二：預覽資料
+                            </h3>
+                            <div class="flex gap-2 items-center">
+                                <span id="import-stats" class="text-xs text-slate-400">尚未上傳檔案</span>
+                                <button id="btn-execute-import" onclick="executeImport()" 
+                                        class="bg-amber-600 hover:bg-amber-500 text-white px-4 py-1.5 rounded text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    <i class="fa-solid fa-database mr-1"></i>執行匯入
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 預覽表格 -->
+                        <div class="flex-1 overflow-auto">
+                            <table class="w-full dense-table" id="import-preview-table">
+                                <thead>
+                                    <tr>
+                                        <th class="w-8">#</th>
+                                        <th class="text-center w-12">狀態</th>
+                                        <th>儲位</th>
+                                        <th>公司</th>
+                                        <th>品號</th>
+                                        <th>品名</th>
+                                        <th>規格</th>
+                                        <th class="text-right">數量</th>
+                                        <th>單位</th>
+                                        <th>批號</th>
+                                        <th>效期</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="import-preview-body">
+                                    <tr><td colspan="11" class="text-center text-slate-500 py-10">
+                                        <i class="fa-solid fa-file-excel text-4xl text-slate-600 mb-3 block"></i>
+                                        <p>請上傳 Excel 檔案</p>
+                                    </td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- 底部統計 -->
+                        <div class="p-3 border-t border-slate-700 flex justify-between items-center text-xs">
+                            <div class="flex gap-4">
+                                <span class="text-slate-400">總筆數：<span id="import-total" class="text-white font-bold">0</span></span>
+                                <span class="text-emerald-400">✓ 有效：<span id="import-valid" class="font-bold">0</span></span>
+                                <span class="text-red-400">✗ 錯誤：<span id="import-invalid" class="font-bold">0</span></span>
+                                <span class="text-yellow-400">⚠ 重複：<span id="import-duplicate" class="font-bold">0</span></span>
+                            </div>
+                            <span class="text-slate-500">匯入後資料將新增到 Firebase</span>
                         </div>
                     </div>
                 </div>
@@ -3953,13 +4216,66 @@ console.log('✅ WMS 工具函數庫已載入');
             html += '<div class="tooltip-stat ' + (emptySlots === 0 ? 'full' : 'empty') + '"><div class="tooltip-stat-value">' + emptySlots + '</div><div class="tooltip-stat-label">空位</div></div>';
             html += '</div>';
             
-            html += renderTooltipLevel('3F', levels['3F'], 8);
-            html += renderTooltipLevel('2F', levels['2F'], 5);
-            html += renderTooltipLevel('1F (挑高)', levels['1F'], 16);
+            // 合併所有層的品項
+            const allItems = [...levels['3F'], ...levels['2F'], ...levels['1F']];
+            
+            if (allItems.length > 0) {
+                html += '<table class="w-full text-xs">';
+                html += '<thead><tr class="text-slate-400 border-b border-slate-700">';
+                html += '<th class="p-1.5 text-left">儲位</th>';
+                html += '<th class="p-1.5 text-left">棧板編號</th>';
+                html += '<th class="p-1.5 text-left">公司</th>';
+                html += '<th class="p-1.5 text-left">品名</th>';
+                html += '<th class="p-1.5 text-left">規格</th>';
+                html += '<th class="p-1.5 text-right">數量</th>';
+                html += '<th class="p-1.5 text-left">效期</th>';
+                html += '<th class="p-1.5 text-left">入庫日</th>';
+                html += '</tr></thead><tbody>';
+                
+                allItems.forEach(item => {
+                    const companyClass = item.company === '崇文' ? 'bg-blue-600' : 'bg-emerald-600';
+                    
+                    // 效期處理
+                    let expiryStr = '-';
+                    if (item.expiryDate) {
+                        const expDate = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
+                        expiryStr = expDate.toLocaleDateString('zh-TW');
+                        const daysLeft = Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24));
+                        if (daysLeft < 0) {
+                            expiryStr = '<span class="text-red-400">' + expiryStr + '</span>';
+                        } else if (daysLeft <= 30) {
+                            expiryStr = '<span class="text-orange-400">' + expiryStr + '</span>';
+                        }
+                    }
+                    
+                    // 入庫日處理
+                    let inboundStr = '-';
+                    if (item.createdAt) {
+                        const inDate = item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+                        inboundStr = inDate.toLocaleDateString('zh-TW');
+                    }
+                    
+                    html += '<tr class="border-b border-slate-800 hover:bg-slate-800/50">';
+                    html += '<td class="p-1.5 font-mono text-[10px] text-emerald-400 font-bold">' + (item.locationId || '-') + '</td>';
+                    html += '<td class="p-1.5 font-mono text-[10px] text-slate-400">' + (item.palletId || '-') + '</td>';
+                    html += '<td class="p-1.5"><span class="px-1 py-0.5 rounded text-[10px] ' + companyClass + '">' + (item.company || '-') + '</span></td>';
+                    html += '<td class="p-1.5 text-white">' + (item.productName || '-') + '</td>';
+                    html += '<td class="p-1.5 text-slate-400 text-[10px]">' + (item.spec || '-') + '</td>';
+                    html += '<td class="p-1.5 text-right font-bold text-white">' + (item.quantity || 0) + '</td>';
+                    html += '<td class="p-1.5">' + expiryStr + '</td>';
+                    html += '<td class="p-1.5 text-slate-400">' + inboundStr + '</td>';
+                    html += '</tr>';
+                });
+                
+                html += '</tbody></table>';
+            } else {
+                html += '<div class="text-center text-slate-500 py-4">此巷道目前沒有庫存</div>';
+            }
             
             return html;
         }
         
+        // 舊的層級渲染函數保留（備用）
         function renderTooltipLevel(name, items, cap) {
             let html = '<div class="tooltip-level">';
             html += '<div class="tooltip-level-header"><span class="tooltip-level-name">' + name + '</span><span class="tooltip-level-count">' + items.length + '/' + cap + '</span></div>';
@@ -14817,8 +15133,12 @@ window.clearLocalStorage = function() {
         
         // 更新列印預覽
         function updateLocPrintPreview() {
+            var countEl = document.getElementById('loc-print-count');
+            var previewEl = document.getElementById('loc-print-preview');
+            
             if (!selectedLocZone) {
-                document.getElementById('loc-print-preview').innerHTML = '請選擇倉庫區域';
+                if (previewEl) previewEl.innerHTML = '<span class="text-slate-500">請選擇倉庫區域</span>';
+                if (countEl) countEl.textContent = '0 張';
                 return;
             }
             
@@ -14830,12 +15150,19 @@ window.clearLocalStorage = function() {
             if (document.getElementById('loc-floor-3f').checked) floors.push('3F');
             
             var count = (endRow - startRow + 1) * floors.length;
-            var preview = '<div class="text-lg font-bold text-blue-400">' + selectedLocZone + '</div>';
-            preview += '<div class="text-sm">排號 ' + startRow.toString().padStart(2, '0') + ' ~ ' + endRow.toString().padStart(2, '0') + '</div>';
-            preview += '<div class="text-sm">樓層：' + floors.join(', ') + '</div>';
-            preview += '<div class="text-emerald-400 font-bold mt-2">共 ' + count + ' 張標籤</div>';
             
-            document.getElementById('loc-print-preview').innerHTML = preview;
+            // 更新張數
+            if (countEl) countEl.textContent = count + ' 張';
+            
+            // 更新預覽
+            var preview = '<div class="flex items-center gap-3">';
+            preview += '<span class="text-lg font-bold text-blue-400">' + selectedLocZone + '</span>';
+            preview += '<span class="text-slate-400">排 ' + startRow.toString().padStart(2, '0') + '-' + endRow.toString().padStart(2, '0') + '</span>';
+            preview += '<span class="text-slate-400">' + floors.join('/') + '</span>';
+            preview += '</div>';
+            preview += '<div class="text-xs text-slate-500 mt-1">範例：' + selectedLocZone + '-' + startRow.toString().padStart(2, '0') + '-' + floors[0] + '</div>';
+            
+            if (previewEl) previewEl.innerHTML = preview;
         }
         
         // 監聽輸入變化
@@ -18793,6 +19120,567 @@ window.generateLowStockReport = function() {
 
 // 頁面載入時初始化
 setTimeout(initReportDates, 500);
+
+// ============================================================
+// 虛擬儲位監控功能
+// ============================================================
+
+// 虛擬儲位定義
+const VIRTUAL_LOCATION_CONFIG = {
+    'TEMP-IN': { name: '進貨暫存區', color: 'emerald', icon: 'fa-truck-loading' },
+    'TEMP-OUT': { name: '出貨暫存區', color: 'orange', icon: 'fa-truck' },
+    'A00': { name: 'A區貨架前端', color: 'blue', icon: 'fa-location-dot' },
+    'A99': { name: 'A區貨架末端', color: 'blue', icon: 'fa-location-dot' },
+    'B00': { name: 'B區貨架前端', color: 'indigo', icon: 'fa-location-dot' },
+    'B99': { name: 'B區貨架末端', color: 'indigo', icon: 'fa-location-dot' },
+    'C00': { name: 'C區貨架前端', color: 'purple', icon: 'fa-location-dot' },
+    'C99': { name: 'C區貨架末端', color: 'purple', icon: 'fa-location-dot' },
+    'D00': { name: 'D區貨架前端', color: 'pink', icon: 'fa-location-dot' },
+    'D99': { name: 'D區貨架末端', color: 'pink', icon: 'fa-location-dot' },
+    'OTHER': { name: '其他位置', color: 'slate', icon: 'fa-box' }
+};
+
+const VIRTUAL_LOCATIONS = Object.keys(VIRTUAL_LOCATION_CONFIG);
+
+// 載入虛擬儲位庫存數量
+async function loadVirtualLocationCounts() {
+    try {
+        // 使用 Firebase v9 語法載入所有棧板
+        const snapshot = await window.getDocs(window.collection(window.db, 'pallets'));
+        
+        const counts = {};
+        VIRTUAL_LOCATIONS.forEach(loc => counts[loc] = 0);
+        
+        // 同時快取虛擬儲位的庫存資料
+        window.virtualLocationInventory = {};
+        VIRTUAL_LOCATIONS.forEach(loc => window.virtualLocationInventory[loc] = []);
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            // 排除已出庫的狀態（shipped, outbound, deleted 等）
+            const status = (data.status || '').toLowerCase();
+            const excludeStatus = ['shipped', 'outbound', 'deleted', 'cancelled', 'removed'];
+            if (excludeStatus.includes(status)) return;
+            
+            data.id = doc.id;
+            const locId = data.locationId;
+            
+            if (VIRTUAL_LOCATION_CONFIG[locId]) {
+                counts[locId]++;
+                window.virtualLocationInventory[locId].push(data);
+            }
+        });
+        
+        Object.keys(counts).forEach(locId => {
+            const el = document.getElementById(`vl-count-${locId}`);
+            if (el) {
+                el.textContent = counts[locId];
+                const card = el.closest('.virtual-loc-card');
+                if (card) {
+                    if (counts[locId] > 0) {
+                        card.classList.add('ring-2', 'ring-offset-2', 'ring-offset-slate-900');
+                        if (locId === 'TEMP-IN') card.classList.add('ring-emerald-500');
+                        else if (locId === 'TEMP-OUT') card.classList.add('ring-orange-500');
+                        else card.classList.add('ring-white/30');
+                    } else {
+                        card.classList.remove('ring-2', 'ring-offset-2', 'ring-offset-slate-900', 
+                                              'ring-emerald-500', 'ring-orange-500', 'ring-white/30');
+                    }
+                }
+            }
+        });
+        
+        console.log('✅ 虛擬儲位數量已更新', counts);
+    } catch (err) {
+        console.error('載入虛擬儲位數量錯誤:', err);
+    }
+}
+
+// 顯示虛擬儲位的 Hover 浮動視窗
+function showVirtualLocTooltip(e, locationId) {
+    const config = VIRTUAL_LOCATION_CONFIG[locationId];
+    if (!config) return;
+    
+    const tooltip = document.getElementById('hover-tooltip');
+    const title = document.getElementById('tooltip-title');
+    const badge = document.getElementById('tooltip-badge');
+    const body = document.getElementById('tooltip-body');
+    if (!tooltip) return;
+    
+    // 取得該虛擬儲位的庫存資料
+    const items = window.virtualLocationInventory ? window.virtualLocationInventory[locationId] || [] : [];
+    
+    title.textContent = config.name + ' (' + locationId + ')';
+    badge.textContent = items.length + ' 板';
+    badge.style.background = items.length > 5 ? 'rgba(239,68,68,0.5)' : items.length > 0 ? 'rgba(59,130,246,0.5)' : 'rgba(100,116,139,0.5)';
+    
+    // 渲染內容（使用統一的表格格式）
+    body.innerHTML = renderVirtualLocTooltipContent(items, locationId);
+    
+    tooltip.classList.remove('hidden');
+    moveHoverTooltip(e);
+}
+
+// 渲染虛擬儲位的浮動視窗內容
+function renderVirtualLocTooltipContent(items, locationId) {
+    let html = '<div class="tooltip-summary">';
+    html += '<div class="tooltip-stat ' + (items.length > 0 ? '' : 'empty') + '"><div class="tooltip-stat-value">' + items.length + '</div><div class="tooltip-stat-label">已存放</div></div>';
+    html += '<div class="tooltip-stat empty"><div class="tooltip-stat-value">∞</div><div class="tooltip-stat-label">容量</div></div>';
+    html += '</div>';
+    
+    if (items.length > 0) {
+        html += '<table class="w-full text-xs">';
+        html += '<thead><tr class="text-slate-400 border-b border-slate-700">';
+        html += '<th class="p-1.5 text-left">儲位</th>';
+        html += '<th class="p-1.5 text-left">棧板編號</th>';
+        html += '<th class="p-1.5 text-left">公司</th>';
+        html += '<th class="p-1.5 text-left">品名</th>';
+        html += '<th class="p-1.5 text-left">規格</th>';
+        html += '<th class="p-1.5 text-right">數量</th>';
+        html += '<th class="p-1.5 text-left">效期</th>';
+        html += '<th class="p-1.5 text-left">入庫日</th>';
+        html += '</tr></thead><tbody>';
+        
+        items.forEach(item => {
+            const companyClass = item.company === '崇文' ? 'bg-blue-600' : 'bg-emerald-600';
+            
+            // 效期處理
+            let expiryStr = '-';
+            if (item.expiryDate) {
+                const expDate = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
+                expiryStr = expDate.toLocaleDateString('zh-TW');
+                const daysLeft = Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24));
+                if (daysLeft < 0) {
+                    expiryStr = '<span class="text-red-400">' + expiryStr + '</span>';
+                } else if (daysLeft <= 30) {
+                    expiryStr = '<span class="text-orange-400">' + expiryStr + '</span>';
+                }
+            }
+            
+            // 入庫日處理
+            let inboundStr = '-';
+            if (item.createdAt) {
+                const inDate = item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+                inboundStr = inDate.toLocaleDateString('zh-TW');
+            }
+            
+            html += '<tr class="border-b border-slate-800 hover:bg-slate-800/50">';
+            html += '<td class="p-1.5 font-mono text-[10px] text-emerald-400 font-bold">' + (item.locationId || locationId) + '</td>';
+            html += '<td class="p-1.5 font-mono text-[10px] text-slate-400">' + (item.palletId || '-') + '</td>';
+            html += '<td class="p-1.5"><span class="px-1 py-0.5 rounded text-[10px] ' + companyClass + '">' + (item.company || '-') + '</span></td>';
+            html += '<td class="p-1.5 text-white">' + (item.productName || '-') + '</td>';
+            html += '<td class="p-1.5 text-slate-400 text-[10px]">' + (item.spec || '-') + '</td>';
+            html += '<td class="p-1.5 text-right font-bold text-white">' + (item.quantity || 0) + '</td>';
+            html += '<td class="p-1.5">' + expiryStr + '</td>';
+            html += '<td class="p-1.5 text-slate-400">' + inboundStr + '</td>';
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+    } else {
+        html += '<div class="text-center text-slate-500 py-4">此暫存區目前沒有庫存</div>';
+    }
+    
+    return html;
+}
+
+// 智能入庫選擇虛擬儲位
+function selectVirtualLocation(locationId) {
+    const locInput = document.getElementById('in-loc');
+    if (locInput) {
+        locInput.value = locationId;
+        validateLocationInput();
+        showNotification(`已選擇虛擬儲位：${VIRTUAL_LOCATION_CONFIG[locationId]?.name || locationId}`, 'success');
+    }
+}
+
+// 修改原本的 refreshVisualMap 以同時更新虛擬儲位
+const originalRefreshVisualMap = typeof refreshVisualMap === 'function' ? refreshVisualMap : null;
+if (originalRefreshVisualMap) {
+    const newRefreshVisualMap = async function() {
+        await originalRefreshVisualMap();
+        await loadVirtualLocationCounts();
+    };
+    window.refreshVisualMap = newRefreshVisualMap;
+}
+
+// 頁面載入時初始化虛擬儲位監控
+setTimeout(() => {
+    if (window.db) {
+        loadVirtualLocationCounts();
+    }
+}, 2000);
+
+console.log('📍 虛擬儲位監控功能已載入');
+
+// ============================================================
+// 庫存匯入功能
+// ============================================================
+
+let importPreviewData = [];
+let importStats = { total: 0, valid: 0, invalid: 0, duplicate: 0 };
+
+// 下載匯入範本
+function downloadImportTemplate() {
+    const templateData = [
+        ['儲位*', '公司*', '品號*', '品名*', '規格', '數量*', '單位', '批號', '效期'],
+        ['JA-01-2F', '崇文', 'BC16118T', '熟白蝦', '16/20*1.1KG*8盒*傳鮮', 30, '箱', '20241201', '2025/06/30'],
+        ['JA-01-2F', '八方', 'BC21118T', '熟白蝦', '21/25*1.1KG*8盒*傳鮮', 25, '箱', '20241215', '2025/07/15'],
+        ['A99', '崇文', 'A5021212', '502白仁', '100/200*12KG', 10, '箱', '20241220', '2025/08/01'],
+        ['TEMP-IN', '八方', 'BW450802', '生白蝦', '40/50*850G*12盒*南美', 50, '箱', '20241225', '2025/09/01'],
+    ];
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(templateData);
+    ws['!cols'] = [
+        { wch: 15 }, { wch: 8 }, { wch: 15 }, { wch: 18 }, { wch: 30 },
+        { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 12 }
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, '庫存匯入');
+    
+    const instructionData = [
+        ['欄位', '必填', '說明', '範例'],
+        ['儲位', '是', '實際儲位或虛擬儲位', 'JA-01-2F、A99、TEMP-IN'],
+        ['公司', '是', '崇文 或 八方', '崇文'],
+        ['品號', '是', 'ERP 品號', 'BC16118T'],
+        ['品名', '是', '產品名稱', '熟白蝦'],
+        ['規格', '否', '產品規格', '16/20*1.1KG*8盒'],
+        ['數量', '是', '庫存數量', '30'],
+        ['單位', '否', '計量單位', '箱'],
+        ['批號', '否', '生產批號', '20241201'],
+        ['效期', '否', '有效期限', '2025/06/30'],
+        ['', '', '', ''],
+        ['【虛擬儲位說明】', '', '', ''],
+        ['A00~D00', '', '貨架前端暫放區', ''],
+        ['A99~D99', '', '貨架末端暫放區', ''],
+        ['TEMP-IN', '', '進貨暫存區', ''],
+        ['TEMP-OUT', '', '出貨暫存區', ''],
+        ['OTHER', '', '其他位置', ''],
+    ];
+    const ws2 = XLSX.utils.aoa_to_sheet(instructionData);
+    ws2['!cols'] = [{ wch: 15 }, { wch: 8 }, { wch: 35 }, { wch: 25 }];
+    XLSX.utils.book_append_sheet(wb, ws2, '欄位說明');
+    
+    XLSX.writeFile(wb, '庫存匯入範本.xlsx');
+    showNotification('✅ 已下載匯入範本', 'success');
+}
+
+// 拖曳上傳處理
+function handleImportDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('border-amber-500', 'bg-amber-900/20');
+}
+
+function handleImportDragLeave(e) {
+    e.currentTarget.classList.remove('border-amber-500', 'bg-amber-900/20');
+}
+
+function handleImportDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('border-amber-500', 'bg-amber-900/20');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) processImportFile(files[0]);
+}
+
+function handleImportFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) processImportFile(file);
+    e.target.value = '';
+}
+
+// 處理匯入檔案
+async function processImportFile(file) {
+    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+        showNotification('❌ 請上傳 Excel 檔案', 'error');
+        return;
+    }
+    
+    showNotification('📖 正在讀取檔案...', 'info');
+    
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+            
+            if (jsonData.length === 0) {
+                showNotification('❌ Excel 檔案沒有資料', 'error');
+                return;
+            }
+            
+            await validateAndPreviewData(jsonData);
+        } catch (err) {
+            console.error('讀取 Excel 錯誤:', err);
+            showNotification('❌ 讀取檔案失敗：' + err.message, 'error');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// 驗證並預覽資料
+async function validateAndPreviewData(jsonData) {
+    importPreviewData = [];
+    importStats = { total: 0, valid: 0, invalid: 0, duplicate: 0 };
+    
+    const existingLocations = new Set();
+    const existingPallets = new Set();
+    
+    try {
+        const locSnap = await db.collection('locations').get();
+        locSnap.forEach(doc => existingLocations.add(doc.id));
+        
+        const palletSnap = await db.collection('pallets').get();
+        palletSnap.forEach(doc => {
+            const d = doc.data();
+            existingPallets.add(`${d.locationId}|${d.productName}|${d.spec || ''}|${d.quantity}`);
+        });
+    } catch (err) {
+        console.error('載入現有資料錯誤:', err);
+    }
+    
+    const fieldMappings = {
+        location: ['儲位', '儲位*', 'location', 'Location'],
+        company: ['公司', '公司*', 'company', 'Company'],
+        productId: ['品號', '品號*', 'productId', 'SKU'],
+        productName: ['品名', '品名*', 'productName', '名稱'],
+        spec: ['規格', 'spec', 'Spec'],
+        quantity: ['數量', '數量*', 'quantity', 'QTY'],
+        unit: ['單位', 'unit', 'Unit'],
+        batchNo: ['批號', 'batchNo', 'batch'],
+        expiryDate: ['效期', 'expiryDate', '有效期限']
+    };
+    
+    function findField(row, fieldNames) {
+        for (const name of fieldNames) {
+            if (row.hasOwnProperty(name) && row[name] !== '') return row[name];
+        }
+        return '';
+    }
+    
+    jsonData.forEach((row, index) => {
+        const record = {
+            rowNum: index + 2,
+            location: String(findField(row, fieldMappings.location)).trim(),
+            company: String(findField(row, fieldMappings.company)).trim(),
+            productId: String(findField(row, fieldMappings.productId)).trim(),
+            productName: String(findField(row, fieldMappings.productName)).trim(),
+            spec: String(findField(row, fieldMappings.spec)).trim(),
+            quantity: parseFloat(findField(row, fieldMappings.quantity)) || 0,
+            unit: String(findField(row, fieldMappings.unit)).trim() || '件',
+            batchNo: String(findField(row, fieldMappings.batchNo)).trim(),
+            expiryDate: String(findField(row, fieldMappings.expiryDate)).trim(),
+            errors: [],
+            status: 'valid'
+        };
+        
+        if (!record.location) record.errors.push('儲位必填');
+        if (!record.company) record.errors.push('公司必填');
+        else if (!['崇文', '八方'].includes(record.company)) record.errors.push('公司須為「崇文」或「八方」');
+        if (!record.productId && !record.productName) record.errors.push('品號或品名至少填一個');
+        if (!record.quantity || record.quantity <= 0) record.errors.push('數量須大於0');
+        
+        const isVirtualLocation = VIRTUAL_LOCATIONS.includes(record.location);
+        const locationExists = existingLocations.has(record.location);
+        if (!isVirtualLocation && !locationExists) {
+            const createLocation = document.getElementById('import-opt-create-location')?.checked ?? true;
+            if (createLocation) record.newLocation = true;
+            else record.errors.push('儲位不存在');
+        }
+        
+        const duplicateKey = `${record.location}|${record.productName}|${record.spec}|${record.quantity}`;
+        if (existingPallets.has(duplicateKey)) {
+            record.isDuplicate = true;
+            const skipDuplicate = document.getElementById('import-opt-skip-duplicate')?.checked ?? true;
+            if (skipDuplicate) record.status = 'duplicate';
+        }
+        
+        if (record.errors.length > 0) {
+            record.status = 'invalid';
+            importStats.invalid++;
+        } else if (record.status === 'duplicate') {
+            importStats.duplicate++;
+        } else {
+            importStats.valid++;
+        }
+        
+        importStats.total++;
+        importPreviewData.push(record);
+    });
+    
+    renderImportPreview();
+    
+    document.getElementById('import-total').textContent = importStats.total;
+    document.getElementById('import-valid').textContent = importStats.valid;
+    document.getElementById('import-invalid').textContent = importStats.invalid;
+    document.getElementById('import-duplicate').textContent = importStats.duplicate;
+    document.getElementById('import-stats').textContent = `已載入 ${importStats.total} 筆，${importStats.valid} 筆可匯入`;
+    
+    const btnImport = document.getElementById('btn-execute-import');
+    if (btnImport) btnImport.disabled = importStats.valid === 0;
+    
+    showNotification(`✅ 已載入 ${importStats.total} 筆資料`, 'success');
+}
+
+// 渲染預覽表格
+function renderImportPreview() {
+    const tbody = document.getElementById('import-preview-body');
+    if (!tbody) return;
+    
+    if (importPreviewData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="11" class="text-center text-slate-500 py-10">
+            <i class="fa-solid fa-file-excel text-4xl text-slate-600 mb-3 block"></i>
+            <p>請上傳 Excel 檔案</p>
+        </td></tr>`;
+        return;
+    }
+    
+    let html = '';
+    importPreviewData.forEach((record) => {
+        const statusIcon = record.status === 'valid' 
+            ? '<span class="text-emerald-400">✓</span>'
+            : record.status === 'duplicate'
+                ? '<span class="text-yellow-400">⚠</span>'
+                : '<span class="text-red-400">✗</span>';
+        
+        const rowClass = record.status === 'invalid' 
+            ? 'bg-red-900/20' : record.status === 'duplicate' ? 'bg-yellow-900/20' : '';
+        
+        const errorTooltip = record.errors.length > 0 ? `title="${record.errors.join(', ')}"` : '';
+        const newLocationBadge = record.newLocation ? '<span class="ml-1 text-[10px] px-1 bg-blue-600 rounded">新</span>' : '';
+        
+        html += `
+            <tr class="${rowClass}" ${errorTooltip}>
+                <td class="text-center text-slate-500">${record.rowNum}</td>
+                <td class="text-center">${statusIcon}</td>
+                <td class="font-mono">${record.location}${newLocationBadge}</td>
+                <td><span class="px-1.5 py-0.5 rounded text-xs ${record.company === '崇文' ? 'bg-blue-600' : 'bg-emerald-600'}">${record.company}</span></td>
+                <td class="font-mono text-xs">${record.productId}</td>
+                <td>${record.productName}</td>
+                <td class="text-xs text-slate-400">${record.spec}</td>
+                <td class="text-right font-bold">${record.quantity}</td>
+                <td class="text-slate-400">${record.unit}</td>
+                <td class="font-mono text-xs">${record.batchNo}</td>
+                <td class="text-xs">${record.expiryDate}</td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// 執行匯入
+async function executeImport() {
+    const validRecords = importPreviewData.filter(r => r.status === 'valid');
+    
+    if (validRecords.length === 0) {
+        showNotification('❌ 沒有可匯入的資料', 'error');
+        return;
+    }
+    
+    if (!confirm(`確定要匯入 ${validRecords.length} 筆資料嗎？\n\n此操作會新增棧板到庫存中。`)) return;
+    
+    const btnImport = document.getElementById('btn-execute-import');
+    if (btnImport) {
+        btnImport.disabled = true;
+        btnImport.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>匯入中...';
+    }
+    
+    let successCount = 0;
+    const batch = db.batch();
+    const newLocations = new Set();
+    const timestamp = firebase.firestore.FieldValue.serverTimestamp();
+    
+    try {
+        for (const record of validRecords) {
+            if (record.newLocation && !newLocations.has(record.location)) {
+                const isVirtual = VIRTUAL_LOCATIONS.includes(record.location);
+                const locRef = db.collection('locations').doc(record.location);
+                batch.set(locRef, {
+                    locationId: record.location,
+                    zone: record.location.charAt(0),
+                    type: isVirtual ? 'virtual' : 'standard',
+                    status: 'available',
+                    capacity: isVirtual ? 99 : 2,
+                    currentLoad: 0,
+                    createdAt: timestamp,
+                    note: isVirtual ? '虛擬儲位' : '匯入時自動建立'
+                });
+                newLocations.add(record.location);
+            }
+            
+            const palletId = 'P' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 6).toUpperCase();
+            const palletRef = db.collection('pallets').doc(palletId);
+            
+            let expiryDate = null;
+            if (record.expiryDate) {
+                const dateParts = record.expiryDate.replace(/\//g, '-').split('-');
+                if (dateParts.length === 3) {
+                    expiryDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+                }
+            }
+            
+            batch.set(palletRef, {
+                palletId: palletId,
+                company: record.company,
+                productId: record.productId,
+                productName: record.productName,
+                spec: record.spec,
+                quantity: record.quantity,
+                unit: record.unit,
+                locationId: record.location,
+                batchNo: record.batchNo,
+                expiryDate: expiryDate ? firebase.firestore.Timestamp.fromDate(expiryDate) : null,
+                status: 'stored',
+                createdAt: timestamp,
+                source: 'excel-import'
+            });
+            
+            const logRef = db.collection('inventoryLogs').doc();
+            batch.set(logRef, {
+                type: 'import',
+                palletId: palletId,
+                company: record.company,
+                productId: record.productId,
+                productName: record.productName,
+                quantity: record.quantity,
+                locationId: record.location,
+                operator: window.currentUser?.email || 'system',
+                remark: 'Excel 批次匯入',
+                createdAt: timestamp
+            });
+            
+            successCount++;
+        }
+        
+        await batch.commit();
+        showNotification(`✅ 成功匯入 ${successCount} 筆資料`, 'success');
+        
+        importPreviewData = [];
+        renderImportPreview();
+        document.getElementById('import-total').textContent = '0';
+        document.getElementById('import-valid').textContent = '0';
+        document.getElementById('import-invalid').textContent = '0';
+        document.getElementById('import-duplicate').textContent = '0';
+        document.getElementById('import-stats').textContent = '匯入完成！';
+        
+        // 更新地圖和虛擬儲位
+        if (typeof refreshVisualMap === 'function') refreshVisualMap();
+        loadVirtualLocationCounts();
+        
+    } catch (err) {
+        console.error('匯入錯誤:', err);
+        showNotification('❌ 匯入失敗：' + err.message, 'error');
+    } finally {
+        if (btnImport) {
+            btnImport.disabled = false;
+            btnImport.innerHTML = '<i class="fa-solid fa-database mr-1"></i>執行匯入';
+        }
+    }
+}
+
+console.log('📥 庫存匯入功能已載入');
 
 </script>
 </body>
