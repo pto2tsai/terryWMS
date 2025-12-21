@@ -728,14 +728,14 @@
                                     <optgroup label="──"><option value="MANAGE">⚙️ 管理倉庫</option></optgroup>
                                 </select>
                                 
+                                <!-- 廠商 -->
+                                <input type="text" id="in-vendor" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" placeholder="廠商" oninput="updateLivePreview()">
+                                
                                 <!-- 品名 -->
                                 <input type="text" id="in-name" class="w-full p-2 bg-slate-800 border-2 border-emerald-500 rounded text-white font-bold" placeholder="👆 品名 *" oninput="updateLivePreview(); autoTriggerSmartSuggest(); updateInboundProgress();">
                                 
-                                <!-- 規格 + 數量 -->
-                                <div class="grid grid-cols-2 gap-1">
-                                    <input type="text" id="in-spec" class="p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" placeholder="規格" oninput="updateLivePreview()">
-                                    <input type="number" id="in-qty" class="p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm font-bold" placeholder="數量 *" oninput="updateLivePreview(); updateInboundProgress();">
-                                </div>
+                                <!-- 規格 -->
+                                <input type="text" id="in-spec" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" placeholder="規格" oninput="updateLivePreview()">
                                 
                                 <!-- 批號 + 效期 -->
                                 <div class="grid grid-cols-2 gap-1">
@@ -743,8 +743,8 @@
                                     <input type="date" id="in-exp" class="p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" oninput="updateLivePreview(); updateInboundProgress();">
                                 </div>
                                 
-                                <!-- 廠商 -->
-                                <input type="text" id="in-vendor" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" placeholder="廠商" oninput="updateLivePreview()">
+                                <!-- 數量 -->
+                                <input type="number" id="in-qty" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm font-bold" placeholder="數量 *" oninput="updateLivePreview(); updateInboundProgress();">
                             </div>
                         </div>
                     </div>
@@ -4893,7 +4893,15 @@ console.log('✅ WMS 工具函數庫已載入');
                     }
                     
                     html += '<tr class="border-b border-slate-800 hover:bg-slate-800/50">';
-                    html += '<td class="p-1.5 font-mono text-[10px] text-emerald-400 font-bold">' + (item.locationId || '-') + '</td>';
+                    // 儲位樓層顏色區分：1F=綠色, 2F=藍色, 3F=紫色
+                    let locDisplay = item.locationId || '-';
+                    if (item.locationId) {
+                        locDisplay = item.locationId
+                            .replace(/-1F$/, '-<span class="text-emerald-400">1F</span>')
+                            .replace(/-2F$/, '-<span class="text-sky-400">2F</span>')
+                            .replace(/-3F$/, '-<span class="text-purple-400">3F</span>');
+                    }
+                    html += '<td class="p-1.5 font-mono text-[10px] text-slate-300 font-bold">' + locDisplay + '</td>';
                     html += '<td class="p-1.5 font-mono text-[10px] text-slate-400">' + (item.palletId || '-') + '</td>';
                     html += '<td class="p-1.5"><span class="px-1 py-0.5 rounded text-[10px] ' + companyClass + '">' + (item.company || '-') + '</span></td>';
                     html += '<td class="p-1.5 text-white">' + (item.productName || '-') + '</td>';
@@ -6024,40 +6032,47 @@ console.log('✅ WMS 工具函數庫已載入');
                 });
             }
             
-            // 區域定義：A-H 區
-            // ABCD 區：1-8 排，EFGH 區：1-22 排
-            var zoneConfig = {
-                'A': { maxRow: 8, floor: 1 },
-                'B': { maxRow: 8, floor: 1 },
-                'C': { maxRow: 8, floor: 2 },
-                'D': { maxRow: 8, floor: 2 },
-                'E': { maxRow: 22, floor: 3 },
-                'F': { maxRow: 22, floor: 3 },
-                'G': { maxRow: 22, floor: 3 },
-                'H': { maxRow: 22, floor: 3 }
+            // 倉庫與區域定義（符合實際倉庫配置）
+            // I 庫：A, B 區（各 8 排）
+            // J 庫：C, D 區（各 8 排）
+            // K 庫：E, F, G, H 區（各 22 排）
+            var warehouseConfig = {
+                'I': { zones: ['A', 'B'], maxRow: 8 },
+                'J': { zones: ['C', 'D'], maxRow: 8 },
+                'K': { zones: ['E', 'F', 'G', 'H'], maxRow: 22 }
             };
             
-            var maxLevel = 5; // 每排 5 層
+            // 樓層定義（由高到低）：3F(8板), 2F(5板), 1F(16板挑高)
+            var levels = ['3F', '2F', '1F'];
+            var levelCapacity = { '3F': 8, '2F': 5, '1F': 16 };
+            
             var available = [];
             
-            Object.keys(zoneConfig).forEach(function(zone) {
-                var config = zoneConfig[zone];
-                for (var row = 1; row <= config.maxRow; row++) {
-                    for (var level = 1; level <= maxLevel; level++) {
-                        var rowStr = row < 10 ? '0' + row : '' + row;
-                        var locId = zone + '-' + rowStr + '-' + String(level).padStart(2, '0');
-                        
-                        if (!occupiedSet.has(locId)) {
-                            available.push({
-                                locationId: locId,
-                                zone: zone,
-                                row: row,
-                                level: level,
-                                floor: config.floor
-                            });
-                        }
+            // 依倉庫 → 區域 → 排號 → 樓層 順序產生儲位
+            Object.keys(warehouseConfig).forEach(function(warehouse) {
+                var config = warehouseConfig[warehouse];
+                config.zones.forEach(function(zoneChar) {
+                    for (var row = 1; row <= config.maxRow; row++) {
+                        // 樓層由高到低（3F → 2F → 1F）
+                        levels.forEach(function(level) {
+                            var rowStr = row < 10 ? '0' + row : '' + row;
+                            // 正確格式：I-A-01-3F
+                            var locId = warehouse + '-' + zoneChar + '-' + rowStr + '-' + level;
+                            
+                            if (!occupiedSet.has(locId)) {
+                                available.push({
+                                    locationId: locId,
+                                    warehouse: warehouse,
+                                    zone: warehouse + '-' + zoneChar,
+                                    zoneChar: zoneChar,
+                                    row: row,
+                                    level: level,
+                                    capacity: levelCapacity[level]
+                                });
+                            }
+                        });
                     }
-                }
+                });
             });
             
             return available;
@@ -6076,17 +6091,24 @@ console.log('✅ WMS 工具函數庫已載入');
                 });
             }
             
-            // 篩選區域
+            // 篩選區域（A, B, C...）
             if (opts.zones && opts.zones.length > 0) {
                 all = all.filter(function(loc) {
-                    return opts.zones.includes(loc.zone);
+                    return opts.zones.includes(loc.zoneChar);
                 });
             }
             
-            // 篩選樓層
-            if (opts.floors && opts.floors.length > 0) {
+            // 篩選倉庫（I, J, K）
+            if (opts.warehouses && opts.warehouses.length > 0) {
                 all = all.filter(function(loc) {
-                    return opts.floors.includes(loc.floor);
+                    return opts.warehouses.includes(loc.warehouse);
+                });
+            }
+            
+            // 篩選樓層（1F, 2F, 3F）
+            if (opts.levels && opts.levels.length > 0) {
+                all = all.filter(function(loc) {
+                    return opts.levels.includes(loc.level);
                 });
             }
             
@@ -6151,7 +6173,8 @@ console.log('✅ WMS 工具函數庫已載入');
                         locationId: selectedLoc.locationId,
                         palletNo: palletNo + '/' + item.palletCount,
                         zone: selectedLoc.zone,
-                        floor: selectedLoc.floor
+                        warehouse: selectedLoc.warehouse,
+                        level: selectedLoc.level
                     };
                     
                     allocations.push(allocation);
