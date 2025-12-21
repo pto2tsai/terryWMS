@@ -349,6 +349,17 @@
                 <div class="nav-item" onclick="switchTab('warehouse-heatmap', event)"><i class="fa-solid fa-fire w-4 text-center mr-2"></i>熱力圖</div>
             </div>
 
+            <!-- 倉租管理 -->
+            <div class="nav-group-header" onclick="toggleNavGroup('grp-rental')">
+                <span><i class="fa-solid fa-dollar-sign w-4 text-center mr-1 text-yellow-400"></i>倉租管理</span>
+                <i class="fa-solid fa-chevron-down nav-chevron"></i>
+            </div>
+            <div class="nav-group-items" id="grp-rental">
+                <div class="nav-item" onclick="switchTab('consignment', event)"><i class="fa-solid fa-box-archive w-4 text-center mr-2 text-amber-400"></i>寄倉管理</div>
+                <div class="nav-item" onclick="switchTab('rental-report', event)"><i class="fa-solid fa-file-invoice-dollar w-4 text-center mr-2 text-emerald-400"></i>倉租報表</div>
+                <div class="nav-item" onclick="switchTab('rental-settings', event)"><i class="fa-solid fa-sliders w-4 text-center mr-2 text-blue-400"></i>費率設定</div>
+            </div>
+            
             <!-- 系統設定 -->
             <div class="nav-group-header" onclick="toggleNavGroup('grp-settings')">
                 <span><i class="fa-solid fa-gear w-4 text-center mr-1 text-slate-400"></i>系統設定</span>
@@ -2795,6 +2806,352 @@
                 </div>
             </div>
 
+            <!-- 寄倉管理頁面 -->
+            <div id="view-consignment" class="view-panel h-full hidden flex flex-col p-4">
+                <div class="bg-gradient-to-r from-amber-900 to-orange-900 border border-amber-600 p-3 rounded-lg mb-3">
+                    <div class="flex justify-between items-center">
+                        <!-- 左側：標題 -->
+                        <div>
+                            <h2 class="text-white font-bold text-lg"><i class="fa-solid fa-box-archive mr-2 text-amber-400"></i>寄倉管理</h2>
+                        </div>
+                        <!-- 右側：統計資訊 -->
+                        <div class="flex items-center gap-2 text-sm">
+                            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/80 rounded-lg border border-emerald-500/50">
+                                <span class="text-emerald-300 text-xs">免費期</span>
+                                <span class="text-emerald-400 font-bold text-lg" id="consign-free-count">0</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/80 rounded-lg border border-blue-500/50">
+                                <span class="text-blue-300 text-xs">計費中</span>
+                                <span class="text-blue-400 font-bold text-lg" id="consign-charging-count">0</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/80 rounded-lg border border-orange-500/50">
+                                <span class="text-orange-300 text-xs">本月到期</span>
+                                <span class="text-orange-400 font-bold text-lg" id="consign-expiring-count">0</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/80 rounded-lg border border-purple-500/50">
+                                <span class="text-purple-300 text-xs">寄倉</span>
+                                <span class="text-purple-400 font-bold text-lg" id="consign-total-units">0</span>
+                                <span class="text-purple-300 text-xs">件</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/80 rounded-lg border border-yellow-500/50">
+                                <span class="text-yellow-300 text-xs">累計</span>
+                                <span class="text-yellow-400 font-bold text-lg" id="consign-total-rent">$0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 篩選列 -->
+                <div class="flex gap-2 mb-3 items-center">
+                    <select id="consign-status-filter" class="scan-input w-32" onchange="filterConsignments()">
+                        <option value="all">全部狀態</option>
+                        <option value="free">免費期內</option>
+                        <option value="charging">計費中</option>
+                        <option value="completed">已結清</option>
+                    </select>
+                    <select id="consign-source-filter" class="scan-input w-28" onchange="filterConsignments()">
+                        <option value="all">全部來源</option>
+                        <option value="internal">內倉</option>
+                        <option value="external">外倉</option>
+                    </select>
+                    <input type="text" id="consign-search" class="scan-input w-48" placeholder="搜尋客戶/品名..." oninput="filterConsignments()">
+                    <div class="flex-1"></div>
+                    <button onclick="openNewConsignmentModal()" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-sm font-bold">
+                        <i class="fa-solid fa-plus mr-1"></i>新增寄倉
+                    </button>
+                    <button onclick="exportConsignments()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm">
+                        <i class="fa-solid fa-file-excel mr-1"></i>匯出
+                    </button>
+                </div>
+                
+                <!-- 寄倉清單 -->
+                <div class="glass-panel flex-1 overflow-auto">
+                    <table class="w-full dense-table">
+                        <thead>
+                            <tr>
+                                <th>來源倉庫</th>
+                                <th>寄庫倉</th>
+                                <th>客戶</th>
+                                <th>品名</th>
+                                <th>批號</th>
+                                <th class="text-right">原始</th>
+                                <th class="text-right">剩餘</th>
+                                <th>免費截止</th>
+                                <th class="text-right">天數</th>
+                                <th class="text-right">租金</th>
+                                <th>狀態</th>
+                                <th class="text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="consignment-list">
+                            <tr><td colspan="12" class="text-center text-slate-500 py-10">尚無寄倉資料</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 倉租報表頁面 -->
+            <div id="view-rental-report" class="view-panel h-full hidden flex flex-col p-4">
+                <div class="bg-gradient-to-r from-emerald-900 to-teal-900 border border-emerald-600 p-3 rounded-lg mb-3">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-white font-bold text-lg"><i class="fa-solid fa-file-invoice-dollar mr-2 text-emerald-400"></i>倉租報表</h2>
+                            <p class="text-emerald-200 text-sm">自有庫存成本、客戶寄倉帳單</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-300 text-sm">計費月份：</span>
+                            <input type="month" id="rental-month" class="scan-input w-40" onchange="loadRentalReport()">
+                            <button onclick="generateMonthlyBill()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
+                                <i class="fa-solid fa-file-invoice mr-1"></i>產生帳單
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 報表內容 -->
+                <div class="grid grid-cols-2 gap-4 flex-1 min-h-0">
+                    <!-- 左側：自有庫存 -->
+                    <div class="glass-panel p-4 flex flex-col overflow-hidden">
+                        <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-700">
+                            <h3 class="text-white font-bold">
+                                <i class="fa-solid fa-warehouse mr-2 text-blue-400"></i>自有庫存倉租（帳面）
+                            </h3>
+                            <span class="text-xs text-slate-400">不收費，僅供成本參考</span>
+                        </div>
+                        <div class="flex-1 overflow-y-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="text-slate-400 border-b border-slate-700">
+                                        <th class="text-left p-2">公司</th>
+                                        <th class="text-right p-2">平均板數</th>
+                                        <th class="text-right p-2">板天數</th>
+                                        <th class="text-right p-2">倉租金額</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="own-stock-rental-body">
+                                    <tr><td colspan="4" class="text-center text-slate-500 py-6">選擇月份後載入</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-slate-700 flex justify-between items-center">
+                            <span class="text-slate-400 text-sm">自有庫存合計</span>
+                            <span class="text-xl font-bold text-blue-400" id="own-stock-total">$0</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 右側：客戶寄倉 -->
+                    <div class="glass-panel p-4 flex flex-col overflow-hidden">
+                        <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-700">
+                            <h3 class="text-white font-bold">
+                                <i class="fa-solid fa-users mr-2 text-amber-400"></i>客戶寄倉帳單（應收）
+                            </h3>
+                            <span class="text-xs text-emerald-400 font-bold">實際收費</span>
+                        </div>
+                        <div class="flex-1 overflow-y-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="text-slate-400 border-b border-slate-700">
+                                        <th class="text-left p-2">客戶</th>
+                                        <th class="text-right p-2">寄倉件數</th>
+                                        <th class="text-right p-2">件天數</th>
+                                        <th class="text-right p-2">倉租金額</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="consign-rental-body">
+                                    <tr><td colspan="4" class="text-center text-slate-500 py-6">選擇月份後載入</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-slate-700 flex justify-between items-center">
+                            <span class="text-slate-400 text-sm">客戶寄倉合計</span>
+                            <span class="text-xl font-bold text-amber-400" id="consign-total">$0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 底部：理貨費用 + 總計 -->
+                <div class="grid grid-cols-3 gap-4 mt-3">
+                    <div class="glass-panel p-4">
+                        <h4 class="text-white font-bold text-sm mb-2"><i class="fa-solid fa-dolly mr-1 text-purple-400"></i>理貨費用</h4>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">本月入庫</span>
+                            <span class="text-white"><span id="handling-inbound-count">0</span> 板 × 200 = <span class="text-purple-400 font-bold" id="handling-inbound-fee">$0</span></span>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-4">
+                        <h4 class="text-white font-bold text-sm mb-2"><i class="fa-solid fa-clock mr-1 text-orange-400"></i>暫存區超時</h4>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">超時費用</span>
+                            <span class="text-orange-400 font-bold" id="temp-overtime-fee">$0</span>
+                        </div>
+                    </div>
+                    <div class="glass-panel p-4 bg-gradient-to-r from-emerald-900/50 to-teal-900/50">
+                        <h4 class="text-white font-bold text-sm mb-2"><i class="fa-solid fa-calculator mr-1 text-emerald-400"></i>本月應收總計</h4>
+                        <div class="text-2xl font-bold text-emerald-400" id="monthly-total">$0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 費率設定頁面 -->
+            <div id="view-rental-settings" class="view-panel h-full hidden flex flex-col p-4">
+                <div class="bg-gradient-to-r from-blue-900 to-indigo-900 border border-blue-600 p-3 rounded-lg mb-4">
+                    <h2 class="text-white font-bold text-lg"><i class="fa-solid fa-sliders mr-2 text-blue-400"></i>費率設定</h2>
+                    <p class="text-blue-200 text-sm">倉租費率、理貨費用、收費開關設定</p>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 flex-1 min-h-0 overflow-y-auto">
+                    <!-- 左側：收費開關 + 倉租費率 -->
+                    <div class="space-y-4">
+                        <!-- 收費開關 -->
+                        <div class="glass-panel p-4">
+                            <h3 class="text-white font-bold text-sm mb-3 pb-2 border-b border-slate-700">
+                                <i class="fa-solid fa-toggle-on mr-2 text-emerald-400"></i>自有庫存收費開關
+                            </h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-white">崇文自有庫存</span>
+                                    <div class="flex items-center gap-2">
+                                        <label class="flex items-center gap-1 cursor-pointer">
+                                            <input type="radio" name="charge-cw" value="no" checked class="w-4 h-4" onchange="updateRentalSettings()">
+                                            <span class="text-slate-400 text-sm">不收費</span>
+                                        </label>
+                                        <label class="flex items-center gap-1 cursor-pointer">
+                                            <input type="radio" name="charge-cw" value="yes" class="w-4 h-4" onchange="updateRentalSettings()">
+                                            <span class="text-emerald-400 text-sm">收費</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-white">八方自有庫存</span>
+                                    <div class="flex items-center gap-2">
+                                        <label class="flex items-center gap-1 cursor-pointer">
+                                            <input type="radio" name="charge-bf" value="no" checked class="w-4 h-4" onchange="updateRentalSettings()">
+                                            <span class="text-slate-400 text-sm">不收費</span>
+                                        </label>
+                                        <label class="flex items-center gap-1 cursor-pointer">
+                                            <input type="radio" name="charge-bf" value="yes" class="w-4 h-4" onchange="updateRentalSettings()">
+                                            <span class="text-emerald-400 text-sm">收費</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="pt-2 border-t border-slate-700">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-400 text-sm">收費生效日期</span>
+                                        <input type="date" id="charge-effective-date" class="scan-input w-40 py-1" onchange="updateRentalSettings()">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 倉租費率 -->
+                        <div class="glass-panel p-4">
+                            <h3 class="text-white font-bold text-sm mb-3 pb-2 border-b border-slate-700">
+                                <i class="fa-solid fa-warehouse mr-2 text-blue-400"></i>倉租費率（板/天）
+                            </h3>
+                            <div class="space-y-3">
+                                <div class="bg-slate-800 p-3 rounded-lg">
+                                    <div class="text-cyan-400 font-bold text-sm mb-2">八方費率</div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-slate-400 text-sm">一般費率：</span>
+                                        <input type="number" id="rate-bf-normal" class="scan-input w-20 py-1 text-center" value="22" onchange="updateRentalSettings()">
+                                        <span class="text-slate-400 text-sm">元/板/天</span>
+                                    </div>
+                                </div>
+                                <div class="bg-slate-800 p-3 rounded-lg">
+                                    <div class="text-emerald-400 font-bold text-sm mb-2">崇文費率（階梯/全額制）</div>
+                                    <div class="space-y-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-400 text-sm">1 ~</span>
+                                            <input type="number" id="rate-cw-tier1-max" class="scan-input w-16 py-1 text-center" value="300" onchange="updateRentalSettings()">
+                                            <span class="text-slate-400 text-sm">板：</span>
+                                            <input type="number" id="rate-cw-tier1" class="scan-input w-16 py-1 text-center" value="22" onchange="updateRentalSettings()">
+                                            <span class="text-slate-400 text-sm">元</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-400 text-sm">超過以上：</span>
+                                            <input type="number" id="rate-cw-tier2" class="scan-input w-16 py-1 text-center" value="20" onchange="updateRentalSettings()">
+                                            <span class="text-slate-400 text-sm">元（全額適用）</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 右側：理貨費用 + 暫存區 + 結算 -->
+                    <div class="space-y-4">
+                        <!-- 理貨費用 -->
+                        <div class="glass-panel p-4">
+                            <h3 class="text-white font-bold text-sm mb-3 pb-2 border-b border-slate-700">
+                                <i class="fa-solid fa-dolly mr-2 text-purple-400"></i>理貨費用
+                            </h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-white">入庫費</span>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" id="fee-inbound" class="scan-input w-20 py-1 text-center" value="200" onchange="updateRentalSettings()">
+                                        <span class="text-slate-400 text-sm">元/板</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-white">出庫費</span>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" id="fee-outbound" class="scan-input w-20 py-1 text-center" value="0" onchange="updateRentalSettings()">
+                                        <span class="text-slate-400 text-sm">元/板</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 暫存區設定 -->
+                        <div class="glass-panel p-4">
+                            <h3 class="text-white font-bold text-sm mb-3 pb-2 border-b border-slate-700">
+                                <i class="fa-solid fa-clock mr-2 text-orange-400"></i>暫存區設定
+                            </h3>
+                            <div class="flex items-center justify-between">
+                                <span class="text-white">免費時數</span>
+                                <div class="flex items-center gap-2">
+                                    <input type="number" id="temp-free-hours" class="scan-input w-20 py-1 text-center" value="4" onchange="updateRentalSettings()">
+                                    <span class="text-slate-400 text-sm">小時</span>
+                                </div>
+                            </div>
+                            <div class="mt-2 text-xs text-slate-500">
+                                超過免費時數後，按一般倉租費率計算
+                            </div>
+                        </div>
+                        
+                        <!-- 結算設定 -->
+                        <div class="glass-panel p-4">
+                            <h3 class="text-white font-bold text-sm mb-3 pb-2 border-b border-slate-700">
+                                <i class="fa-solid fa-calendar-check mr-2 text-emerald-400"></i>結算設定
+                            </h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-white">每月結算日</span>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" id="settle-day" class="scan-input w-16 py-1 text-center" value="25" min="1" max="28" onchange="updateRentalSettings()">
+                                        <span class="text-slate-400 text-sm">號</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-white">寄倉免費截止</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-slate-400 text-sm">預設至當月</span>
+                                        <input type="number" id="free-until-day" class="scan-input w-16 py-1 text-center" value="25" min="1" max="28" onchange="updateRentalSettings()">
+                                        <span class="text-slate-400 text-sm">號</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 儲存按鈕 -->
+                        <button onclick="saveRentalSettings()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
+                            <i class="fa-solid fa-save mr-2"></i>儲存設定
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- 效期管理頁面 -->
             <div id="view-expiry-management" class="view-panel h-full hidden flex flex-col p-4">
                 <!-- 頂部標題 -->
@@ -4539,7 +4896,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 html += '<th class="p-1.5 text-left">規格</th>';
                 html += '<th class="p-1.5 text-right">數量</th>';
                 html += '<th class="p-1.5 text-left">效期</th>';
-                html += '<th class="p-1.5 text-left">入庫日</th>';
+                html += '<th class="p-1.5 text-left">寄倉</th>';
                 html += '</tr></thead><tbody>';
                 
                 allItems.forEach(item => {
@@ -4558,11 +4915,20 @@ console.log('✅ WMS 工具函數庫已載入');
                         }
                     }
                     
-                    // 入庫日處理
-                    let inboundStr = '-';
-                    if (item.createdAt) {
-                        const inDate = item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
-                        inboundStr = inDate.toLocaleDateString('zh-TW');
+                    // 寄倉資訊
+                    let consignStr = '-';
+                    if (window.getLocationConsignments && item.locationId) {
+                        const consignments = window.getLocationConsignments(item.locationId);
+                        // 篩選同品名規格的寄倉
+                        const matchingConsign = consignments.filter(c => 
+                            c.productName === item.productName && c.spec === item.spec
+                        );
+                        if (matchingConsign.length > 0) {
+                            const totalConsigned = matchingConsign.reduce((sum, c) => sum + c.qty, 0);
+                            const customers = [...new Set(matchingConsign.map(c => c.customer))];
+                            consignStr = '<span class="text-amber-400">' + totalConsigned + '件</span>';
+                            consignStr += '<span class="text-[10px] text-slate-500 ml-1">(' + customers.join(',') + ')</span>';
+                        }
                     }
                     
                     html += '<tr class="border-b border-slate-800 hover:bg-slate-800/50">';
@@ -4573,7 +4939,7 @@ console.log('✅ WMS 工具函數庫已載入');
                     html += '<td class="p-1.5 text-slate-400 text-[10px]">' + (item.spec || '-') + '</td>';
                     html += '<td class="p-1.5 text-right font-bold text-white">' + (item.quantity || 0) + '</td>';
                     html += '<td class="p-1.5">' + expiryStr + '</td>';
-                    html += '<td class="p-1.5 text-slate-400">' + inboundStr + '</td>';
+                    html += '<td class="p-1.5">' + consignStr + '</td>';
                     html += '</tr>';
                 });
                 
@@ -19992,6 +20358,1124 @@ async function executeImport() {
 }
 
 console.log('📥 庫存匯入功能已載入');
+
+// ========== 倉租管理模組 ==========
+
+// 倉租設定（預設值）
+window.rentalSettings = JSON.parse(localStorage.getItem('wms_rental_settings') || JSON.stringify({
+    chargeOwnStock: {
+        chungwen: false,
+        bafang: false,
+        effectiveDate: null
+    },
+    storageRate: {
+        bafang: 22,
+        chungwen: {
+            tier1Max: 300,
+            tier1Rate: 22,
+            tier2Rate: 20
+        }
+    },
+    handlingFee: {
+        inbound: 200,
+        outbound: 0
+    },
+    tempZone: {
+        freeHours: 4
+    },
+    settlement: {
+        settleDay: 25,
+        freeUntilDay: 25
+    }
+}));
+
+// 寄倉資料
+window.consignmentData = JSON.parse(localStorage.getItem('wms_consignments') || '[]');
+
+// 儲存設定到本地
+function saveRentalSettingsToStorage() {
+    localStorage.setItem('wms_rental_settings', JSON.stringify(window.rentalSettings));
+}
+
+// 儲存寄倉資料到本地
+function saveConsignmentsToStorage() {
+    localStorage.setItem('wms_consignments', JSON.stringify(window.consignmentData));
+}
+
+// 更新設定值（即時）
+window.updateRentalSettings = function() {
+    // 收費開關
+    window.rentalSettings.chargeOwnStock.chungwen = document.querySelector('input[name="charge-cw"]:checked')?.value === 'yes';
+    window.rentalSettings.chargeOwnStock.bafang = document.querySelector('input[name="charge-bf"]:checked')?.value === 'yes';
+    window.rentalSettings.chargeOwnStock.effectiveDate = document.getElementById('charge-effective-date')?.value || null;
+    
+    // 倉租費率
+    window.rentalSettings.storageRate.bafang = parseInt(document.getElementById('rate-bf-normal')?.value) || 22;
+    window.rentalSettings.storageRate.chungwen.tier1Max = parseInt(document.getElementById('rate-cw-tier1-max')?.value) || 300;
+    window.rentalSettings.storageRate.chungwen.tier1Rate = parseInt(document.getElementById('rate-cw-tier1')?.value) || 22;
+    window.rentalSettings.storageRate.chungwen.tier2Rate = parseInt(document.getElementById('rate-cw-tier2')?.value) || 20;
+    
+    // 理貨費用
+    window.rentalSettings.handlingFee.inbound = parseInt(document.getElementById('fee-inbound')?.value) || 200;
+    window.rentalSettings.handlingFee.outbound = parseInt(document.getElementById('fee-outbound')?.value) || 0;
+    
+    // 暫存區
+    window.rentalSettings.tempZone.freeHours = parseInt(document.getElementById('temp-free-hours')?.value) || 4;
+    
+    // 結算設定
+    window.rentalSettings.settlement.settleDay = parseInt(document.getElementById('settle-day')?.value) || 25;
+    window.rentalSettings.settlement.freeUntilDay = parseInt(document.getElementById('free-until-day')?.value) || 25;
+};
+
+// 儲存設定
+window.saveRentalSettings = function() {
+    updateRentalSettings();
+    saveRentalSettingsToStorage();
+    showNotification('✅ 費率設定已儲存', 'success');
+};
+
+// 載入設定到畫面
+window.loadRentalSettingsUI = function() {
+    const s = window.rentalSettings;
+    
+    // 收費開關
+    const cwRadio = document.querySelector(`input[name="charge-cw"][value="${s.chargeOwnStock.chungwen ? 'yes' : 'no'}"]`);
+    if (cwRadio) cwRadio.checked = true;
+    const bfRadio = document.querySelector(`input[name="charge-bf"][value="${s.chargeOwnStock.bafang ? 'yes' : 'no'}"]`);
+    if (bfRadio) bfRadio.checked = true;
+    if (document.getElementById('charge-effective-date')) {
+        document.getElementById('charge-effective-date').value = s.chargeOwnStock.effectiveDate || '';
+    }
+    
+    // 費率
+    if (document.getElementById('rate-bf-normal')) document.getElementById('rate-bf-normal').value = s.storageRate.bafang;
+    if (document.getElementById('rate-cw-tier1-max')) document.getElementById('rate-cw-tier1-max').value = s.storageRate.chungwen.tier1Max;
+    if (document.getElementById('rate-cw-tier1')) document.getElementById('rate-cw-tier1').value = s.storageRate.chungwen.tier1Rate;
+    if (document.getElementById('rate-cw-tier2')) document.getElementById('rate-cw-tier2').value = s.storageRate.chungwen.tier2Rate;
+    
+    // 理貨費用
+    if (document.getElementById('fee-inbound')) document.getElementById('fee-inbound').value = s.handlingFee.inbound;
+    if (document.getElementById('fee-outbound')) document.getElementById('fee-outbound').value = s.handlingFee.outbound;
+    
+    // 暫存區
+    if (document.getElementById('temp-free-hours')) document.getElementById('temp-free-hours').value = s.tempZone.freeHours;
+    
+    // 結算
+    if (document.getElementById('settle-day')) document.getElementById('settle-day').value = s.settlement.settleDay;
+    if (document.getElementById('free-until-day')) document.getElementById('free-until-day').value = s.settlement.freeUntilDay;
+};
+
+// 計算倉租費率（元/板/天）
+window.getStorageRate = function(company, palletCount) {
+    const s = window.rentalSettings.storageRate;
+    if (company === '八方') {
+        return s.bafang;
+    } else {
+        // 崇文階梯費率（全額制）
+        if (palletCount > s.chungwen.tier1Max) {
+            return s.chungwen.tier2Rate;
+        }
+        return s.chungwen.tier1Rate;
+    }
+};
+
+// 計算寄倉費率（元/件/天）
+window.getConsignmentRate = function(company, palletCount, unitsPerPallet) {
+    const ratePerPallet = getStorageRate(company, palletCount);
+    return ratePerPallet / unitsPerPallet;
+};
+
+// 開啟新增寄倉 Modal
+window.openNewConsignmentModal = async function() {
+    const today = new Date();
+    const freeUntilDay = window.rentalSettings.settlement.freeUntilDay;
+    let freeUntil = new Date(today.getFullYear(), today.getMonth(), freeUntilDay);
+    if (today.getDate() > freeUntilDay) {
+        freeUntil = new Date(today.getFullYear(), today.getMonth() + 1, freeUntilDay);
+    }
+    const freeUntilStr = freeUntil.toISOString().split('T')[0];
+    const todayStr = today.toISOString().split('T')[0];
+    
+    // 取得寄庫倉選項
+    const consignWarehouseOptions = getConsignWarehouseOptions();
+    
+    const content = `
+        <div class="flex gap-4" style="height: 520px;">
+            <!-- 左側：基本資訊 + 已選品項 -->
+            <div class="w-72 flex flex-col">
+                <!-- 基本資訊 -->
+                <div class="bg-slate-800 rounded-lg p-3 mb-3">
+                    <div class="text-sm text-amber-400 font-bold mb-2"><i class="fa-solid fa-user mr-1"></i>客戶資訊</div>
+                    <div class="space-y-2">
+                        <div>
+                            <input type="text" id="consign-customer" class="scan-input w-full" placeholder="輸入客戶名稱..." oninput="onConsignCustomerInput()">
+                        </div>
+                        <div>
+                            <label class="text-[10px] text-slate-500">寄庫倉</label>
+                            <div class="flex gap-1">
+                                <select id="consign-target-warehouse" class="scan-input flex-1 text-sm">
+                                    <option value="">-- 選擇 --</option>
+                                    ${consignWarehouseOptions}
+                                </select>
+                                <button onclick="addNewConsignWarehouse()" class="px-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs" title="新增">
+                                    <i class="fa-solid fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="text-[10px] text-slate-500">寄倉日</label>
+                                <input type="date" id="consign-date" class="scan-input text-sm py-1" value="${todayStr}">
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-slate-500">免費至</label>
+                                <input type="date" id="consign-free-until" class="scan-input text-sm py-1" value="${freeUntilStr}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 已選擇品項 -->
+                <div class="bg-slate-800 rounded-lg p-3 flex-1 flex flex-col">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="text-sm text-emerald-400 font-bold"><i class="fa-solid fa-cart-shopping mr-1"></i>已選擇</div>
+                        <div class="text-xs text-slate-500" id="consign-selected-summary">0 品項</div>
+                    </div>
+                    <div id="consign-selected-list" class="flex-1 overflow-y-auto space-y-1">
+                        <div class="text-slate-500 text-sm text-center py-8">
+                            <i class="fa-solid fa-arrow-right text-2xl mb-2 block opacity-30"></i>
+                            從右側選擇品項
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-700 pt-2 mt-2">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">合計</span>
+                            <span class="text-white font-bold" id="consign-total-qty">0 件</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右側：庫存清單 -->
+            <div class="flex-1 flex flex-col bg-slate-800 rounded-lg p-3">
+                <!-- 搜尋列 + 確認按鈕 -->
+                <div class="flex gap-2 mb-2">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                        <input type="text" id="consign-search-input" class="scan-input w-full pl-9" placeholder="搜尋品名、規格、批號..." oninput="filterConsignInventory()">
+                    </div>
+                    <select id="consign-warehouse-filter" class="scan-input w-36" onchange="filterConsignInventory()">
+                        <option value="">全部倉庫</option>
+                    </select>
+                    <button onclick="saveConsignmentFromSelection()" class="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold whitespace-nowrap">
+                        <i class="fa-solid fa-check mr-1"></i>確認寄倉
+                    </button>
+                </div>
+                
+                <!-- 庫存表格 -->
+                <div class="flex-1 overflow-y-auto" id="consign-inventory-container">
+                    <div class="text-slate-500 text-center py-10">
+                        <i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i>
+                        載入庫存中...
+                    </div>
+                </div>
+                
+                <div class="text-[10px] text-slate-500 mt-2 text-center">
+                    💡 輸入數量後按 Enter 或點擊 + 加入
+                </div>
+            </div>
+        </div>
+    `;
+    
+    WMS.createModal('consignment-modal', {
+        title: '新增客戶寄倉',
+        icon: 'fa-solid fa-box-archive text-amber-400',
+        content: content,
+        width: '900px'
+    });
+    
+    // 初始化
+    window.consignSelectedItems = [];
+    
+    // 載入庫存
+    await loadConsignInventoryList();
+};
+
+// 倉庫分類定義
+window.warehouseConfig = {
+    // 內倉（I/J/K 庫，有儲位管理）
+    internal: [
+        '崇文_成品', '崇文_原料', '崇文_白蝦', '崇文_半成品庫', '崇文_退貨庫',
+        '八方_成品', '八方_原料', '八方_白蝦'
+    ],
+    // 外倉（無儲位管理）
+    external: [
+        '崇文_洽通', '崇文_有興', '崇文_品順', '崇文_富崐', '崇文_景山1號', '崇文_景山2號',
+        '八方_洽通', '八方_有興', '八方_品順', '八方_富崐', '八方_景山1號',
+        '張春梅_有興', '張春梅_原料', '張春梅_景山1號',
+        '客戶代工倉', '貨品暫存庫'
+    ],
+    // 客戶寄庫倉
+    consign: [
+        '(惠敏)客戶寄庫倉', '崇文(惠-布袋)客戶寄庫倉', '崇文(業務)客戶寄庫倉', 
+        '崇文_寄庫倉', 'PCHOME寄倉'
+    ]
+};
+
+// 取得寄庫倉選項
+function getConsignWarehouseOptions() {
+    const config = window.warehouseConfig;
+    let html = '';
+    config.consign.forEach(w => {
+        html += `<option value="${w}">${w}</option>`;
+    });
+    return html;
+}
+
+// 暫存已選擇的品項
+window.consignSelectedItems = [];
+
+// 暫存庫存資料
+window.consignInventoryData = [];
+
+// 客戶名稱輸入時自動匹配寄庫倉
+window.onConsignCustomerInput = function() {
+    const customer = document.getElementById('consign-customer')?.value.trim();
+    const targetSelect = document.getElementById('consign-target-warehouse');
+    
+    if (!customer || !targetSelect) return;
+    
+    // 尋找匹配的寄庫倉
+    const config = window.warehouseConfig;
+    const matching = config.consign.find(w => w.includes(customer));
+    
+    if (matching) {
+        targetSelect.value = matching;
+    }
+};
+
+// 新增寄庫倉
+window.addNewConsignWarehouse = function() {
+    const customer = document.getElementById('consign-customer')?.value.trim();
+    const name = prompt('請輸入新寄庫倉名稱：', customer ? `(${customer})客戶寄庫倉` : '');
+    
+    if (!name) return;
+    
+    // 新增到清單
+    window.warehouseConfig.consign.push(name);
+    
+    // 更新下拉選單
+    const targetSelect = document.getElementById('consign-target-warehouse');
+    if (targetSelect) {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        targetSelect.appendChild(option);
+        targetSelect.value = name;
+    }
+    
+    showNotification(`✅ 已新增寄庫倉：${name}`, 'success');
+};
+
+// 載入庫存清單
+async function loadConsignInventoryList() {
+    const container = document.getElementById('consign-inventory-container');
+    const warehouseFilter = document.getElementById('consign-warehouse-filter');
+    
+    try {
+        // 從 Firebase 取得庫存
+        const inventory = window.currentInventory ? window.currentInventory() : [];
+        
+        // 過濾有效庫存
+        const validItems = inventory.filter(p => {
+            if (!p.productName) return false;
+            if (p.quantity <= 0) return false;
+            const status = (p.status || '').toLowerCase();
+            if (status === 'shipped' || status === 'outbound' || status === 'deleted') return false;
+            return true;
+        });
+        
+        // 計算已寄倉數量
+        const consignedMap = {};
+        window.consignmentData.forEach(c => {
+            if (c.status !== 'active') return;
+            const key = `${c.productName}|${c.spec}|${c.batchNo}`;
+            consignedMap[key] = (consignedMap[key] || 0) + c.remainingQty;
+        });
+        
+        // 加入可寄倉數量
+        validItems.forEach(item => {
+            const key = `${item.productName}|${item.spec}|${item.batchNo}`;
+            const consigned = consignedMap[key] || 0;
+            item.consigned = consigned;
+            item.available = Math.max(0, item.quantity - consigned);
+            
+            // 判斷倉庫類型
+            const warehouse = item.warehouse || item.company || '';
+            item.warehouseName = warehouse;
+            item.isInternal = window.warehouseConfig.internal.some(w => warehouse.includes(w) || w.includes(warehouse));
+        });
+        
+        window.consignInventoryData = validItems;
+        
+        // 建立倉庫篩選選項
+        const warehouses = new Set();
+        validItems.forEach(item => {
+            if (item.warehouseName) warehouses.add(item.warehouseName);
+        });
+        
+        let filterHtml = '<option value="">全部倉庫</option>';
+        Array.from(warehouses).sort().forEach(w => {
+            filterHtml += `<option value="${w}">${w}</option>`;
+        });
+        warehouseFilter.innerHTML = filterHtml;
+        
+        // 渲染庫存
+        renderConsignInventory(validItems);
+        
+    } catch (err) {
+        console.error('載入庫存失敗:', err);
+        container.innerHTML = '<div class="text-red-400 text-center py-10">載入失敗</div>';
+    }
+}
+
+// 渲染庫存清單
+function renderConsignInventory(items) {
+    const container = document.getElementById('consign-inventory-container');
+    
+    if (items.length === 0) {
+        container.innerHTML = '<div class="text-slate-500 text-center py-10">無符合條件的庫存</div>';
+        return;
+    }
+    
+    // 按倉庫分組
+    const groupedByWarehouse = {};
+    items.forEach(item => {
+        const wh = item.warehouseName || '未分類';
+        if (!groupedByWarehouse[wh]) groupedByWarehouse[wh] = [];
+        groupedByWarehouse[wh].push(item);
+    });
+    
+    let html = '';
+    
+    Object.keys(groupedByWarehouse).sort().forEach(warehouse => {
+        const warehouseItems = groupedByWarehouse[warehouse];
+        const isInternal = warehouseItems[0]?.isInternal;
+        const whClass = isInternal ? 'bg-blue-600' : 'bg-purple-600';
+        const whIcon = isInternal ? 'fa-warehouse' : 'fa-building';
+        
+        html += `
+            <div class="mb-3">
+                <div class="flex items-center gap-2 mb-1 sticky top-0 bg-slate-800 py-1 z-10">
+                    <span class="px-2 py-0.5 ${whClass} rounded text-[10px]"><i class="fa-solid ${whIcon} mr-1"></i>${warehouse}</span>
+                    <span class="text-[10px] text-slate-500">${warehouseItems.length} 項</span>
+                </div>
+                <div class="space-y-1">
+        `;
+        
+        warehouseItems.forEach((item, idx) => {
+            const itemId = `inv-${warehouse.replace(/[^a-zA-Z0-9]/g, '')}-${idx}`;
+            const isSelected = window.consignSelectedItems.some(s => 
+                s.palletId === (item.palletId || item.id) && s.batchNo === item.batchNo
+            );
+            const availableClass = item.available > 0 ? 'text-emerald-400' : 'text-red-400';
+            const rowClass = isSelected ? 'bg-emerald-900/40 border-emerald-500' : 'bg-slate-700/50 border-slate-600';
+            const disabled = item.available <= 0;
+            
+            html += `
+                <div class="flex items-center gap-2 p-2 rounded border ${rowClass} ${disabled ? 'opacity-50' : 'hover:bg-slate-700'}" id="row-${itemId}">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="text-white font-medium truncate">${item.productName}</span>
+                            <span class="text-slate-400 text-xs">${item.spec || ''}</span>
+                        </div>
+                        <div class="flex items-center gap-3 text-[10px] text-slate-500 mt-0.5">
+                            <span><i class="fa-solid fa-barcode mr-1"></i>${item.batchNo || '-'}</span>
+                            ${item.locationId ? `<span><i class="fa-solid fa-location-dot mr-1"></i>${item.locationId}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-white text-sm">${item.quantity}<span class="text-slate-500 text-[10px] ml-0.5">件</span></div>
+                        ${item.consigned > 0 ? `<div class="text-amber-400 text-[10px]">已寄${item.consigned}</div>` : ''}
+                    </div>
+                    <div class="text-right w-14">
+                        <div class="${availableClass} font-bold">${item.available}</div>
+                        <div class="text-[10px] text-slate-500">可寄</div>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <input type="number" 
+                            id="qty-${itemId}" 
+                            class="scan-input w-16 py-1 text-center text-sm ${disabled ? 'opacity-50' : ''}" 
+                            min="1" 
+                            max="${item.available}"
+                            placeholder="數量"
+                            ${disabled ? 'disabled' : ''}
+                            onkeydown="if(event.key==='Enter'){addConsignItem('${itemId}', this, ${JSON.stringify(item).replace(/"/g, '&quot;')})}"
+                        >
+                        <button 
+                            onclick="addConsignItem('${itemId}', document.getElementById('qty-${itemId}'), ${JSON.stringify(item).replace(/"/g, '&quot;')})"
+                            class="px-2 py-1 ${disabled ? 'bg-slate-700 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white'} rounded"
+                            ${disabled ? 'disabled' : ''}
+                        >
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div></div>';
+    });
+    
+    container.innerHTML = html;
+}
+
+// 篩選庫存
+window.filterConsignInventory = function() {
+    const searchText = (document.getElementById('consign-search-input')?.value || '').toLowerCase();
+    const warehouseFilter = document.getElementById('consign-warehouse-filter')?.value || '';
+    
+    let filtered = window.consignInventoryData;
+    
+    // 倉庫篩選
+    if (warehouseFilter) {
+        filtered = filtered.filter(item => item.warehouseName === warehouseFilter);
+    }
+    
+    // 文字搜尋
+    if (searchText) {
+        filtered = filtered.filter(item => 
+            (item.productName || '').toLowerCase().includes(searchText) ||
+            (item.spec || '').toLowerCase().includes(searchText) ||
+            (item.batchNo || '').toLowerCase().includes(searchText) ||
+            (item.locationId || '').toLowerCase().includes(searchText)
+        );
+    }
+    
+    renderConsignInventory(filtered);
+};
+
+// 加入寄倉品項
+window.addConsignItem = function(itemId, qtyInput, itemData) {
+    const qty = parseInt(qtyInput?.value) || 0;
+    
+    if (qty <= 0) {
+        qtyInput?.focus();
+        return;
+    }
+    
+    if (qty > itemData.available) {
+        alert(`數量不能超過可寄數量 ${itemData.available}`);
+        return;
+    }
+    
+    // 檢查是否已存在
+    const existingIdx = window.consignSelectedItems.findIndex(s => 
+        s.palletId === (itemData.palletId || itemData.id) && s.batchNo === itemData.batchNo
+    );
+    
+    if (existingIdx >= 0) {
+        // 更新數量
+        window.consignSelectedItems[existingIdx].qty = qty;
+    } else {
+        // 新增
+        window.consignSelectedItems.push({
+            palletId: itemData.palletId || itemData.id,
+            productName: itemData.productName,
+            spec: itemData.spec,
+            batchNo: itemData.batchNo,
+            locationId: itemData.locationId,
+            warehouseName: itemData.warehouseName,
+            isInternal: itemData.isInternal,
+            stock: itemData.quantity,
+            available: itemData.available,
+            qty: qty
+        });
+    }
+    
+    // 清空輸入
+    if (qtyInput) qtyInput.value = '';
+    
+    // 更新顯示
+    updateConsignSelectedList();
+    
+    // 標記該行
+    const row = document.getElementById(`row-${itemId}`);
+    if (row) {
+        row.classList.remove('bg-slate-700/50', 'border-slate-600');
+        row.classList.add('bg-emerald-900/40', 'border-emerald-500');
+    }
+};
+
+// 更新已選擇清單
+function updateConsignSelectedList() {
+    const listDiv = document.getElementById('consign-selected-list');
+    const summaryDiv = document.getElementById('consign-selected-summary');
+    const totalDiv = document.getElementById('consign-total-qty');
+    
+    const items = window.consignSelectedItems;
+    
+    if (items.length === 0) {
+        listDiv.innerHTML = `
+            <div class="text-slate-500 text-sm text-center py-8">
+                <i class="fa-solid fa-arrow-right text-2xl mb-2 block opacity-30"></i>
+                從右側選擇品項
+            </div>
+        `;
+        summaryDiv.textContent = '0 品項';
+        totalDiv.textContent = '0 件';
+        return;
+    }
+    
+    let html = '';
+    let totalQty = 0;
+    
+    items.forEach((item, idx) => {
+        totalQty += item.qty;
+        const whClass = item.isInternal ? 'text-blue-400' : 'text-purple-400';
+        
+        html += `
+            <div class="flex items-center gap-2 p-2 bg-slate-700/50 rounded group">
+                <div class="flex-1 min-w-0">
+                    <div class="text-white text-sm truncate">${item.productName}</div>
+                    <div class="text-[10px] text-slate-500">${item.spec || ''} | ${item.batchNo || '-'}</div>
+                    <div class="text-[10px] ${whClass}">${item.warehouseName}</div>
+                </div>
+                <div class="text-right">
+                    <input type="number" 
+                        class="scan-input w-14 py-0.5 text-center text-sm" 
+                        value="${item.qty}" 
+                        min="1" 
+                        max="${item.available}"
+                        onchange="updateConsignItemQty(${idx}, this.value)"
+                    >
+                </div>
+                <button onclick="removeConsignItem(${idx})" class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 px-1">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+        `;
+    });
+    
+    listDiv.innerHTML = html;
+    summaryDiv.textContent = `${items.length} 品項`;
+    totalDiv.textContent = `${totalQty.toLocaleString()} 件`;
+}
+
+// 更新品項數量
+window.updateConsignItemQty = function(idx, value) {
+    const qty = parseInt(value) || 0;
+    const item = window.consignSelectedItems[idx];
+    
+    if (!item) return;
+    
+    if (qty <= 0) {
+        removeConsignItem(idx);
+        return;
+    }
+    
+    if (qty > item.available) {
+        alert(`數量不能超過可寄數量 ${item.available}`);
+        return;
+    }
+    
+    item.qty = qty;
+    updateConsignSelectedList();
+};
+
+// 移除品項
+window.removeConsignItem = function(idx) {
+    window.consignSelectedItems.splice(idx, 1);
+    updateConsignSelectedList();
+    filterConsignInventory(); // 重新渲染以更新標記
+};
+
+// 儲存寄倉
+window.saveConsignmentFromSelection = async function() {
+    const customer = document.getElementById('consign-customer')?.value.trim();
+    const targetWarehouse = document.getElementById('consign-target-warehouse')?.value;
+    const consignDate = document.getElementById('consign-date')?.value;
+    const freeUntil = document.getElementById('consign-free-until')?.value;
+    
+    // 驗證
+    if (!customer) { alert('請輸入客戶名稱'); return; }
+    if (!targetWarehouse) { alert('請選擇寄庫倉'); return; }
+    if (window.consignSelectedItems.length === 0) { alert('請至少選擇一個品項'); return; }
+    
+    // 計算計費起始日
+    const freeUntilDate = new Date(freeUntil);
+    const chargeStartDate = new Date(freeUntilDate);
+    chargeStartDate.setDate(chargeStartDate.getDate() + 1);
+    const chargeStartStr = chargeStartDate.toISOString().split('T')[0];
+    
+    // 建立寄倉記錄
+    const timestamp = Date.now();
+    const newConsignments = [];
+    
+    for (let i = 0; i < window.consignSelectedItems.length; i++) {
+        const item = window.consignSelectedItems[i];
+        
+        // 取得每板件數
+        const productMaster = window.productMasterData?.find(p => 
+            p.name === item.productName && (p.spec === item.spec || (!p.spec && !item.spec))
+        );
+        
+        const unitsPerPallet = productMaster?.palletCapacity || 60;
+        const ratePerUnit = getConsignmentRate('崇文', 1, unitsPerPallet);
+        
+        const consignment = {
+            id: `CON-${timestamp}-${i}`,
+            source: item.isInternal ? 'internal' : 'external',
+            sourceWarehouse: item.warehouseName,
+            targetWarehouse: targetWarehouse,
+            productName: item.productName,
+            spec: item.spec,
+            batchNo: item.batchNo,
+            customer: customer,
+            originalQty: item.qty,
+            remainingQty: item.qty,
+            consignmentDate: consignDate,
+            freeUntil: freeUntil,
+            chargeStartDate: chargeStartStr,
+            unitsPerPallet: unitsPerPallet,
+            ratePerUnit: ratePerUnit,
+            note: '',
+            pickups: [],
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            sourceLocations: item.isInternal && item.locationId ? [{
+                palletId: item.palletId,
+                locationId: item.locationId,
+                batchNo: item.batchNo,
+                qty: item.qty
+            }] : null
+        };
+        
+        newConsignments.push(consignment);
+    }
+    
+    // 儲存
+    window.consignmentData.push(...newConsignments);
+    saveConsignmentsToStorage();
+    
+    // 關閉並刷新
+    WMS.closeModal('consignment-modal');
+    
+    const totalQty = window.consignSelectedItems.reduce((sum, item) => sum + item.qty, 0);
+    showNotification(`✅ 已新增 ${newConsignments.length} 筆寄倉：${customer}，共 ${totalQty} 件`, 'success');
+    
+    // 立即刷新
+    setTimeout(() => loadConsignmentList(), 50);
+};
+
+// 取得儲位的寄倉資訊（供 tooltip 使用）
+window.getLocationConsignments = function(locationId) {
+    const consignments = [];
+    
+    window.consignmentData.forEach(c => {
+        if (c.source !== 'internal') return;
+        if (c.status !== 'active') return;
+        if (!c.sourceLocations) return;
+        
+        c.sourceLocations.forEach(loc => {
+            if (loc.locationId === locationId) {
+                consignments.push({
+                    customer: c.customer,
+                    productName: c.productName,
+                    spec: c.spec,
+                    qty: loc.qty
+                });
+            }
+        });
+    });
+    
+    return consignments;
+};
+
+// 載入寄倉清單
+window.loadConsignmentList = function() {
+    const tbody = document.getElementById('consignment-list');
+    if (!tbody) return;
+    
+    const statusFilter = document.getElementById('consign-status-filter')?.value || 'all';
+    const sourceFilter = document.getElementById('consign-source-filter')?.value || 'all';
+    const searchText = (document.getElementById('consign-search')?.value || '').toLowerCase();
+    
+    let data = [...window.consignmentData]; // 複製陣列避免排序影響原資料
+    
+    // 按建立時間降序排序（最新的在最上面）
+    data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    // 篩選狀態
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    if (statusFilter === 'free') {
+        data = data.filter(c => c.status === 'active' && c.freeUntil >= todayStr);
+    } else if (statusFilter === 'charging') {
+        data = data.filter(c => c.status === 'active' && c.freeUntil < todayStr);
+    } else if (statusFilter === 'completed') {
+        data = data.filter(c => c.status === 'completed');
+    }
+    
+    // 篩選來源
+    if (sourceFilter === 'internal') {
+        data = data.filter(c => c.source !== 'external');
+    } else if (sourceFilter === 'external') {
+        data = data.filter(c => c.source === 'external');
+    }
+    
+    // 搜尋
+    if (searchText) {
+        data = data.filter(c => 
+            (c.customer || '').toLowerCase().includes(searchText) ||
+            (c.productName || '').toLowerCase().includes(searchText) ||
+            (c.batchNo || '').toLowerCase().includes(searchText) ||
+            (c.sourceWarehouse || '').toLowerCase().includes(searchText) ||
+            (c.targetWarehouse || '').toLowerCase().includes(searchText)
+        );
+    }
+    
+    // 統計
+    let freeCount = 0, chargingCount = 0, expiringCount = 0, totalUnits = 0, totalRent = 0;
+    const thisMonth = today.getMonth();
+    
+    window.consignmentData.forEach(c => {
+        if (c.status !== 'active') return;
+        totalUnits += c.remainingQty;
+        
+        if (c.freeUntil >= todayStr) {
+            freeCount++;
+        } else {
+            chargingCount++;
+            // 計算累計租金
+            const chargeStart = new Date(c.chargeStartDate);
+            const daysDiff = Math.max(0, Math.floor((today - chargeStart) / (1000 * 60 * 60 * 24)));
+            totalRent += c.remainingQty * c.ratePerUnit * daysDiff;
+        }
+        
+        // 本月到期
+        const freeUntilDate = new Date(c.freeUntil);
+        if (freeUntilDate.getMonth() === thisMonth) {
+            expiringCount++;
+        }
+    });
+    
+    // 更新統計卡片
+    const el = (id) => document.getElementById(id);
+    if (el('consign-free-count')) el('consign-free-count').textContent = freeCount;
+    if (el('consign-charging-count')) el('consign-charging-count').textContent = chargingCount;
+    if (el('consign-expiring-count')) el('consign-expiring-count').textContent = expiringCount;
+    if (el('consign-total-units')) el('consign-total-units').textContent = totalUnits.toLocaleString();
+    if (el('consign-total-rent')) el('consign-total-rent').textContent = '$' + Math.round(totalRent).toLocaleString();
+    
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-slate-500 py-10">尚無寄倉資料</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    data.forEach(c => {
+        // 計算狀態和累計
+        const isFree = c.freeUntil >= todayStr;
+        const statusBadge = c.status === 'completed' 
+            ? '<span class="badge badge-slate">已結清</span>'
+            : isFree 
+                ? '<span class="badge badge-green">免費期</span>'
+                : '<span class="badge badge-yellow">計費中</span>';
+        
+        // 來源倉庫
+        const sourceWarehouse = c.sourceWarehouse || (c.source === 'external' ? '外倉' : '內倉');
+        const isInternal = c.source !== 'external';
+        const sourceClass = isInternal ? 'text-blue-400' : 'text-purple-400';
+        
+        // 目標寄庫倉
+        const targetWarehouse = c.targetWarehouse || '-';
+        
+        let chargeDays = 0;
+        let accumulatedRent = 0;
+        if (!isFree && c.status === 'active') {
+            const chargeStart = new Date(c.chargeStartDate);
+            chargeDays = Math.max(0, Math.floor((today - chargeStart) / (1000 * 60 * 60 * 24)));
+            accumulatedRent = c.remainingQty * c.ratePerUnit * chargeDays;
+        }
+        
+        html += `
+            <tr class="border-b border-slate-700 hover:bg-slate-800">
+                <td class="p-2 text-xs ${sourceClass}">${sourceWarehouse}</td>
+                <td class="p-2 text-xs text-amber-400">${targetWarehouse}</td>
+                <td class="p-2 font-bold text-white">${c.customer}</td>
+                <td class="p-2 text-white text-sm">${c.productName}<span class="text-slate-500 text-xs ml-1">${c.spec || ''}</span></td>
+                <td class="p-2 text-slate-400 text-xs font-mono">${c.batchNo || '-'}</td>
+                <td class="p-2 text-right text-slate-400">${c.originalQty}</td>
+                <td class="p-2 text-right font-bold text-white">${c.remainingQty}</td>
+                <td class="p-2 text-xs ${isFree ? 'text-emerald-400' : 'text-orange-400'}">${c.freeUntil}</td>
+                <td class="p-2 text-right text-slate-400">${chargeDays}</td>
+                <td class="p-2 text-right font-bold text-yellow-400">$${Math.round(accumulatedRent).toLocaleString()}</td>
+                <td class="p-2">${statusBadge}</td>
+                <td class="p-2 text-center">
+                    ${c.status === 'active' ? `
+                        <button onclick="openPickupModal('${c.id}')" class="text-blue-400 hover:bg-blue-500/20 rounded px-2 py-1 mr-1" title="提貨">
+                            <i class="fa-solid fa-truck-ramp-box"></i>
+                        </button>
+                        <button onclick="deleteConsignment('${c.id}')" class="text-red-400 hover:bg-red-500/20 rounded px-2 py-1" title="刪除">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    ` : '-'}
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+};
+
+// 篩選寄倉
+window.filterConsignments = function() {
+    loadConsignmentList();
+};
+
+// 開啟提貨 Modal
+window.openPickupModal = function(consignmentId) {
+    const c = window.consignmentData.find(item => item.id === consignmentId);
+    if (!c) return;
+    
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    const content = `
+        <div class="space-y-4">
+            <div class="bg-slate-800 rounded-lg p-3">
+                <div class="text-white font-bold">${c.customer}</div>
+                <div class="text-sm text-slate-400">${c.productName} | ${c.spec || '-'}</div>
+                <div class="text-sm text-slate-400">剩餘：<span class="text-emerald-400 font-bold">${c.remainingQty}</span> 件</div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-sm text-slate-400 mb-1 block">提貨日期</label>
+                    <input type="date" id="pickup-date" class="scan-input" value="${todayStr}">
+                </div>
+                <div>
+                    <label class="text-sm text-slate-400 mb-1 block">提貨件數 *</label>
+                    <input type="number" id="pickup-qty" class="scan-input" placeholder="${c.remainingQty}" min="1" max="${c.remainingQty}">
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="savePickup('${consignmentId}')" class="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
+                    <i class="fa-solid fa-truck-ramp-box mr-1"></i>確認提貨
+                </button>
+                <button onclick="WMS.closeModal('pickup-modal')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
+                    取消
+                </button>
+            </div>
+        </div>
+    `;
+    
+    WMS.createModal('pickup-modal', {
+        title: '客戶提貨',
+        icon: 'fa-solid fa-truck-ramp-box text-blue-400',
+        content: content,
+        width: '400px'
+    });
+};
+
+// 儲存提貨
+window.savePickup = function(consignmentId) {
+    const pickupDate = document.getElementById('pickup-date')?.value;
+    const pickupQty = parseInt(document.getElementById('pickup-qty')?.value) || 0;
+    
+    const c = window.consignmentData.find(item => item.id === consignmentId);
+    if (!c) return;
+    
+    if (pickupQty <= 0) {
+        alert('請輸入提貨件數');
+        return;
+    }
+    if (pickupQty > c.remainingQty) {
+        alert(`提貨件數不能超過剩餘 ${c.remainingQty} 件`);
+        return;
+    }
+    
+    // 記錄提貨
+    c.pickups.push({
+        date: pickupDate,
+        qty: pickupQty
+    });
+    
+    // 更新剩餘數量
+    c.remainingQty -= pickupQty;
+    
+    // 如果全部提完，標記為已結清
+    if (c.remainingQty <= 0) {
+        c.status = 'completed';
+        c.completedAt = new Date().toISOString();
+    }
+    
+    saveConsignmentsToStorage();
+    WMS.closeModal('pickup-modal');
+    showNotification(`✅ 已提貨 ${pickupQty} 件`, 'success');
+    loadConsignmentList();
+};
+
+// 刪除寄倉
+window.deleteConsignment = function(consignmentId) {
+    if (!confirm('確定要刪除此寄倉記錄嗎？')) return;
+    
+    const idx = window.consignmentData.findIndex(c => c.id === consignmentId);
+    if (idx >= 0) {
+        window.consignmentData.splice(idx, 1);
+        saveConsignmentsToStorage();
+        showNotification('✅ 已刪除寄倉記錄', 'success');
+        loadConsignmentList();
+    }
+};
+
+// 載入倉租報表
+window.loadRentalReport = function() {
+    const monthInput = document.getElementById('rental-month');
+    if (!monthInput || !monthInput.value) return;
+    
+    // 解析月份
+    const [year, month] = monthInput.value.split('-').map(Number);
+    const settleDay = window.rentalSettings.settlement.settleDay;
+    
+    // 計費區間：上月26日 ~ 當月25日
+    const startDate = new Date(year, month - 2, settleDay + 1);
+    const endDate = new Date(year, month - 1, settleDay);
+    
+    // TODO: 實際計算倉租（需要歷史庫存快照）
+    // 目前先顯示示意資料
+    
+    document.getElementById('own-stock-rental-body').innerHTML = `
+        <tr class="border-b border-slate-700">
+            <td class="p-2 text-white font-bold">崇文</td>
+            <td class="p-2 text-right">-</td>
+            <td class="p-2 text-right">-</td>
+            <td class="p-2 text-right text-blue-400">-</td>
+        </tr>
+        <tr class="border-b border-slate-700">
+            <td class="p-2 text-white font-bold">八方</td>
+            <td class="p-2 text-right">-</td>
+            <td class="p-2 text-right">-</td>
+            <td class="p-2 text-right text-blue-400">-</td>
+        </tr>
+    `;
+    
+    // 計算客戶寄倉帳單
+    const customerTotals = {};
+    
+    window.consignmentData.forEach(c => {
+        // 計算該月份內的計費天數
+        const chargeStart = new Date(c.chargeStartDate);
+        
+        // 計算每次提貨前的計費
+        let previousQty = c.originalQty;
+        let previousDate = chargeStart;
+        
+        c.pickups.forEach(p => {
+            const pickupDate = new Date(p.date);
+            // TODO: 精確計算每段期間的費用
+        });
+        
+        // 簡化計算：目前剩餘件數 × 天數 × 費率
+        if (c.status === 'active' && c.freeUntil < endDate.toISOString().split('T')[0]) {
+            const effectiveStart = new Date(Math.max(chargeStart, startDate));
+            const effectiveEnd = new Date(Math.min(new Date(), endDate));
+            const days = Math.max(0, Math.floor((effectiveEnd - effectiveStart) / (1000 * 60 * 60 * 24)));
+            const rent = c.remainingQty * c.ratePerUnit * days;
+            
+            if (!customerTotals[c.customer]) {
+                customerTotals[c.customer] = { units: 0, unitDays: 0, rent: 0 };
+            }
+            customerTotals[c.customer].units += c.remainingQty;
+            customerTotals[c.customer].unitDays += c.remainingQty * days;
+            customerTotals[c.customer].rent += rent;
+        }
+    });
+    
+    let consignHtml = '';
+    let totalConsignRent = 0;
+    
+    Object.entries(customerTotals).forEach(([customer, data]) => {
+        consignHtml += `
+            <tr class="border-b border-slate-700">
+                <td class="p-2 text-white font-bold">${customer}</td>
+                <td class="p-2 text-right">${data.units.toLocaleString()}</td>
+                <td class="p-2 text-right">${data.unitDays.toLocaleString()}</td>
+                <td class="p-2 text-right text-amber-400">$${Math.round(data.rent).toLocaleString()}</td>
+            </tr>
+        `;
+        totalConsignRent += data.rent;
+    });
+    
+    if (!consignHtml) {
+        consignHtml = '<tr><td colspan="4" class="text-center text-slate-500 py-6">本月無客戶寄倉費用</td></tr>';
+    }
+    
+    document.getElementById('consign-rental-body').innerHTML = consignHtml;
+    document.getElementById('consign-total').textContent = '$' + Math.round(totalConsignRent).toLocaleString();
+    document.getElementById('monthly-total').textContent = '$' + Math.round(totalConsignRent).toLocaleString();
+};
+
+// 產生月結帳單
+window.generateMonthlyBill = function() {
+    const monthInput = document.getElementById('rental-month');
+    if (!monthInput || !monthInput.value) {
+        alert('請先選擇月份');
+        return;
+    }
+    
+    // TODO: 產生 Excel 帳單
+    showNotification('📄 帳單產生功能開發中', 'info');
+};
+
+// 匯出寄倉資料
+window.exportConsignments = function() {
+    if (window.consignmentData.length === 0) {
+        alert('沒有資料可匯出');
+        return;
+    }
+    
+    const data = window.consignmentData.map(c => ({
+        '客戶': c.customer,
+        '品名': c.productName,
+        '規格': c.spec || '',
+        '原始數量': c.originalQty,
+        '剩餘數量': c.remainingQty,
+        '寄倉日期': c.consignmentDate,
+        '免費截止': c.freeUntil,
+        '費率(元/件/天)': c.ratePerUnit?.toFixed(4) || '',
+        '狀態': c.status === 'completed' ? '已結清' : '進行中',
+        '備註': c.note || ''
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '寄倉清單');
+    XLSX.writeFile(wb, `寄倉清單_${new Date().toISOString().split('T')[0]}.xlsx`);
+    
+    showNotification('✅ 已匯出寄倉清單', 'success');
+};
+
+// 頁面切換時載入資料
+const originalSwitchTab = window.switchTab;
+window.switchTab = function(viewId, event) {
+    originalSwitchTab(viewId, event);
+    
+    if (viewId === 'consignment') {
+        loadConsignmentList();
+    } else if (viewId === 'rental-settings') {
+        loadRentalSettingsUI();
+    } else if (viewId === 'rental-report') {
+        // 設定預設月份為當月
+        const monthInput = document.getElementById('rental-month');
+        if (monthInput && !monthInput.value) {
+            const today = new Date();
+            monthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        }
+    }
+};
+
+console.log('💰 倉租管理模組已載入');
 
 </script>
 </body>
