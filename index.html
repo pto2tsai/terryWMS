@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WMS 全功能旗艦版 (V50.0 Live Preview)</title>
+    <title>WMS 全功能旗艦版 (V50.1 使用者管理優化)</title>
     <script>
         // 在 Tailwind 載入前先攔截警告
         (function() {
@@ -226,6 +226,18 @@
         .preview-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; border-bottom: 1px dashed #eee; }
         .preview-val { font-weight: bold; }
         .preview-big { font-size: 24px; font-weight: 900; text-align: center; display: block; margin: 10px 0; }
+
+        /* 區域勾選按鈕樣式 */
+        .zone-check-btn input:checked + span { background: #2563eb; color: white; }
+        .zone-check-btn input:not(:checked) + span { background: #334155; color: #94a3b8; }
+        .zone-check-btn span:hover { opacity: 0.8; }
+        
+        /* 小型插單卡片樣式 */
+        .mini-label-card { background: white; border-radius: 4px; padding: 6px; font-size: 10px; color: black; }
+        .mini-label-card .name { font-weight: 900; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mini-label-card .spec { color: #666; font-size: 9px; }
+        .mini-label-card .loc { font-weight: 900; font-size: 12px; color: #2563eb; }
+        .mini-label-card .qty { font-weight: 900; font-size: 14px; color: #dc2626; text-align: right; }
 
         @media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position: absolute; left: 0; top: 0; width: 100%; } .print-page { page-break-after: always; width: 100mm; height: 148mm; border: 3px solid black; padding: 15px; margin: 0 auto; color: black !important; background: white !important; display: flex; flex-direction: column; } .print-header { text-align: center; font-size: 24px; font-weight: 900; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; } .print-row { display: flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 5px; } .print-label { font-size: 14px; color: #333; font-weight: bold; } .print-val { font-size: 18px; font-weight: bold; text-align: right; } .print-big { font-size: 32px; font-weight: 900; } .print-footer { margin-top: auto; text-align: center; } }
     </style>
@@ -660,91 +672,79 @@
                 </div>
             </div>
 
-            <div id="view-unified-inbound" class="view-panel h-full hidden flex flex-col p-3">
+            <div id="view-unified-inbound" class="view-panel h-full hidden flex flex-col p-2">
                 <input type="hidden" id="in-category" value="Raw">
+                
+                <!-- 頂部步驟進度指示器（精簡版）-->
+                <div class="flex items-center justify-center gap-1 mb-2 bg-slate-800/80 rounded-lg py-1.5 px-3">
+                    <div id="inbound-step-1" class="flex items-center gap-1.5 px-3 py-1 rounded bg-blue-600 text-white text-sm">
+                        <span class="w-5 h-5 rounded-full bg-white text-blue-600 flex items-center justify-center font-bold text-xs">1</span>
+                        <span class="font-bold">填寫資料</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-slate-600 text-[10px]"></i>
+                    <div id="inbound-step-2" class="flex items-center gap-1.5 px-3 py-1 rounded bg-slate-700 text-slate-400 text-sm">
+                        <span class="w-5 h-5 rounded-full bg-slate-600 text-slate-400 flex items-center justify-center font-bold text-xs">2</span>
+                        <span>選擇儲位</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-slate-600 text-[10px]"></i>
+                    <div id="inbound-step-3" class="flex items-center gap-1.5 px-3 py-1 rounded bg-slate-700 text-slate-400 text-sm">
+                        <span class="w-5 h-5 rounded-full bg-slate-600 text-slate-400 flex items-center justify-center font-bold text-xs">3</span>
+                        <span>確認入庫</span>
+                    </div>
+                    <div class="ml-auto">
+                        <button onclick="showPendingInbounds()" class="px-2 py-1 bg-yellow-600 hover:bg-yellow-500 text-white rounded text-xs font-bold">
+                            <i class="fa-solid fa-clock mr-1"></i>待執行 <span id="pending-inbound-count" class="bg-yellow-800 px-1 rounded">0</span>
+                        </button>
+                    </div>
+                </div>
+                
                 <!-- 三步驟主區域 -->
-                <div class="flex gap-3 flex-1 min-h-0">
+                <div class="flex gap-2 flex-1 min-h-0">
                     
-                    <!-- STEP 1: 產品資訊 -->
+                    <!-- STEP 1: 產品資訊（精簡版）-->
                     <div class="w-72 flex flex-col">
-                        <div class="bg-blue-900/50 border border-blue-500 rounded-lg p-3 flex flex-col h-full">
-                            <div class="flex justify-between items-center mb-2">
-                                <div class="text-blue-400 font-bold text-sm">
-                                    <span class="bg-blue-500 text-white px-2 py-0.5 rounded mr-2 text-xs">1</span>產品資訊
-                                </div>
-                                <button onclick="showPendingInbounds()" class="px-2 py-1 bg-yellow-600 hover:bg-yellow-500 text-white rounded font-bold text-xs">
-                                    <i class="fa-solid fa-clock mr-1"></i>待執行 <span id="pending-inbound-count" class="bg-yellow-800 px-1 rounded">0</span>
-                                </button>
+                        <div class="bg-blue-900/40 border border-blue-500 rounded-lg p-3 flex flex-col h-full">
+                            <div class="text-blue-400 font-bold text-sm mb-2">
+                                <i class="fa-solid fa-box mr-1"></i>產品資訊
                             </div>
                             
-                            <div class="space-y-2 flex-1">
-                                <!-- 入庫類型 + 目標倉庫 並排 -->
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label class="text-xs text-slate-400">入庫類型</label>
-                                        <select id="in-type-select" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm focus:border-blue-500 focus:outline-none" onchange="onInboundTypeChange()">
-                                            <option value="Raw">📦 採購進貨</option>
-                                            <option value="FG">🏭 產線成品</option>
-                                            <option value="WIP">⚙️ 半成品</option>
-                                            <option value="Return">↩️ 餘料退庫</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="text-xs text-slate-400">目標倉庫</label>
-                                        <select id="in-warehouse" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm focus:border-blue-500 focus:outline-none" onchange="onWarehouseChange()">
-                                            <optgroup label="── 本倉 ──">
-                                                <option value="MAIN">🏭 一般庫存</option>
-                                                <option value="MAIN-CONSIGN">📦 客戶寄倉</option>
-                                                <option value="MAIN-RESERVE">🔒 業務預留</option>
-                                            </optgroup>
-                                            <optgroup label="── 崇文外倉 ──" id="optgroup-cw">
-                                            </optgroup>
-                                            <optgroup label="── 八方外倉 ──" id="optgroup-bf">
-                                            </optgroup>
-                                            <optgroup label="────────">
-                                                <option value="MANAGE">⚙️ 管理倉庫</option>
-                                            </optgroup>
-                                        </select>
-                                    </div>
+                            <div class="space-y-1.5 flex-1">
+                                <!-- 入庫類型（單行按鈕）-->
+                                <div class="flex gap-1">
+                                    <button type="button" onclick="selectInboundType('Raw')" id="btn-type-Raw" class="inbound-type-btn active flex-1 py-1 rounded border border-blue-500 bg-blue-900/50 text-white text-xs font-bold">採購</button>
+                                    <button type="button" onclick="selectInboundType('FG')" id="btn-type-FG" class="inbound-type-btn flex-1 py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-xs">成品</button>
+                                    <button type="button" onclick="selectInboundType('WIP')" id="btn-type-WIP" class="inbound-type-btn flex-1 py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-xs">半成品</button>
+                                    <button type="button" onclick="selectInboundType('Return')" id="btn-type-Return" class="inbound-type-btn flex-1 py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-xs">退庫</button>
+                                </div>
+                                <select id="in-type-select" class="hidden" onchange="onInboundTypeChange()">
+                                    <option value="Raw">採購進貨</option><option value="FG">產線成品</option><option value="WIP">半成品</option><option value="Return">餘料退庫</option>
+                                </select>
+                                
+                                <!-- 目標倉庫 -->
+                                <select id="in-warehouse" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" onchange="onWarehouseChange()">
+                                    <optgroup label="本倉"><option value="MAIN">🏭 一般庫存</option><option value="MAIN-CONSIGN">📦 客戶寄倉</option></optgroup>
+                                    <optgroup label="崇文外倉" id="optgroup-cw"></optgroup>
+                                    <optgroup label="八方外倉" id="optgroup-bf"></optgroup>
+                                    <optgroup label="──"><option value="MANAGE">⚙️ 管理倉庫</option></optgroup>
+                                </select>
+                                
+                                <!-- 品名 -->
+                                <input type="text" id="in-name" class="w-full p-2 bg-slate-800 border-2 border-emerald-500 rounded text-white font-bold" placeholder="👆 品名 *" oninput="updateLivePreview(); autoTriggerSmartSuggest(); updateInboundProgress();">
+                                
+                                <!-- 規格 + 數量 -->
+                                <div class="grid grid-cols-2 gap-1">
+                                    <input type="text" id="in-spec" class="p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" placeholder="規格" oninput="updateLivePreview()">
+                                    <input type="number" id="in-qty" class="p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm font-bold" placeholder="數量 *" oninput="updateLivePreview(); updateInboundProgress();">
                                 </div>
                                 
-                                <div class="border-t border-slate-600 my-1"></div>
-                                
-                                <div>
-                                    <label class="text-xs text-slate-400">品名 <span class="text-red-400">*</span></label>
-                                    <input type="text" id="in-name" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white font-bold focus:border-blue-500 focus:outline-none" placeholder="輸入品名" oninput="updateLivePreview(); autoTriggerSmartSuggest()">
+                                <!-- 批號 + 效期 -->
+                                <div class="grid grid-cols-2 gap-1">
+                                    <input type="text" id="in-batch" class="p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" placeholder="批號" oninput="updateLivePreview()">
+                                    <input type="date" id="in-exp" class="p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" oninput="updateLivePreview(); updateInboundProgress();">
                                 </div>
                                 
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label class="text-xs text-slate-400">規格</label>
-                                        <input type="text" id="in-spec" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm focus:border-blue-500 focus:outline-none" placeholder="300/400" oninput="updateLivePreview()">
-                                    </div>
-                                    <div>
-                                        <label class="text-xs text-slate-400">數量 <span class="text-red-400">*</span></label>
-                                        <input type="number" id="in-qty" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white font-bold text-sm focus:border-blue-500 focus:outline-none" placeholder="50" oninput="updateLivePreview()">
-                                    </div>
-                                </div>
-                                
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label class="text-xs text-slate-400">批號</label>
-                                        <input type="text" id="in-batch" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm focus:border-blue-500 focus:outline-none" oninput="updateLivePreview()">
-                                    </div>
-                                    <div>
-                                        <label class="text-xs text-slate-400">效期 <span class="text-red-400">*</span></label>
-                                        <input type="date" id="in-exp" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm focus:border-blue-500 focus:outline-none" oninput="updateLivePreview()">
-                                    </div>
-                                </div>
-                                
-                                <div>
-                                    <label class="text-xs text-slate-400">廠商</label>
-                                    <input type="text" id="in-vendor" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm focus:border-blue-500 focus:outline-none" oninput="updateLivePreview()">
-                                </div>
-                            </div>
-                            
-                            <div class="mt-2 pt-2 border-t border-blue-500/30 text-xs text-slate-500">
-                                <i class="fa-solid fa-lightbulb mr-1 text-yellow-400"></i>輸入品名自動顯示建議儲位
+                                <!-- 廠商 -->
+                                <input type="text" id="in-vendor" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" placeholder="廠商" oninput="updateLivePreview()">
                             </div>
                         </div>
                     </div>
@@ -752,130 +752,106 @@
                     <!-- STEP 2: 指定儲位 / 外倉選擇 -->
                     <div class="flex-1 flex flex-col min-w-0">
                         <!-- 外倉選擇區域（外倉模式時顯示）-->
-                        <div id="external-wh-section" class="bg-cyan-900/50 border border-cyan-500 rounded-lg p-4 flex-col h-full hidden">
-                            <div class="flex justify-between items-center mb-3">
-                                <div class="text-cyan-400 font-bold text-sm" id="inbound-wh-title">
-                                    <span class="bg-cyan-500 text-white px-2 py-1 rounded mr-2">2</span><i class="fa-solid fa-building mr-2"></i>外倉入庫
-                                </div>
+                        <div id="external-wh-section" class="bg-cyan-900/40 border border-cyan-500 rounded-lg p-3 flex-col h-full hidden">
+                            <div class="text-cyan-400 font-bold text-sm mb-2" id="inbound-wh-title">
+                                <i class="fa-solid fa-building mr-1"></i>外倉入庫（不需指定儲位）
                             </div>
-                            
-                            <div class="flex-1 flex flex-col items-center justify-center">
-                                <div class="text-center mb-6">
-                                    <i class="fa-solid fa-building text-6xl text-cyan-400 mb-4"></i>
-                                    <p class="text-slate-300 text-lg">外倉入庫不需要指定儲位</p>
-                                    <p class="text-slate-500 text-sm mt-2">系統將自動記錄到所選外倉的庫存中</p>
-                                </div>
-                                
-                                <div class="bg-slate-800/50 border border-slate-600 rounded-xl p-4 w-full max-w-md">
-                                    <div class="text-slate-400 text-xs mb-2">外倉庫存管理特點：</div>
-                                    <ul class="text-slate-300 text-sm space-y-2">
-                                        <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i>不需要管理儲位</li>
-                                        <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i>記錄品名、規格、批號、效期、數量</li>
-                                        <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i>可隨時調撥回本倉</li>
-                                        <li><i class="fa-solid fa-check text-emerald-400 mr-2"></i>支援效期追蹤</li>
-                                    </ul>
+                            <div class="flex-1 flex items-center justify-center">
+                                <div class="text-center">
+                                    <i class="fa-solid fa-building text-4xl text-cyan-400 mb-2"></i>
+                                    <p class="text-slate-400 text-sm">外倉自動記錄庫存</p>
                                 </div>
                             </div>
                         </div>
                         
                         <!-- 本倉儲位選擇區域 -->
-                        <div id="location-section" class="bg-emerald-900/50 border border-emerald-500 rounded-lg p-4 flex flex-col h-full flex">
-                            <div class="flex justify-between items-center mb-3">
-                                <div class="text-emerald-400 font-bold text-sm">
-                                    <span class="bg-emerald-500 text-white px-2 py-1 rounded mr-2">2</span>指定儲位
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="calculateSmartSuggest()" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded font-bold text-sm">
-                                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>智能建議
+                        <div id="location-section" class="bg-emerald-900/40 border border-emerald-500 rounded-lg p-3 flex flex-col h-full">
+                            <div class="flex justify-between items-center mb-2">
+                                <div class="text-emerald-400 font-bold text-sm"><i class="fa-solid fa-map-marker-alt mr-1"></i>選擇儲位</div>
+                                <div class="flex gap-2 items-center">
+                                    <button onclick="calculateSmartSuggest()" class="px-2 py-1 bg-yellow-600 hover:bg-yellow-500 text-white rounded text-xs font-bold">
+                                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>建議
                                     </button>
-                                    <input type="text" id="in-loc" class="w-40 p-2 bg-slate-800 border-2 border-emerald-500 rounded text-lg font-bold text-emerald-400 text-center focus:outline-none" placeholder="或輸入儲位" oninput="validateLocationInput()" onchange="validateLocationInput()">
+                                    <input type="text" id="in-loc" class="w-28 p-1.5 bg-slate-800 border-2 border-emerald-500 rounded text-sm font-bold text-emerald-400 text-center" placeholder="儲位" oninput="validateLocationInput(); updateInboundProgress();" onchange="validateLocationInput()">
                                 </div>
                             </div>
                             
-                            <!-- 虛擬儲位快速選擇 -->
-                            <div class="mb-2 p-2 bg-slate-800/50 rounded-lg border border-slate-700">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <span class="text-xs text-amber-400 font-bold"><i class="fa-solid fa-location-dot mr-1"></i>暫存區快選</span>
-                                </div>
+                            <!-- 快速選擇暫存區（精簡版）-->
+                            <div class="mb-2 p-2 bg-slate-800/70 rounded border border-amber-500/30">
                                 <div class="flex flex-wrap gap-1">
-                                    <button onclick="selectVirtualLocation('TEMP-IN')" class="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold">
+                                    <button onclick="selectVirtualLocation('TEMP-IN')" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold">
                                         <i class="fa-solid fa-truck-loading mr-1"></i>進貨暫存
                                     </button>
-                                    <button onclick="selectVirtualLocation('TEMP-OUT')" class="px-2 py-1 bg-orange-700 hover:bg-orange-600 text-white rounded text-xs font-bold">
+                                    <button onclick="selectVirtualLocation('TEMP-OUT')" class="px-3 py-1.5 bg-orange-700 hover:bg-orange-600 text-white rounded text-xs font-bold">
                                         <i class="fa-solid fa-truck mr-1"></i>出貨暫存
                                     </button>
-                                    <button onclick="selectVirtualLocation('A00')" class="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded text-xs">A00</button>
-                                    <button onclick="selectVirtualLocation('A99')" class="px-2 py-1 bg-blue-700 hover:bg-blue-600 text-white rounded text-xs">A99</button>
-                                    <button onclick="selectVirtualLocation('B00')" class="px-2 py-1 bg-indigo-700 hover:bg-indigo-600 text-white rounded text-xs">B00</button>
-                                    <button onclick="selectVirtualLocation('B99')" class="px-2 py-1 bg-indigo-700 hover:bg-indigo-600 text-white rounded text-xs">B99</button>
-                                    <button onclick="selectVirtualLocation('C00')" class="px-2 py-1 bg-purple-700 hover:bg-purple-600 text-white rounded text-xs">C00</button>
-                                    <button onclick="selectVirtualLocation('C99')" class="px-2 py-1 bg-purple-700 hover:bg-purple-600 text-white rounded text-xs">C99</button>
-                                    <button onclick="selectVirtualLocation('D00')" class="px-2 py-1 bg-pink-700 hover:bg-pink-600 text-white rounded text-xs">D00</button>
-                                    <button onclick="selectVirtualLocation('D99')" class="px-2 py-1 bg-pink-700 hover:bg-pink-600 text-white rounded text-xs">D99</button>
-                                    <button onclick="selectVirtualLocation('OTHER')" class="px-2 py-1 bg-slate-600 hover:bg-slate-500 text-white rounded text-xs">其他</button>
+                                    <button onclick="selectVirtualLocation('A00')" class="px-2 py-1 bg-blue-800 hover:bg-blue-700 text-white rounded text-[10px]">A00</button>
+                                    <button onclick="selectVirtualLocation('B00')" class="px-2 py-1 bg-indigo-800 hover:bg-indigo-700 text-white rounded text-[10px]">B00</button>
+                                    <button onclick="selectVirtualLocation('C00')" class="px-2 py-1 bg-purple-800 hover:bg-purple-700 text-white rounded text-[10px]">C00</button>
+                                    <button onclick="selectVirtualLocation('D00')" class="px-2 py-1 bg-pink-800 hover:bg-pink-700 text-white rounded text-[10px]">D00</button>
+                                    <button onclick="selectVirtualLocation('OTHER')" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-[10px]">其他</button>
                                 </div>
                             </div>
                             
                             <!-- 智能建議列表 -->
                             <div id="smart-suggest-panel" class="mb-2 hidden">
-                                <div class="flex items-center gap-2 mb-1">
-                                    <span class="text-xs text-yellow-400 font-bold"><i class="fa-solid fa-lightbulb mr-1"></i>智能建議</span>
-                                </div>
                                 <div id="smart-suggest-list"></div>
                             </div>
                             
                             <!-- 倉庫地圖 -->
-                            <div class="flex-1 bg-slate-900 rounded-lg border border-slate-700 p-3 overflow-auto relative">
-                                <div class="absolute top-2 right-2 bg-slate-800/90 p-1 px-2 rounded text-xs text-slate-400 flex gap-3 z-10">
+                            <div class="flex-1 bg-slate-900/80 rounded border border-slate-700 p-2 overflow-auto relative">
+                                <div class="absolute top-1 right-1 bg-slate-800/90 p-1 px-2 rounded text-[10px] text-slate-400 flex gap-2 z-10">
                                     <span><i class="fa-solid fa-star text-yellow-400 mr-1"></i>推薦</span>
-                                    <span><span class="inline-block w-3 h-3 border border-emerald-500 mr-1"></span>空位</span>
+                                    <span class="text-emerald-400">□ 空位</span>
                                 </div>
                                 <div class="inbound-map-container">
                                     <div class="inbound-map-row">
-                                        <div class="inbound-warehouse"><div class="text-blue-400 font-bold text-sm mb-2">I 庫（原料）</div><div class="inbound-zone"><span class="text-xs text-slate-400">A</span><div class="rack-lanes-grid-inbound" id="grid-I-A-map"></div></div><div class="inbound-zone"><span class="text-xs text-slate-400">B</span><div class="rack-lanes-grid-inbound" id="grid-I-B-map"></div></div></div>
-                                        <div class="inbound-warehouse"><div class="text-purple-400 font-bold text-sm mb-2">J 庫（成品）</div><div class="inbound-zone"><span class="text-xs text-slate-400">C</span><div class="rack-lanes-grid-inbound" id="grid-J-C-map"></div></div><div class="inbound-zone"><span class="text-xs text-slate-400">D</span><div class="rack-lanes-grid-inbound" id="grid-J-D-map"></div></div></div>
+                                        <div class="inbound-warehouse"><div class="text-blue-400 font-bold text-xs mb-1">I 庫</div><div class="inbound-zone"><span class="text-[10px] text-slate-400">A</span><div class="rack-lanes-grid-inbound" id="grid-I-A-map"></div></div><div class="inbound-zone"><span class="text-[10px] text-slate-400">B</span><div class="rack-lanes-grid-inbound" id="grid-I-B-map"></div></div></div>
+                                        <div class="inbound-warehouse"><div class="text-purple-400 font-bold text-xs mb-1">J 庫</div><div class="inbound-zone"><span class="text-[10px] text-slate-400">C</span><div class="rack-lanes-grid-inbound" id="grid-J-C-map"></div></div><div class="inbound-zone"><span class="text-[10px] text-slate-400">D</span><div class="rack-lanes-grid-inbound" id="grid-J-D-map"></div></div></div>
                                     </div>
-                                    <div class="inbound-warehouse-k"><div class="text-emerald-400 font-bold text-sm mb-2">K 庫（大型）</div><div class="inbound-k-zones"><div class="inbound-zone-k"><span class="text-xs text-slate-400">E</span><div class="rack-lanes-grid-k" id="grid-K-E-map"></div></div><div class="inbound-zone-k"><span class="text-xs text-slate-400">F</span><div class="rack-lanes-grid-k" id="grid-K-F-map"></div></div><div class="inbound-zone-k"><span class="text-xs text-slate-400">G</span><div class="rack-lanes-grid-k" id="grid-K-G-map"></div></div><div class="inbound-zone-k"><span class="text-xs text-slate-400">H</span><div class="rack-lanes-grid-k" id="grid-K-H-map"></div></div></div></div>
+                                    <div class="inbound-warehouse-k"><div class="text-emerald-400 font-bold text-xs mb-1">K 庫</div><div class="inbound-k-zones"><div class="inbound-zone-k"><span class="text-[10px] text-slate-400">E</span><div class="rack-lanes-grid-k" id="grid-K-E-map"></div></div><div class="inbound-zone-k"><span class="text-[10px] text-slate-400">F</span><div class="rack-lanes-grid-k" id="grid-K-F-map"></div></div><div class="inbound-zone-k"><span class="text-[10px] text-slate-400">G</span><div class="rack-lanes-grid-k" id="grid-K-G-map"></div></div><div class="inbound-zone-k"><span class="text-[10px] text-slate-400">H</span><div class="rack-lanes-grid-k" id="grid-K-H-map"></div></div></div></div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- STEP 3: 預覽確認 -->
-                    <div class="w-52 flex flex-col">
-                        <div class="bg-purple-900/50 border border-purple-500 rounded-lg p-4 flex flex-col h-full">
-                            <div class="text-purple-400 font-bold text-sm mb-3">
-                                <span class="bg-purple-500 text-white px-2 py-1 rounded mr-2">3</span>預覽確認
+                    <!-- STEP 3: 預覽確認（精簡版）-->
+                    <div class="w-48 flex flex-col">
+                        <div class="bg-purple-900/40 border border-purple-500 rounded-lg p-3 flex flex-col h-full">
+                            <div class="text-purple-400 font-bold text-sm mb-2"><i class="fa-solid fa-check-circle mr-1"></i>確認入庫</div>
+                            
+                            <!-- 完成度檢查（精簡版）-->
+                            <div id="inbound-checklist" class="bg-slate-800/70 rounded p-2 mb-2 text-xs space-y-1">
+                                <div class="flex items-center gap-1" id="check-name"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-400">品名</span></div>
+                                <div class="flex items-center gap-1" id="check-qty"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-400">數量</span></div>
+                                <div class="flex items-center gap-1" id="check-exp"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-400">效期</span></div>
+                                <div class="flex items-center gap-1" id="check-loc"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-400">儲位</span></div>
                             </div>
                             
-                            <!-- 入庫指令單預覽 -->
-                            <div id="live-preview-box" class="bg-white rounded-lg p-3 text-center mb-4">
-                                <div class="flex">
-                                    <div class="flex-1 border-r-2 border-black pr-2">
-                                        <div class="text-2xl font-black text-black" id="prev-name">-</div>
-                                        <div class="text-xl font-bold text-gray-700 mt-1" id="prev-spec">-</div>
-                                    </div>
-                                    <div class="w-24 flex items-center justify-center">
-                                        <div class="text-xl font-black text-black" id="prev-loc">-</div>
-                                    </div>
+                            <!-- 入庫指令單預覽（精簡版）-->
+                            <div id="live-preview-box" class="bg-white rounded p-2 text-center mb-2">
+                                <div class="text-sm font-black text-black truncate" id="prev-name">-</div>
+                                <div class="text-xs font-bold text-gray-600" id="prev-spec">-</div>
+                                <div class="flex justify-between text-[9px] text-gray-500 mt-1 pt-1 border-t">
+                                    <span id="prev-batch">批: -</span>
+                                    <span id="prev-exp">效: -</span>
                                 </div>
-                                <div class="flex justify-between text-xs text-gray-500 mt-2 pt-2 border-t">
-                                    <span id="prev-batch">批號: -</span>
-                                    <span id="prev-exp">效期: -</span>
+                                <div class="flex items-center justify-between mt-1 pt-1 border-t border-black">
+                                    <span class="text-xs font-bold text-black" id="prev-loc">-</span>
+                                    <span class="text-lg font-black text-red-600" id="prev-qty">0</span>
                                 </div>
-                                <div class="text-2xl font-black text-red-600 mt-2 pt-2 border-t-2 border-black" id="prev-qty">0</div>
                             </div>
                             
-                            <!-- 操作按鈕 -->
-                            <div class="space-y-2 flex-1 flex flex-col justify-end">
-                                <button onclick="createAndPrintInbound()" class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-lg shadow-lg">
-                                    <i class="fa-solid fa-print mr-2"></i>建單並列印
+                            <!-- 操作按鈕（精簡版）-->
+                            <div class="space-y-1.5 flex-1 flex flex-col justify-end">
+                                <button onclick="createAndPrintInbound()" id="btn-inbound-main" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded font-bold text-sm" disabled>
+                                    <i class="fa-solid fa-print mr-1"></i>建單列印
                                 </button>
-                                <button onclick="createInboundOrder()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold text-sm">
-                                    <i class="fa-solid fa-plus mr-2"></i>僅建單
+                                <button onclick="createInboundOrder()" class="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs">
+                                    <i class="fa-solid fa-plus mr-1"></i>僅建單
                                 </button>
-                                <button onclick="directInbound()" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm border border-slate-600">
-                                    <i class="fa-solid fa-bolt mr-2"></i>直接入庫
+                                <button onclick="directInbound()" class="w-full py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs border border-slate-600">
+                                    <i class="fa-solid fa-bolt mr-1"></i>直接入庫
                                 </button>
                             </div>
                         </div>
@@ -934,133 +910,115 @@
                 </div>
             </div>
 
-            <div id="view-pre-inbound" class="view-panel h-full hidden flex p-4 gap-4">
+            <div id="view-pre-inbound" class="view-panel h-full hidden flex p-3 gap-3">
                 <!-- 左側：匯入與設定 -->
-                <div class="w-1/3 glass-panel p-4 flex flex-col overflow-y-auto">
-                    <h3 class="text-white font-bold mb-3 border-b border-slate-700 pb-2 text-sm">📦 貨櫃入庫作業</h3>
+                <div class="w-80 glass-panel p-3 flex flex-col">
+                    <h3 class="text-white font-bold mb-2 text-sm border-b border-slate-700 pb-2">📦 貨櫃入庫作業</h3>
                     
-                    <!-- Excel 匯入 -->
-                    <div class="mb-4 bg-slate-800 p-3 rounded border border-slate-700">
+                    <!-- 1. Excel 匯入 -->
+                    <div class="mb-2 bg-slate-800 p-2 rounded border border-slate-700">
                         <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm text-blue-400 font-bold">1. Excel 匯入</span>
+                            <span class="text-xs text-blue-400 font-bold">1. Excel 匯入</span>
                             <button onclick="downloadTemplate('container')" class="text-[10px] text-slate-400 underline">下載範本</button>
                         </div>
                         <input type="file" id="containerExcel" accept=".xlsx" class="hidden" onchange="handleContainerImport(event)">
                         <button onclick="document.getElementById('containerExcel').click()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-bold">
                             <i class="fa-solid fa-file-excel mr-1"></i>上傳 Excel
                         </button>
-                        <div class="text-xs text-slate-400 mt-2">
-                            欄位：廠商、品名、規格、批號、效期、數量、每板數
-                        </div>
+                        <div class="text-[10px] text-slate-500 mt-1">欄位：廠商、品名、規格、批號、效期、數量、每板數</div>
                     </div>
                     
-                    <!-- 儲位分配設定 -->
-                    <div class="mb-4 bg-slate-800 p-3 rounded border border-slate-700">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm text-yellow-400 font-bold">2. 儲位分配設定</span>
-                            <button onclick="showAvailableLocations()" class="text-[10px] text-blue-400 underline">查看空位</button>
-                        </div>
-                        <div class="space-y-2">
-                            <div class="flex items-center gap-2">
-                                <label class="text-xs text-slate-400 w-20">分配策略</label>
-                                <select id="container-strategy" class="scan-input flex-1 text-sm">
-                                    <option value="sequential">順序分配</option>
-                                    <option value="clustered" selected>同品項集中</option>
-                                </select>
+                    <!-- 1. 手動新增品項（與 Excel 並行）-->
+                    <div class="mb-2 bg-slate-800 p-2 rounded border border-slate-700">
+                        <div class="text-xs text-cyan-400 font-bold mb-2">1. 手動新增品項</div>
+                        <div class="space-y-1.5">
+                            <input type="text" id="pre-vendor" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="廠商">
+                            <input type="text" id="pre-name" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="品名 *">
+                            <input type="text" id="pre-spec" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="規格">
+                            <div class="grid grid-cols-2 gap-1.5">
+                                <input type="text" id="pre-batch" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="批號 *">
+                                <input type="date" id="pre-exp" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm">
                             </div>
-                            <div class="flex items-center gap-2">
-                                <label class="text-xs text-slate-400 w-20">指定區域</label>
-                                <select id="container-zones" class="scan-input flex-1 text-sm" multiple size="3">
-                                    <option value="A" selected>A 區 (1F, 1-8排)</option>
-                                    <option value="B" selected>B 區 (1F, 1-8排)</option>
-                                    <option value="C">C 區 (2F, 1-8排)</option>
-                                    <option value="D">D 區 (2F, 1-8排)</option>
-                                    <option value="E">E 區 (3F, 1-22排)</option>
-                                    <option value="F">F 區 (3F, 1-22排)</option>
-                                    <option value="G">G 區 (3F, 1-22排)</option>
-                                    <option value="H">H 區 (3F, 1-22排)</option>
-                                </select>
+                            <div class="grid grid-cols-2 gap-1.5">
+                                <input type="number" id="pre-qty" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center" placeholder="總數量 *">
+                                <input type="number" id="pre-per-pallet" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center" value="50" placeholder="每板數">
                             </div>
-                            <div class="flex items-center gap-2 mt-2">
-                                <input type="checkbox" id="container-skip-occupied" checked class="w-4 h-4">
-                                <label for="container-skip-occupied" class="text-xs text-slate-400">自動跳過已佔用儲位</label>
-                            </div>
-                            <div class="text-[10px] text-slate-500 mt-1">按住 Ctrl 可多選區域</div>
-                            <div id="available-count" class="text-xs text-emerald-400 mt-2"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- 手動輸入 -->
-                    <div class="mb-4 bg-slate-800 p-3 rounded border border-slate-700">
-                        <div class="text-sm text-cyan-400 font-bold mb-2">3. 手動新增品項</div>
-                        <div class="space-y-2">
-                            <input type="text" id="pre-vendor" class="scan-input text-sm" placeholder="廠商">
-                            <input type="text" id="pre-name" class="scan-input text-sm" placeholder="品名 *">
-                            <input type="text" id="pre-spec" class="scan-input text-sm" placeholder="規格">
-                            <input type="text" id="pre-batch" class="scan-input text-sm" placeholder="批號 *">
-                            <input type="date" id="pre-exp" class="scan-input text-sm">
-                            <div class="grid grid-cols-2 gap-2">
-                                <input type="number" id="pre-qty" class="scan-input text-sm text-center" placeholder="總數量 *">
-                                <input type="number" id="pre-per-pallet" class="scan-input text-sm text-center" value="50" placeholder="每板數">
-                            </div>
-                            <button onclick="addContainerItem()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold">
+                            <button onclick="addContainerItemAndGenerate()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold">
                                 <i class="fa-solid fa-plus mr-1"></i>新增品項
                             </button>
                         </div>
                     </div>
                     
-                    <!-- 操作按鈕 -->
-                    <div class="mt-auto space-y-2">
-                        <button onclick="generateContainerLabels()" id="btn-generate-labels" class="w-full py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded text-sm font-bold">
-                            <i class="fa-solid fa-tags mr-1"></i>產生棧板插單
-                        </button>
-                        <button onclick="confirmContainerInbound()" id="btn-confirm-inbound" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-bold hidden">
-                            <i class="fa-solid fa-check mr-1"></i>確認入庫
-                        </button>
+                    <!-- 2. 儲位區域設定 -->
+                    <div class="flex-1 bg-slate-800 p-2 rounded border border-slate-700">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs text-yellow-400 font-bold">2. 儲位區域設定</span>
+                            <button onclick="showAvailableLocations()" class="text-[10px] text-blue-400 underline">查看空位</button>
+                        </div>
+                        <!-- 區域勾選按鈕 -->
+                        <div class="grid grid-cols-8 gap-1 mb-2">
+                            <label class="zone-check-btn"><input type="checkbox" value="A" checked class="container-zone-cb hidden"><span class="block text-center py-1.5 rounded text-xs font-bold cursor-pointer bg-blue-600 text-white">A</span></label>
+                            <label class="zone-check-btn"><input type="checkbox" value="B" checked class="container-zone-cb hidden"><span class="block text-center py-1.5 rounded text-xs font-bold cursor-pointer bg-blue-600 text-white">B</span></label>
+                            <label class="zone-check-btn"><input type="checkbox" value="C" class="container-zone-cb hidden"><span class="block text-center py-1.5 rounded text-xs font-bold cursor-pointer bg-slate-700 text-slate-400">C</span></label>
+                            <label class="zone-check-btn"><input type="checkbox" value="D" class="container-zone-cb hidden"><span class="block text-center py-1.5 rounded text-xs font-bold cursor-pointer bg-slate-700 text-slate-400">D</span></label>
+                            <label class="zone-check-btn"><input type="checkbox" value="E" class="container-zone-cb hidden"><span class="block text-center py-1.5 rounded text-xs font-bold cursor-pointer bg-slate-700 text-slate-400">E</span></label>
+                            <label class="zone-check-btn"><input type="checkbox" value="F" class="container-zone-cb hidden"><span class="block text-center py-1.5 rounded text-xs font-bold cursor-pointer bg-slate-700 text-slate-400">F</span></label>
+                            <label class="zone-check-btn"><input type="checkbox" value="G" class="container-zone-cb hidden"><span class="block text-center py-1.5 rounded text-xs font-bold cursor-pointer bg-slate-700 text-slate-400">G</span></label>
+                            <label class="zone-check-btn"><input type="checkbox" value="H" class="container-zone-cb hidden"><span class="block text-center py-1.5 rounded text-xs font-bold cursor-pointer bg-slate-700 text-slate-400">H</span></label>
+                        </div>
+                        <select id="container-zones" class="hidden"></select>
+                        <div class="flex items-center gap-2">
+                            <select id="container-strategy" class="flex-1 p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-xs">
+                                <option value="clustered" selected>同品項集中</option>
+                                <option value="sequential">順序分配</option>
+                            </select>
+                            <label class="flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap">
+                                <input type="checkbox" id="container-skip-occupied" checked class="w-3 h-3">跳過佔用
+                            </label>
+                        </div>
+                        <div id="available-count" class="text-xs text-emerald-400 mt-1"></div>
                     </div>
                 </div>
                 
                 <!-- 中間：品項清單 -->
-                <div class="w-1/3 glass-panel p-4 flex flex-col">
-                    <div class="flex justify-between items-center mb-3">
+                <div class="w-72 glass-panel p-3 flex flex-col">
+                    <div class="flex justify-between items-center mb-2">
                         <h3 class="text-white font-bold text-sm">📋 入庫品項清單</h3>
                         <button onclick="clearContainerItems()" class="text-xs text-red-400 hover:text-red-300">清除全部</button>
                     </div>
                     <div id="container-items-list" class="flex-1 overflow-y-auto space-y-2">
-                        <div class="text-center text-slate-500 py-8">
+                        <div class="text-center text-slate-500 py-6">
                             <i class="fa-solid fa-box-open text-3xl mb-2"></i>
-                            <div>尚無品項，請匯入 Excel 或手動新增</div>
+                            <div class="text-sm">尚無品項</div>
+                            <div class="text-xs text-slate-600">請匯入 Excel 或手動新增</div>
                         </div>
                     </div>
-                    <div id="container-summary" class="mt-3 pt-3 border-t border-slate-700 hidden">
-                        <div class="flex justify-between text-sm">
-                            <span class="text-slate-400">品項數</span>
-                            <span class="text-white font-bold" id="container-item-count">0</span>
-                        </div>
-                        <div class="flex justify-between text-sm">
-                            <span class="text-slate-400">總板數</span>
-                            <span class="text-yellow-400 font-bold" id="container-pallet-count">0</span>
-                        </div>
-                        <div class="flex justify-between text-sm">
-                            <span class="text-slate-400">總數量</span>
-                            <span class="text-emerald-400 font-bold" id="container-total-qty">0</span>
-                        </div>
+                    <div id="container-summary" class="mt-2 pt-2 border-t border-slate-700 hidden">
+                        <div class="flex justify-between text-sm"><span class="text-slate-400">品項數</span><span class="text-white font-bold" id="container-item-count">0</span></div>
+                        <div class="flex justify-between text-sm"><span class="text-slate-400">總板數</span><span class="text-yellow-400 font-bold" id="container-pallet-count">0</span></div>
+                        <div class="flex justify-between text-sm"><span class="text-slate-400">總數量</span><span class="text-emerald-400 font-bold" id="container-total-qty">0</span></div>
                     </div>
                 </div>
                 
                 <!-- 右側：標籤預覽 -->
-                <div class="flex-1 glass-panel p-4 flex flex-col">
-                    <div class="flex justify-between items-center mb-3">
+                <div class="flex-1 glass-panel p-3 flex flex-col">
+                    <div class="flex justify-between items-center mb-2">
                         <h3 class="text-white font-bold text-sm">🏷️ 棧板插單預覽</h3>
-                        <button onclick="printContainerLabels()" id="btn-print-labels" class="bg-slate-700 text-slate-500 px-3 py-1 rounded text-xs font-bold cursor-not-allowed" disabled>
+                    </div>
+                    <div id="container-labels-preview" class="flex-1 overflow-y-auto grid grid-cols-3 gap-2 content-start">
+                        <div class="col-span-3 text-center text-slate-500 py-8">
+                            <i class="fa-solid fa-tags text-3xl mb-2"></i>
+                            <div>請先新增品項</div>
+                        </div>
+                    </div>
+                    <!-- 操作按鈕移到底部 -->
+                    <div id="container-action-buttons" class="mt-3 pt-3 border-t border-slate-700 space-y-2 hidden">
+                        <button onclick="printContainerLabels()" id="btn-print-labels" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold">
                             <i class="fa-solid fa-print mr-1"></i>列印插單
                         </button>
-                    </div>
-                    <div id="container-labels-preview" class="flex-1 overflow-y-auto grid grid-cols-2 gap-3 content-start">
-                        <div class="col-span-2 text-center text-slate-500 py-8">
-                            <i class="fa-solid fa-tags text-3xl mb-2"></i>
-                            <div>請先新增品項並產生插單</div>
-                        </div>
+                        <button onclick="confirmContainerInbound()" id="btn-confirm-inbound" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-bold">
+                            <i class="fa-solid fa-check mr-1"></i>確認入庫
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1439,179 +1397,48 @@
             </div>
             
             
-            <div id="view-move" class="view-panel h-full hidden flex flex-col p-3 gap-2">
-                <!-- 頂部標題 + 統計資訊 -->
-                <div class="flex items-center justify-between bg-gradient-to-r from-blue-900 to-indigo-900 border border-blue-600 px-4 py-2 rounded-lg">
+            <div id="view-move" class="view-panel h-full hidden flex flex-col p-2 gap-2">
+                <!-- 頂部標題列 -->
+                <div class="flex items-center justify-between bg-gradient-to-r from-blue-900 to-indigo-900 border border-blue-600 px-3 py-2 rounded-lg">
                     <div class="flex items-center gap-3">
-                        <h2 class="text-white font-bold text-lg"><i class="fa-solid fa-clipboard-list mr-2 text-blue-400"></i>智能調度中心</h2>
-                        <span class="text-blue-300 text-xs">分析庫存 → 產生工單 → 發布執行</span>
-                    </div>
-                    <div class="flex items-center gap-3" id="dispatch-stats-bar">
-                        <div class="flex items-center gap-1.5 bg-orange-900/50 border border-orange-600/50 rounded px-2 py-1">
-                            <span class="text-orange-400 text-xs">合併</span>
-                            <span class="text-white font-bold" id="stat-bar-merge">0</span>
-                        </div>
-                        <div class="flex items-center gap-1.5 bg-blue-900/50 border border-blue-600/50 rounded px-2 py-1">
-                            <span class="text-blue-400 text-xs">移位</span>
-                            <span class="text-white font-bold" id="stat-bar-move">0</span>
-                        </div>
-                        <div class="flex items-center gap-1.5 bg-purple-900/50 border border-purple-600/50 rounded px-2 py-1">
-                            <span class="text-purple-400 text-xs">操作</span>
-                            <span class="text-white font-bold" id="stat-bar-ops">0</span>
-                        </div>
-                        <div class="flex items-center gap-1.5 bg-emerald-900/50 border border-emerald-600/50 rounded px-2 py-1">
-                            <span class="text-emerald-400 text-xs">釋放</span>
-                            <span class="text-white font-bold" id="stat-bar-free">0</span>
+                        <h2 class="text-white font-bold"><i class="fa-solid fa-clipboard-list mr-2 text-blue-400"></i>智能調度中心</h2>
+                        <!-- 統計資訊 -->
+                        <div class="flex items-center gap-2 text-sm" id="dispatch-stats-bar">
+                            <span class="bg-orange-900/50 border border-orange-600/50 rounded px-2 py-0.5 text-orange-400">合併 <b class="text-white" id="stat-bar-merge">0</b></span>
+                            <span class="bg-blue-900/50 border border-blue-600/50 rounded px-2 py-0.5 text-blue-400">移位 <b class="text-white" id="stat-bar-move">0</b></span>
+                            <span class="bg-emerald-900/50 border border-emerald-600/50 rounded px-2 py-0.5 text-emerald-400">釋放 <b class="text-white" id="stat-bar-free">0</b></span>
                         </div>
                     </div>
-                </div>
-                
-                <!-- ========== 步驟流程指示器 ========== -->
-                <div class="flex items-center justify-center gap-2 mb-4 bg-slate-800/50 rounded-lg p-3">
-                    <div id="step-1-indicator" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white">
-                        <div class="w-7 h-7 rounded-full bg-white text-blue-600 flex items-center justify-center font-bold">1</div>
-                        <span class="font-bold">分析庫存</span>
-                    </div>
-                    <i class="fa-solid fa-chevron-right text-slate-500"></i>
-                    <div id="step-2-indicator" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-slate-400">
-                        <div class="w-7 h-7 rounded-full bg-slate-600 text-slate-400 flex items-center justify-center font-bold">2</div>
-                        <span>確認工單</span>
-                    </div>
-                    <i class="fa-solid fa-chevron-right text-slate-500"></i>
-                    <div id="step-3-indicator" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-slate-400">
-                        <div class="w-7 h-7 rounded-full bg-slate-600 text-slate-400 flex items-center justify-center font-bold">3</div>
-                        <span>發布執行</span>
-                    </div>
-                </div>
-                
-                <!-- ========== Step 1: 分析庫存 ========== -->
-                <div id="dispatch-step-1" class="dispatch-step">
-                    <div class="bg-gradient-to-br from-blue-900/30 to-slate-900 border border-blue-600/50 rounded-xl p-6 text-center">
-                        <div class="text-6xl mb-4">📊</div>
-                        <h3 class="text-white text-xl font-bold mb-2">步驟 1：分析庫存狀況</h3>
-                        <p class="text-slate-400 mb-6">系統會自動掃描所有庫存，找出需要合併或移位的品項</p>
-                        
-                        <div class="bg-slate-800/50 rounded-lg p-4 mb-6 text-left max-w-md mx-auto">
-                            <div class="text-slate-300 text-sm space-y-2">
-                                <div class="flex items-center gap-2">
-                                    <i class="fa-solid fa-check-circle text-orange-400"></i>
-                                    <span><b class="text-orange-400">餘板合併</b>：零散庫存（＜50%板容量）合併釋放空間</span>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <i class="fa-solid fa-check-circle text-blue-400"></i>
-                                    <span><b class="text-blue-400">孤立移位</b>：分散的庫存移到主要巷道集中</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <button onclick="startDispatchAnalysis()" class="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-lg shadow-lg">
-                            <i class="fa-solid fa-magnifying-glass-chart mr-2"></i>開始分析
+                    <!-- 操作按鈕 -->
+                    <div class="flex items-center gap-2">
+                        <button onclick="startDispatchAnalysis()" class="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-white rounded text-sm font-bold">
+                            <i class="fa-solid fa-refresh mr-1"></i>重新分析
                         </button>
-                        
-                        <div id="analysis-loading" class="hidden mt-6">
-                            <i class="fa-solid fa-spinner fa-spin text-4xl text-blue-400 mb-3"></i>
-                            <p class="text-slate-400">正在分析庫存資料...</p>
-                        </div>
+                        <button onclick="publishSelectedToMobile()" id="btn-publish-mobile" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <i class="fa-solid fa-paper-plane mr-1"></i>發布 (<span id="publish-count">0</span>)
+                        </button>
+                        <button onclick="printSelectedDispatchOrders()" id="btn-print-selected" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <i class="fa-solid fa-print mr-1"></i>列印
+                        </button>
                     </div>
                 </div>
                 
-                <!-- ========== Step 2: 確認工單 ========== -->
-                <div id="dispatch-step-2" class="dispatch-step hidden">
-                    <!-- 工單列表標題 + 操作區 -->
-                    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-                        <div class="flex items-center gap-4">
-                            <h3 class="text-white font-bold"><i class="fa-solid fa-list-check mr-2 text-blue-400"></i>建議調度工單</h3>
-                            <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:text-white bg-slate-700 px-3 py-1 rounded">
-                                <input type="checkbox" id="dispatch-select-all" onchange="toggleAllDispatchOrders()" class="w-4 h-4 rounded accent-blue-500">
-                                全選
-                            </label>
-                            <span class="text-sm text-slate-400">已選 <span id="dispatch-selected-count" class="text-blue-400 font-bold">0</span> 個工單</span>
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="goToDispatchStep(1)" class="text-slate-400 hover:text-white text-sm px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">
-                                <i class="fa-solid fa-arrow-left mr-1"></i>重新分析
-                            </button>
-                            <button onclick="printSelectedDispatchOrders()" class="text-slate-400 hover:text-white text-sm px-3 py-1 rounded bg-slate-700 hover:bg-slate-600">
-                                <i class="fa-solid fa-print mr-1"></i>列印選取
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- 調度工單列表 -->
-                    <div class="flex-1 overflow-y-auto mb-4 max-h-[400px]" id="dispatch-orders-container">
-                    </div>
-                    
-                    <!-- 發布按鈕區 -->
-                    <div class="bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-500/50 rounded-xl p-4">
-                        <div class="flex items-center justify-between">
-                            <div class="text-slate-300">
-                                <i class="fa-solid fa-mobile-screen mr-2 text-purple-400"></i>
-                                選取工單後，點擊發布按鈕將工單發送到堆高機手機
-                            </div>
-                            <div class="flex gap-3">
-                                <button onclick="publishSelectedToMobile()" id="btn-publish-mobile" class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                                    <i class="fa-solid fa-paper-plane mr-2"></i>發布到手機 (<span id="publish-count">0</span>)
-                                </button>
-                                <button onclick="printSelectedDispatchOrders()" id="btn-print-selected" class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                                    <i class="fa-solid fa-print mr-2"></i>列印工單
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                <!-- 工單選擇區 -->
+                <div class="flex items-center gap-3 bg-slate-800/50 rounded px-3 py-2">
+                    <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:text-white">
+                        <input type="checkbox" id="dispatch-select-all" onchange="toggleAllDispatchOrders()" class="w-4 h-4 rounded accent-blue-500">
+                        全選
+                    </label>
+                    <span class="text-sm text-slate-400">已選 <span id="dispatch-selected-count" class="text-blue-400 font-bold">0</span> 個工單</span>
+                    <div class="flex-1"></div>
+                    <span id="analysis-loading" class="hidden text-yellow-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-1"></i>分析中...</span>
                 </div>
                 
-                <!-- ========== Step 3: 發布執行 ========== -->
-                <div id="dispatch-step-3" class="dispatch-step hidden">
-                    <div class="bg-gradient-to-br from-emerald-900/30 to-slate-900 border border-emerald-600/50 rounded-xl p-6">
-                        <div class="text-center mb-6">
-                            <div class="text-6xl mb-4">🚀</div>
-                            <h3 class="text-white text-xl font-bold mb-2">步驟 3：選擇發布方式</h3>
-                            <p class="text-slate-400">選擇如何將工單發送給現場人員執行</p>
-                        </div>
-                        
-                        <div class="grid grid-cols-2 gap-4 max-w-2xl mx-auto mb-6">
-                            <!-- 發布到手機 -->
-                            <div class="bg-slate-800 border-2 border-purple-500 rounded-xl p-5 hover:bg-slate-700 cursor-pointer transition-all" onclick="publishDispatchToMobile()">
-                                <div class="text-center">
-                                    <div class="text-5xl mb-3">📱</div>
-                                    <h4 class="text-white font-bold text-lg mb-2">發布到手機</h4>
-                                    <p class="text-slate-400 text-sm mb-4">堆高機手的手機會<br>立即收到通知</p>
-                                    <div class="bg-purple-600 text-white py-2 px-4 rounded-lg font-bold">
-                                        <i class="fa-solid fa-paper-plane mr-2"></i>發布
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- 列印工單 -->
-                            <div class="bg-slate-800 border-2 border-emerald-500 rounded-xl p-5 hover:bg-slate-700 cursor-pointer transition-all" onclick="printAllDispatchOrders()">
-                                <div class="text-center">
-                                    <div class="text-5xl mb-3">🖨️</div>
-                                    <h4 class="text-white font-bold text-lg mb-2">列印紙本工單</h4>
-                                    <p class="text-slate-400 text-sm mb-4">列印後交給<br>現場人員執行</p>
-                                    <div class="bg-emerald-600 text-white py-2 px-4 rounded-lg font-bold">
-                                        <i class="fa-solid fa-print mr-2"></i>列印
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="flex justify-center gap-3">
-                            <button onclick="goToDispatchStep(2)" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
-                                <i class="fa-solid fa-arrow-left mr-2"></i>返回上一步
-                            </button>
-                            <button onclick="goToDispatchStep(1)" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
-                                <i class="fa-solid fa-rotate mr-2"></i>重新開始
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- 已發布的工單 -->
-                    <div id="published-orders-section" class="mt-4 hidden">
-                        <div class="bg-gradient-to-br from-green-900/30 to-slate-900 border border-green-600/50 rounded-xl p-4">
-                            <h4 class="text-green-400 font-bold mb-3"><i class="fa-solid fa-check-circle mr-2"></i>已發布工單</h4>
-                            <div id="published-orders-list" class="space-y-2">
-                            </div>
-                        </div>
+                <!-- 調度工單列表（主要區域）-->
+                <div class="flex-1 overflow-y-auto bg-slate-900/50 rounded-lg border border-slate-700 p-2" id="dispatch-orders-container">
+                    <div class="text-center text-slate-500 py-10">
+                        <i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i>
+                        <div>正在自動分析庫存...</div>
                     </div>
                 </div>
             </div>
@@ -2203,29 +2030,61 @@
                     </div>
                 </div>
                 
-                <!-- 角色說明 -->
+                <!-- 角色權限說明 + 統計（整合） -->
                 <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-4">
-                    <h3 class="text-white font-bold mb-3"><i class="fa-solid fa-shield-halved mr-2 text-purple-400"></i>角色權限說明</h3>
-                    <div class="grid grid-cols-5 gap-3 text-sm">
-                        <div class="bg-red-900/30 border border-red-600/50 rounded-lg p-3">
-                            <div class="text-red-400 font-bold mb-1"><i class="fa-solid fa-crown mr-1"></i>管理員</div>
-                            <div class="text-slate-400 text-xs">全部功能 + 使用者管理</div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-white font-bold"><i class="fa-solid fa-shield-halved mr-2 text-purple-400"></i>角色權限總覽</h3>
+                        <span id="user-count" class="text-slate-400 text-sm bg-slate-700/50 px-3 py-1 rounded-full">共 0 位使用者</span>
+                    </div>
+                    <div class="grid grid-cols-7 gap-2 text-sm">
+                        <div class="bg-red-900/30 border border-red-600/50 rounded-lg p-3 hover:bg-red-900/50 transition cursor-pointer" onclick="document.getElementById('user-role-filter').value='admin';filterUserList();">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-red-400 font-bold text-xs"><i class="fa-solid fa-crown mr-1"></i>管理員</span>
+                                <span class="text-red-400 font-black text-lg" id="stat-admin">0</span>
+                            </div>
+                            <div class="text-slate-400 text-[10px] leading-relaxed">全部功能<br>使用者管理</div>
                         </div>
-                        <div class="bg-purple-900/30 border border-purple-600/50 rounded-lg p-3">
-                            <div class="text-purple-400 font-bold mb-1"><i class="fa-solid fa-user-tie mr-1"></i>倉管主管</div>
-                            <div class="text-slate-400 text-xs">全部操作 + 報表</div>
+                        <div class="bg-emerald-900/30 border border-emerald-600/50 rounded-lg p-3 hover:bg-emerald-900/50 transition cursor-pointer" onclick="document.getElementById('user-role-filter').value='finance';filterUserList();">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-emerald-400 font-bold text-xs"><i class="fa-solid fa-calculator mr-1"></i>財務</span>
+                                <span class="text-emerald-400 font-black text-lg" id="stat-finance">0</span>
+                            </div>
+                            <div class="text-slate-400 text-[10px] leading-relaxed">入庫核准<br>倉租報表</div>
                         </div>
-                        <div class="bg-blue-900/30 border border-blue-600/50 rounded-lg p-3">
-                            <div class="text-blue-400 font-bold mb-1"><i class="fa-solid fa-user mr-1"></i>倉管人員</div>
-                            <div class="text-slate-400 text-xs">入庫/出庫/異動</div>
+                        <div class="bg-purple-900/30 border border-purple-600/50 rounded-lg p-3 hover:bg-purple-900/50 transition cursor-pointer" onclick="document.getElementById('user-role-filter').value='supervisor';filterUserList();">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-purple-400 font-bold text-xs"><i class="fa-solid fa-user-tie mr-1"></i>主管</span>
+                                <span class="text-purple-400 font-black text-lg" id="stat-supervisor">0</span>
+                            </div>
+                            <div class="text-slate-400 text-[10px] leading-relaxed">全部操作<br>報表核准</div>
                         </div>
-                        <div class="bg-orange-900/30 border border-orange-600/50 rounded-lg p-3">
-                            <div class="text-orange-400 font-bold mb-1"><i class="fa-solid fa-truck mr-1"></i>堆高機手</div>
-                            <div class="text-slate-400 text-xs">調度執行/移位</div>
+                        <div class="bg-cyan-900/30 border border-cyan-600/50 rounded-lg p-3 hover:bg-cyan-900/50 transition cursor-pointer" onclick="document.getElementById('user-role-filter').value='sales';filterUserList();">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-cyan-400 font-bold text-xs"><i class="fa-solid fa-briefcase mr-1"></i>業務</span>
+                                <span class="text-cyan-400 font-black text-lg" id="stat-sales">0</span>
+                            </div>
+                            <div class="text-slate-400 text-[10px] leading-relaxed">庫存查詢<br>寄倉報表</div>
                         </div>
-                        <div class="bg-slate-700/30 border border-slate-600/50 rounded-lg p-3">
-                            <div class="text-slate-300 font-bold mb-1"><i class="fa-solid fa-eye mr-1"></i>只讀</div>
-                            <div class="text-slate-400 text-xs">查詢/報表（無操作）</div>
+                        <div class="bg-blue-900/30 border border-blue-600/50 rounded-lg p-3 hover:bg-blue-900/50 transition cursor-pointer" onclick="document.getElementById('user-role-filter').value='operator';filterUserList();">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-blue-400 font-bold text-xs"><i class="fa-solid fa-user mr-1"></i>倉管</span>
+                                <span class="text-blue-400 font-black text-lg" id="stat-operator">0</span>
+                            </div>
+                            <div class="text-slate-400 text-[10px] leading-relaxed">入庫出庫<br>開立工單</div>
+                        </div>
+                        <div class="bg-orange-900/30 border border-orange-600/50 rounded-lg p-3 hover:bg-orange-900/50 transition cursor-pointer" onclick="document.getElementById('user-role-filter').value='forklift';filterUserList();">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-orange-400 font-bold text-xs"><i class="fa-solid fa-truck mr-1"></i>堆高機</span>
+                                <span class="text-orange-400 font-black text-lg" id="stat-forklift">0</span>
+                            </div>
+                            <div class="text-slate-400 text-[10px] leading-relaxed">執行工單<br>移位上架</div>
+                        </div>
+                        <div class="bg-slate-700/30 border border-slate-600/50 rounded-lg p-3 hover:bg-slate-700/50 transition cursor-pointer" onclick="document.getElementById('user-role-filter').value='readonly';filterUserList();">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-slate-300 font-bold text-xs"><i class="fa-solid fa-eye mr-1"></i>只讀</span>
+                                <span class="text-slate-300 font-black text-lg" id="stat-readonly">0</span>
+                            </div>
+                            <div class="text-slate-400 text-[10px] leading-relaxed">僅能查詢<br>無操作權</div>
                         </div>
                     </div>
                 </div>
@@ -2233,11 +2092,13 @@
                 <!-- 搜尋篩選 -->
                 <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-3 mb-4">
                     <div class="flex gap-3 items-center">
-                        <input type="text" id="user-search" class="scan-input flex-1" placeholder="搜尋 Email 或姓名..." oninput="filterUserList()">
+                        <input type="text" id="user-search" class="scan-input flex-1" placeholder="🔍 搜尋 Email 或姓名..." oninput="filterUserList()">
                         <select id="user-role-filter" class="scan-input w-40" onchange="filterUserList()">
                             <option value="">全部角色</option>
                             <option value="admin">管理員</option>
+                            <option value="finance">財務人員</option>
                             <option value="supervisor">倉管主管</option>
+                            <option value="sales">業務人員</option>
                             <option value="operator">倉管人員</option>
                             <option value="forklift">堆高機手</option>
                             <option value="readonly">只讀</option>
@@ -2247,7 +2108,9 @@
                             <option value="active">啟用</option>
                             <option value="inactive">停用</option>
                         </select>
-                        <span id="user-count" class="text-slate-400 text-sm">共 0 位使用者</span>
+                        <button onclick="document.getElementById('user-role-filter').value='';document.getElementById('user-status-filter').value='';document.getElementById('user-search').value='';filterUserList();" class="bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-2 rounded-lg text-sm" title="清除篩選">
+                            <i class="fa-solid fa-filter-circle-xmark"></i>
+                        </button>
                     </div>
                 </div>
                 
@@ -2273,39 +2136,15 @@
                         </table>
                     </div>
                 </div>
-                
-                <!-- 使用者統計 -->
-                <div class="grid grid-cols-5 gap-3 mt-4">
-                    <div class="bg-red-900/20 border border-red-600/30 rounded-lg p-3 text-center">
-                        <div class="text-2xl font-bold text-red-400" id="stat-admin">0</div>
-                        <div class="text-xs text-slate-400">管理員</div>
-                    </div>
-                    <div class="bg-purple-900/20 border border-purple-600/30 rounded-lg p-3 text-center">
-                        <div class="text-2xl font-bold text-purple-400" id="stat-supervisor">0</div>
-                        <div class="text-xs text-slate-400">倉管主管</div>
-                    </div>
-                    <div class="bg-blue-900/20 border border-blue-600/30 rounded-lg p-3 text-center">
-                        <div class="text-2xl font-bold text-blue-400" id="stat-operator">0</div>
-                        <div class="text-xs text-slate-400">倉管人員</div>
-                    </div>
-                    <div class="bg-orange-900/20 border border-orange-600/30 rounded-lg p-3 text-center">
-                        <div class="text-2xl font-bold text-orange-400" id="stat-forklift">0</div>
-                        <div class="text-xs text-slate-400">堆高機手</div>
-                    </div>
-                    <div class="bg-slate-700/20 border border-slate-600/30 rounded-lg p-3 text-center">
-                        <div class="text-2xl font-bold text-slate-400" id="stat-readonly">0</div>
-                        <div class="text-xs text-slate-400">只讀</div>
-                    </div>
-                </div>
             </div>
             
             <!-- 新增/編輯使用者 Modal -->
             <div id="modal-user-edit" class="fixed inset-0 z-50 bg-black/80 hidden flex items-center justify-center backdrop-blur-sm">
-                <div class="bg-slate-900 border border-slate-700 rounded-2xl w-[500px] shadow-2xl">
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl w-[600px] shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
                     <div class="bg-gradient-to-r from-blue-900 to-indigo-900 p-4 rounded-t-2xl border-b border-slate-700">
                         <h3 class="text-white font-bold text-lg" id="modal-user-title"><i class="fa-solid fa-user-plus mr-2"></i>新增使用者</h3>
                     </div>
-                    <div class="p-6 space-y-4">
+                    <div class="p-6 space-y-4 overflow-y-auto flex-1">
                         <input type="hidden" id="edit-user-id">
                         <div class="grid grid-cols-2 gap-4">
                             <div>
@@ -2319,13 +2158,16 @@
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
-                                <label class="text-slate-400 text-xs mb-1 block">角色 <span class="text-red-400">*</span></label>
-                                <select id="edit-user-role" class="scan-input w-full">
-                                    <option value="admin">管理員</option>
+                                <label class="text-slate-400 text-xs mb-1 block">角色範本 <span class="text-red-400">*</span></label>
+                                <select id="edit-user-role" class="scan-input w-full" onchange="applyRoleTemplate()">
+                                    <option value="admin">管理員（全部權限）</option>
+                                    <option value="finance">財務人員</option>
                                     <option value="supervisor">倉管主管</option>
+                                    <option value="sales">業務人員</option>
                                     <option value="operator" selected>倉管人員</option>
                                     <option value="forklift">堆高機手</option>
                                     <option value="readonly">只讀</option>
+                                    <option value="custom">🔧 自訂權限</option>
                                 </select>
                             </div>
                             <div>
@@ -2333,6 +2175,86 @@
                                 <input type="text" id="edit-user-dept" class="scan-input w-full" placeholder="倉儲部">
                             </div>
                         </div>
+                        
+                        <!-- 自訂權限區塊 -->
+                        <div id="custom-permissions-section" class="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <label class="text-slate-300 text-sm font-bold"><i class="fa-solid fa-key mr-2 text-amber-400"></i>功能權限</label>
+                                <div class="flex gap-2">
+                                    <button type="button" onclick="selectAllPermissions()" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded">全選</button>
+                                    <button type="button" onclick="clearAllPermissions()" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded">清除</button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2 text-sm">
+                                <!-- 入庫管理 -->
+                                <div class="bg-emerald-900/20 border border-emerald-700/30 rounded-lg p-2">
+                                    <div class="text-emerald-400 text-xs font-bold mb-2"><i class="fa-solid fa-arrow-down mr-1"></i>入庫管理</div>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white">
+                                        <input type="checkbox" id="perm-inbound" class="perm-checkbox w-3 h-3"> 入庫作業
+                                    </label>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white mt-1">
+                                        <input type="checkbox" id="perm-approve" class="perm-checkbox w-3 h-3"> 入庫核准
+                                    </label>
+                                </div>
+                                <!-- 庫內作業 -->
+                                <div class="bg-blue-900/20 border border-blue-700/30 rounded-lg p-2">
+                                    <div class="text-blue-400 text-xs font-bold mb-2"><i class="fa-solid fa-warehouse mr-1"></i>庫內作業</div>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white">
+                                        <input type="checkbox" id="perm-inventory" class="perm-checkbox w-3 h-3"> 庫存查詢
+                                    </label>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white mt-1">
+                                        <input type="checkbox" id="perm-move" class="perm-checkbox w-3 h-3"> 庫存調度
+                                    </label>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white mt-1">
+                                        <input type="checkbox" id="perm-merge" class="perm-checkbox w-3 h-3"> 板號異動
+                                    </label>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white mt-1">
+                                        <input type="checkbox" id="perm-stocktake" class="perm-checkbox w-3 h-3"> 庫存盤點
+                                    </label>
+                                </div>
+                                <!-- 出庫物流 -->
+                                <div class="bg-red-900/20 border border-red-700/30 rounded-lg p-2">
+                                    <div class="text-red-400 text-xs font-bold mb-2"><i class="fa-solid fa-arrow-up mr-1"></i>出庫物流</div>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white">
+                                        <input type="checkbox" id="perm-outbound" class="perm-checkbox w-3 h-3"> 波次揀貨
+                                    </label>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white mt-1">
+                                        <input type="checkbox" id="perm-dispatch" class="perm-checkbox w-3 h-3"> 執行調度
+                                    </label>
+                                </div>
+                                <!-- 倉租管理 -->
+                                <div class="bg-amber-900/20 border border-amber-700/30 rounded-lg p-2">
+                                    <div class="text-amber-400 text-xs font-bold mb-2"><i class="fa-solid fa-dollar-sign mr-1"></i>倉租管理</div>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white">
+                                        <input type="checkbox" id="perm-consignment" class="perm-checkbox w-3 h-3"> 寄倉管理
+                                    </label>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white mt-1">
+                                        <input type="checkbox" id="perm-rental" class="perm-checkbox w-3 h-3"> 倉租報表
+                                    </label>
+                                </div>
+                                <!-- 報表分析 -->
+                                <div class="bg-purple-900/20 border border-purple-700/30 rounded-lg p-2">
+                                    <div class="text-purple-400 text-xs font-bold mb-2"><i class="fa-solid fa-chart-line mr-1"></i>報表分析</div>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white">
+                                        <input type="checkbox" id="perm-report" class="perm-checkbox w-3 h-3"> 報表匯出
+                                    </label>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white mt-1">
+                                        <input type="checkbox" id="perm-analysis" class="perm-checkbox w-3 h-3"> 出貨分析
+                                    </label>
+                                </div>
+                                <!-- 系統管理 -->
+                                <div class="bg-slate-700/30 border border-slate-600/30 rounded-lg p-2">
+                                    <div class="text-slate-300 text-xs font-bold mb-2"><i class="fa-solid fa-gear mr-1"></i>系統管理</div>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white">
+                                        <input type="checkbox" id="perm-users" class="perm-checkbox w-3 h-3"> 使用者管理
+                                    </label>
+                                    <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white mt-1">
+                                        <input type="checkbox" id="perm-settings" class="perm-checkbox w-3 h-3"> 系統設定
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div id="password-fields">
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
@@ -3968,12 +3890,20 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, getDoc, setDoc, doc, query, where, orderBy, limit, onSnapshot, writeBatch, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, createUserWithEmailAndPassword, fetchSignInMethodsForEmail } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
         const firebaseConfig = { apiKey: "AIzaSyBEWzyRMJQirGbh28ANkE6aN42GzUBuw2s", authDomain: "terrywms-2345f.firebaseapp.com", projectId: "terrywms-2345f", storageBucket: "terrywms-2345f.firebasestorage.app", messagingSenderId: "75589714942", appId: "1:75589714942:web:3a7f723c3d1449df78f6af" };
         const app = initializeApp(firebaseConfig); const db = getFirestore(app); const auth = getAuth(app);
+        
+        // 建立第二個 Firebase App 專門用於建立新使用者（避免影響當前登入狀態）
+        const secondaryApp = initializeApp(firebaseConfig, "SecondaryApp");
+        const secondaryAuth = getAuth(secondaryApp);
+        window.secondaryAuth = secondaryAuth;
+        
         window.sendPasswordResetEmail = sendPasswordResetEmail;
         window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.fetchSignInMethodsForEmail = fetchSignInMethodsForEmail;
+        window.auth = auth;
         window.db = db; window.collection = collection; window.addDoc = addDoc; window.getDoc = getDoc; window.setDoc = setDoc; window.doc = doc; window.updateDoc = updateDoc; window.deleteDoc = deleteDoc; window.writeBatch = writeBatch; window.getDocs = getDocs; window.query = query; window.where = where; window.orderBy = orderBy; window.limit = limit; window.onSnapshot = onSnapshot; window.serverTimestamp = serverTimestamp;
 
         // ========== 儲位格式工具函數（必須最先定義）==========
@@ -4062,14 +3992,21 @@
                 });
                 if(document.getElementById('kpi-total-pallets')) { 
                     document.getElementById('kpi-total-pallets').innerText = stats.total; 
-                    document.getElementById('kpi-fg-count').innerText = stats.fg; 
-                    document.getElementById('kpi-return-count').innerText = stats.ret; 
+                    var fgEl = document.getElementById('kpi-fg-count');
+                    var retEl = document.getElementById('kpi-return-count');
+                    if (fgEl) fgEl.innerText = stats.fg;
+                    if (retEl) retEl.innerText = stats.ret;
                     updateChart(stats.chart); 
                 }
                 // 更新戰情分析的統計資料
                 updateDashboardStats(currentInventory);
                 
                 renderAllMaps();
+                
+                // 更新虛擬儲位/暫存區統計
+                if (typeof loadVirtualLocationCounts === 'function') {
+                    loadVirtualLocationCounts();
+                }
                 
                 // 效期警示檢查（首次載入時）
                 if (!window._expiryAlertChecked) {
@@ -4118,7 +4055,15 @@
         
         // 更新戰情分析統計
         function updateDashboardStats(inventory) {
-            if (!inventory || inventory.length === 0) return;
+            console.log('🔍 updateDashboardStats 被呼叫，inventory 長度:', inventory ? inventory.length : 0);
+            
+            // 即使沒有庫存也要更新 UI（顯示 0）
+            if (!inventory) inventory = [];
+            
+            // 顯示前 3 筆資料的結構（除錯用）
+            if (inventory.length > 0) {
+                console.log('📦 第一筆資料結構:', JSON.stringify(inventory[0], null, 2));
+            }
             
             // 統計變數
             let cwCount = 0, bfCount = 0, virtualCount = 0;
@@ -4131,16 +4076,25 @@
             const thirtyDays = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
             
             inventory.forEach(item => {
-                // 公司統計
-                if (item.company === '崇文') cwCount++;
-                else if (item.company === '八方') bfCount++;
+                // 公司統計（處理各種可能的欄位名稱）
+                const company = item.company || item.owner || item.customer || '';
+                if (company.includes('崇文') || company === 'CW' || company === 'cw') cwCount++;
+                else if (company.includes('八方') || company === 'BF' || company === 'bf') bfCount++;
+                else {
+                    // 如果沒有公司欄位，根據其他欄位判斷
+                    bfCount++; // 預設歸類
+                }
                 
-                // 虛擬儲位統計
-                if (VIRTUAL_LOCS.includes(item.locationId)) virtualCount++;
+                // 虛擬儲位統計（處理大小寫）
+                const locId = item.locationId || '';
+                const locUpper = locId.toUpperCase();
+                if (VIRTUAL_LOCS.includes(locUpper) || VIRTUAL_LOCS.includes(locId)) {
+                    virtualCount++;
+                }
                 
                 // 區域統計
-                if (item.locationId && !VIRTUAL_LOCS.includes(item.locationId)) {
-                    const parsed = window.parseLocationId ? window.parseLocationId(item.locationId) : null;
+                if (locId && !VIRTUAL_LOCS.includes(locUpper)) {
+                    const parsed = window.parseLocationId ? window.parseLocationId(locId) : null;
                     if (parsed && parsed.zone) {
                         if (!zoneStats[parsed.zone]) zoneStats[parsed.zone] = 0;
                         zoneStats[parsed.zone]++;
@@ -4149,16 +4103,19 @@
                 
                 // 效期警示
                 if (item.expiryDate) {
-                    const expDate = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
-                    if (expDate <= thirtyDays) {
-                        expiryAlerts.push({
-                            productName: item.productName,
-                            locationId: item.locationId,
-                            quantity: item.quantity,
-                            expiryDate: expDate,
-                            isExpired: expDate < today
-                        });
-                    }
+                    let expDate;
+                    try {
+                        expDate = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
+                        if (!isNaN(expDate.getTime()) && expDate <= thirtyDays) {
+                            expiryAlerts.push({
+                                productName: item.productName,
+                                locationId: item.locationId,
+                                quantity: item.quantity,
+                                expiryDate: expDate,
+                                isExpired: expDate < today
+                            });
+                        }
+                    } catch(e) { /* 忽略無效日期 */ }
                 }
             });
             
@@ -4168,10 +4125,14 @@
             const virtualEl = document.getElementById('kpi-virtual-count');
             const expiryEl = document.getElementById('kpi-expiry-alert');
             
+            console.log('📊 KPI 元素:', { cwEl: !!cwEl, bfEl: !!bfEl, virtualEl: !!virtualEl, expiryEl: !!expiryEl });
+            
             if (cwEl) cwEl.textContent = cwCount;
             if (bfEl) bfEl.textContent = bfCount;
             if (virtualEl) virtualEl.textContent = virtualCount;
             if (expiryEl) expiryEl.textContent = expiryAlerts.length;
+            
+            console.log('📊 戰情分析更新:', { 總庫存: inventory.length, 崇文: cwCount, 八方: bfCount, 暫存區: virtualCount, 效期警示: expiryAlerts.length, 區域統計: zoneStats });
             
             // 更新公司分布圖
             updateCompanyChart(cwCount, bfCount);
@@ -5505,6 +5466,98 @@ console.log('✅ WMS 工具函數庫已載入');
             document.getElementById('prev-exp').innerText = '效期: ' + (document.getElementById('in-exp').value || '-');
             document.getElementById('prev-qty').innerText = document.getElementById('in-qty').value || '0';
         }
+        
+        // 入庫類型按鈕選擇
+        window.selectInboundType = function(type) {
+            // 更新隱藏的 select
+            document.getElementById('in-type-select').value = type;
+            
+            // 更新按鈕樣式
+            document.querySelectorAll('.inbound-type-btn').forEach(function(btn) {
+                btn.classList.remove('active', 'border-blue-500', 'bg-blue-900/50', 'text-white');
+                btn.classList.remove('border-purple-500', 'bg-purple-900/50', 'text-purple-400');
+                btn.classList.remove('border-yellow-500', 'bg-yellow-900/50', 'text-yellow-400');
+                btn.classList.remove('border-orange-500', 'bg-orange-900/50', 'text-orange-400');
+                btn.classList.add('border-slate-600', 'bg-slate-800', 'text-slate-400');
+            });
+            
+            var activeBtn = document.getElementById('btn-type-' + type);
+            if (activeBtn) {
+                activeBtn.classList.remove('border-slate-600', 'bg-slate-800', 'text-slate-400');
+                var colors = {
+                    'Raw': ['border-blue-500', 'bg-blue-900/50', 'text-white'],
+                    'FG': ['border-purple-500', 'bg-purple-900/50', 'text-white'],
+                    'WIP': ['border-yellow-500', 'bg-yellow-900/50', 'text-white'],
+                    'Return': ['border-orange-500', 'bg-orange-900/50', 'text-white']
+                };
+                activeBtn.classList.add(...(colors[type] || colors['Raw']));
+                activeBtn.classList.add('active');
+            }
+            
+            // 觸發原本的 onchange
+            onInboundTypeChange();
+        };
+        
+        // 更新入庫進度指示器
+        window.updateInboundProgress = function() {
+            var name = document.getElementById('in-name').value.trim();
+            var qty = document.getElementById('in-qty').value;
+            var exp = document.getElementById('in-exp').value;
+            var loc = document.getElementById('in-loc').value.trim();
+            
+            // 更新檢查清單
+            updateCheckItem('check-name', !!name);
+            updateCheckItem('check-qty', !!qty && parseInt(qty) > 0);
+            updateCheckItem('check-exp', !!exp);
+            updateCheckItem('check-loc', !!loc);
+            
+            // 更新步驟進度
+            var step1 = document.getElementById('inbound-step-1');
+            var step2 = document.getElementById('inbound-step-2');
+            var step3 = document.getElementById('inbound-step-3');
+            
+            var step1Complete = !!name && !!qty && parseInt(qty) > 0 && !!exp;
+            var step2Complete = !!loc;
+            
+            // Step 1
+            if (step1Complete) {
+                step1.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white transition-all';
+            } else {
+                step1.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white transition-all';
+            }
+            
+            // Step 2
+            if (step2Complete) {
+                step2.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white transition-all';
+            } else if (step1Complete) {
+                step2.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white transition-all';
+            } else {
+                step2.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-slate-400 transition-all';
+            }
+            
+            // Step 3
+            if (step1Complete && step2Complete) {
+                step3.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 text-white transition-all';
+                document.getElementById('btn-inbound-main').disabled = false;
+            } else {
+                step3.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-slate-400 transition-all';
+                document.getElementById('btn-inbound-main').disabled = true;
+            }
+        };
+        
+        function updateCheckItem(id, isComplete) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            var icon = el.querySelector('i');
+            var text = el.querySelector('span');
+            if (isComplete) {
+                icon.className = 'fa-solid fa-check-circle text-emerald-400 text-xs';
+                text.className = 'text-emerald-400';
+            } else {
+                icon.className = 'fa-solid fa-circle text-slate-600 text-xs';
+                text.className = 'text-slate-400';
+            }
+        }
 
         async function confirmUnifiedInbound() {
              var loc = document.getElementById('in-loc').value;
@@ -5770,6 +5823,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 var sheet = workbook.Sheets[workbook.SheetNames[0]];
                 var rows = XLSX.utils.sheet_to_json(sheet);
                 
+                var importCount = 0;
                 rows.forEach(function(row) {
                     var item = {
                         id: 'CI-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
@@ -5785,11 +5839,18 @@ console.log('✅ WMS 工具函數庫已載入');
                     
                     if (item.productName && item.quantity > 0) {
                         window._containerData.items.push(item);
+                        importCount++;
                     }
                 });
                 
                 renderContainerItems();
-                alert('匯入成功：' + rows.length + ' 筆品項');
+                
+                // 自動產生插單預覽
+                if (importCount > 0) {
+                    autoGenerateLabels();
+                }
+                
+                alert('匯入成功：' + importCount + ' 筆品項');
             };
             reader.readAsArrayBuffer(file);
             event.target.value = '';
@@ -5805,9 +5866,9 @@ console.log('✅ WMS 工具函數庫已載入');
             var qty = parseInt(document.getElementById('pre-qty').value) || 0;
             var perPallet = parseInt(document.getElementById('pre-per-pallet').value) || 50;
             
-            if (!name) { alert('請輸入品名'); return; }
-            if (!batch) { alert('請輸入批號'); return; }
-            if (qty <= 0) { alert('請輸入數量'); return; }
+            if (!name) { alert('請輸入品名'); return false; }
+            if (!batch) { alert('請輸入批號'); return false; }
+            if (qty <= 0) { alert('請輸入數量'); return false; }
             
             var item = {
                 id: 'CI-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
@@ -5829,6 +5890,55 @@ console.log('✅ WMS 工具函數庫已載入');
             document.getElementById('pre-spec').value = '';
             document.getElementById('pre-batch').value = '';
             document.getElementById('pre-qty').value = '';
+            
+            return true;
+        };
+        
+        // 新增品項並自動產生預覽
+        window.addContainerItemAndGenerate = function() {
+            var success = addContainerItem();
+            if (success) {
+                // 自動產生插單預覽
+                autoGenerateLabels();
+            }
+        };
+        
+        // 自動產生插單預覽（新增品項或匯入後自動呼叫）
+        window.autoGenerateLabels = function() {
+            var items = window._containerData.items;
+            if (items.length === 0) return;
+            
+            // 取得設定
+            var strategy = document.getElementById('container-strategy').value;
+            
+            // 從勾選按鈕讀取選中的區域
+            var selectedZones = [];
+            document.querySelectorAll('.container-zone-cb:checked').forEach(function(cb) {
+                selectedZones.push(cb.value);
+            });
+            
+            if (selectedZones.length === 0) {
+                // 如果沒選區域，預設 A、B
+                selectedZones = ['A', 'B'];
+            }
+            
+            // 使用智慧分配
+            var labels = smartAllocateLocations(items, {
+                strategy: strategy,
+                zones: selectedZones
+            });
+            
+            // 檢查是否有溢出
+            var overflowCount = labels.filter(function(l) { return l.overflow; }).length;
+            if (overflowCount > 0) {
+                console.warn('有 ' + overflowCount + ' 板找不到空位');
+            }
+            
+            window._containerData.labels = labels;
+            renderContainerLabels();
+            
+            // 顯示操作按鈕
+            document.getElementById('container-action-buttons').classList.remove('hidden');
         };
         
         // 渲染品項清單
@@ -5893,11 +6003,9 @@ console.log('✅ WMS 工具函數庫已載入');
             window._containerData.items = [];
             window._containerData.labels = [];
             renderContainerItems();
-            document.getElementById('container-labels-preview').innerHTML = '<div class="col-span-2 text-center text-slate-500 py-8"><i class="fa-solid fa-tags text-3xl mb-2"></i><div>請先新增品項並產生插單</div></div>';
-            document.getElementById('btn-print-labels').disabled = true;
-            document.getElementById('btn-print-labels').classList.add('cursor-not-allowed', 'bg-slate-700', 'text-slate-500');
-            document.getElementById('btn-print-labels').classList.remove('bg-blue-600', 'text-white');
-            document.getElementById('btn-confirm-inbound').classList.add('hidden');
+            document.getElementById('container-labels-preview').innerHTML = '<div class="col-span-3 text-center text-slate-500 py-8"><i class="fa-solid fa-tags text-3xl mb-2"></i><div>請先新增品項</div></div>';
+            // 隱藏操作按鈕
+            document.getElementById('container-action-buttons').classList.add('hidden');
         };
         
         // 取得所有可用儲位（考慮破碎空間）
@@ -6133,8 +6241,12 @@ console.log('✅ WMS 工具函數庫已載入');
             
             // 取得設定
             var strategy = document.getElementById('container-strategy').value;
-            var zonesSelect = document.getElementById('container-zones');
-            var selectedZones = Array.from(zonesSelect.selectedOptions).map(function(opt) { return opt.value; });
+            
+            // 從勾選按鈕讀取選中的區域
+            var selectedZones = [];
+            document.querySelectorAll('.container-zone-cb:checked').forEach(function(cb) {
+                selectedZones.push(cb.value);
+            });
             
             if (selectedZones.length === 0) {
                 alert('請至少選擇一個區域');
@@ -6165,8 +6277,16 @@ console.log('✅ WMS 工具函數庫已載入');
         
         // 顯示可用儲位統計
         window.showAvailableLocations = function() {
-            var zonesSelect = document.getElementById('container-zones');
-            var selectedZones = Array.from(zonesSelect.selectedOptions).map(function(opt) { return opt.value; });
+            // 從勾選按鈕讀取選中的區域
+            var selectedZones = [];
+            document.querySelectorAll('.container-zone-cb:checked').forEach(function(cb) {
+                selectedZones.push(cb.value);
+            });
+            
+            if (selectedZones.length === 0) {
+                document.getElementById('available-count').innerHTML = '<div class="text-yellow-400">請選擇區域</div>';
+                return;
+            }
             
             var available = getFilteredAvailableLocations({ zones: selectedZones });
             
@@ -6198,10 +6318,27 @@ console.log('✅ WMS 工具函數庫已載入');
         
         // 區域選擇變更時更新空位統計
         document.addEventListener('DOMContentLoaded', function() {
-            var zonesSelect = document.getElementById('container-zones');
-            if (zonesSelect) {
-                zonesSelect.addEventListener('change', showAvailableLocations);
-            }
+            // 為勾選按鈕加入事件監聽
+            document.querySelectorAll('.container-zone-cb').forEach(function(cb) {
+                cb.addEventListener('change', function() {
+                    // 更新按鈕樣式
+                    var span = this.nextElementSibling;
+                    if (this.checked) {
+                        span.classList.remove('bg-slate-700', 'text-slate-400');
+                        span.classList.add('bg-blue-600', 'text-white');
+                    } else {
+                        span.classList.remove('bg-blue-600', 'text-white');
+                        span.classList.add('bg-slate-700', 'text-slate-400');
+                    }
+                    // 更新空位統計
+                    showAvailableLocations();
+                });
+            });
+            
+            // 初始化空位統計
+            setTimeout(function() {
+                if (window.showAvailableLocations) showAvailableLocations();
+            }, 1000);
         });
         
         // 渲染標籤預覽
@@ -6210,7 +6347,7 @@ console.log('✅ WMS 工具函數庫已載入');
             var labels = window._containerData.labels;
             
             if (labels.length === 0) {
-                container.innerHTML = '<div class="col-span-2 text-center text-slate-500 py-8"><i class="fa-solid fa-tags text-3xl mb-2"></i><div>請先新增品項並產生插單</div></div>';
+                container.innerHTML = '<div class="col-span-3 text-center text-slate-500 py-8"><i class="fa-solid fa-tags text-3xl mb-2"></i><div>請先新增品項</div></div>';
                 return;
             }
             
@@ -6218,38 +6355,44 @@ console.log('✅ WMS 工具函數庫已載入');
             labels.forEach(function(label, idx) {
                 var expDisplay = label.expiryDate ? formatDate(label.expiryDate) : '-';
                 
-                html += '<div class="bg-white p-3 rounded text-black text-xs border-2 border-slate-400">' +
-                    '<div class="flex justify-between items-start mb-1">' +
-                    '<div class="font-bold text-sm text-blue-800">' + label.locationId + '</div>' +
-                    '<div class="text-[10px] text-slate-500">' + label.palletNo + '</div>' +
+                // 模擬實際列印格式的小型預覽卡片（橫式）
+                html += '<div class="bg-white rounded border-2 border-black overflow-hidden" style="aspect-ratio: 297/210;">' +
+                    // 第一區：品名（最大）
+                    '<div class="border-b-2 border-black p-1 text-center" style="height: 35%;">' +
+                    '<div class="font-black text-black leading-tight" style="font-size: clamp(12px, 3vw, 18px);">' + label.productName + '</div>' +
                     '</div>' +
-                    '<div class="font-bold text-base">' + label.productName + '</div>' +
-                    '<div class="text-slate-600">' + label.spec + '</div>' +
-                    '<div class="grid grid-cols-2 gap-1 mt-2 text-[11px]">' +
-                    '<div><span class="text-slate-500">批號:</span> ' + label.batchNo + '</div>' +
-                    '<div><span class="text-slate-500">效期:</span> ' + expDisplay + '</div>' +
-                    '<div><span class="text-slate-500">數量:</span> <strong class="text-red-600">' + label.quantity + '</strong></div>' +
-                    '<div><span class="text-slate-500">廠商:</span> ' + (label.vendor || '-') + '</div>' +
+                    // 第二區：規格
+                    '<div class="border-b border-black p-0.5 text-center bg-gray-50" style="height: 15%;">' +
+                    '<div class="text-gray-700 font-bold" style="font-size: clamp(8px, 2vw, 12px);">' + (label.spec || '-') + '</div>' +
                     '</div>' +
-                    '<div class="mt-2 flex justify-center"><svg id="bc-container-' + idx + '" class="w-full h-8"></svg></div>' +
+                    // 第三區：批號、效期、數量、廠商
+                    '<div class="border-b border-black grid grid-cols-4 text-center" style="height: 25%;">' +
+                    '<div class="border-r border-gray-300 p-0.5">' +
+                    '<div class="text-gray-500" style="font-size: 6px;">批號</div>' +
+                    '<div class="font-bold text-black" style="font-size: clamp(6px, 1.5vw, 9px);">' + label.batchNo + '</div>' +
+                    '</div>' +
+                    '<div class="border-r border-gray-300 p-0.5">' +
+                    '<div class="text-gray-500" style="font-size: 6px;">效期</div>' +
+                    '<div class="font-bold text-black" style="font-size: clamp(6px, 1.5vw, 9px);">' + expDisplay + '</div>' +
+                    '</div>' +
+                    '<div class="border-r border-gray-300 p-0.5">' +
+                    '<div class="text-gray-500" style="font-size: 6px;">數量</div>' +
+                    '<div class="font-black text-red-600" style="font-size: clamp(8px, 2vw, 14px);">' + label.quantity + '</div>' +
+                    '</div>' +
+                    '<div class="p-0.5">' +
+                    '<div class="text-gray-500" style="font-size: 6px;">廠商</div>' +
+                    '<div class="font-bold text-black" style="font-size: clamp(6px, 1.5vw, 9px);">' + (label.vendor || '-') + '</div>' +
+                    '</div>' +
+                    '</div>' +
+                    // 第四區：儲位（黑底白字）+ 板號
+                    '<div class="flex items-center justify-between px-1" style="height: 25%;">' +
+                    '<div class="bg-black text-white font-black px-1.5 py-0.5 rounded" style="font-size: clamp(10px, 2.5vw, 16px);">' + label.locationId + '</div>' +
+                    '<div class="text-gray-500 font-mono" style="font-size: clamp(6px, 1.5vw, 10px);">' + label.palletNo + '</div>' +
+                    '</div>' +
                     '</div>';
             });
             
             container.innerHTML = html;
-            
-            // 產生條碼
-            labels.forEach(function(label, idx) {
-                setTimeout(function() {
-                    try {
-                        JsBarcode('#bc-container-' + idx, label.id, {
-                            format: 'CODE128',
-                            height: 25,
-                            displayValue: true,
-                            fontSize: 10
-                        });
-                    } catch(e) {}
-                }, 100);
-            });
         };
         
         // 格式化日期
@@ -7944,14 +8087,13 @@ console.log('✅ WMS 工具函數庫已載入');
         
         // 初始化智能調度（不再自動分析）
         window.initSmartDispatch = function() {
-            console.log('initSmartDispatch 被呼叫');
-            // 顯示 Step 1，等待用戶點擊開始
-            goToDispatchStep(1);
+            console.log('initSmartDispatch 被呼叫 - 自動開始分析');
+            // 直接開始分析，不再等待用戶點擊
+            startDispatchAnalysis();
         };
         
-        // 重新分析調度
-        // ========== 調度中心步驟控制 ==========
-        window.currentDispatchStep = 1;
+        // ========== 調度中心步驟控制（簡化版）==========
+        window.currentDispatchStep = 2; // 直接到步驟 2（選擇工單）
         
         window.goToDispatchStep = function(step) {
             console.log('goToDispatchStep 被呼叫, step =', step);
@@ -8179,12 +8321,19 @@ console.log('✅ WMS 工具函數庫已載入');
                 }
                 
                 // ========== 第二步：孤立板移位建議 ==========
-                // 找「孤立」在其他巷道的板，建議移動到主要巷道的空位
+                // 嚴格條件：只有真正「孤立」的情況才建議移位
+                // 孤立定義：
+                // 1. 同品項分散在 3 個以上巷道，且某巷道只有 1 板
+                // 2. 同品項有一板在不同「區」（如 I 庫 vs K 庫）
                 var isolatedMoves = [];
                 
-                if (laneList.length > 1 && mainLane) {
+                // 只有當分散在 3 個以上巷道時才考慮移位
+                if (laneList.length >= 3 && mainLane) {
                     var mainLaneQty = laneGroups[mainLane].qty;
                     var totalQty = g.totalQty;
+                    
+                    // 解析主要巷道的區域 (I, J, K)
+                    var mainWarehouse = mainLane.split('-')[0];
                     
                     // 找出主要巷道已佔用的儲位
                     var mainLaneOccupied = new Set();
@@ -8193,19 +8342,17 @@ console.log('✅ WMS 工具函數庫已載入');
                     });
                     
                     // 找出主要巷道的所有可能儲位（1F, 2F, 3F）
-                    // 解析主要巷道 key (如 I-A-01)
                     var mainLaneParts = mainLane.split('-');
-                    var mainZone = mainLaneParts[0];      // I
-                    var mainRow = mainLaneParts[1];       // A
-                    var mainCol = mainLaneParts[2];       // 01
+                    var mainZone = mainLaneParts[0];
+                    var mainRow = mainLaneParts[1];
+                    var mainCol = mainLaneParts[2];
                     
-                    // 產生該巷道所有層的儲位（優先順序：2F > 3F > 1F，1F保留給理貨不足板）
+                    // 產生該巷道所有層的儲位
                     var levelPriority = ['2F', '3F', '1F'];
                     var availableSlots = [];
                     levelPriority.forEach(function(level) {
                         var slotId = mainZone + '-' + mainRow + '-' + mainCol + '-' + level;
                         if (!mainLaneOccupied.has(slotId)) {
-                            // 檢查這個位置是否被其他品項佔用
                             var isOccupiedByOthers = pallets.some(function(p) {
                                 return p.locationId === slotId;
                             });
@@ -8215,59 +8362,55 @@ console.log('✅ WMS 工具函數庫已載入');
                         }
                     });
                     
-                    // 如果主巷道完全沒空位，找鄰近巷道的空位
+                    // 如果主巷道沒空位，就不建議移位
                     if (availableSlots.length === 0) {
-                        var colNum = parseInt(mainCol);
-                        // 檢查前後巷道
-                        for (var offset = 1; offset <= 3 && availableSlots.length === 0; offset++) {
-                            [colNum + offset, colNum - offset].forEach(function(tryCol) {
-                                if (tryCol >= 1 && tryCol <= 22 && availableSlots.length < 5) {
-                                    var tryColStr = String(tryCol).padStart(2, '0');
-                                    levelPriority.forEach(function(level) {
-                                        var slotId = mainZone + '-' + mainRow + '-' + tryColStr + '-' + level;
-                                        var isOccupied = pallets.some(function(p) { return p.locationId === slotId; });
-                                        if (!isOccupied && availableSlots.length < 5) {
-                                            availableSlots.push(slotId);
-                                        }
+                        // 不建議移位，因為沒有空間可以集中
+                    } else {
+                        var slotIndex = 0;
+                        
+                        laneList.forEach(function(lane) {
+                            if (lane === mainLane) return;
+                            
+                            var laneData = laneGroups[lane];
+                            var laneWarehouse = lane.split('-')[0];
+                            
+                            // 嚴格孤立條件：
+                            // 條件1: 只有 1 板（真正孤立）
+                            // 條件2: 在不同倉庫區域（如 I vs K）
+                            var isReallyIsolated = laneData.palletCount === 1;
+                            var isDifferentWarehouse = laneWarehouse !== mainWarehouse;
+                            
+                            // 只有同時滿足「只有1板」才移位，或者在不同倉庫才考慮
+                            if (isReallyIsolated || (isDifferentWarehouse && laneData.palletCount <= 2)) {
+                                // 確保有空位可以移
+                                if (slotIndex < availableSlots.length) {
+                                    laneData.items.forEach(function(p) {
+                                        if (slotIndex >= availableSlots.length) return;
+                                        
+                                        var targetSlot = availableSlots[slotIndex];
+                                        slotIndex++;
+                                        
+                                        var reason = isReallyIsolated ? 
+                                            '孤立板(僅1板)' : 
+                                            '跨區(' + laneWarehouse + '→' + mainWarehouse + ')';
+                                        
+                                        isolatedMoves.push({
+                                            type: 'isolated',
+                                            palletId: p.palletId,
+                                            from: p.locationId,
+                                            fromLane: lane,
+                                            toLane: mainLane,
+                                            toSlot: targetSlot,
+                                            qty: p.quantity,
+                                            batchNo: p.batchNo,
+                                            expDate: p.expDate || p.expiryDate,
+                                            reason: reason
+                                        });
                                     });
                                 }
-                            });
-                        }
+                            }
+                        });
                     }
-                    
-                    // 如果主巷道沒空位，找同品項其他儲位旁邊的空位
-                    var slotIndex = 0;
-                    
-                    laneList.forEach(function(lane) {
-                        if (lane === mainLane) return;
-                        
-                        var laneData = laneGroups[lane];
-                        var lanePercent = totalQty > 0 ? (laneData.qty / totalQty * 100) : 0;
-                        
-                        // 孤立條件：該巷道板數 ≤ 2 或 數量佔比 < 30%
-                        var isIsolated = laneData.palletCount <= 2 || lanePercent < 30;
-                        
-                        if (isIsolated) {
-                            laneData.items.forEach(function(p) {
-                                // 決定目標儲位：優先使用找到的空位，否則建議主巷道 2F
-                                var targetSlot = availableSlots[slotIndex] || (mainLane + '-2F');
-                                slotIndex++;
-                                
-                                isolatedMoves.push({
-                                    type: 'isolated',
-                                    palletId: p.palletId,
-                                    from: p.locationId,
-                                    fromLane: lane,
-                                    toLane: mainLane,
-                                    toSlot: targetSlot,
-                                    qty: p.quantity,
-                                    batchNo: p.batchNo,
-                                    expDate: p.expDate || p.expiryDate,
-                                    reason: laneData.palletCount <= 2 ? '孤立板(僅' + laneData.palletCount + '板)' : '少量(' + Math.round(lanePercent) + '%)'
-                                });
-                            });
-                        }
-                    });
                 }
                 
                 totalPartialOps += partialMerges.length;
@@ -8383,122 +8526,107 @@ console.log('✅ WMS 工具函數庫已載入');
             }
         };
         
-        // 渲染調度工單
+        // 渲染調度工單（緊湊表格式）
         function renderDispatchOrders(items) {
             var container = document.getElementById('dispatch-orders-container');
             if (!container) return;
             
             if (items.length === 0) {
-                container.innerHTML = '<div class="text-center py-12 bg-slate-900/50 border border-slate-700 rounded-lg"><i class="fa-solid fa-check-circle text-emerald-400 text-5xl mb-4"></i><p class="text-emerald-400 text-xl font-bold">所有品項都已優化！</p><p class="text-slate-500 mt-2">目前無需執行調度作業</p></div>';
+                container.innerHTML = '<div class="text-center py-12"><i class="fa-solid fa-check-circle text-emerald-400 text-5xl mb-4"></i><p class="text-emerald-400 text-xl font-bold">所有品項都已優化！</p><p class="text-slate-500 mt-2">目前無需執行調度作業</p></div>';
                 updateDispatchSelectionUI();
                 return;
             }
             
-            var html = '<div class="space-y-2">';
-            var orderNo = 1;
+            // 表格式佈局
+            var html = '<table class="w-full text-sm">';
+            html += '<thead class="bg-slate-800 sticky top-0">';
+            html += '<tr class="text-slate-400 text-xs">';
+            html += '<th class="p-2 text-left w-8"><input type="checkbox" id="dispatch-select-all-table" onchange="toggleAllDispatchOrders()" class="w-4 h-4"></th>';
+            html += '<th class="p-2 text-left">品項</th>';
+            html += '<th class="p-2 text-center w-20">操作</th>';
+            html += '<th class="p-2 text-left">明細</th>';
+            html += '<th class="p-2 text-center w-16">釋放</th>';
+            html += '<th class="p-2 text-center w-12"></th>';
+            html += '</tr></thead><tbody>';
             
+            var orderNo = 1;
             items.forEach(function(item, idx) {
                 var hasMerge = item.partialMerges && item.partialMerges.length > 0;
                 var hasMove = item.isolatedMoves && item.isolatedMoves.length > 0;
-                var opsCount = 0;
-                var mergeCount = 0;
-                var moveCount = 0;
-                if (hasMerge) item.partialMerges.forEach(function(g) { opsCount += g.sources.length; mergeCount += g.sources.length; });
-                if (hasMove) { opsCount += item.isolatedMoves.length; moveCount = item.isolatedMoves.length; }
+                var mergeCount = 0, moveCount = 0, freeCount = 0;
                 
-                html += '<div class="bg-slate-900 border border-slate-700 rounded-lg overflow-hidden dispatch-order-item" data-idx="' + idx + '">';
+                if (hasMerge) {
+                    item.partialMerges.forEach(function(g) { 
+                        mergeCount += g.sources.length;
+                        freeCount += g.sources.length;
+                    });
+                }
+                if (hasMove) moveCount = item.isolatedMoves.length;
                 
-                // 工單標題列 - 更緊湊
-                html += '<div class="bg-gradient-to-r from-slate-800 to-slate-800/50 px-3 py-2 flex items-center justify-between">';
+                // 主行
+                html += '<tr class="border-b border-slate-700 hover:bg-slate-800/50 dispatch-order-item" data-idx="' + idx + '">';
+                
+                // 勾選
+                html += '<td class="p-2"><input type="checkbox" class="dispatch-order-checkbox w-4 h-4 accent-purple-500" data-idx="' + idx + '" onchange="updateDispatchSelectionUI()"></td>';
+                
+                // 品項名稱
+                html += '<td class="p-2">';
                 html += '<div class="flex items-center gap-2">';
-                html += '<input type="checkbox" class="dispatch-order-checkbox w-4 h-4 rounded accent-purple-500 cursor-pointer" data-idx="' + idx + '" onchange="updateDispatchSelectionUI()">';
-                html += '<span class="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded">#' + String(orderNo).padStart(3, '0') + '</span>';
-                html += '<span class="text-white font-bold text-sm">' + item.name + '</span>';
+                html += '<span class="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">' + String(orderNo).padStart(3, '0') + '</span>';
+                html += '<span class="text-white font-bold">' + item.name + '</span>';
                 if (item.spec) html += '<span class="text-slate-500 text-xs">(' + item.spec + ')</span>';
                 html += '</div>';
-                html += '<div class="flex items-center gap-2">';
-                if (mergeCount > 0) html += '<span class="bg-orange-900/50 text-orange-400 text-xs px-2 py-0.5 rounded border border-orange-700">合併 ' + mergeCount + '</span>';
-                if (moveCount > 0) html += '<span class="bg-blue-900/50 text-blue-400 text-xs px-2 py-0.5 rounded border border-blue-700">移位 ' + moveCount + '</span>';
-                html += '<button onclick="printSingleDispatchOrder(' + idx + ');" class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-2 py-1 rounded"><i class="fa-solid fa-print"></i></button>';
-                html += '</div>';
-                html += '</div>';
+                html += '<div class="text-[10px] text-slate-500 mt-0.5">容量' + item.palletCapacity + ' · 庫存' + item.totalQty + ' · ' + item.laneCount + '巷道</div>';
+                html += '</td>';
                 
-                // 品項摘要 - 簡化為一行
-                html += '<div class="px-3 py-1.5 bg-slate-800/30 border-b border-slate-700/50 flex items-center gap-4 text-xs">';
-                html += '<span class="text-slate-500">容量 <span class="text-white">' + item.palletCapacity + '</span></span>';
-                html += '<span class="text-slate-500">庫存 <span class="text-cyan-400">' + item.totalQty + '</span></span>';
-                html += '<span class="text-slate-500">巷道 <span class="text-purple-400">' + item.laneCount + '</span></span>';
-                html += '<span class="text-slate-500">主巷 <span class="text-emerald-400 font-mono">' + (item.mainLane || '-') + '</span></span>';
-                html += '</div>';
+                // 操作類型標籤
+                html += '<td class="p-2 text-center">';
+                if (mergeCount > 0) html += '<span class="inline-block bg-orange-900/50 text-orange-400 text-[10px] px-1.5 py-0.5 rounded border border-orange-700 mr-1">併' + mergeCount + '</span>';
+                if (moveCount > 0) html += '<span class="inline-block bg-blue-900/50 text-blue-400 text-[10px] px-1.5 py-0.5 rounded border border-blue-700">移' + moveCount + '</span>';
+                html += '</td>';
                 
-                // ========== 合併操作 ==========
+                // 操作明細（簡化顯示）
+                html += '<td class="p-2 text-xs">';
                 if (hasMerge) {
-                    item.partialMerges.forEach(function(group, gIdx) {
-                        html += '<div class="border-t border-slate-700">';
-                        html += '<div class="px-3 py-1.5 bg-orange-900/20 flex items-center justify-between">';
-                        html += '<div class="flex items-center gap-2">';
-                        html += '<span class="bg-orange-600 text-white text-xs font-bold px-1.5 py-0.5 rounded">合併 #' + (gIdx + 1) + '</span>';
-                        html += '<span class="text-orange-300 text-xs">將 ' + group.sources.length + ' 板合併至 <span class="font-mono font-bold">' + group.keep.location + '</span></span>';
-                        html += '</div>';
-                        html += '<span class="text-emerald-400 text-xs"><i class="fa-solid fa-unlock mr-1"></i>釋放 ' + group.sources.length + ' 位</span>';
-                        html += '</div>';
-                        
-                        // 緊湊操作列表
-                        html += '<div class="px-3 py-2 space-y-1">';
-                        group.sources.forEach(function(src, sIdx) {
-                            html += '<div class="flex items-center gap-2 text-xs bg-slate-800/50 rounded px-2 py-1">';
-                            html += '<span class="text-slate-500 w-4">' + (sIdx + 1) + '</span>';
-                            html += '<span class="font-mono text-red-400 font-bold w-24">' + src.location + '</span>';
-                            html += '<span class="text-yellow-400 font-bold w-16 text-right">' + src.qty + '件</span>';
-                            html += '<i class="fa-solid fa-arrow-right text-slate-600 mx-2"></i>';
-                            html += '<span class="font-mono text-emerald-400 font-bold">' + group.keep.location + '</span>';
-                            html += '<span class="text-slate-500 ml-auto">□</span>';
-                            html += '</div>';
-                        });
-                        html += '<div class="flex items-center gap-2 text-xs bg-emerald-900/30 rounded px-2 py-1 mt-1 border border-emerald-800/50">';
-                        html += '<span class="text-emerald-400">合併後：</span>';
-                        html += '<span class="font-mono text-emerald-300 font-bold">' + group.keep.location + '</span>';
-                        html += '<span class="text-emerald-400 font-bold">' + group.totalAfterMerge + '件</span>';
-                        html += '<span class="text-emerald-500">(' + Math.round(group.totalAfterMerge / item.palletCapacity * 100) + '%)</span>';
-                        html += '</div>';
-                        html += '</div>';
+                    item.partialMerges.forEach(function(g, gIdx) {
+                        var srcLocs = g.sources.map(function(s) { return s.location; }).join(', ');
+                        html += '<div class="text-orange-300 mb-0.5">';
+                        html += '<span class="text-orange-500">→</span> ' + srcLocs + ' <span class="text-slate-500">併入</span> <span class="text-emerald-400 font-mono">' + g.keep.location + '</span>';
+                        html += ' <span class="text-slate-600">(' + g.totalAfterMerge + '件)</span>';
                         html += '</div>';
                     });
                 }
-                
-                // ========== 移位操作 ==========
                 if (hasMove) {
-                    html += '<div class="border-t border-slate-700">';
-                    html += '<div class="px-3 py-1.5 bg-blue-900/20 flex items-center justify-between">';
-                    html += '<div class="flex items-center gap-2">';
-                    html += '<span class="bg-blue-600 text-white text-xs font-bold px-1.5 py-0.5 rounded">移位</span>';
-                    html += '<span class="text-blue-300 text-xs">集中至主巷道 <span class="font-mono font-bold">' + item.mainLane + '</span></span>';
-                    html += '</div>';
-                    html += '</div>';
-                    
-                    // 緊湊操作列表
-                    html += '<div class="px-3 py-2 space-y-1">';
-                    item.isolatedMoves.forEach(function(m, mIdx) {
-                        html += '<div class="flex items-center gap-2 text-xs bg-slate-800/50 rounded px-2 py-1">';
-                        html += '<span class="text-slate-500 w-4">' + (mIdx + 1) + '</span>';
-                        html += '<span class="font-mono text-red-400 font-bold w-24">' + m.from + '</span>';
-                        html += '<span class="text-yellow-400 font-bold w-16 text-right">' + m.qty + '件</span>';
-                        html += '<i class="fa-solid fa-arrow-right text-slate-600 mx-2"></i>';
-                        html += '<span class="font-mono text-emerald-400 font-bold w-24">' + m.toSlot + '</span>';
-                        html += '<span class="text-slate-500 text-xs truncate flex-1">' + m.reason + '</span>';
-                        html += '<span class="text-slate-500">□</span>';
+                    item.isolatedMoves.forEach(function(m) {
+                        html += '<div class="text-blue-300 mb-0.5">';
+                        html += '<span class="text-blue-500">→</span> <span class="font-mono">' + m.from + '</span> <span class="text-slate-500">移至</span> <span class="text-emerald-400 font-mono">' + m.toSlot + '</span>';
+                        html += ' <span class="text-slate-600">(' + m.qty + '件)</span>';
                         html += '</div>';
                     });
-                    html += '</div>';
-                    html += '</div>';
                 }
+                html += '</td>';
                 
-                html += '</div>';
+                // 釋放儲位數
+                html += '<td class="p-2 text-center">';
+                if (freeCount > 0) {
+                    html += '<span class="text-emerald-400 font-bold">' + freeCount + '</span>';
+                } else {
+                    html += '<span class="text-slate-600">-</span>';
+                }
+                html += '</td>';
+                
+                // 列印按鈕
+                html += '<td class="p-2 text-center">';
+                html += '<button onclick="printSingleDispatchOrder(' + idx + ')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-print"></i></button>';
+                html += '</td>';
+                
+                html += '</tr>';
                 orderNo++;
             });
             
-            html += '</div>';
+            html += '</tbody></table>';
             container.innerHTML = html;
+            updateDispatchSelectionUI();
         }
         
         // 列印單個調度工單
@@ -8515,14 +8643,14 @@ console.log('✅ WMS 工具函數庫已載入');
             printDispatchOrder([item], '調度工單 - ' + item.name);
         };
         
-        // 列印全部調度工單
-        // ========== 發布調度工單到手機 ==========
         // ========== 調度工單勾選功能 ==========
         window.toggleAllDispatchOrders = function() {
             var selectAll = document.getElementById('dispatch-select-all');
+            var selectAllTable = document.getElementById('dispatch-select-all-table');
+            var isChecked = selectAll ? selectAll.checked : (selectAllTable ? selectAllTable.checked : false);
             var checkboxes = document.querySelectorAll('.dispatch-order-checkbox');
             checkboxes.forEach(function(cb) {
-                cb.checked = selectAll.checked;
+                cb.checked = isChecked;
             });
             updateDispatchSelectionUI();
         };
@@ -16107,10 +16235,80 @@ window.clearLocalStorage = function() {
         
         window.ROLES = {
             admin: { name: '管理員', color: 'red', icon: 'crown', level: 100, permissions: ['all'] },
-            supervisor: { name: '倉管主管', color: 'purple', icon: 'user-tie', level: 80, permissions: ['inbound', 'outbound', 'move', 'merge', 'report', 'approve'] },
-            operator: { name: '倉管人員', color: 'blue', icon: 'user', level: 60, permissions: ['inbound', 'outbound', 'move', 'merge'] },
-            forklift: { name: '堆高機手', color: 'orange', icon: 'truck', level: 40, permissions: ['move', 'merge', 'dispatch'] },
-            readonly: { name: '只讀', color: 'slate', icon: 'eye', level: 10, permissions: ['view'] }
+            finance: { name: '財務人員', color: 'emerald', icon: 'calculator', level: 85, permissions: ['approve', 'report', 'rental', 'consignment', 'inventory', 'analysis'] },
+            supervisor: { name: '倉管主管', color: 'purple', icon: 'user-tie', level: 80, permissions: ['inbound', 'outbound', 'move', 'merge', 'stocktake', 'report', 'approve', 'inventory', 'dispatch', 'analysis'] },
+            sales: { name: '業務人員', color: 'cyan', icon: 'briefcase', level: 70, permissions: ['inventory', 'report', 'consignment', 'rental', 'analysis'] },
+            operator: { name: '倉管人員', color: 'blue', icon: 'user', level: 60, permissions: ['inbound', 'outbound', 'move', 'merge', 'stocktake', 'inventory', 'report'] },
+            forklift: { name: '堆高機手', color: 'orange', icon: 'truck', level: 40, permissions: ['move', 'merge', 'dispatch', 'inventory'] },
+            readonly: { name: '只讀', color: 'slate', icon: 'eye', level: 10, permissions: ['inventory'] },
+            custom: { name: '自訂權限', color: 'amber', icon: 'sliders', level: 50, permissions: [] }
+        };
+        
+        // 權限 ID 對照表
+        window.PERMISSION_IDS = ['inbound', 'approve', 'inventory', 'move', 'merge', 'stocktake', 'outbound', 'dispatch', 'consignment', 'rental', 'report', 'analysis', 'users', 'settings'];
+        
+        // 套用角色範本到權限勾選
+        window.applyRoleTemplate = function() {
+            var role = document.getElementById('edit-user-role').value;
+            var roleConfig = window.ROLES[role];
+            
+            if (!roleConfig) return;
+            
+            // 清除所有勾選
+            clearAllPermissions();
+            
+            // 如果是管理員，全選
+            if (roleConfig.permissions.includes('all')) {
+                selectAllPermissions();
+                return;
+            }
+            
+            // 根據角色範本勾選
+            roleConfig.permissions.forEach(function(perm) {
+                var checkbox = document.getElementById('perm-' + perm);
+                if (checkbox) checkbox.checked = true;
+            });
+        };
+        
+        // 全選權限
+        window.selectAllPermissions = function() {
+            document.querySelectorAll('.perm-checkbox').forEach(function(cb) {
+                cb.checked = true;
+            });
+        };
+        
+        // 清除所有權限
+        window.clearAllPermissions = function() {
+            document.querySelectorAll('.perm-checkbox').forEach(function(cb) {
+                cb.checked = false;
+            });
+        };
+        
+        // 取得目前勾選的權限
+        window.getSelectedPermissions = function() {
+            var permissions = [];
+            document.querySelectorAll('.perm-checkbox:checked').forEach(function(cb) {
+                var permId = cb.id.replace('perm-', '');
+                permissions.push(permId);
+            });
+            return permissions;
+        };
+        
+        // 設定權限勾選（用於編輯時載入）
+        window.setPermissionCheckboxes = function(permissions) {
+            clearAllPermissions();
+            if (!permissions || !Array.isArray(permissions)) return;
+            
+            // 如果是 'all'，全選
+            if (permissions.includes('all')) {
+                selectAllPermissions();
+                return;
+            }
+            
+            permissions.forEach(function(perm) {
+                var checkbox = document.getElementById('perm-' + perm);
+                if (checkbox) checkbox.checked = true;
+            });
         };
         
         // 當前使用者
@@ -16245,9 +16443,37 @@ window.clearLocalStorage = function() {
         // 檢查特定功能權限
         window.canAccess = function(feature) {
             if (!window.currentUser) return false;
+            
             var userRole = window.ROLES[window.currentUser.role] || window.ROLES.readonly;
+            
+            // 管理員有所有權限
             if (userRole.permissions.includes('all')) return true;
+            
+            // 優先檢查自訂權限
+            if (window.currentUser.customPermissions && Array.isArray(window.currentUser.customPermissions)) {
+                return window.currentUser.customPermissions.includes(feature);
+            }
+            
+            // 回退到角色預設權限
             return userRole.permissions.includes(feature);
+        };
+        
+        // 取得使用者的有效權限列表
+        window.getUserPermissions = function(user) {
+            if (!user) return [];
+            
+            var userRole = window.ROLES[user.role] || window.ROLES.readonly;
+            
+            // 管理員有所有權限
+            if (userRole.permissions.includes('all')) return ['all'];
+            
+            // 優先使用自訂權限
+            if (user.customPermissions && Array.isArray(user.customPermissions)) {
+                return user.customPermissions;
+            }
+            
+            // 回退到角色預設權限
+            return userRole.permissions;
         };
         
         // 應用權限（隱藏無權限的選單）
@@ -16298,6 +16524,9 @@ window.clearLocalStorage = function() {
             document.getElementById('edit-user-active').checked = true;
             document.getElementById('password-fields').style.display = 'block';
             
+            // 套用預設角色的權限
+            applyRoleTemplate();
+            
             document.getElementById('modal-user-edit').classList.remove('hidden');
         };
         
@@ -16322,6 +16551,14 @@ window.clearLocalStorage = function() {
             document.getElementById('edit-user-password2').value = '';
             document.getElementById('edit-user-active').checked = user.active !== false;
             document.getElementById('password-fields').style.display = 'none'; // 編輯時隱藏密碼
+            
+            // 載入使用者的自訂權限，如果沒有則套用角色範本
+            if (user.customPermissions && Array.isArray(user.customPermissions)) {
+                document.getElementById('edit-user-role').value = 'custom';
+                setPermissionCheckboxes(user.customPermissions);
+            } else {
+                applyRoleTemplate();
+            }
             
             document.getElementById('modal-user-edit').classList.remove('hidden');
         };
@@ -16365,34 +16602,56 @@ window.clearLocalStorage = function() {
                         return;
                     }
                     
-                    // 檢查是否已存在
+                    // 檢查是否已存在於本地
                     if (getUserByEmail(email)) {
-                        showToast('❌ 此 Email 已存在');
+                        showToast('❌ 此 Email 已存在於系統中');
                         return;
                     }
                     
-                    // 先嘗試建立 Firebase Auth 帳號
+                    // 顯示進度提示
+                    showToast('⏳ 正在建立使用者帳號...');
+                    
+                    // 使用第二個 Firebase App 建立 Auth 帳號（不影響當前登入狀態）
                     var authCreated = false;
+                    var authUid = null;
                     try {
-                        await window.createUserWithEmailAndPassword(window.auth, email, password);
+                        // 使用 secondaryAuth 建立帳號
+                        var userCredential = await window.createUserWithEmailAndPassword(window.secondaryAuth, email, password);
+                        authUid = userCredential.user.uid;
                         authCreated = true;
-                        console.log('Firebase Auth 帳號已建立');
+                        console.log('Firebase Auth 帳號已建立，UID:', authUid);
+                        
+                        // 立即登出 secondaryAuth（重要！避免影響系統狀態）
+                        try {
+                            await window.secondaryAuth.signOut();
+                        } catch (signOutErr) {
+                            console.log('SecondaryAuth signOut:', signOutErr);
+                        }
                     } catch (authErr) {
-                        console.log('建立 Auth 帳號失敗:', authErr.code);
+                        console.log('建立 Auth 帳號失敗:', authErr.code, authErr.message);
                         if (authErr.code === 'auth/email-already-in-use') {
-                            // 帳號已存在，繼續建立使用者資料
+                            // 帳號已存在於 Firebase Auth，繼續建立使用者資料
                             authCreated = true;
+                            showToast('ℹ️ 此 Email 已有 Auth 帳號，將建立系統使用者資料');
                         } else if (authErr.code === 'auth/weak-password') {
-                            showToast('❌ 密碼強度不足，請使用更複雜的密碼');
+                            showToast('❌ 密碼強度不足，請使用至少6位密碼');
                             return;
                         } else if (authErr.code === 'auth/invalid-email') {
                             showToast('❌ Email 格式不正確');
                             return;
+                        } else if (authErr.code === 'auth/operation-not-allowed') {
+                            showToast('❌ Firebase 尚未啟用 Email/Password 登入方式');
+                            return;
+                        } else {
+                            // 其他錯誤，顯示但繼續嘗試建立使用者資料
+                            console.warn('Auth 建立警告:', authErr);
                         }
-                        // 其他錯誤繼續建立使用者資料
                     }
                     
                     // 儲存使用者資料到 Firestore
+                    // 取得自訂權限
+                    var customPermissions = getSelectedPermissions();
+                    
                     var newUser = {
                         email: email,
                         name: name,
@@ -16400,6 +16659,8 @@ window.clearLocalStorage = function() {
                         dept: dept,
                         active: active,
                         authCreated: authCreated,
+                        authUid: authUid || null,
+                        customPermissions: customPermissions,
                         createdAt: new Date().toISOString(),
                         createdBy: window.currentUser ? window.currentUser.email : 'system'
                     };
@@ -16408,24 +16669,28 @@ window.clearLocalStorage = function() {
                     window.usersData.push({ id: email, ...newUser });
                     
                     // 記錄操作
-                    console.log('使用者操作記錄: create_user', email, '新增使用者 - ' + name + ' (' + role + ')');
+                    console.log('使用者操作記錄: create_user', email, '新增使用者 - ' + name + ' (' + role + ')', '權限:', customPermissions);
                     
                     if (authCreated) {
-                        showToast('✅ 使用者已建立，可立即登入系統');
+                        showToast('✅ 使用者 ' + name + ' 已建立完成！可立即登入系統');
                     } else {
-                        showToast('⚠️ 使用者資料已建立，但 Auth 帳號需手動建立');
+                        showToast('⚠️ 使用者資料已建立，但登入帳號建立失敗');
                         setTimeout(function() {
-                            alert('📋 使用者資料已建立！\n\n但 Firebase Auth 帳號建立失敗。\n\n請到 Firebase Console > Authentication 手動建立帳號：\n• Email: ' + email + '\n• 密碼: ' + password);
+                            alert('📋 使用者資料已建立！\n\n但 Firebase Auth 帳號建立失敗。\n\n請到 Firebase Console > Authentication > Users\n點擊「Add user」手動建立：\n\n• Email: ' + email + '\n• Password: （您設定的密碼）\n\n或聯繫系統管理員協助處理。');
                         }, 500);
                     }
                     
                 } else {
                     // 編輯模式
+                    // 取得自訂權限
+                    var customPermissions = getSelectedPermissions();
+                    
                     var updateData = {
                         name: name,
                         role: role,
                         dept: dept,
                         active: active,
+                        customPermissions: customPermissions,
                         updatedAt: new Date().toISOString(),
                         updatedBy: window.currentUser ? window.currentUser.email : 'system'
                     };
@@ -16438,7 +16703,7 @@ window.clearLocalStorage = function() {
                         Object.assign(user, updateData);
                     }
                     
-                    showToast('✅ 使用者已更新');
+                    showToast('✅ 使用者 ' + name + ' 已更新');
                 }
                 
                 closeUserModal();
@@ -16507,13 +16772,14 @@ window.clearLocalStorage = function() {
             var tbody = document.getElementById('user-list-body');
             if (!tbody) return;
             
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-slate-500 py-8"><i class="fa-solid fa-spinner fa-spin mr-2"></i>載入中...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-500 py-8"><i class="fa-solid fa-spinner fa-spin mr-2"></i>載入中...</td></tr>';
             
             // 重新從 Firebase 載入
             await loadUsersFromFirebase();
             
             if (window.usersData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-slate-500 py-8">尚無使用者資料</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-500 py-8">尚無使用者資料</td></tr>';
+                updateUserStats();
                 return;
             }
             
@@ -16531,6 +16797,11 @@ window.clearLocalStorage = function() {
                 var statusBadge = user.active !== false 
                     ? '<span class="badge badge-green cursor-pointer" onclick="toggleUserStatus(\'' + user.email + '\')">啟用</span>'
                     : '<span class="badge badge-red cursor-pointer" onclick="toggleUserStatus(\'' + user.email + '\')">停用</span>';
+                // 判斷是否可登入：有 authCreated 標記，或曾經登入過
+                var canLogin = user.authCreated || user.lastLogin;
+                var authBadge = canLogin 
+                    ? '<span class="text-emerald-400 text-[10px]" title="可登入"><i class="fa-solid fa-check-circle"></i></span>'
+                    : '<span class="text-yellow-400 text-[10px]" title="尚未建立登入帳號"><i class="fa-solid fa-exclamation-triangle"></i></span>';
                 var lastLogin = user.lastLogin 
                     ? new Date(user.lastLogin).toLocaleString('zh-TW')
                     : '<span class="text-slate-600">從未登入</span>';
@@ -16538,15 +16809,26 @@ window.clearLocalStorage = function() {
                     ? new Date(user.createdAt).toLocaleDateString('zh-TW')
                     : '-';
                 
+                // 取得使用者權限並顯示
+                var userPerms = getUserPermissions(user);
+                var permBadge = '';
+                if (userPerms.includes('all')) {
+                    permBadge = '<span class="text-amber-400 text-[10px] ml-1" title="全部權限"><i class="fa-solid fa-star"></i></span>';
+                } else if (user.customPermissions && user.customPermissions.length > 0) {
+                    permBadge = '<span class="text-amber-400 text-[10px] ml-1" title="自訂 ' + user.customPermissions.length + ' 項權限"><i class="fa-solid fa-sliders"></i> ' + user.customPermissions.length + '</span>';
+                }
+                
                 html += '<tr class="hover:bg-slate-800/50 border-b border-slate-700/50">';
-                html += '<td class="p-3"><span class="text-cyan-400">' + user.email + '</span></td>';
+                html += '<td class="p-3"><span class="text-cyan-400">' + user.email + '</span> ' + authBadge + '</td>';
                 html += '<td class="p-3 font-bold text-white">' + (user.name || '-') + '</td>';
-                html += '<td class="p-3"><span class="badge badge-' + role.color + '"><i class="fa-solid fa-' + role.icon + ' mr-1"></i>' + role.name + '</span></td>';
+                html += '<td class="p-3"><span class="badge badge-' + role.color + '"><i class="fa-solid fa-' + role.icon + ' mr-1"></i>' + role.name + '</span>' + permBadge + '</td>';
                 html += '<td class="p-3 text-slate-400">' + (user.dept || '-') + '</td>';
-                html += '<td class="p-3">' + statusBadge + '</td>';
+                html += '<td class="p-3 text-center">' + statusBadge + '</td>';
                 html += '<td class="p-3 text-slate-400 text-xs">' + lastLogin + '</td>';
+                html += '<td class="p-3 text-slate-400 text-xs">' + createdAt + '</td>';
                 html += '<td class="p-3 text-center">';
                 html += '<button onclick="editUser(\'' + user.email + '\')" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2 py-1 rounded mr-1" title="編輯"><i class="fa-solid fa-pen"></i></button>';
+                html += '<button onclick="resetUserPassword(\'' + user.email + '\')" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-2 py-1 rounded mr-1" title="重設密碼"><i class="fa-solid fa-key"></i></button>';
                 if (user.email !== 'admin@bafang.com') {
                     html += '<button onclick="deleteUser(\'' + user.email + '\')" class="bg-red-600 hover:bg-red-500 text-white text-xs px-2 py-1 rounded" title="刪除"><i class="fa-solid fa-trash"></i></button>';
                 }
@@ -16555,6 +16837,138 @@ window.clearLocalStorage = function() {
             });
             
             tbody.innerHTML = html;
+            
+            // 更新統計
+            updateUserStats();
+            
+            // 更新使用者數量
+            document.getElementById('user-count').innerText = '共 ' + window.usersData.length + ' 位使用者';
+        };
+        
+        // 更新使用者統計
+        function updateUserStats() {
+            var stats = { admin: 0, finance: 0, supervisor: 0, sales: 0, operator: 0, forklift: 0, readonly: 0 };
+            window.usersData.forEach(function(u) {
+                if (stats.hasOwnProperty(u.role)) {
+                    stats[u.role]++;
+                } else {
+                    stats.operator++;
+                }
+            });
+            
+            Object.keys(stats).forEach(function(role) {
+                var el = document.getElementById('stat-' + role);
+                if (el) el.innerText = stats[role];
+            });
+        }
+        
+        // 重設使用者密碼
+        window.resetUserPassword = async function(email) {
+            if (!confirm('確定要發送密碼重設郵件給 ' + email + '？')) return;
+            
+            try {
+                await window.sendPasswordResetEmail(window.auth, email);
+                showToast('✅ 密碼重設郵件已發送至 ' + email);
+            } catch (e) {
+                console.error('發送密碼重設郵件失敗:', e);
+                if (e.code === 'auth/user-not-found') {
+                    showToast('⚠️ 此 Email 尚未建立 Firebase Auth 帳號');
+                } else {
+                    showToast('❌ 發送失敗: ' + e.message);
+                }
+            }
+        };
+        
+        // 篩選使用者清單
+        window.filterUserList = function() {
+            var searchText = (document.getElementById('user-search').value || '').toLowerCase();
+            var roleFilter = document.getElementById('user-role-filter').value;
+            var statusFilter = document.getElementById('user-status-filter').value;
+            
+            var tbody = document.getElementById('user-list-body');
+            if (!tbody) return;
+            
+            // 篩選
+            var filteredUsers = window.usersData.filter(function(user) {
+                // 搜尋文字
+                if (searchText) {
+                    var matchEmail = (user.email || '').toLowerCase().includes(searchText);
+                    var matchName = (user.name || '').toLowerCase().includes(searchText);
+                    if (!matchEmail && !matchName) return false;
+                }
+                
+                // 角色篩選
+                if (roleFilter && user.role !== roleFilter) return false;
+                
+                // 狀態篩選
+                if (statusFilter === 'active' && user.active === false) return false;
+                if (statusFilter === 'inactive' && user.active !== false) return false;
+                
+                return true;
+            });
+            
+            // 排序
+            filteredUsers.sort(function(a, b) {
+                var levelA = (window.ROLES[a.role] || window.ROLES.readonly).level;
+                var levelB = (window.ROLES[b.role] || window.ROLES.readonly).level;
+                if (levelB !== levelA) return levelB - levelA;
+                return (a.name || '').localeCompare(b.name || '');
+            });
+            
+            // 渲染
+            if (filteredUsers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-500 py-8">沒有符合條件的使用者</td></tr>';
+                document.getElementById('user-count').innerText = '共 0 位使用者';
+                return;
+            }
+            
+            var html = '';
+            filteredUsers.forEach(function(user) {
+                var role = window.ROLES[user.role] || window.ROLES.operator;
+                var statusBadge = user.active !== false 
+                    ? '<span class="badge badge-green cursor-pointer" onclick="toggleUserStatus(\'' + user.email + '\')">啟用</span>'
+                    : '<span class="badge badge-red cursor-pointer" onclick="toggleUserStatus(\'' + user.email + '\')">停用</span>';
+                // 判斷是否可登入：有 authCreated 標記，或曾經登入過
+                var canLogin = user.authCreated || user.lastLogin;
+                var authBadge = canLogin 
+                    ? '<span class="text-emerald-400 text-[10px]" title="可登入"><i class="fa-solid fa-check-circle"></i></span>'
+                    : '<span class="text-yellow-400 text-[10px]" title="尚未建立登入帳號"><i class="fa-solid fa-exclamation-triangle"></i></span>';
+                var lastLogin = user.lastLogin 
+                    ? new Date(user.lastLogin).toLocaleString('zh-TW')
+                    : '<span class="text-slate-600">從未登入</span>';
+                var createdAt = user.createdAt
+                    ? new Date(user.createdAt).toLocaleDateString('zh-TW')
+                    : '-';
+                
+                // 取得使用者權限並顯示
+                var userPerms = getUserPermissions(user);
+                var permBadge = '';
+                if (userPerms.includes('all')) {
+                    permBadge = '<span class="text-amber-400 text-[10px] ml-1" title="全部權限"><i class="fa-solid fa-star"></i></span>';
+                } else if (user.customPermissions && user.customPermissions.length > 0) {
+                    permBadge = '<span class="text-amber-400 text-[10px] ml-1" title="自訂 ' + user.customPermissions.length + ' 項權限"><i class="fa-solid fa-sliders"></i> ' + user.customPermissions.length + '</span>';
+                }
+                
+                html += '<tr class="hover:bg-slate-800/50 border-b border-slate-700/50">';
+                html += '<td class="p-3"><span class="text-cyan-400">' + user.email + '</span> ' + authBadge + '</td>';
+                html += '<td class="p-3 font-bold text-white">' + (user.name || '-') + '</td>';
+                html += '<td class="p-3"><span class="badge badge-' + role.color + '"><i class="fa-solid fa-' + role.icon + ' mr-1"></i>' + role.name + '</span>' + permBadge + '</td>';
+                html += '<td class="p-3 text-slate-400">' + (user.dept || '-') + '</td>';
+                html += '<td class="p-3 text-center">' + statusBadge + '</td>';
+                html += '<td class="p-3 text-slate-400 text-xs">' + lastLogin + '</td>';
+                html += '<td class="p-3 text-slate-400 text-xs">' + createdAt + '</td>';
+                html += '<td class="p-3 text-center">';
+                html += '<button onclick="editUser(\'' + user.email + '\')" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2 py-1 rounded mr-1" title="編輯"><i class="fa-solid fa-pen"></i></button>';
+                html += '<button onclick="resetUserPassword(\'' + user.email + '\')" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-2 py-1 rounded mr-1" title="重設密碼"><i class="fa-solid fa-key"></i></button>';
+                if (user.email !== 'admin@bafang.com') {
+                    html += '<button onclick="deleteUser(\'' + user.email + '\')" class="bg-red-600 hover:bg-red-500 text-white text-xs px-2 py-1 rounded" title="刪除"><i class="fa-solid fa-trash"></i></button>';
+                }
+                html += '</td>';
+                html += '</tr>';
+            });
+            
+            tbody.innerHTML = html;
+            document.getElementById('user-count').innerText = '共 ' + filteredUsers.length + ' 位使用者';
         };
         
         // 取得操作者名稱（用於記錄）
@@ -19839,15 +20253,27 @@ async function loadVirtualLocationCounts() {
             const excludeStatus = ['shipped', 'outbound', 'deleted', 'cancelled', 'removed'];
             if (excludeStatus.includes(status)) return;
             
-            data.id = doc.id;
-            const locId = data.locationId;
+            // 排除數量為 0 的棧板
+            if (!data.quantity || data.quantity <= 0) return;
             
-            if (VIRTUAL_LOCATION_CONFIG[locId]) {
+            data.id = doc.id;
+            let locId = data.locationId || '';
+            
+            // 標準化 locationId（轉大寫）
+            const locIdUpper = locId.toUpperCase().trim();
+            
+            // 檢查是否為虛擬儲位
+            if (VIRTUAL_LOCATION_CONFIG[locIdUpper]) {
+                counts[locIdUpper]++;
+                window.virtualLocationInventory[locIdUpper].push(data);
+            } else if (VIRTUAL_LOCATION_CONFIG[locId]) {
+                // 原始格式也檢查
                 counts[locId]++;
                 window.virtualLocationInventory[locId].push(data);
             }
         });
         
+        // 更新 UI
         Object.keys(counts).forEach(locId => {
             const el = document.getElementById(`vl-count-${locId}`);
             if (el) {
@@ -19967,6 +20393,14 @@ function selectVirtualLocation(locationId) {
     if (locInput) {
         locInput.value = locationId;
         validateLocationInput();
+        // 更新入庫進度
+        if (typeof updateInboundProgress === 'function') {
+            updateInboundProgress();
+        }
+        // 更新預覽
+        if (typeof updateLivePreview === 'function') {
+            updateLivePreview();
+        }
         showNotification(`已選擇虛擬儲位：${VIRTUAL_LOCATION_CONFIG[locationId]?.name || locationId}`, 'success');
     }
 }
