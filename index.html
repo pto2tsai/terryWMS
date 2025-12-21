@@ -54,7 +54,9 @@
         .badge-blue { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
         .badge-red { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
 
-        .dense-table th { position: sticky; top: 0; background: #0f172a; z-index: 10; padding: 8px 12px; border-bottom: 1px solid #334155; text-align: left; font-size: 12px; color: #94a3b8; }
+        .dense-table th { position: sticky; top: 0; background: #0f172a; z-index: 10; padding: 8px 12px; border-bottom: 1px solid #334155; font-size: 12px; color: #94a3b8; }
+        .dense-table th.text-left { text-align: left; }
+        .dense-table th.text-right { text-align: right; }
         .dense-table td { padding: 6px 12px; border-bottom: 1px solid #1e293b; white-space: nowrap; font-size: 12px; }
         .dense-table tr:hover { background-color: #334155; cursor: pointer; }
 
@@ -743,8 +745,48 @@
                                     <input type="date" id="in-exp" class="p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" oninput="updateLivePreview(); updateInboundProgress();">
                                 </div>
                                 
-                                <!-- 數量 -->
-                                <input type="number" id="in-qty" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm font-bold" placeholder="數量 *" oninput="updateLivePreview(); updateInboundProgress();">
+                                <!-- 品項類型選擇 -->
+                                <div class="flex gap-2 bg-slate-900 rounded p-1.5">
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="in-product-type" value="fixed" class="hidden peer" checked onchange="toggleProductType('fixed')">
+                                        <div class="text-center py-1 rounded text-xs font-bold peer-checked:bg-blue-600 peer-checked:text-white text-slate-400 transition-all">
+                                            📦 定重品
+                                        </div>
+                                    </label>
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="in-product-type" value="variable" class="hidden peer" onchange="toggleProductType('variable')">
+                                        <div class="text-center py-1 rounded text-xs font-bold peer-checked:bg-amber-600 peer-checked:text-white text-slate-400 transition-all">
+                                            ⚖️ 不定重品
+                                        </div>
+                                    </label>
+                                </div>
+                                
+                                <!-- 定重品：數量 + 箱容 -->
+                                <div id="fixed-weight-fields" class="grid grid-cols-2 gap-1">
+                                    <div class="relative">
+                                        <input type="number" id="in-qty" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm font-bold pr-8" placeholder="數量 *" oninput="updateLivePreview(); updateInboundProgress();">
+                                        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">件</span>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="number" id="in-unit-weight" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm font-bold pr-12" placeholder="箱容" oninput="updateLivePreview();" step="0.1">
+                                        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">kg/件</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- 不定重品：數量 + 總重量 -->
+                                <div id="variable-weight-fields" class="grid grid-cols-2 gap-1 hidden">
+                                    <div class="relative">
+                                        <input type="number" id="in-qty-var" class="w-full p-1.5 bg-slate-800 border border-amber-600/50 rounded text-white text-sm font-bold pr-8" placeholder="數量 *" oninput="updateLivePreview(); updateInboundProgress(); calcAvgWeight();">
+                                        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-xs">件</span>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="number" id="in-weight" class="w-full p-1.5 bg-slate-800 border border-amber-600/50 rounded text-white text-sm font-bold pr-8" placeholder="總重量 *" oninput="updateLivePreview(); calcAvgWeight(); updateInboundProgress();" step="0.1">
+                                        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-xs">kg</span>
+                                    </div>
+                                </div>
+                                <div id="avg-weight-hint" class="text-xs text-amber-400 -mt-1 hidden">
+                                    <i class="fa-solid fa-calculator mr-1"></i>每件均重：<span id="avg-weight-value">-</span> kg
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -925,7 +967,7 @@
                         <button onclick="document.getElementById('containerExcel').click()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-bold">
                             <i class="fa-solid fa-file-excel mr-1"></i>上傳 Excel
                         </button>
-                        <div class="text-[10px] text-slate-500 mt-1">欄位：廠商、品名、規格、批號、效期、數量、每板數</div>
+                        <div class="text-[10px] text-slate-500 mt-1">欄位：廠商、品名、規格、批號、效期、數量、每板數、箱容kg、總重量kg、類型(定重/不定重)</div>
                     </div>
                     
                     <!-- 1. 手動新增品項（與 Excel 並行）-->
@@ -939,9 +981,36 @@
                                 <input type="text" id="pre-batch" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="批號 *">
                                 <input type="date" id="pre-exp" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm">
                             </div>
-                            <div class="grid grid-cols-2 gap-1.5">
-                                <input type="number" id="pre-qty" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center" placeholder="總數量 *">
+                            <!-- 品項類型選擇 -->
+                            <div class="flex gap-1 bg-slate-900 rounded p-1">
+                                <label class="flex-1 cursor-pointer">
+                                    <input type="radio" name="pre-product-type" value="fixed" class="hidden peer" checked onchange="togglePreProductType('fixed')">
+                                    <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-blue-600 peer-checked:text-white text-slate-400">📦 定重</div>
+                                </label>
+                                <label class="flex-1 cursor-pointer">
+                                    <input type="radio" name="pre-product-type" value="variable" class="hidden peer" onchange="togglePreProductType('variable')">
+                                    <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-amber-600 peer-checked:text-white text-slate-400">⚖️ 不定重</div>
+                                </label>
+                            </div>
+                            <!-- 定重品欄位 -->
+                            <div id="pre-fixed-fields" class="grid grid-cols-3 gap-1.5">
+                                <input type="number" id="pre-qty" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center" placeholder="數量 *">
                                 <input type="number" id="pre-per-pallet" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center" value="50" placeholder="每板數">
+                                <input type="number" id="pre-unit-weight" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center" placeholder="箱容kg" step="0.1">
+                            </div>
+                            <!-- 不定重品欄位 -->
+                            <div id="pre-variable-fields" class="hidden space-y-1.5">
+                                <div class="grid grid-cols-2 gap-1.5">
+                                    <div class="relative">
+                                        <input type="number" id="pre-qty-var" class="w-full p-1.5 bg-slate-900 border border-amber-600/50 rounded text-white text-sm text-center pr-6" placeholder="數量 *">
+                                        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-[10px]">件</span>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="number" id="pre-total-weight" class="w-full p-1.5 bg-slate-900 border border-amber-600/50 rounded text-white text-sm text-center pr-6" placeholder="總重量 *" step="0.1">
+                                        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-[10px]">kg</span>
+                                    </div>
+                                </div>
+                                <input type="number" id="pre-per-pallet-var" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center" value="50" placeholder="每板數">
                             </div>
                             <button onclick="addContainerItemAndGenerate()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold">
                                 <i class="fa-solid fa-plus mr-1"></i>新增品項
@@ -1023,7 +1092,7 @@
                 </div>
             </div>
             
-            <div id="view-inventory-query" class="view-panel h-full hidden flex flex-col p-4"><div class="flex gap-2 mb-3 items-center"><input type="text" id="global-search" class="scan-input pl-9" placeholder="萬用搜尋..." oninput="filterInventory()"><button onclick="document.getElementById('stockImportInput').click()" class="bg-orange-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-orange-500 ml-auto flex items-center gap-2"><i class="fa-solid fa-file-import"></i> 期初匯入</button><button onclick="downloadTemplate('stock')" class="text-slate-400 text-xs hover:text-white underline">範本</button><input type="file" id="stockImportInput" accept=".xlsx" class="hidden" onchange="handleStockImport(event)"></div><div class="glass-panel flex-1 overflow-auto"><table class="w-full dense-table"><thead><tr><th>ID</th><th>品名</th><th>規格</th><th>批號</th><th>數量</th><th>位置</th><th>操作</th></tr></thead><tbody id="inventory-list-body"></tbody></table></div></div>
+            <div id="view-inventory-query" class="view-panel h-full hidden flex flex-col p-4"><div class="flex gap-2 mb-3 items-center"><input type="text" id="global-search" class="scan-input pl-9" placeholder="萬用搜尋..." oninput="filterInventory()"><button onclick="exportInventoryToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-500 flex items-center gap-2"><i class="fa-solid fa-file-excel"></i> 匯出庫存</button><button onclick="document.getElementById('stockImportInput').click()" class="bg-orange-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-orange-500 ml-auto flex items-center gap-2"><i class="fa-solid fa-file-import"></i> 期初匯入</button><button onclick="downloadTemplate('stock')" class="text-slate-400 text-xs hover:text-white underline">範本</button><input type="file" id="stockImportInput" accept=".xlsx" class="hidden" onchange="handleStockImport(event)"></div><div class="glass-panel flex-1 overflow-auto"><table class="w-full dense-table"><thead><tr><th class="text-left">品名</th><th class="text-left">規格</th><th class="text-left">批號</th><th class="text-right">數量</th><th class="text-right">重量</th><th class="text-left">位置</th><th class="text-left">效期</th><th class="text-right">操作</th></tr></thead><tbody id="inventory-list-body"></tbody></table></div></div>
             
             <!-- 成品出貨（自動揀貨） -->
 
@@ -3286,13 +3355,14 @@
                                     <th class="text-left p-3 text-slate-300 font-medium">品項</th>
                                     <th class="text-left p-3 text-slate-300 font-medium">規格</th>
                                     <th class="text-right p-3 text-slate-300 font-medium">數量</th>
+                                    <th class="text-right p-3 text-slate-300 font-medium">重量</th>
                                     <th class="text-left p-3 text-slate-300 font-medium">儲位</th>
                                     <th class="text-left p-3 text-slate-300 font-medium">批號</th>
                                     <th class="text-left p-3 text-slate-300 font-medium">備註</th>
                                 </tr>
                             </thead>
                             <tbody id="inventory-log-list">
-                                <tr><td colspan="8" class="text-center text-slate-500 py-16">
+                                <tr><td colspan="9" class="text-center text-slate-500 py-16">
                                     <i class="fa-solid fa-search text-4xl mb-3 opacity-30"></i>
                                     <p>請設定查詢條件後點擊「查詢」</p>
                                 </td></tr>
@@ -3754,6 +3824,44 @@
                 </div>
             </div>
 
+            <!-- 領料確認 Modal -->
+            <div id="modal-rm-confirm" class="fixed inset-0 z-50 bg-black/80 hidden flex items-center justify-center backdrop-blur-sm">
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl w-[600px] max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+                    <div class="bg-gradient-to-r from-cyan-900 to-cyan-800 p-4 rounded-t-2xl border-b border-slate-700">
+                        <h3 class="text-white font-bold text-lg"><i class="fa-solid fa-clipboard-check mr-2"></i>確認領料出庫</h3>
+                        <p class="text-cyan-200 text-sm mt-1">請確認每筆的實際領用數量</p>
+                    </div>
+                    <div class="p-4 flex-1 overflow-y-auto">
+                        <!-- 領料明細列表 -->
+                        <div id="rm-confirm-list" class="space-y-3">
+                            <!-- 動態產生 -->
+                        </div>
+                    </div>
+                    <div class="p-4 border-t border-slate-700 bg-slate-800/50">
+                        <div class="grid grid-cols-2 gap-3 mb-4">
+                            <div>
+                                <label class="text-slate-400 text-xs mb-1 block">領用人 <span class="text-red-400">*</span></label>
+                                <input type="text" id="rm-confirm-user" class="scan-input w-full" placeholder="輸入領用人姓名">
+                            </div>
+                            <div>
+                                <label class="text-slate-400 text-xs mb-1 block">用途/生產批次</label>
+                                <input type="text" id="rm-confirm-purpose" class="scan-input w-full" placeholder="如：加工A線、生產批次001">
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mb-4 p-3 bg-slate-900 rounded-lg">
+                            <div class="text-slate-400">總計領用</div>
+                            <div class="text-2xl font-bold text-yellow-400" id="rm-confirm-total">0 件</div>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="closeRmConfirmModal()" class="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">取消</button>
+                            <button onclick="executeRmPicking()" class="flex-1 py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold">
+                                <i class="fa-solid fa-check mr-2"></i>確認出庫
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
     <div id="print-area" class="hidden"></div>
 
     <!-- 待執行入庫單彈窗 -->
@@ -3987,7 +4095,36 @@
                         if(data.category === 'FG') badge = '<span class="badge badge-purple">成品</span>';
                         if(data.category === 'WIP') badge = '<span class="badge badge-yellow">半成品</span>';
                         if(data.source === 'Factory_Return') badge = '<span class="badge badge-orange">餘料</span>';
-                        if(tbody) tbody.innerHTML += `<tr class="border-b border-slate-700 hover:bg-slate-800"><td class="font-mono text-blue-400 p-2">${d.id}</td><td class="text-white p-2">${data.productName}</td><td class="text-yellow-400 p-2">${data.spec||'-'}</td><td class="text-slate-400 font-mono p-2">${data.batchNo}</td><td class="text-right text-white p-2">${data.quantity||'-'}</td><td class="p-2">${data.locationId}</td><td class="p-2 text-right"><button onclick="deletePallet('${d.id}')" class="text-red-500 hover:bg-red-500/20 rounded px-2"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+                        if(tbody) {
+                            // 重量顯示
+                            var weightDisplay = '-';
+                            if (data.productType === 'variable' && data.totalWeight > 0) {
+                                weightDisplay = '<span class="text-amber-400">' + data.totalWeight + ' kg</span>';
+                            } else if (data.unitWeight > 0) {
+                                weightDisplay = '<span class="text-slate-400">@' + data.unitWeight + ' kg</span>';
+                            } else if (data.totalWeight > 0) {
+                                weightDisplay = '<span class="text-amber-400">' + data.totalWeight + ' kg</span>';
+                            }
+                            
+                            // 效期顯示
+                            var expDisplay = '-';
+                            var expClass = 'text-slate-400';
+                            if (data.expiryDate) {
+                                var expDate = data.expiryDate.toDate ? data.expiryDate.toDate() : new Date(data.expiryDate);
+                                var today = new Date();
+                                var diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+                                expDisplay = expDate.toLocaleDateString('zh-TW');
+                                if (diffDays < 0) {
+                                    expClass = 'text-red-500 font-bold';
+                                } else if (diffDays < 30) {
+                                    expClass = 'text-red-400';
+                                } else if (diffDays < 90) {
+                                    expClass = 'text-yellow-400';
+                                }
+                            }
+                            
+                            tbody.innerHTML += `<tr class="border-b border-slate-700 hover:bg-slate-800"><td class="text-white p-2">${data.productName}</td><td class="text-yellow-400 p-2">${data.spec||'-'}</td><td class="text-slate-400 font-mono p-2">${data.batchNo||'-'}</td><td class="text-right text-white p-2">${data.quantity||'-'}</td><td class="text-right p-2">${weightDisplay}</td><td class="p-2 text-cyan-400 font-mono">${data.locationId}</td><td class="p-2 ${expClass}">${expDisplay}</td><td class="p-2 text-right"><button onclick="deletePallet('${d.id}')" class="text-red-500 hover:bg-red-500/20 rounded px-2" title="刪除"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+                        }
                     }
                 });
                 if(document.getElementById('kpi-total-pallets')) { 
@@ -4906,7 +5043,19 @@ console.log('✅ WMS 工具函數庫已載入');
                     html += '<td class="p-1.5"><span class="px-1 py-0.5 rounded text-[10px] ' + companyClass + '">' + (item.company || '-') + '</span></td>';
                     html += '<td class="p-1.5 text-white">' + (item.productName || '-') + '</td>';
                     html += '<td class="p-1.5 text-slate-400 text-[10px]">' + (item.spec || '-') + '</td>';
-                    html += '<td class="p-1.5 text-right font-bold text-white">' + (item.quantity || 0) + '</td>';
+                    // 數量顯示：定重品顯示箱容，不定重品顯示總重量
+                    var qtyDisplay = (item.quantity || 0) + '件';
+                    if (item.productType === 'variable' && item.totalWeight > 0) {
+                        // 不定重品：顯示總重量
+                        qtyDisplay += '<span class="text-amber-400 text-[10px] ml-1">/ ' + item.totalWeight + 'kg</span>';
+                    } else if (item.unitWeight && item.unitWeight > 0) {
+                        // 定重品：顯示箱容
+                        qtyDisplay += '<span class="text-slate-500 text-[10px] ml-1">@' + item.unitWeight + 'kg</span>';
+                    } else if (item.totalWeight && item.totalWeight > 0) {
+                        // 向下相容：有總重量但沒有標記類型
+                        qtyDisplay += '<span class="text-amber-400 text-[10px] ml-1">/ ' + item.totalWeight + 'kg</span>';
+                    }
+                    html += '<td class="p-1.5 text-right font-bold text-white">' + qtyDisplay + '</td>';
                     html += '<td class="p-1.5">' + expiryStr + '</td>';
                     html += '<td class="p-1.5">' + consignStr + '</td>';
                     html += '</tr>';
@@ -5508,49 +5657,53 @@ console.log('✅ WMS 工具函數庫已載入');
         
         // 更新入庫進度指示器
         window.updateInboundProgress = function() {
-            var name = document.getElementById('in-name').value.trim();
-            var qty = document.getElementById('in-qty').value;
-            var exp = document.getElementById('in-exp').value;
-            var loc = document.getElementById('in-loc').value.trim();
+            var nameEl = document.getElementById('in-name');
+            var expEl = document.getElementById('in-exp');
+            var locEl = document.getElementById('in-loc');
+            var btn = document.getElementById('btn-inbound-main');
             
-            // 更新檢查清單
-            updateCheckItem('check-name', !!name);
-            updateCheckItem('check-qty', !!qty && parseInt(qty) > 0);
-            updateCheckItem('check-exp', !!exp);
-            updateCheckItem('check-loc', !!loc);
+            if (!nameEl || !expEl || !locEl || !btn) return;
             
-            // 更新步驟進度
-            var step1 = document.getElementById('inbound-step-1');
-            var step2 = document.getElementById('inbound-step-2');
-            var step3 = document.getElementById('inbound-step-3');
+            var name = nameEl.value.trim();
+            var exp = expEl.value;
+            var loc = locEl.value.trim();
             
-            var step1Complete = !!name && !!qty && parseInt(qty) > 0 && !!exp;
-            var step2Complete = !!loc;
+            // 檢查數量 - 根據選擇的類型
+            var radio = document.querySelector('input[name="in-product-type"]:checked');
+            var isVariable = radio && radio.value === 'variable';
             
-            // Step 1
-            if (step1Complete) {
-                step1.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white transition-all';
+            var qtyOk = false;
+            if (isVariable) {
+                var qv = document.getElementById('in-qty-var');
+                var wt = document.getElementById('in-weight');
+                qtyOk = qv && wt && parseInt(qv.value) > 0 && parseFloat(wt.value) > 0;
             } else {
-                step1.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white transition-all';
+                var q = document.getElementById('in-qty');
+                qtyOk = q && parseInt(q.value) > 0;
             }
             
-            // Step 2
-            if (step2Complete) {
-                step2.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white transition-all';
-            } else if (step1Complete) {
-                step2.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white transition-all';
-            } else {
-                step2.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-slate-400 transition-all';
+            // 更新檢查項目
+            if (typeof updateCheckItem === 'function') {
+                updateCheckItem('check-name', !!name);
+                updateCheckItem('check-qty', qtyOk);
+                updateCheckItem('check-exp', !!exp);
+                updateCheckItem('check-loc', !!loc);
             }
             
-            // Step 3
-            if (step1Complete && step2Complete) {
-                step3.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 text-white transition-all';
-                document.getElementById('btn-inbound-main').disabled = false;
-            } else {
-                step3.className = 'flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-slate-400 transition-all';
-                document.getElementById('btn-inbound-main').disabled = true;
-            }
+            var allOk = !!name && qtyOk && !!exp && !!loc;
+            
+            // 更新步驟樣式
+            var s1 = document.getElementById('inbound-step-1');
+            var s2 = document.getElementById('inbound-step-2');
+            var s3 = document.getElementById('inbound-step-3');
+            
+            var step1Done = !!name && qtyOk && !!exp;
+            
+            if (s1) s1.className = step1Done ? 'flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white transition-all' : 'flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white transition-all';
+            if (s2) s2.className = !!loc ? 'flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white transition-all' : 'flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-slate-400 transition-all';
+            if (s3) s3.className = allOk ? 'flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 text-white transition-all' : 'flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-slate-400 transition-all';
+            
+            btn.disabled = !allOk;
         };
         
         function updateCheckItem(id, isComplete) {
@@ -5566,6 +5719,46 @@ console.log('✅ WMS 工具函數庫已載入');
                 text.className = 'text-slate-400';
             }
         }
+        
+        // 切換品項類型（定重/不定重）
+        window.toggleProductType = function(type) {
+            var fixedFields = document.getElementById('fixed-weight-fields');
+            var variableFields = document.getElementById('variable-weight-fields');
+            var avgWeightHint = document.getElementById('avg-weight-hint');
+            
+            if (type === 'fixed') {
+                fixedFields.classList.remove('hidden');
+                variableFields.classList.add('hidden');
+                avgWeightHint.classList.add('hidden');
+            } else {
+                fixedFields.classList.add('hidden');
+                variableFields.classList.remove('hidden');
+                avgWeightHint.classList.remove('hidden');
+            }
+            
+            // 切換類型後重新檢查進度
+            updateInboundProgress();
+        };
+        
+        // 計算每件均重（不定重品）
+        window.calcAvgWeight = function() {
+            var qty = parseInt(document.getElementById('in-qty-var').value) || 0;
+            var weight = parseFloat(document.getElementById('in-weight').value) || 0;
+            var avgSpan = document.getElementById('avg-weight-value');
+            
+            if (qty > 0 && weight > 0) {
+                var avg = Math.round(weight / qty * 100) / 100;
+                avgSpan.innerText = avg;
+            } else {
+                avgSpan.innerText = '-';
+            }
+        };
+        
+        // 取得當前品項類型
+        window.getProductType = function() {
+            var radio = document.querySelector('input[name="in-product-type"]:checked');
+            return radio ? radio.value : 'fixed';
+        };
 
         async function confirmUnifiedInbound() {
              var loc = document.getElementById('in-loc').value;
@@ -5576,11 +5769,28 @@ console.log('✅ WMS 工具函數庫已載入');
              if(!loc) { alert("❌ 請先選儲位"); return; }
              if(!finalID) { alert("❌ 請輸入插單編號"); return; }
              if(!document.getElementById('in-name').value) { alert("❌ 請填寫品名"); return; }
-             if(!document.getElementById('in-qty').value) { alert("❌ 請填寫數量"); return; }
+             
+             // 根據品項類型取得數量和重量
+             var productType = getProductType();
+             var qty, totalWeight, unitWeight;
+             
+             if (productType === 'fixed') {
+                 // 定重品：數量 + 箱容
+                 qty = parseInt(document.getElementById('in-qty').value) || 0;
+                 unitWeight = parseFloat(document.getElementById('in-unit-weight').value) || 0;
+                 totalWeight = qty * unitWeight; // 計算總重量
+                 if (!qty) { alert("❌ 請填寫數量"); return; }
+             } else {
+                 // 不定重品：數量 + 總重量
+                 qty = parseInt(document.getElementById('in-qty-var').value) || 0;
+                 totalWeight = parseFloat(document.getElementById('in-weight').value) || 0;
+                 unitWeight = qty > 0 ? Math.round(totalWeight / qty * 100) / 100 : 0;
+                 if (!qty) { alert("❌ 請填寫數量"); return; }
+                 if (!totalWeight) { alert("❌ 不定重品請填寫總重量"); return; }
+             }
 
              var productName = document.getElementById('in-name').value;
              var spec = document.getElementById('in-spec').value || '';
-             var qty = parseInt(document.getElementById('in-qty').value) || 0;
              var batchNo = document.getElementById('in-batch') ? document.getElementById('in-batch').value : '';
              var expDate = document.getElementById('in-exp') ? document.getElementById('in-exp').value : '';
              var vendor = document.getElementById('in-vendor') ? document.getElementById('in-vendor').value : '';
@@ -5595,33 +5805,46 @@ console.log('✅ WMS 工具函數庫已載入');
                     batchNo: batchNo,
                     expiryDate: expDate,
                     quantity: qty,
+                    totalWeight: totalWeight,
+                    unitWeight: unitWeight,
+                    productType: productType,
                     locationId: loc,
                     category: document.getElementById('in-category').value,
                     inboundDate: new Date(), 
                     status: "Available",
                     vendor: vendor,
                     workOrder: document.getElementById('in-wo') ? document.getElementById('in-wo').value : '',
-                    totalWeight: 0,
                     source: 'Inbound'
                 });
                 
                 // 記錄異動
                 var categoryNames = { 'Raw': '採購進貨', 'FG': '產線成品', 'WIP': '產線半成品', 'Return': '餘料退庫' };
                 var categoryName = categoryNames[document.getElementById('in-category').value] || '入庫';
+                var weightNote = productType === 'fixed' 
+                    ? (unitWeight > 0 ? ' (箱容' + unitWeight + 'kg)' : '')
+                    : ' (總重' + totalWeight + 'kg)';
                 await window.logInventoryChange({
                     type: 'inbound',
                     productName: productName,
                     spec: spec,
                     quantity: qty,
+                    weight: totalWeight,
                     quantityChange: qty,
+                    weightChange: totalWeight,
                     locationId: loc,
                     batchNo: batchNo,
                     palletId: finalID,
                     expDate: expDate,
-                    note: categoryName + (vendor ? ' - ' + vendor : '')
+                    note: categoryName + (vendor ? ' - ' + vendor : '') + weightNote
                 });
                 
-                alert("✅ 入庫成功！");
+                var successMsg = "✅ 入庫成功！\n數量：" + qty + " 件";
+                if (productType === 'fixed' && unitWeight > 0) {
+                    successMsg += "\n箱容：" + unitWeight + " kg/件";
+                } else if (productType === 'variable') {
+                    successMsg += "\n總重：" + totalWeight + " kg（均重 " + unitWeight + " kg/件）";
+                }
+                alert(successMsg);
                 
                 setTimeout(function() {
                     var shouldPreview = document.getElementById('preview-pallet-tag') && document.getElementById('preview-pallet-tag').checked;
@@ -5632,6 +5855,7 @@ console.log('✅ WMS 工具函數庫已載入');
                             spec: document.getElementById('in-spec').value || '',
                             batchNo: document.getElementById('in-batch') ? document.getElementById('in-batch').value : '',
                             qty: document.getElementById('in-qty').value,
+                            weight: document.getElementById('in-weight').value,
                             loc: loc,
                             barcode: finalID
                         };
@@ -5645,6 +5869,10 @@ console.log('✅ WMS 工具函數庫已載入');
                     document.getElementById('in-name').value = '';
                     document.getElementById('in-spec').value = '';
                     document.getElementById('in-qty').value = '';
+                    document.getElementById('in-unit-weight').value = '';
+                    document.getElementById('in-qty-var').value = '';
+                    document.getElementById('in-weight').value = '';
+                    document.getElementById('avg-weight-value').innerText = '-';
                 }
              } catch(e) { 
                  console.error('入庫錯誤:', e);
@@ -5702,12 +5930,17 @@ console.log('✅ WMS 工具函數庫已載入');
             // 第二列：規格（100px）
             html += '<div class="row-2"><div class="product-spec">' + (d.spec || '-') + '</div></div>';
             
-            // 第三列：批號、效期、數量、廠商
+            // 第三列：批號、效期、數量、重量/廠商
             html += '<div class="row-3">';
             html += '<div class="info-cell batch"><div class="info-label">批號</div><div class="info-value">' + (d.batchNo || '-') + '</div></div>';
             html += '<div class="info-cell expiry"><div class="info-label">效期</div><div class="info-value">' + (exp || '-') + '</div></div>';
             html += '<div class="info-cell qty"><div class="info-label">數量</div><div class="info-value qty-val">' + d.qty + '</div></div>';
-            html += '<div class="info-cell vendor"><div class="info-label">廠商</div><div class="info-value vendor-val">' + (vendor || '-') + '</div></div>';
+            // 如果有重量資訊則顯示重量，否則顯示廠商
+            if (d.weight && parseFloat(d.weight) > 0) {
+                html += '<div class="info-cell vendor"><div class="info-label">重量</div><div class="info-value" style="color:#d97706;">' + d.weight + ' kg</div></div>';
+            } else {
+                html += '<div class="info-cell vendor"><div class="info-label">廠商</div><div class="info-value vendor-val">' + (vendor || '-') + '</div></div>';
+            }
             html += '</div>';
             
             // 第四列：儲位 + 短條碼（QR Code 已移到第一列）
@@ -5754,13 +5987,36 @@ console.log('✅ WMS 工具函數庫已載入');
                     var logPromises = [];
                     json.forEach((r,i) => { 
                         const palletId = r['條碼']||`OLD-${i}`;
+                        const qty = parseInt(r['數量']) || 0;
+                        
+                        // 判斷品項類型
+                        var productType = 'fixed';
+                        var unitWeight = parseFloat(r['箱容kg']) || 0;
+                        var totalWeight = parseFloat(r['總重量kg']) || 0;
+                        
+                        if (r['類型']) {
+                            productType = (r['類型'] === '不定重' || r['類型'] === 'variable') ? 'variable' : 'fixed';
+                        } else if (totalWeight > 0 && unitWeight === 0) {
+                            productType = 'variable';
+                        }
+                        
+                        if (productType === 'fixed' && unitWeight > 0) {
+                            totalWeight = qty * unitWeight;
+                        } else if (productType === 'variable' && qty > 0 && totalWeight > 0) {
+                            unitWeight = Math.round(totalWeight / qty * 100) / 100;
+                        }
+                        
                         const ref = window.doc(window.collection(window.db, "pallets")); 
                         batch.set(ref, { 
                             palletId: palletId, 
                             productName: r['品名'], 
                             spec: r['規格']||'', 
-                            quantity: r['數量'], 
-                            locationId: "INIT-STAGE", 
+                            batchNo: r['批號']||'',
+                            quantity: qty,
+                            totalWeight: totalWeight,
+                            unitWeight: unitWeight,
+                            productType: productType,
+                            locationId: r['儲位'] || "INIT-STAGE", 
                             status: "Available", 
                             inboundDate: new Date(), 
                             source: "Opening" 
@@ -5770,11 +6026,14 @@ console.log('✅ WMS 工具函數庫已載入');
                             type: 'inbound',
                             productName: r['品名'],
                             spec: r['規格'] || '',
-                            quantity: r['數量'],
-                            quantityChange: r['數量'],
-                            locationId: 'INIT-STAGE',
+                            quantity: qty,
+                            weight: totalWeight,
+                            quantityChange: qty,
+                            weightChange: totalWeight,
+                            locationId: r['儲位'] || 'INIT-STAGE',
+                            batchNo: r['批號'] || '',
                             palletId: palletId,
-                            note: '期初匯入'
+                            note: '期初匯入' + (totalWeight > 0 ? ' (' + totalWeight + 'kg)' : '')
                         }));
                     }); 
                     await batch.commit();
@@ -5785,6 +6044,83 @@ console.log('✅ WMS 工具函數庫已載入');
             reader.readAsArrayBuffer(file); 
             e.target.value = ''; 
         }
+        
+        // 匯出庫存到 Excel
+        window.exportInventoryToExcel = function() {
+            var pallets = window.currentPallets ? window.currentPallets() : [];
+            
+            if (pallets.length === 0) {
+                alert('沒有庫存資料可匯出');
+                return;
+            }
+            
+            // 準備資料
+            var data = [
+                ['條碼', '品名', '規格', '批號', '效期', '數量', '類型', '箱容kg', '總重量kg', '儲位', '廠商', '入庫日期']
+            ];
+            
+            pallets.forEach(function(p) {
+                var expDate = '';
+                if (p.expiryDate) {
+                    if (p.expiryDate.toDate) {
+                        expDate = p.expiryDate.toDate().toISOString().split('T')[0];
+                    } else if (typeof p.expiryDate === 'string') {
+                        expDate = p.expiryDate;
+                    }
+                }
+                
+                var inboundDate = '';
+                if (p.inboundDate) {
+                    if (p.inboundDate.toDate) {
+                        inboundDate = p.inboundDate.toDate().toISOString().split('T')[0];
+                    } else if (typeof p.inboundDate === 'string') {
+                        inboundDate = p.inboundDate.split('T')[0];
+                    }
+                }
+                
+                var productType = p.productType === 'variable' ? '不定重' : '定重';
+                
+                data.push([
+                    p.palletId || '',
+                    p.productName || '',
+                    p.spec || '',
+                    p.batchNo || '',
+                    expDate,
+                    p.quantity || 0,
+                    productType,
+                    p.unitWeight || '',
+                    p.totalWeight || '',
+                    p.locationId || '',
+                    p.vendor || '',
+                    inboundDate
+                ]);
+            });
+            
+            // 建立 Excel
+            var ws = XLSX.utils.aoa_to_sheet(data);
+            ws['!cols'] = [
+                {wch:18}, // 條碼
+                {wch:20}, // 品名
+                {wch:15}, // 規格
+                {wch:12}, // 批號
+                {wch:12}, // 效期
+                {wch:8},  // 數量
+                {wch:8},  // 類型
+                {wch:8},  // 箱容
+                {wch:10}, // 總重量
+                {wch:12}, // 儲位
+                {wch:10}, // 廠商
+                {wch:12}  // 入庫日期
+            ];
+            
+            var wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '庫存清單');
+            
+            var filename = '庫存清單_' + new Date().toISOString().split('T')[0] + '.xlsx';
+            XLSX.writeFile(wb, filename);
+            
+            alert('✅ 匯出成功！\n\n共 ' + (data.length - 1) + ' 筆庫存');
+        };
 
         // ========== 貨櫃入庫作業 ==========
         
@@ -5799,21 +6135,25 @@ console.log('✅ WMS 工具函數庫已載入');
             if (type === 'container' || type === 'pre') {
                 var wb = XLSX.utils.book_new();
                 var data = [
-                    ['廠商', '品名', '規格', '批號', '效期', '數量', '每板數'],
-                    ['傳鮮', '熟白蝦 50/60', '1.1KG*8盒', 'B240301', '2025/12/31', 400, 50],
-                    ['傳鮮', '花枝圈', '300g*10包', 'B240302', '2025/11/30', 200, 40]
+                    ['廠商', '品名', '規格', '批號', '效期', '數量', '每板數', '類型', '箱容kg', '總重量kg'],
+                    ['傳鮮', '熟白蝦 50/60', '1.1KG*8盒', 'B240301', '2025/12/31', 400, 50, '定重', 10, ''],
+                    ['傳鮮', '花枝圈', '300g*10包', 'B240302', '2025/11/30', 200, 40, '定重', 3, ''],
+                    ['海洋', '船凍透抽', '40/60', 'B240303', '2025/10/31', 50, 50, '不定重', '', 1250],
+                    ['海洋', '魷魚原料', '-', 'B240304', '2025/09/30', 30, 30, '不定重', '', 680]
                 ];
                 var ws = XLSX.utils.aoa_to_sheet(data);
-                ws['!cols'] = [{wch:10},{wch:20},{wch:15},{wch:12},{wch:12},{wch:8},{wch:8}];
+                ws['!cols'] = [{wch:10},{wch:20},{wch:15},{wch:12},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:10}];
                 XLSX.utils.book_append_sheet(wb, ws, '入庫清單');
                 XLSX.writeFile(wb, '貨櫃入庫範本.xlsx');
             } else if (type === 'stock') {
                 var wb = XLSX.utils.book_new();
                 var data = [
-                    ['品名', '規格', '批號', '效期', '數量', '儲位'],
-                    ['熟白蝦', '50/60 1.1KG', 'B240101', '2025/06/30', 50, 'A-01-01']
+                    ['品名', '規格', '批號', '效期', '數量', '儲位', '類型', '箱容kg', '總重量kg', '條碼'],
+                    ['熟白蝦', '50/60 1.1KG', 'B240101', '2025/06/30', 50, 'I-A-01-3F', '定重', 10, '', 'PL-B240101-001'],
+                    ['船凍透抽', '40/60', 'B240201', '2025/08/31', 30, 'I-A-02-3F', '不定重', '', 750, 'PL-B240201-001']
                 ];
                 var ws = XLSX.utils.aoa_to_sheet(data);
+                ws['!cols'] = [{wch:15},{wch:15},{wch:12},{wch:12},{wch:8},{wch:12},{wch:8},{wch:8},{wch:10},{wch:18}];
                 XLSX.utils.book_append_sheet(wb, ws, '庫存');
                 XLSX.writeFile(wb, '期初庫存範本.xlsx');
             }
@@ -5833,6 +6173,29 @@ console.log('✅ WMS 工具函數庫已載入');
                 
                 var importCount = 0;
                 rows.forEach(function(row) {
+                    var qty = parseInt(row['數量']) || 0;
+                    var perPallet = parseInt(row['每板數']) || 50;
+                    
+                    // 判斷品項類型：有「總重量kg」欄位且有值 → 不定重；否則為定重
+                    var productType = 'fixed';
+                    var unitWeight = parseFloat(row['箱容kg']) || 0;
+                    var totalWeight = parseFloat(row['總重量kg']) || 0;
+                    
+                    // 如果明確標記類型
+                    if (row['類型']) {
+                        productType = (row['類型'] === '不定重' || row['類型'] === 'variable') ? 'variable' : 'fixed';
+                    } else if (totalWeight > 0 && unitWeight === 0) {
+                        // 有總重量但沒箱容 → 判斷為不定重
+                        productType = 'variable';
+                    }
+                    
+                    // 計算重量
+                    if (productType === 'fixed') {
+                        totalWeight = qty * unitWeight;
+                    } else {
+                        unitWeight = qty > 0 ? Math.round(totalWeight / qty * 100) / 100 : 0;
+                    }
+                    
                     var item = {
                         id: 'CI-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
                         vendor: row['廠商'] || '',
@@ -5840,9 +6203,12 @@ console.log('✅ WMS 工具函數庫已載入');
                         spec: row['規格'] || '',
                         batchNo: row['批號'] || '',
                         expiryDate: row['效期'] || '',
-                        quantity: parseInt(row['數量']) || 0,
-                        perPallet: parseInt(row['每板數']) || 50,
-                        palletCount: Math.ceil((parseInt(row['數量']) || 0) / (parseInt(row['每板數']) || 50))
+                        quantity: qty,
+                        perPallet: perPallet,
+                        palletCount: Math.ceil(qty / perPallet),
+                        productType: productType,
+                        unitWeight: unitWeight,
+                        totalWeight: totalWeight
                     };
                     
                     if (item.productName && item.quantity > 0) {
@@ -5864,6 +6230,26 @@ console.log('✅ WMS 工具函數庫已載入');
             event.target.value = '';
         };
         
+        // 切換貨櫃入庫品項類型
+        window.togglePreProductType = function(type) {
+            var fixedFields = document.getElementById('pre-fixed-fields');
+            var variableFields = document.getElementById('pre-variable-fields');
+            
+            if (type === 'fixed') {
+                fixedFields.classList.remove('hidden');
+                variableFields.classList.add('hidden');
+            } else {
+                fixedFields.classList.add('hidden');
+                variableFields.classList.remove('hidden');
+            }
+        };
+        
+        // 取得貨櫃入庫品項類型
+        window.getPreProductType = function() {
+            var radio = document.querySelector('input[name="pre-product-type"]:checked');
+            return radio ? radio.value : 'fixed';
+        };
+        
         // 手動新增品項
         window.addContainerItem = function() {
             var vendor = document.getElementById('pre-vendor').value.trim();
@@ -5871,12 +6257,28 @@ console.log('✅ WMS 工具函數庫已載入');
             var spec = document.getElementById('pre-spec').value.trim();
             var batch = document.getElementById('pre-batch').value.trim();
             var exp = document.getElementById('pre-exp').value;
-            var qty = parseInt(document.getElementById('pre-qty').value) || 0;
-            var perPallet = parseInt(document.getElementById('pre-per-pallet').value) || 50;
+            
+            var productType = getPreProductType();
+            var qty, perPallet, unitWeight, totalWeight;
+            
+            if (productType === 'fixed') {
+                // 定重品
+                qty = parseInt(document.getElementById('pre-qty').value) || 0;
+                perPallet = parseInt(document.getElementById('pre-per-pallet').value) || 50;
+                unitWeight = parseFloat(document.getElementById('pre-unit-weight').value) || 0;
+                totalWeight = qty * unitWeight;
+            } else {
+                // 不定重品
+                qty = parseInt(document.getElementById('pre-qty-var').value) || 0;
+                totalWeight = parseFloat(document.getElementById('pre-total-weight').value) || 0;
+                perPallet = parseInt(document.getElementById('pre-per-pallet-var').value) || 50;
+                unitWeight = qty > 0 ? Math.round(totalWeight / qty * 100) / 100 : 0;
+            }
             
             if (!name) { alert('請輸入品名'); return false; }
             if (!batch) { alert('請輸入批號'); return false; }
             if (qty <= 0) { alert('請輸入數量'); return false; }
+            if (productType === 'variable' && totalWeight <= 0) { alert('不定重品請輸入總重量'); return false; }
             
             var item = {
                 id: 'CI-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
@@ -5887,7 +6289,10 @@ console.log('✅ WMS 工具函數庫已載入');
                 expiryDate: exp,
                 quantity: qty,
                 perPallet: perPallet,
-                palletCount: Math.ceil(qty / perPallet)
+                palletCount: Math.ceil(qty / perPallet),
+                productType: productType,
+                unitWeight: unitWeight,
+                totalWeight: totalWeight
             };
             
             window._containerData.items.push(item);
@@ -5898,6 +6303,9 @@ console.log('✅ WMS 工具函數庫已載入');
             document.getElementById('pre-spec').value = '';
             document.getElementById('pre-batch').value = '';
             document.getElementById('pre-qty').value = '';
+            document.getElementById('pre-unit-weight').value = '';
+            document.getElementById('pre-qty-var').value = '';
+            document.getElementById('pre-total-weight').value = '';
             
             return true;
         };
@@ -6137,11 +6545,22 @@ console.log('✅ WMS 工具函數庫已載入');
             
             items.forEach(function(item) {
                 var remaining = item.quantity;
+                var remainingWeight = item.totalWeight || 0;
                 var palletNo = 1;
                 var itemLocations = [];
                 
                 while (remaining > 0 && available.length > 0) {
                     var palletQty = Math.min(remaining, item.perPallet);
+                    // 計算該板重量
+                    var palletWeight = 0;
+                    if (item.productType === 'variable' && item.totalWeight > 0) {
+                        // 不定重：按比例分配重量
+                        palletWeight = Math.round((palletQty / item.quantity) * item.totalWeight * 10) / 10;
+                    } else if (item.unitWeight > 0) {
+                        // 定重：按件數計算
+                        palletWeight = palletQty * item.unitWeight;
+                    }
+                    
                     var selectedLoc;
                     
                     if (strategy === 'clustered' && itemLocations.length > 0) {
@@ -6170,6 +6589,9 @@ console.log('✅ WMS 工具函數庫已載入');
                         batchNo: item.batchNo,
                         expiryDate: item.expiryDate,
                         quantity: palletQty,
+                        totalWeight: palletWeight,
+                        unitWeight: item.unitWeight || 0,
+                        productType: item.productType || 'fixed',
                         locationId: selectedLoc.locationId,
                         palletNo: palletNo + '/' + item.palletCount,
                         zone: selectedLoc.zone,
@@ -6182,12 +6604,20 @@ console.log('✅ WMS 工具函數庫已載入');
                     usedLocations.push(selectedLoc.locationId);
                     
                     remaining -= palletQty;
+                    remainingWeight -= palletWeight;
                     palletNo++;
                 }
                 
                 // 如果還有剩餘但沒有空位
                 while (remaining > 0) {
                     var palletQty = Math.min(remaining, item.perPallet);
+                    var palletWeight = 0;
+                    if (item.productType === 'variable' && item.totalWeight > 0) {
+                        palletWeight = Math.round((palletQty / item.quantity) * item.totalWeight * 10) / 10;
+                    } else if (item.unitWeight > 0) {
+                        palletWeight = palletQty * item.unitWeight;
+                    }
+                    
                     allocations.push({
                         id: 'PL-' + item.batchNo + '-' + String(palletNo).padStart(3, '0'),
                         vendor: item.vendor,
@@ -6196,6 +6626,9 @@ console.log('✅ WMS 工具函數庫已載入');
                         batchNo: item.batchNo,
                         expiryDate: item.expiryDate,
                         quantity: palletQty,
+                        totalWeight: palletWeight,
+                        unitWeight: item.unitWeight || 0,
+                        productType: item.productType || 'fixed',
                         locationId: '⚠️ 無空位',
                         palletNo: palletNo + '/' + item.palletCount,
                         overflow: true
@@ -6550,6 +6983,9 @@ console.log('✅ WMS 工具函數庫已載入');
                         batchNo: label.batchNo,
                         expiryDate: label.expiryDate ? new Date(label.expiryDate) : null,
                         quantity: label.quantity,
+                        totalWeight: label.totalWeight || 0,
+                        unitWeight: label.unitWeight || 0,
+                        productType: label.productType || 'fixed',
                         locationId: label.locationId,
                         status: 'Active',
                         inboundDate: new Date(),
@@ -11303,13 +11739,22 @@ window.clearLocalStorage = function() {
                         : '<span class="badge badge-yellow"><i class="fa-solid fa-clock"></i></span>';
                 var rowClass = item.completed ? 'bg-emerald-900/20' : item.shortage ? 'bg-red-900/20' : '';
                 
+                // 重量顯示
+                var qtyDisplay = item.pickQty;
+                if (item.totalWeight && item.totalWeight > 0 && item.availableQty > 0) {
+                    var pickWeight = Math.round(item.pickQty / item.availableQty * item.totalWeight * 10) / 10;
+                    if (pickWeight > 0) {
+                        qtyDisplay += '<span class="text-amber-400 text-xs ml-1">/' + pickWeight + 'kg</span>';
+                    }
+                }
+                
                 html += '<tr class="' + rowClass + ' border-b border-slate-700/50 hover:bg-slate-800/50">';
                 html += '<td class="p-2">' + statusBadge + '</td>';
                 html += '<td class="p-2 font-mono text-cyan-400 font-bold">' + item.locationId + '</td>';
                 html += '<td class="p-2 font-mono text-slate-300">' + item.palletId + '</td>';
                 html += '<td class="p-2 text-white">' + item.productName + '</td>';
                 html += '<td class="p-2 text-slate-400">' + item.spec + '</td>';
-                html += '<td class="p-2 text-right text-yellow-400 font-bold">' + item.pickQty + '</td>';
+                html += '<td class="p-2 text-right text-yellow-400 font-bold">' + qtyDisplay + '</td>';
                 html += '<td class="p-2 font-mono text-purple-400">' + item.orderNo + '</td>';
                 html += '<td class="p-2 text-slate-300">' + item.customer + '</td>';
                 html += '</tr>';
@@ -11380,26 +11825,41 @@ window.clearLocalStorage = function() {
                     var palletData = palletDoc.data();
                     var newQty = (parseInt(palletData.quantity) || 0) - item.pickQty;
                     
+                    // 計算重量變化
+                    var pickWeight = 0;
+                    var newWeight = palletData.totalWeight || 0;
+                    if (palletData.totalWeight > 0 && palletData.quantity > 0) {
+                        // 按比例計算取出的重量
+                        pickWeight = Math.round((item.pickQty / palletData.quantity) * palletData.totalWeight * 10) / 10;
+                        newWeight = Math.round((palletData.totalWeight - pickWeight) * 10) / 10;
+                    }
+                    
                     // 記錄異動
                     await window.logInventoryChange({
                         type: 'outbound',
                         productName: palletData.productName,
                         spec: palletData.spec || '',
                         quantity: newQty,
+                        weight: pickWeight,
                         quantityChange: -item.pickQty,
+                        weightChange: -pickWeight,
                         locationId: item.locationId,
                         palletId: item.palletId,
                         batchNo: palletData.batchNo || '',
                         orderId: item.orderNo,
-                        note: '波次揀貨 ' + window._waveData.currentWave.waveNo
+                        note: '波次揀貨 ' + window._waveData.currentWave.waveNo + (pickWeight > 0 ? ' (' + pickWeight + 'kg)' : '')
                     });
                     
                     if (newQty <= 0) {
                         // 刪除空板
                         await window.deleteDoc(palletDoc.ref);
                     } else {
-                        // 更新數量
-                        await window.updateDoc(palletDoc.ref, { quantity: newQty });
+                        // 更新數量和重量
+                        var updateData = { quantity: newQty };
+                        if (palletData.totalWeight > 0) {
+                            updateData.totalWeight = newWeight;
+                        }
+                        await window.updateDoc(palletDoc.ref, updateData);
                     }
                 }
                 
@@ -11879,7 +12339,7 @@ window.clearLocalStorage = function() {
             var tbody = document.getElementById('inventory-log-list');
             
             if (logs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-500 py-16"><i class="fa-solid fa-inbox text-4xl mb-3 opacity-30"></i><p>查無資料</p></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-slate-500 py-16"><i class="fa-solid fa-inbox text-4xl mb-3 opacity-30"></i><p>查無資料</p></td></tr>';
                 return;
             }
             
@@ -11888,6 +12348,7 @@ window.clearLocalStorage = function() {
                 var typeLabel = getLogTypeLabel(log.type);
                 var typeClass = getLogTypeClass(log.type);
                 var qtyDisplay = formatQuantityChange(log);
+                var weightDisplay = formatWeightChange(log);
                 var locationDisplay = formatLocationDisplay(log);
                 
                 html += '<tr class="border-t border-slate-700 hover:bg-slate-700/30">';
@@ -11896,6 +12357,7 @@ window.clearLocalStorage = function() {
                 html += '<td class="p-3 text-white font-medium">' + (log.productName || '-') + '</td>';
                 html += '<td class="p-3 text-slate-400">' + (log.spec || '-') + '</td>';
                 html += '<td class="p-3 text-right font-bold ' + qtyDisplay.class + '">' + qtyDisplay.text + '</td>';
+                html += '<td class="p-3 text-right ' + weightDisplay.class + '">' + weightDisplay.text + '</td>';
                 html += '<td class="p-3 font-mono text-sm">' + locationDisplay + '</td>';
                 html += '<td class="p-3 text-slate-400 text-xs">' + (log.batchNo || '-') + '</td>';
                 html += '<td class="p-3 text-slate-500 text-xs max-w-[150px] truncate" title="' + (log.note || '') + '">' + (log.note || '-') + '</td>';
@@ -11950,6 +12412,29 @@ window.clearLocalStorage = function() {
                 return { text: change.toString(), class: 'text-red-400' };
             }
             return { text: qty.toString(), class: 'text-white' };
+        }
+        
+        // 格式化重量變化
+        function formatWeightChange(log) {
+            var weight = log.weight || 0;
+            var change = log.weightChange || 0;
+            
+            if (weight === 0 && change === 0) {
+                return { text: '-', class: 'text-slate-600' };
+            }
+            
+            if (log.type === 'inbound') {
+                return { text: '+' + weight + ' kg', class: 'text-emerald-400' };
+            } else if (log.type === 'outbound' || log.type === 'picking') {
+                return { text: '-' + weight + ' kg', class: 'text-red-400' };
+            } else if (log.type === 'move') {
+                return { text: weight + ' kg', class: 'text-blue-400' };
+            } else if (change > 0) {
+                return { text: '+' + change + ' kg', class: 'text-emerald-400' };
+            } else if (change < 0) {
+                return { text: change + ' kg', class: 'text-red-400' };
+            }
+            return { text: weight + ' kg', class: 'text-amber-400' };
         }
         
         // 格式化儲位顯示
@@ -13530,7 +14015,7 @@ window.clearLocalStorage = function() {
             
             if (!confirm('確認移動？\n\n' +
                 '📦 ' + pallet.productName + ' ' + (pallet.spec || '') + '\n' +
-                '數量: ' + pallet.quantity + ' 件\n' +
+                '數量: ' + pallet.quantity + ' 件' + (pallet.totalWeight > 0 ? ' / ' + pallet.totalWeight + ' kg' : '') + '\n' +
                 '批號: ' + (pallet.batchNo || '-') + '\n\n' +
                 '📍 ' + oldLoc + ' → ' + targetLoc)) {
                 return;
@@ -13560,6 +14045,7 @@ window.clearLocalStorage = function() {
                     productName: pallet.productName,
                     spec: pallet.spec || '',
                     quantity: pallet.quantity,
+                    weight: pallet.totalWeight || 0,
                     fromLocation: oldLoc,
                     toLocation: targetLoc,
                     batchNo: pallet.batchNo || '',
@@ -13640,17 +14126,27 @@ window.clearLocalStorage = function() {
             }
             
             var newQty = (keepPallet.quantity || 0) + (removePallet.quantity || 0);
+            var newWeight = (keepPallet.totalWeight || 0) + (removePallet.totalWeight || 0);
+            newWeight = Math.round(newWeight * 10) / 10; // 四捨五入到小數一位
             
-            if (!confirm('確認合併？\n\n' +
+            // 計算新的每件均重
+            var newUnitWeight = newQty > 0 && newWeight > 0 ? Math.round(newWeight / newQty * 100) / 100 : (keepPallet.unitWeight || 0);
+            
+            var confirmMsg = '確認合併？\n\n' +
                 '【保留】\n' +
                 '  📦 ' + keepPallet.productName + ' ' + (keepPallet.spec || '') + '\n' +
-                '  數量: ' + keepPallet.quantity + ' 件\n' +
+                '  數量: ' + keepPallet.quantity + ' 件' + (keepPallet.totalWeight > 0 ? ' / ' + keepPallet.totalWeight + ' kg' : '') + '\n' +
                 '  儲位: ' + keepPallet.locationId + '\n\n' +
                 '【移入並刪除】\n' +
                 '  📦 ' + removePallet.productName + ' ' + (removePallet.spec || '') + '\n' +
-                '  數量: ' + removePallet.quantity + ' 件\n' +
+                '  數量: ' + removePallet.quantity + ' 件' + (removePallet.totalWeight > 0 ? ' / ' + removePallet.totalWeight + ' kg' : '') + '\n' +
                 '  儲位: ' + removePallet.locationId + '\n\n' +
-                '✅ 合併後數量: ' + newQty + ' 件')) {
+                '✅ 合併後: ' + newQty + ' 件';
+            if (newWeight > 0) {
+                confirmMsg += ' / ' + newWeight + ' kg';
+            }
+            
+            if (!confirm(confirmMsg)) {
                 return;
             }
             
@@ -13661,6 +14157,8 @@ window.clearLocalStorage = function() {
                 
                 if (keepIdx >= 0) {
                     pallets[keepIdx].quantity = newQty;
+                    pallets[keepIdx].totalWeight = newWeight;
+                    pallets[keepIdx].unitWeight = newUnitWeight;
                     pallets[keepIdx].mergedAt = new Date().toISOString();
                     pallets[keepIdx].mergedBy = window.currentUser ? window.currentUser.email : 'admin';
                 }
@@ -13674,6 +14172,8 @@ window.clearLocalStorage = function() {
                     var batch = window.writeBatch(window.db);
                     batch.update(window.doc(window.db, 'pallets', keepPallet.id), {
                         quantity: newQty,
+                        totalWeight: newWeight,
+                        unitWeight: newUnitWeight,
                         mergedAt: new Date().toISOString(),
                         mergedBy: window.currentUser ? window.currentUser.email : 'admin'
                     });
@@ -13682,22 +14182,29 @@ window.clearLocalStorage = function() {
                 }
                 
                 // 記錄異動
+                var mergeNote = '合併: ' + removePallet.palletId + '(' + removePallet.quantity + '件';
+                if (removePallet.totalWeight > 0) mergeNote += '/' + removePallet.totalWeight + 'kg';
+                mergeNote += ') → ' + keepPallet.palletId;
+                
                 await window.logInventoryChange({
                     type: 'merge',
                     productName: keepPallet.productName,
                     spec: keepPallet.spec || '',
                     quantity: newQty,
+                    weight: newWeight,
                     quantityChange: removePallet.quantity,
+                    weightChange: removePallet.totalWeight || 0,
                     locationId: keepPallet.locationId,
                     fromLocation: removePallet.locationId,
                     toLocation: keepPallet.locationId,
                     batchNo: keepPallet.batchNo || '',
                     palletId: keepPallet.palletId,
-                    note: '合併: ' + removePallet.palletId + '(' + removePallet.quantity + '件) → ' + keepPallet.palletId
+                    note: mergeNote
                 });
                 
-                alert('✅ 合併成功！\n\n' +
-                    '新數量: ' + newQty + ' 件');
+                var successMsg = '✅ 合併成功！\n\n新數量: ' + newQty + ' 件';
+                if (newWeight > 0) successMsg += ' / ' + newWeight + ' kg';
+                alert(successMsg);
                 
                 // 清空輸入
                 document.getElementById('merge-keep-id').value = '';
@@ -14079,6 +14586,7 @@ window.clearLocalStorage = function() {
                         palletId: p.palletId,
                         locationId: p.locationId,
                         quantity: p.quantity,
+                        totalWeight: p.totalWeight || 0,
                         expDate: p.expDate || p.expiryDate || '9999-12-31',
                         inboundDate: p.inboundDate ? (p.inboundDate.toDate ? p.inboundDate.toDate() : new Date(p.inboundDate)) : new Date(),
                         isIsolated: sameProductInLane === 1,
@@ -14126,13 +14634,16 @@ window.clearLocalStorage = function() {
                     plan.push({ 
                         palletId: c.palletId, 
                         locationId: c.locationId, 
-                        quantity: c.quantity, 
+                        quantity: c.quantity,
+                        totalWeight: c.totalWeight,
                         pickQty: c.quantity,
+                        pickWeight: c.totalWeight,
                         expDate: c.expDate,
                         batchNo: c.batchNo,
                         isIsolated: c.isIsolated,
                         pickType: 'full',
-                        remaining: 0
+                        remaining: 0,
+                        remainingWeight: 0
                     });
                     remaining = 0;
                     candidates.splice(i, 1);
@@ -14145,17 +14656,23 @@ window.clearLocalStorage = function() {
                 var c = candidates[i];
                 var pickQty = Math.min(c.quantity, remaining);
                 var pickType = pickQty === c.quantity ? 'full' : 'split';
+                // 計算重量比例
+                var weightRatio = c.quantity > 0 ? (pickQty / c.quantity) : 0;
+                var pickWeight = c.totalWeight > 0 ? Math.round(c.totalWeight * weightRatio * 10) / 10 : 0;
                 
                 plan.push({
                     palletId: c.palletId,
                     locationId: c.locationId,
                     quantity: c.quantity,
+                    totalWeight: c.totalWeight,
                     pickQty: pickQty,
+                    pickWeight: pickWeight,
                     expDate: c.expDate,
                     batchNo: c.batchNo,
                     isIsolated: c.isIsolated,
                     pickType: pickType,
-                    remaining: c.quantity - pickQty
+                    remaining: c.quantity - pickQty,
+                    remainingWeight: c.totalWeight > 0 ? Math.round((c.totalWeight - pickWeight) * 10) / 10 : 0
                 });
                 
                 remaining -= pickQty;
@@ -14185,7 +14702,7 @@ window.clearLocalStorage = function() {
             html += '<th class="p-2 text-left">狀態</th>';
             html += '</tr></thead><tbody>';
             
-            var fullCount = 0, splitCount = 0, clearCount = 0, totalPick = 0;
+            var fullCount = 0, splitCount = 0, clearCount = 0, totalPick = 0, totalWeight = 0;
             
             plan.forEach(function(item, idx) {
                 var typeLabel = item.pickType === 'full' ? 
@@ -14197,21 +14714,38 @@ window.clearLocalStorage = function() {
                 else splitCount++;
                 if (item.remaining === 0) clearCount++;
                 totalPick += item.pickQty;
+                totalWeight += item.pickWeight || 0;
+                
+                // 庫存顯示（含重量）
+                var stockDisplay = item.quantity + '';
+                if (item.totalWeight > 0) {
+                    stockDisplay += '<span class="text-amber-400 text-xs ml-1">/' + item.totalWeight + 'kg</span>';
+                }
+                
+                // 取用顯示（含重量）
+                var pickDisplay = item.pickQty + '';
+                if (item.pickWeight > 0) {
+                    pickDisplay += '<span class="text-amber-400 text-xs ml-1">/' + item.pickWeight + 'kg</span>';
+                }
                 
                 html += '<tr class="border-b border-slate-800 hover:bg-slate-800">';
                 if (mode === 'rm') {
-                    html += '<td class="p-2"><input type="checkbox" class="rm-pick-checkbox w-5 h-5" data-idx="' + idx + '" data-qty="' + item.pickQty + '" onchange="updateRmSelection()" checked></td>';
+                    html += '<td class="p-2"><input type="checkbox" class="rm-pick-checkbox w-5 h-5" data-idx="' + idx + '" data-qty="' + item.pickQty + '" data-weight="' + (item.pickWeight || 0) + '" onchange="updateRmSelection()" checked></td>';
                 }
                 html += '<td class="p-2 text-white font-bold">' + (idx + 1) + '</td>';
                 html += '<td class="p-2 text-blue-400 font-mono font-bold">' + item.locationId + '</td>';
-                html += '<td class="p-2 text-right text-slate-400">' + item.quantity + '</td>';
-                html += '<td class="p-2 text-right text-yellow-400 font-bold text-lg">' + item.pickQty + '</td>';
+                html += '<td class="p-2 text-right text-slate-400">' + stockDisplay + '</td>';
+                html += '<td class="p-2 text-right text-yellow-400 font-bold text-lg">' + pickDisplay + '</td>';
                 html += '<td class="p-2 text-center">' + typeLabel + '</td>';
                 html += '<td class="p-2 text-slate-300">' + (item.expDate || '-') + '</td>';
                 html += '<td class="p-2 text-slate-400 text-xs">' + (item.batchNo || '-') + '</td>';
                 html += '<td class="p-2">' + isolatedLabel;
                 if (item.remaining > 0) {
-                    html += '<span class="text-xs text-slate-500 ml-1">餘' + item.remaining + '</span>';
+                    var remainDisplay = '餘' + item.remaining;
+                    if (item.remainingWeight > 0) {
+                        remainDisplay += '/' + item.remainingWeight + 'kg';
+                    }
+                    html += '<span class="text-xs text-slate-500 ml-1">' + remainDisplay + '</span>';
                 }
                 html += '</td>';
                 html += '</tr>';
@@ -14222,13 +14756,17 @@ window.clearLocalStorage = function() {
             
             // 更新統計
             summaryDiv.classList.remove('hidden');
-            document.getElementById(mode + '-total-pick') && (document.getElementById(mode + '-total-pick').innerText = totalPick + ' 件');
+            var totalDisplay = totalPick + ' 件';
+            if (totalWeight > 0) {
+                totalDisplay += ' / ' + Math.round(totalWeight * 10) / 10 + ' kg';
+            }
+            document.getElementById(mode + '-total-pick') && (document.getElementById(mode + '-total-pick').innerText = totalDisplay);
             document.getElementById(mode + '-full-pallet') && (document.getElementById(mode + '-full-pallet').innerText = fullCount + ' 板');
             document.getElementById(mode + '-split-pallet') && (document.getElementById(mode + '-split-pallet').innerText = splitCount + ' 板');
             document.getElementById(mode + '-clear-slots') && (document.getElementById(mode + '-clear-slots').innerText = clearCount + ' 個');
             
             if (mode === 'rm') {
-                document.getElementById('rm-selected-qty').innerText = totalPick + ' 件';
+                document.getElementById('rm-selected-qty').innerText = totalDisplay;
                 document.getElementById('rm-required-qty').innerText = requiredQty + ' 件';
             }
         }
@@ -14237,16 +14775,22 @@ window.clearLocalStorage = function() {
         window.updateRmSelection = function() {
             var checkboxes = document.querySelectorAll('.rm-pick-checkbox');
             var total = 0;
+            var totalWeight = 0;
             checkboxes.forEach(function(cb) {
                 if (cb.checked) {
                     total += parseInt(cb.dataset.qty) || 0;
+                    totalWeight += parseFloat(cb.dataset.weight) || 0;
                 }
             });
-            document.getElementById('rm-selected-qty').innerText = total + ' 件';
+            var display = total + ' 件';
+            if (totalWeight > 0) {
+                display += ' / ' + Math.round(totalWeight * 10) / 10 + ' kg';
+            }
+            document.getElementById('rm-selected-qty').innerText = display;
         };
 
-        // 確認原料領用出庫
-        window.confirmRmPicking = async function() {
+        // 確認原料領用出庫 - 開啟確認彈窗
+        window.confirmRmPicking = function() {
             var checkboxes = document.querySelectorAll('.rm-pick-checkbox:checked');
             if (checkboxes.length === 0) {
                 alert('請至少勾選一個儲位');
@@ -14254,54 +14798,405 @@ window.clearLocalStorage = function() {
             }
             
             var plan = window.pickingPlan.rm;
-            var dept = document.getElementById('rm-pick-dept').value || '';
             var product = window.pickingSelectedProduct.rm;
             
-            if (!confirm('確認執行 ' + checkboxes.length + ' 筆領料出庫？')) return;
+            // 產生確認列表
+            var html = '';
+            var totalQty = 0;
             
-            var batch = window.writeBatch(window.db);
-            var logPromises = [];
-            
-            checkboxes.forEach(function(cb) {
+            checkboxes.forEach(function(cb, index) {
                 var idx = parseInt(cb.dataset.idx);
                 var item = plan[idx];
+                totalQty += item.pickQty;
                 
-                if (item.pickType === 'full') {
-                    // 整板出庫：刪除
-                    var ref = window.doc(window.db, 'pallets', item.palletId);
-                    batch.delete(ref);
-                } else {
-                    // 拆板：更新數量
-                    var ref = window.doc(window.db, 'pallets', item.palletId);
-                    batch.update(ref, { quantity: item.remaining });
+                html += '<div class="bg-slate-800 rounded-lg p-3 border border-slate-700" data-idx="' + idx + '">';
+                html += '<div class="flex justify-between items-start mb-3">';
+                html += '<div>';
+                html += '<div class="text-white font-bold">' + (product ? product.name : item.productName) + '</div>';
+                html += '<div class="text-slate-400 text-sm">' + (product ? product.spec : (item.spec || '-')) + '</div>';
+                html += '</div>';
+                html += '<div class="text-right">';
+                html += '<div class="text-slate-400 text-xs">儲位</div>';
+                html += '<div class="text-cyan-400 font-mono font-bold">' + item.locationId + '</div>';
+                html += '</div>';
+                html += '</div>';
+                
+                html += '<div class="grid grid-cols-4 gap-2 mb-3">';
+                html += '<div class="bg-slate-900 rounded p-2 text-center">';
+                html += '<div class="text-slate-500 text-xs">棧板庫存</div>';
+                html += '<div class="text-white font-bold">' + item.quantity + ' 件</div>';
+                if (item.totalWeight > 0) {
+                    html += '<div class="text-amber-400 text-xs">' + item.totalWeight + ' kg</div>';
+                }
+                html += '</div>';
+                html += '<div class="bg-slate-900 rounded p-2 text-center">';
+                html += '<div class="text-slate-500 text-xs">批號</div>';
+                html += '<div class="text-white text-sm">' + (item.batchNo || '-') + '</div>';
+                html += '</div>';
+                html += '<div class="bg-slate-900 rounded p-2 text-center">';
+                html += '<div class="text-slate-500 text-xs">效期</div>';
+                html += '<div class="text-white text-sm">' + (item.expDate || '-') + '</div>';
+                html += '</div>';
+                html += '<div class="bg-slate-900 rounded p-2 text-center">';
+                html += '<div class="text-slate-500 text-xs">每件均重</div>';
+                var avgWeight = (item.totalWeight > 0 && item.quantity > 0) ? Math.round(item.totalWeight / item.quantity * 10) / 10 : 0;
+                html += '<div class="text-slate-400 text-sm">' + (avgWeight > 0 ? avgWeight + ' kg' : '-') + '</div>';
+                html += '</div>';
+                html += '</div>';
+                
+                // 領用方式選擇
+                html += '<div class="bg-cyan-900/30 border border-cyan-600/50 rounded-lg p-3">';
+                html += '<div class="text-cyan-400 text-sm font-bold mb-2"><i class="fa-solid fa-hand-pointer mr-1"></i>實際領用';
+                if (item.totalWeight > 0) {
+                    html += ' <span class="text-amber-400 font-normal text-xs">（不定重原料可填重量）</span>';
+                }
+                html += '</div>';
+                
+                html += '<div class="flex flex-wrap items-center gap-3">';
+                
+                // 整板領用選項
+                html += '<label class="flex items-center gap-2 cursor-pointer">';
+                html += '<input type="radio" name="pick-type-' + idx + '" value="full" class="rm-pick-type" data-idx="' + idx + '" data-qty="' + item.quantity + '" data-weight="' + item.totalWeight + '" ' + (item.pickType === 'full' ? 'checked' : '') + ' onchange="updateRmConfirmQty(' + idx + ', \'full\')">';
+                html += '<span class="text-white">整板</span>';
+                html += '</label>';
+                
+                // 部分領用選項
+                html += '<label class="flex items-center gap-2 cursor-pointer">';
+                html += '<input type="radio" name="pick-type-' + idx + '" value="partial" class="rm-pick-type" data-idx="' + idx + '" ' + (item.pickType !== 'full' ? 'checked' : '') + ' onchange="updateRmConfirmQty(' + idx + ', \'partial\')">';
+                html += '<span class="text-white">部分領用</span>';
+                html += '</label>';
+                
+                // 分隔線
+                html += '<span class="text-slate-600">|</span>';
+                
+                // 部分領用數量輸入
+                html += '<div class="flex items-center gap-1">';
+                html += '<input type="number" id="rm-partial-qty-' + idx + '" class="scan-input w-20 text-center font-bold" value="' + item.pickQty + '" min="1" max="' + item.quantity + '" ' + (item.pickType === 'full' ? 'disabled' : '') + ' onchange="updateRmConfirmFromQty(' + idx + ')">';
+                html += '<span class="text-slate-400 text-sm">件</span>';
+                html += '</div>';
+                
+                // 如果有重量，顯示重量輸入
+                if (item.totalWeight > 0) {
+                    html += '<span class="text-slate-500">或</span>';
+                    html += '<div class="flex items-center gap-1">';
+                    html += '<input type="number" id="rm-partial-weight-' + idx + '" class="scan-input w-24 text-center font-bold border-amber-600/50" value="' + (item.pickWeight || 0) + '" min="0.1" max="' + item.totalWeight + '" step="0.1" ' + (item.pickType === 'full' ? 'disabled' : '') + ' onchange="updateRmConfirmFromWeight(' + idx + ')">';
+                    html += '<span class="text-amber-400 text-sm">kg</span>';
+                    html += '</div>';
                 }
                 
-                // 記錄領用異動
-                logPromises.push(window.logInventoryChange({
-                    type: 'picking',
-                    productName: product ? product.name : item.productName,
-                    spec: product ? product.spec : (item.spec || ''),
-                    quantity: item.pickQty,
-                    quantityChange: -item.pickQty,
-                    locationId: item.locationId,
-                    batchNo: item.batchNo || '',
-                    palletId: item.palletId,
-                    expDate: item.expDate,
-                    note: '原料領用' + (dept ? ' - ' + dept : '')
-                }));
+                html += '</div>';
+                
+                // 剩餘提示
+                html += '<div class="mt-2 text-sm" id="rm-remaining-hint-' + idx + '">';
+                if (item.pickType === 'full') {
+                    html += '<span class="text-green-400"><i class="fa-solid fa-check-circle mr-1"></i>整板出庫，儲位清空</span>';
+                } else {
+                    var remainHint = '剩餘 ' + item.remaining + ' 件';
+                    if (item.totalWeight > 0 && item.remainingWeight > 0) {
+                        remainHint += ' / ' + item.remainingWeight + ' kg';
+                    }
+                    html += '<span class="text-yellow-400"><i class="fa-solid fa-info-circle mr-1"></i>' + remainHint + ' 保留在原儲位</span>';
+                }
+                html += '</div>';
+                
+                html += '</div>';
+                html += '</div>';
             });
             
-            await batch.commit();
+            document.getElementById('rm-confirm-list').innerHTML = html;
+            document.getElementById('rm-confirm-total').innerText = totalQty + ' 件';
             
-            // 等待所有異動記錄完成
-            await Promise.all(logPromises);
+            // 帶入預設領用單位
+            var dept = document.getElementById('rm-pick-dept').value || '';
+            document.getElementById('rm-confirm-purpose').value = dept;
             
-            alert('✅ 領料出庫完成！');
+            // 開啟彈窗
+            document.getElementById('modal-rm-confirm').classList.remove('hidden');
+        };
+        
+        // 關閉領料確認彈窗
+        window.closeRmConfirmModal = function() {
+            document.getElementById('modal-rm-confirm').classList.add('hidden');
+        };
+        
+        // 從件數更新（輸入件數後換算重量）
+        window.updateRmConfirmFromQty = function(idx) {
+            var plan = window.pickingPlan.rm;
+            var item = plan[idx];
+            var qtyInput = document.getElementById('rm-partial-qty-' + idx);
+            var weightInput = document.getElementById('rm-partial-weight-' + idx);
+            var qty = parseInt(qtyInput.value) || 0;
             
-            // 清空
-            window.pickingPlan.rm = [];
-            document.getElementById('rm-picking-result').innerHTML = '<div class="text-center text-slate-500 py-20"><i class="fa-solid fa-check-circle text-4xl mb-4 text-green-500"></i><div>領料完成</div></div>';
-            document.getElementById('rm-picking-summary').classList.add('hidden');
+            if (weightInput && item.totalWeight > 0 && item.quantity > 0) {
+                var avgWeight = item.totalWeight / item.quantity;
+                weightInput.value = Math.round(qty * avgWeight * 10) / 10;
+            }
+            
+            updateRmConfirmHint(idx);
+            updateRmConfirmTotal();
+        };
+        
+        // 從重量更新（輸入重量後換算件數）
+        window.updateRmConfirmFromWeight = function(idx) {
+            var plan = window.pickingPlan.rm;
+            var item = plan[idx];
+            var qtyInput = document.getElementById('rm-partial-qty-' + idx);
+            var weightInput = document.getElementById('rm-partial-weight-' + idx);
+            var weight = parseFloat(weightInput.value) || 0;
+            
+            if (item.totalWeight > 0 && item.quantity > 0) {
+                var avgWeight = item.totalWeight / item.quantity;
+                var estimatedQty = Math.round(weight / avgWeight);
+                qtyInput.value = Math.min(estimatedQty, item.quantity);
+            }
+            
+            updateRmConfirmHint(idx);
+            updateRmConfirmTotal();
+        };
+        
+        // 更新剩餘提示
+        window.updateRmConfirmHint = function(idx) {
+            var plan = window.pickingPlan.rm;
+            var item = plan[idx];
+            var hintDiv = document.getElementById('rm-remaining-hint-' + idx);
+            var qtyInput = document.getElementById('rm-partial-qty-' + idx);
+            var weightInput = document.getElementById('rm-partial-weight-' + idx);
+            
+            var pickQty = parseInt(qtyInput.value) || 0;
+            var remainQty = item.quantity - pickQty;
+            
+            var hint = '剩餘 ' + remainQty + ' 件';
+            if (item.totalWeight > 0 && weightInput) {
+                var pickWeight = parseFloat(weightInput.value) || 0;
+                var remainWeight = Math.round((item.totalWeight - pickWeight) * 10) / 10;
+                hint += ' / ' + remainWeight + ' kg';
+            }
+            
+            if (remainQty <= 0) {
+                hintDiv.innerHTML = '<span class="text-green-400"><i class="fa-solid fa-check-circle mr-1"></i>全部領用，儲位清空</span>';
+            } else {
+                hintDiv.innerHTML = '<span class="text-yellow-400"><i class="fa-solid fa-info-circle mr-1"></i>' + hint + ' 保留在原儲位</span>';
+            }
+        };
+        
+        // 更新單筆領用數量（整板/部分切換）
+        window.updateRmConfirmQty = function(idx, type) {
+            var qtyInput = document.getElementById('rm-partial-qty-' + idx);
+            var weightInput = document.getElementById('rm-partial-weight-' + idx);
+            var hintDiv = document.getElementById('rm-remaining-hint-' + idx);
+            var plan = window.pickingPlan.rm;
+            var item = plan[idx];
+            
+            if (type === 'full') {
+                qtyInput.disabled = true;
+                qtyInput.value = item.quantity;
+                if (weightInput) {
+                    weightInput.disabled = true;
+                    weightInput.value = item.totalWeight;
+                }
+                hintDiv.innerHTML = '<span class="text-green-400"><i class="fa-solid fa-check-circle mr-1"></i>整板出庫，儲位清空</span>';
+            } else {
+                qtyInput.disabled = false;
+                if (weightInput) {
+                    weightInput.disabled = false;
+                }
+                qtyInput.focus();
+                updateRmConfirmHint(idx);
+            }
+            
+            updateRmConfirmTotal();
+        };
+        
+        // 更新總計
+        window.updateRmConfirmTotal = function() {
+            var total = 0;
+            var totalWeight = 0;
+            var plan = window.pickingPlan.rm;
+            
+            document.querySelectorAll('.rm-pick-type:checked').forEach(function(radio) {
+                var idx = parseInt(radio.dataset.idx);
+                if (radio.value === 'full') {
+                    total += plan[idx].quantity;
+                } else {
+                    var qtyInput = document.getElementById('rm-partial-qty-' + idx);
+                    total += parseInt(qtyInput.value) || 0;
+                }
+                
+                // 更新剩餘提示
+                var qtyInput = document.getElementById('rm-partial-qty-' + idx);
+                var hintDiv = document.getElementById('rm-remaining-hint-' + idx);
+                var item = plan[idx];
+                
+                if (radio.value === 'full') {
+                    hintDiv.innerHTML = '<span class="text-green-400"><i class="fa-solid fa-check-circle mr-1"></i>整板出庫，儲位清空</span>';
+                } else {
+                    var remaining = item.quantity - (parseInt(qtyInput.value) || 0);
+                    if (remaining < 0) remaining = 0;
+                    var remainHint = '剩餘 ' + remaining + ' 件';
+                    var weightInput = document.getElementById('rm-partial-weight-' + idx);
+                    if (weightInput && item.totalWeight > 0) {
+                        var remainWeight = Math.round((item.totalWeight - (parseFloat(weightInput.value) || 0)) * 10) / 10;
+                        remainHint += ' / ' + remainWeight + ' kg';
+                    }
+                    hintDiv.innerHTML = '<span class="text-yellow-400"><i class="fa-solid fa-info-circle mr-1"></i>' + remainHint + ' 保留在原儲位</span>';
+                }
+                
+                // 累加重量
+                var weightInput = document.getElementById('rm-partial-weight-' + idx);
+                if (weightInput) {
+                    if (radio.value === 'full') {
+                        totalWeight += plan[idx].totalWeight || 0;
+                    } else {
+                        totalWeight += parseFloat(weightInput.value) || 0;
+                    }
+                }
+            });
+            
+            var totalDisplay = total + ' 件';
+            if (totalWeight > 0) {
+                totalDisplay += ' / ' + Math.round(totalWeight * 10) / 10 + ' kg';
+            }
+            document.getElementById('rm-confirm-total').innerText = totalDisplay;
+        };
+        
+        // 執行領料出庫
+        window.executeRmPicking = async function() {
+            var user = document.getElementById('rm-confirm-user').value.trim();
+            var purpose = document.getElementById('rm-confirm-purpose').value.trim();
+            
+            if (!user) {
+                alert('請輸入領用人');
+                document.getElementById('rm-confirm-user').focus();
+                return;
+            }
+            
+            var plan = window.pickingPlan.rm;
+            var product = window.pickingSelectedProduct.rm;
+            var pickItems = [];
+            
+            // 收集實際領用資料
+            document.querySelectorAll('.rm-pick-type:checked').forEach(function(radio) {
+                var idx = parseInt(radio.dataset.idx);
+                var item = plan[idx];
+                var actualQty, actualWeight = 0;
+                
+                if (radio.value === 'full') {
+                    actualQty = item.quantity;
+                    actualWeight = item.totalWeight || 0;
+                } else {
+                    actualQty = parseInt(document.getElementById('rm-partial-qty-' + idx).value) || 0;
+                    var weightInput = document.getElementById('rm-partial-weight-' + idx);
+                    if (weightInput) {
+                        actualWeight = parseFloat(weightInput.value) || 0;
+                    }
+                }
+                
+                if (actualQty > 0 && actualQty <= item.quantity) {
+                    pickItems.push({
+                        palletId: item.palletId,
+                        locationId: item.locationId,
+                        originalQty: item.quantity,
+                        originalWeight: item.totalWeight || 0,
+                        pickQty: actualQty,
+                        pickWeight: actualWeight,
+                        remaining: item.quantity - actualQty,
+                        remainingWeight: (item.totalWeight || 0) - actualWeight,
+                        batchNo: item.batchNo,
+                        expDate: item.expDate,
+                        pickType: actualQty === item.quantity ? 'full' : 'partial'
+                    });
+                }
+            });
+            
+            if (pickItems.length === 0) {
+                alert('沒有有效的領用項目');
+                return;
+            }
+            
+            var totalPick = pickItems.reduce(function(sum, p) { return sum + p.pickQty; }, 0);
+            var totalWeight = pickItems.reduce(function(sum, p) { return sum + (p.pickWeight || 0); }, 0);
+            
+            var confirmMsg = '確認領用 ' + totalPick + ' 件';
+            if (totalWeight > 0) {
+                confirmMsg += ' / ' + Math.round(totalWeight * 10) / 10 + ' kg';
+            }
+            confirmMsg += '？\n\n領用人：' + user + '\n用途：' + (purpose || '-');
+            
+            if (!confirm(confirmMsg)) return;
+            
+            try {
+                var batch = window.writeBatch(window.db);
+                var logPromises = [];
+                
+                pickItems.forEach(function(item) {
+                    var ref = window.doc(window.db, 'pallets', item.palletId);
+                    
+                    if (item.pickType === 'full') {
+                        // 整板出庫：刪除
+                        batch.delete(ref);
+                    } else {
+                        // 部分領用：更新剩餘數量和重量
+                        var updateData = { quantity: item.remaining };
+                        if (item.originalWeight > 0) {
+                            updateData.totalWeight = Math.round(item.remainingWeight * 10) / 10;
+                        }
+                        batch.update(ref, updateData);
+                    }
+                    
+                    // 記錄領用異動
+                    var noteText = '原料領用 - 領用人：' + user;
+                    if (purpose) noteText += '，用途：' + purpose;
+                    if (item.pickWeight > 0) noteText += ' (' + item.pickWeight + 'kg)';
+                    
+                    logPromises.push(window.logInventoryChange({
+                        type: 'picking',
+                        productName: product ? product.name : '',
+                        spec: product ? product.spec : '',
+                        quantity: item.pickQty,
+                        weight: item.pickWeight || 0,
+                        quantityChange: -item.pickQty,
+                        weightChange: -(item.pickWeight || 0),
+                        locationId: item.locationId,
+                        batchNo: item.batchNo || '',
+                        palletId: item.palletId,
+                        expDate: item.expDate,
+                        note: noteText
+                    }));
+                });
+                
+                await batch.commit();
+                await Promise.all(logPromises);
+                
+                // 關閉彈窗
+                closeRmConfirmModal();
+                
+                // 顯示完成訊息
+                var resultMsg = '✅ 領料出庫完成！\n\n領用人：' + user + '\n總計：' + totalPick + ' 件';
+                if (totalWeight > 0) {
+                    resultMsg += ' / ' + Math.round(totalWeight * 10) / 10 + ' kg';
+                }
+                alert(resultMsg);
+                
+                // 清空
+                window.pickingPlan.rm = [];
+                var resultHtml = '<div class="text-center text-slate-500 py-20"><i class="fa-solid fa-check-circle text-4xl mb-4 text-green-500"></i><div class="text-lg mb-2">領料完成</div><div class="text-sm">領用人：' + user + ' ｜ 總計：' + totalPick + ' 件';
+                if (totalWeight > 0) {
+                    resultHtml += ' / ' + Math.round(totalWeight * 10) / 10 + ' kg';
+                }
+                resultHtml += '</div></div>';
+                document.getElementById('rm-picking-result').innerHTML = resultHtml;
+                document.getElementById('rm-picking-summary').classList.add('hidden');
+                
+                // 清空輸入
+                document.getElementById('rm-pick-name').value = '';
+                document.getElementById('rm-pick-spec').value = '';
+                document.getElementById('rm-pick-qty').value = '';
+                document.getElementById('rm-pick-dept').value = '';
+                
+            } catch (err) {
+                console.error('領料出庫失敗:', err);
+                alert('❌ 領料出庫失敗：' + err.message);
+            }
         };
 
         // 列印揀貨單
@@ -14580,9 +15475,20 @@ window.clearLocalStorage = function() {
                 return;
             }
             
-            var csv = '倉庫,品名,規格,批號,數量,效期\n';
+            var csv = '倉庫,品名,規格,批號,數量,類型,箱容kg,總重量kg,效期\n';
             window.externalStock.forEach(function(s) {
-                csv += [extWhNames[s.warehouseId] || s.warehouseId, s.productName, s.spec, s.batchNo, s.quantity, s.expDate].join(',') + '\n';
+                var productType = s.productType === 'variable' ? '不定重' : '定重';
+                csv += [
+                    extWhNames[s.warehouseId] || s.warehouseId, 
+                    s.productName, 
+                    s.spec, 
+                    s.batchNo, 
+                    s.quantity,
+                    productType,
+                    s.unitWeight || '',
+                    s.totalWeight || '',
+                    s.expDate
+                ].join(',') + '\n';
             });
             
             var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
@@ -14621,9 +15527,30 @@ window.clearLocalStorage = function() {
             var spec = document.getElementById('in-spec').value.trim();
             var batch = document.getElementById('in-batch').value.trim();
             var exp = document.getElementById('in-exp').value;
-            var qty = parseInt(document.getElementById('in-qty').value) || 0;
             var vendor = document.getElementById('in-vendor').value.trim();
             var category = document.getElementById('in-category').value || 'Raw';
+            
+            // 取得品項類型和數量/重量
+            var productType = 'fixed';
+            var radio = document.querySelector('input[name="in-product-type"]:checked');
+            if (radio) {
+                productType = radio.value;
+            }
+            
+            var qty, unitWeight, totalWeight;
+            
+            if (productType === 'fixed') {
+                qty = parseInt(document.getElementById('in-qty').value) || 0;
+                unitWeight = parseFloat(document.getElementById('in-unit-weight').value) || 0;
+                totalWeight = qty * unitWeight;
+            } else {
+                // 不定重品
+                var qtyVarEl = document.getElementById('in-qty-var');
+                var weightEl = document.getElementById('in-weight');
+                qty = qtyVarEl ? (parseInt(qtyVarEl.value) || 0) : 0;
+                totalWeight = weightEl ? (parseFloat(weightEl.value) || 0) : 0;
+                unitWeight = qty > 0 ? Math.round(totalWeight / qty * 100) / 100 : 0;
+            }
             
             // 判斷是否為外倉入庫（從下拉選單取得）
             var warehouseId = document.getElementById('in-warehouse').value;
@@ -14634,6 +15561,7 @@ window.clearLocalStorage = function() {
             if (!name) { alert('請輸入品名'); return null; }
             if (!exp) { alert('⚠️ 效期為必填欄位'); return null; }
             if (qty <= 0) { alert('請輸入有效數量'); return null; }
+            if (productType === 'variable' && totalWeight <= 0) { alert('❌ 不定重品請填寫總重量'); return null; }
             
             // ========== 效期檢查警示 ==========
             var expiryCheck = checkExpiryStatus(name, spec, exp);
@@ -14687,6 +15615,9 @@ window.clearLocalStorage = function() {
                 batchNo: batch,
                 expDate: exp,
                 quantity: qty,
+                productType: productType,
+                unitWeight: unitWeight,
+                totalWeight: totalWeight,
                 vendor: vendor,
                 status: 'pending', // 全部都是待執行
                 needsApproval: needsApproval, // 標記是否需要審核
@@ -19533,6 +20464,15 @@ function renderPickingListV2() {
         ).join(', ');
         const moreOrders = (item.orders || []).length > 3 ? '...' : '';
         
+        // 重量顯示
+        let qtyDisplay = `<span class="text-yellow-400 font-bold text-lg">${item.pickQty}</span>`;
+        if (item.totalWeight && item.totalWeight > 0) {
+            const pickWeight = item.availableQty > 0 ? Math.round(item.pickQty / item.availableQty * item.totalWeight * 10) / 10 : 0;
+            if (pickWeight > 0) {
+                qtyDisplay += `<span class="text-amber-400 text-xs ml-1">/${pickWeight}kg</span>`;
+            }
+        }
+        
         html += `<tr class="hover:bg-slate-800/50 border-b border-slate-700/50 ${rowClass}">`;
         html += `<td class="p-2 text-center">${statusIcon}</td>`;
         html += `<td class="p-2 ${textClass}"><span class="text-cyan-400 font-mono">${item.locationId}</span></td>`;
@@ -19540,7 +20480,7 @@ function renderPickingListV2() {
         html += `<td class="p-2 ${textClass} text-white">${item.productName}</td>`;
         html += `<td class="p-2 ${textClass} text-slate-400 text-xs">${item.spec}</td>`;
         html += `<td class="p-2 text-right ${textClass}">
-            <span class="text-yellow-400 font-bold text-lg">${item.pickQty}</span>
+            ${qtyDisplay}
             ${!item.shortage ? `<span class="text-slate-500 text-xs ml-1">/ ${item.availableQty}</span>` : ''}
         </td>`;
         html += `<td class="p-2 ${textClass} text-xs text-slate-400">${item.batchNo || '-'}</td>`;
