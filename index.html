@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WMS 全功能旗艦版 (V50.6 導航列整合優化)</title>
+    <title>WMS 全功能旗艦版 (V50.9 雲端同步完整版)</title>
     <script>
         // 在 Tailwind 載入前先攔截警告
         (function() {
@@ -1846,78 +1846,45 @@
                 </div>
             </div>
 
-            <div id="view-external-warehouse" class="view-panel h-full hidden flex flex-col p-6">
-                <div class="bg-gradient-to-r from-cyan-900 to-cyan-800 border border-cyan-600 p-4 rounded-lg mb-4">
-                    <h2 class="text-white font-bold text-xl"><i class="fa-solid fa-building mr-2 text-cyan-400"></i>外部倉庫管理</h2>
-                    <p class="text-cyan-200 text-sm mt-1">管理外倉庫存（台北倉、台中倉、高雄倉、門市）</p>
-                </div>
-                
-                <!-- 外倉總覽卡片 -->
-                <div class="grid grid-cols-4 gap-4 mb-4">
-                    <div class="glass-panel p-4 border-l-4 border-blue-500 cursor-pointer hover:bg-slate-800" onclick="filterExternalWarehouse('EXT-TP')">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <div class="text-slate-400 text-xs">台北倉</div>
-                                <div class="text-2xl font-bold text-white" id="ext-tp-count">0</div>
-                                <div class="text-xs text-slate-500"><span id="ext-tp-items">0</span> 品項</div>
-                            </div>
-                            <i class="fa-solid fa-warehouse text-blue-400 text-2xl"></i>
+            <div id="view-external-warehouse" class="view-panel h-full hidden flex flex-col p-4">
+                <!-- 頂部控制區 -->
+                <div class="glass-panel p-3 mb-3">
+                    <div class="flex items-center gap-4 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-building text-cyan-400"></i>
+                            <span class="text-white font-bold">外部倉庫管理</span>
                         </div>
-                    </div>
-                    <div class="glass-panel p-4 border-l-4 border-emerald-500 cursor-pointer hover:bg-slate-800" onclick="filterExternalWarehouse('EXT-TC')">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <div class="text-slate-400 text-xs">台中倉</div>
-                                <div class="text-2xl font-bold text-white" id="ext-tc-count">0</div>
-                                <div class="text-xs text-slate-500"><span id="ext-tc-items">0</span> 品項</div>
-                            </div>
-                            <i class="fa-solid fa-warehouse text-emerald-400 text-2xl"></i>
+                        <div class="w-px h-6 bg-slate-600"></div>
+                        <!-- 公司選擇 -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-400 text-xs">公司：</span>
+                            <button onclick="setExtCompany('all')" id="btn-ext-all" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-600 text-white">全部</button>
+                            <button onclick="setExtCompany('崇文')" id="btn-ext-cw" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">崇文</button>
+                            <button onclick="setExtCompany('八方')" id="btn-ext-bf" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">八方</button>
                         </div>
-                    </div>
-                    <div class="glass-panel p-4 border-l-4 border-orange-500 cursor-pointer hover:bg-slate-800" onclick="filterExternalWarehouse('EXT-KH')">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <div class="text-slate-400 text-xs">高雄倉</div>
-                                <div class="text-2xl font-bold text-white" id="ext-kh-count">0</div>
-                                <div class="text-xs text-slate-500"><span id="ext-kh-items">0</span> 品項</div>
-                            </div>
-                            <i class="fa-solid fa-warehouse text-orange-400 text-2xl"></i>
-                        </div>
-                    </div>
-                    <div class="glass-panel p-4 border-l-4 border-purple-500 cursor-pointer hover:bg-slate-800" onclick="filterExternalWarehouse('STORE')">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <div class="text-slate-400 text-xs">門市</div>
-                                <div class="text-2xl font-bold text-white" id="ext-store-count">0</div>
-                                <div class="text-xs text-slate-500"><span id="ext-store-items">0</span> 品項</div>
-                            </div>
-                            <i class="fa-solid fa-store text-purple-400 text-2xl"></i>
-                        </div>
+                        <div class="w-px h-6 bg-slate-600"></div>
+                        <!-- 倉庫篩選 -->
+                        <select id="ext-wh-filter" class="scan-input text-xs w-40" onchange="filterExternalWarehouse(this.value)">
+                            <option value="">全部外倉</option>
+                        </select>
+                        <button onclick="exportExternalStock()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-bold ml-auto">
+                            <i class="fa-solid fa-file-excel mr-1"></i>匯出
+                        </button>
                     </div>
                 </div>
 
-                <div class="flex gap-4 flex-1">
+                <div class="flex gap-3 flex-1 min-h-0">
                     <!-- 左側：外倉庫存列表 -->
-                    <div class="flex-1 glass-panel p-4 flex flex-col">
-                        <div class="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
-                            <h3 class="text-white font-bold"><i class="fa-solid fa-boxes-stacked mr-2 text-cyan-400"></i>外倉庫存明細</h3>
-                            <div class="flex gap-2">
-                                <select id="ext-wh-filter" class="scan-input text-xs w-32" onchange="filterExternalWarehouse(this.value)">
-                                    <option value="">全部外倉</option>
-                                    <option value="EXT-TP">台北倉</option>
-                                    <option value="EXT-TC">台中倉</option>
-                                    <option value="EXT-KH">高雄倉</option>
-                                    <option value="STORE">門市</option>
-                                </select>
-                                <button onclick="exportExternalStock()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold">
-                                    <i class="fa-solid fa-file-excel mr-1"></i>匯出
-                                </button>
-                            </div>
+                    <div class="flex-1 glass-panel p-3 flex flex-col">
+                        <div class="flex justify-between items-center mb-2 border-b border-slate-700 pb-2">
+                            <h3 class="text-white font-bold text-sm"><i class="fa-solid fa-boxes-stacked mr-2 text-cyan-400"></i>外倉庫存明細</h3>
+                            <span class="text-xs text-slate-400" id="ext-stock-count">0 筆</span>
                         </div>
                         <div class="flex-1 overflow-auto">
-                            <table class="w-full text-sm">
+                            <table class="w-full text-xs">
                                 <thead class="sticky top-0 bg-slate-800">
-                                    <tr class="text-slate-400 text-xs">
+                                    <tr class="text-slate-400">
+                                        <th class="text-left p-2">公司</th>
                                         <th class="text-left p-2">倉庫</th>
                                         <th class="text-left p-2">品名</th>
                                         <th class="text-left p-2">規格</th>
@@ -1928,35 +1895,41 @@
                                     </tr>
                                 </thead>
                                 <tbody id="external-stock-list">
-                                    <tr><td colspan="7" class="text-center text-slate-500 py-10">載入中...</td></tr>
+                                    <tr><td colspan="8" class="text-center text-slate-500 py-10">載入中...</td></tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
                     <!-- 右側：手動調整/對帳 -->
-                    <div class="w-80 glass-panel p-4 flex flex-col">
-                        <h3 class="text-white font-bold mb-3 border-b border-slate-700 pb-2">
+                    <div class="w-72 glass-panel p-3 flex flex-col">
+                        <h3 class="text-white font-bold text-sm mb-2 border-b border-slate-700 pb-2">
                             <i class="fa-solid fa-pen-to-square mr-2 text-yellow-400"></i>庫存調整/對帳
                         </h3>
-                        <div class="bg-yellow-900/30 border border-yellow-600/50 rounded p-2 mb-3 text-xs">
-                            <i class="fa-solid fa-triangle-exclamation text-yellow-400 mr-1"></i>
-                            <span class="text-yellow-200">效期為必填欄位；批號建議填寫（自產/進口/大宗原料必填）</span>
-                        </div>
-                        <div class="space-y-3">
+                        <div class="space-y-2">
+                            <!-- 公司選擇 -->
+                            <div>
+                                <label class="text-xs text-slate-400">公司 *</label>
+                                <div class="flex gap-1 bg-slate-900 rounded p-1">
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="ext-adj-company" value="崇文" class="hidden peer" checked>
+                                        <div class="text-center py-1 rounded text-xs font-bold peer-checked:bg-blue-600 peer-checked:text-white text-slate-400">崇文</div>
+                                    </label>
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="ext-adj-company" value="八方" class="hidden peer">
+                                        <div class="text-center py-1 rounded text-xs font-bold peer-checked:bg-purple-600 peer-checked:text-white text-slate-400">八方</div>
+                                    </label>
+                                </div>
+                            </div>
                             <div>
                                 <label class="text-xs text-slate-400">外倉 *</label>
-                                <select id="ext-adj-wh" class="scan-input">
+                                <select id="ext-adj-wh" class="scan-input text-sm">
                                     <option value="">選擇倉庫</option>
-                                    <option value="EXT-TP">台北倉</option>
-                                    <option value="EXT-TC">台中倉</option>
-                                    <option value="EXT-KH">高雄倉</option>
-                                    <option value="STORE">門市</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="text-xs text-slate-400">品名 *</label>
-                                <input type="text" id="ext-adj-name" class="scan-input" placeholder="品名">
+                                <input type="text" id="ext-adj-name" class="scan-input text-sm" placeholder="品名">
                             </div>
                             <div>
                                 <label class="text-xs text-slate-400">規格</label>
@@ -3431,6 +3404,7 @@
                             <thead class="bg-slate-700 sticky top-0">
                                 <tr>
                                     <th class="text-left p-3 text-slate-300 font-medium">日期時間</th>
+                                    <th class="text-left p-3 text-slate-300 font-medium">公司</th>
                                     <th class="text-left p-3 text-slate-300 font-medium">類型</th>
                                     <th class="text-left p-3 text-slate-300 font-medium">品項</th>
                                     <th class="text-left p-3 text-slate-300 font-medium">規格</th>
@@ -3442,7 +3416,7 @@
                                 </tr>
                             </thead>
                             <tbody id="inventory-log-list">
-                                <tr><td colspan="9" class="text-center text-slate-500 py-16">
+                                <tr><td colspan="10" class="text-center text-slate-500 py-16">
                                     <i class="fa-solid fa-search text-4xl mb-3 opacity-30"></i>
                                     <p>請設定查詢條件後點擊「查詢」</p>
                                 </td></tr>
@@ -4166,7 +4140,7 @@
                 snapshot.forEach(d => {
                     const data = d.data();
                     if(data.quantity > 0 || data.totalWeight > 0) {
-                        currentInventory.push(data);
+                        currentInventory.push({ id: d.id, ...data });
                         stats.total++;
                         if(data.category === 'FG') { stats.fg++; stats.chart.fg++; } else if(data.category === 'WIP') { stats.chart.wip++; } else { stats.chart.raw++; }
                         if(data.source === 'Factory_Return') stats.ret++;
@@ -4477,6 +4451,16 @@
         }
         
         window.currentInventory = () => currentInventory; window.currentOrders = () => currentOrders; window.currentPallets = () => currentInventory;
+        // 別名，供調撥功能使用（使用 getter 確保取得最新資料）
+        Object.defineProperty(window, 'inventory', {
+            get: function() { return currentInventory; }
+        });
+        // 重新載入庫存（Firestore onSnapshot 會自動更新，這裡只是觸發 UI 更新）
+        window.fetchInventory = function() {
+            return new Promise(function(resolve) {
+                setTimeout(resolve, 100);
+            });
+        };
     </script>
 
     <script>
@@ -4889,7 +4873,12 @@ console.log('✅ WMS 工具函數庫已載入');
             if(viewId === 'warehouse-heatmap') { initWarehouseHeatmap(); }
             if(viewId === 'expiry-management') { refreshExpiryReport(); }
             if(viewId === 'user-management') { loadUserList(); }
-            if(viewId === 'wave-picking') { refreshWaveList(); }
+            if(viewId === 'wave-picking') { loadWavesFromFirebase(); }
+            if(viewId === 'product-master') { loadProductMasterFromFirebase(); }
+            if(viewId === 'external-warehouse') { loadExternalStock(); updateExtWarehouseFilter(); }
+            if(viewId === 'consignment') { loadConsignmentsFromFirebase(); }
+            if(viewId === 'rental-settings') { loadRentalSettingsFromFirebase(); }
+            if(viewId === 'rental-report') { loadRentalSettingsFromFirebase(); }
         }
         function renderAllMaps() { 
             renderMapUI('grid-I-A'); renderMapUI('grid-I-B'); 
@@ -5925,6 +5914,7 @@ console.log('✅ WMS 工具函數庫已載入');
                     : ' (總重' + totalWeight + 'kg)';
                 await window.logInventoryChange({
                     type: 'inbound',
+                    company: company,
                     productName: productName,
                     spec: spec,
                     quantity: qty,
@@ -6156,7 +6146,7 @@ console.log('✅ WMS 工具函數庫已載入');
             
             // 準備資料
             var data = [
-                ['條碼', '品名', '規格', '批號', '效期', '數量', '類型', '箱容kg', '總重量kg', '儲位', '廠商', '入庫日期']
+                ['公司', '條碼', '品名', '規格', '批號', '效期', '數量', '類型', '箱容kg', '總重量kg', '儲位', '廠商', '入庫日期']
             ];
             
             pallets.forEach(function(p) {
@@ -6181,6 +6171,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 var productType = p.productType === 'variable' ? '不定重' : '定重';
                 
                 data.push([
+                    p.company || '',
                     p.palletId || '',
                     p.productName || '',
                     p.spec || '',
@@ -7147,6 +7138,7 @@ console.log('✅ WMS 工具函數庫已載入');
             if (pallet) {
                 await window.logInventoryChange({
                     type: 'adjust',
+                    company: pallet.company || '',
                     productName: pallet.productName || '',
                     spec: pallet.spec || '',
                     quantity: pallet.quantity || 0,
@@ -7173,6 +7165,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 // 記錄每筆刪除
                 logPromises.push(window.logInventoryChange({
                     type: 'adjust',
+                    company: data.company || '',
                     productName: data.productName || '',
                     spec: data.spec || '',
                     quantity: data.quantity || 0,
@@ -7663,6 +7656,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 // 記錄異動
                 await window.logInventoryChange({
                     type: 'merge',
+                    company: source.company || '',
                     productName: source.productName,
                     spec: source.spec || '',
                     quantity: totalQty,
@@ -10011,14 +10005,48 @@ console.log('✅ WMS 工具函數庫已載入');
         
         // 波次資料
         window._waveData = {
-            waves: JSON.parse(localStorage.getItem('wms_waves') || '[]'),
+            waves: [],
             currentWave: null,
             pickingList: [],
             completedItems: []
         };
         
-        // 儲存波次
-        function saveWaves() {
+        // 從 Firebase 載入波次資料
+        window.loadWavesFromFirebase = async function() {
+            try {
+                if (!window.db || !window.collection || !window.getDocs) {
+                    console.log('Firebase 尚未初始化，使用 localStorage');
+                    window._waveData.waves = JSON.parse(localStorage.getItem('wms_waves') || '[]');
+                    refreshWaveList();
+                    return;
+                }
+                
+                var snapshot = await window.getDocs(window.collection(window.db, 'waves'));
+                window._waveData.waves = [];
+                snapshot.forEach(function(doc) {
+                    window._waveData.waves.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // 依建立時間排序（新的在前）
+                window._waveData.waves.sort(function(a, b) {
+                    return (b.createdAt || '').localeCompare(a.createdAt || '');
+                });
+                
+                console.log('波次資料已載入:', window._waveData.waves.length, '筆');
+                
+                // 同步備份到 localStorage
+                localStorage.setItem('wms_waves', JSON.stringify(window._waveData.waves));
+                
+                refreshWaveList();
+            } catch(e) {
+                console.error('載入波次資料失敗:', e);
+                window._waveData.waves = JSON.parse(localStorage.getItem('wms_waves') || '[]');
+                refreshWaveList();
+            }
+        };
+        
+        // 儲存波次（同步到 Firebase）
+        async function saveWaves() {
             localStorage.setItem('wms_waves', JSON.stringify(window._waveData.waves));
         }
         
@@ -10823,7 +10851,11 @@ window._backupConfig = {
         { name: 'inboundTasks', label: '入庫任務' },
         { name: 'shippingOrders', label: '出貨單' },
         { name: 'dispatchOrders', label: '派車單' },
-        { name: 'externalStock', label: '外部庫存' }
+        { name: 'externalStock', label: '外部庫存' },
+        { name: 'productMaster', label: '品項主檔' },
+        { name: 'warehouses', label: '外倉設定' },
+        { name: 'consignments', label: '寄倉資料' },
+        { name: 'settings', label: '系統設定' }
     ]
 };
 
@@ -12361,6 +12393,7 @@ window.clearLocalStorage = function() {
                 var logEntry = {
                     timestamp: new Date().toISOString(),
                     type: data.type,                    // inbound, outbound, move, merge, adjust, scrap
+                    company: data.company || '',        // 公司別
                     productName: data.productName || '',
                     spec: data.spec || '',
                     quantity: data.quantity || 0,
@@ -12378,7 +12411,7 @@ window.clearLocalStorage = function() {
                 };
                 
                 var docRef = await addDoc(collection(db, 'inventoryLogs'), logEntry);
-                console.log('異動記錄已儲存:', logEntry.type, logEntry.productName, '操作者:', operator);
+                console.log('異動記錄已儲存:', logEntry.type, logEntry.productName, '公司:', logEntry.company, '操作者:', operator);
                 return docRef.id;
             } catch (e) {
                 console.error('記錄異動失敗:', e);
@@ -12515,7 +12548,7 @@ window.clearLocalStorage = function() {
             var tbody = document.getElementById('inventory-log-list');
             
             if (logs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-slate-500 py-16"><i class="fa-solid fa-inbox text-4xl mb-3 opacity-30"></i><p>查無資料</p></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center text-slate-500 py-16"><i class="fa-solid fa-inbox text-4xl mb-3 opacity-30"></i><p>查無資料</p></td></tr>';
                 return;
             }
             
@@ -12527,8 +12560,13 @@ window.clearLocalStorage = function() {
                 var weightDisplay = formatWeightChange(log);
                 var locationDisplay = formatLocationDisplay(log);
                 
+                // 公司標籤
+                var companyClass = log.company === '八方' ? 'bg-purple-900/50 text-purple-300' : 'bg-blue-900/50 text-blue-300';
+                var companyLabel = log.company ? '<span class="px-1.5 py-0.5 rounded text-xs ' + companyClass + '">' + log.company + '</span>' : '-';
+                
                 html += '<tr class="border-t border-slate-700 hover:bg-slate-700/30">';
                 html += '<td class="p-3 text-slate-300 font-mono text-xs">' + formatTimestamp(log.timestamp) + '</td>';
+                html += '<td class="p-3">' + companyLabel + '</td>';
                 html += '<td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold ' + typeClass + '">' + typeLabel + '</span></td>';
                 html += '<td class="p-3 text-white font-medium">' + (log.productName || '-') + '</td>';
                 html += '<td class="p-3 text-slate-400">' + (log.spec || '-') + '</td>';
@@ -13538,9 +13576,13 @@ window.clearLocalStorage = function() {
                 return;
             }
             
+            // 公司標籤樣式
+            var companyClass = pallet.company === '八方' ? 'bg-purple-900/50 text-purple-300' : 'bg-blue-900/50 text-blue-300';
+            var companyLabel = pallet.company ? '<span class="px-2 py-0.5 rounded text-xs ' + companyClass + '">' + pallet.company + '</span>' : '';
+            
             // 顯示找到的資料
             infoEl.innerHTML = 
-                '<div class="text-emerald-400 mb-2"><i class="fa-solid fa-check-circle mr-1"></i>已找到</div>' +
+                '<div class="text-emerald-400 mb-2"><i class="fa-solid fa-check-circle mr-1"></i>已找到 ' + companyLabel + '</div>' +
                 '<div class="text-white font-bold text-lg">' + pallet.productName + '</div>' +
                 '<div class="text-slate-300">' + (pallet.spec || '-') + '</div>' +
                 '<div class="text-yellow-400 font-bold text-xl mt-1">' + pallet.quantity + ' 件</div>' +
@@ -14218,6 +14260,7 @@ window.clearLocalStorage = function() {
                 // 記錄異動
                 await window.logInventoryChange({
                     type: 'move',
+                    company: pallet.company || '',
                     productName: pallet.productName,
                     spec: pallet.spec || '',
                     quantity: pallet.quantity,
@@ -14364,6 +14407,7 @@ window.clearLocalStorage = function() {
                 
                 await window.logInventoryChange({
                     type: 'merge',
+                    company: keepPallet.company || '',
                     productName: keepPallet.productName,
                     spec: keepPallet.spec || '',
                     quantity: newQty,
@@ -14698,8 +14742,8 @@ window.clearLocalStorage = function() {
                 return;
             }
             
-            // 取得目前選擇的公司
-            var selectedCompany = mode === 'rm' ? (window.rmCompany || '崇文') : '崇文';
+            // 取得目前選擇的公司（波次揀貨和原料領用都要過濾）
+            var selectedCompany = mode === 'rm' ? (window.rmCompany || '崇文') : (window.waveCompany || '崇文');
             
             var products = {};
             window.currentPallets().forEach(function(p) {
@@ -14748,9 +14792,15 @@ window.clearLocalStorage = function() {
                 return;
             }
             
-            // 找出所有符合的棧板
+            // 取得目前選擇的公司
+            var selectedCompany = mode === 'rm' ? (window.rmCompany || '崇文') : (window.waveCompany || '崇文');
+            
+            // 找出所有符合的棧板（需過濾公司）
             var candidates = [];
             window.currentPallets().forEach(function(p) {
+                // 公司過濾
+                if (p.company && p.company !== selectedCompany) return;
+                
                 if (p.productName === product.name && (p.spec || '') === product.spec && p.quantity > 0) {
                     // 計算是否為孤立儲位
                     var parsed = parseLocationId(p.locationId);
@@ -15516,22 +15566,86 @@ window.clearLocalStorage = function() {
         }
         
         // 渲染外倉庫存列表
+        // 外倉管理公司過濾
+        window.extCompanyFilter = 'all';
+        
+        window.setExtCompany = function(company) {
+            window.extCompanyFilter = company;
+            
+            // 更新按鈕樣式
+            document.getElementById('btn-ext-all').className = company === 'all' 
+                ? 'px-3 py-1.5 rounded text-xs font-bold bg-slate-600 text-white' 
+                : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
+            document.getElementById('btn-ext-cw').className = company === '崇文' 
+                ? 'px-3 py-1.5 rounded text-xs font-bold bg-blue-600 text-white' 
+                : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
+            document.getElementById('btn-ext-bf').className = company === '八方' 
+                ? 'px-3 py-1.5 rounded text-xs font-bold bg-purple-600 text-white' 
+                : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
+            
+            // 更新外倉下拉選單
+            updateExtWarehouseFilter();
+            
+            // 重新渲染
+            renderExternalStock();
+        };
+        
+        // 更新外倉篩選下拉選單
+        function updateExtWarehouseFilter() {
+            var company = window.extCompanyFilter;
+            var filterSelect = document.getElementById('ext-wh-filter');
+            var adjSelect = document.getElementById('ext-adj-wh');
+            
+            var html = '<option value="">全部外倉</option>';
+            var adjHtml = '<option value="">選擇倉庫</option>';
+            
+            window.warehousesData.forEach(function(w) {
+                if (w.type === 'external' && w.active) {
+                    if (company === 'all' || w.company === company) {
+                        var label = w.company + ' - ' + w.name;
+                        html += '<option value="' + w.code + '">' + label + '</option>';
+                        adjHtml += '<option value="' + w.code + '">' + label + '</option>';
+                    }
+                }
+            });
+            
+            if (filterSelect) filterSelect.innerHTML = html;
+            if (adjSelect) adjSelect.innerHTML = adjHtml;
+        }
+        
         function renderExternalStock(filter) {
             var tbody = document.getElementById('external-stock-list');
+            var companyFilter = window.extCompanyFilter || 'all';
             var data = window.externalStock;
             
+            // 公司過濾
+            if (companyFilter !== 'all') {
+                data = data.filter(function(s) { return s.company === companyFilter; });
+            }
+            
+            // 倉庫過濾
             if (filter) {
                 data = data.filter(function(s) { return s.warehouseId === filter; });
             }
             
+            // 更新數量
+            var countEl = document.getElementById('ext-stock-count');
+            if (countEl) countEl.innerText = data.length + ' 筆';
+            
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-slate-500 py-10">無庫存資料</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-500 py-10">無庫存資料</td></tr>';
                 return;
             }
             
+            // 取得倉庫名稱
+            var getWhName = function(code) {
+                var wh = window.warehousesData.find(function(w) { return w.code === code; });
+                return wh ? wh.name : code;
+            };
+            
             var html = '';
             data.forEach(function(s) {
-                var whName = extWhNames[s.warehouseId] || s.warehouseId;
+                var whName = getWhName(s.warehouseId);
                 var expClass = '';
                 if (s.expDate) {
                     var exp = new Date(s.expDate);
@@ -15542,7 +15656,10 @@ window.clearLocalStorage = function() {
                     else if (days < 90) expClass = 'text-yellow-400';
                 }
                 
+                var companyClass = s.company === '八方' ? 'bg-purple-900/50 text-purple-300' : 'bg-blue-900/50 text-blue-300';
+                
                 html += '<tr class="border-b border-slate-700 hover:bg-slate-800">';
+                html += '<td class="p-2"><span class="px-1.5 py-0.5 rounded text-xs ' + companyClass + '">' + (s.company || '-') + '</span></td>';
                 html += '<td class="p-2"><span class="px-2 py-1 rounded text-xs bg-slate-700">' + whName + '</span></td>';
                 html += '<td class="p-2 text-white font-bold">' + (s.productName || '-') + '</td>';
                 html += '<td class="p-2 text-slate-400">' + (s.spec || '-') + '</td>';
@@ -15550,9 +15667,6 @@ window.clearLocalStorage = function() {
                 html += '<td class="p-2 text-right text-yellow-400 font-bold">' + (s.quantity || 0) + '</td>';
                 html += '<td class="p-2 ' + expClass + '">' + (s.expDate || '-') + '</td>';
                 html += '<td class="p-2 text-center">';
-                html += '<button onclick="openExternalOutboundModal(\'' + s.id + '\')" class="bg-orange-600 hover:bg-orange-500 text-white text-xs px-2 py-1 rounded mr-1" title="出庫"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>';
-                html += '<button onclick="openTransferModal(\'' + s.id + '\')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2 py-1 rounded mr-1" title="調入本倉"><i class="fa-solid fa-truck-arrow-right"></i></button>';
-                html += '<button onclick="editExternalStock(\'' + s.id + '\')" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2 py-1 rounded mr-1" title="編輯"><i class="fa-solid fa-pen"></i></button>';
                 html += '<button onclick="deleteExternalStock(\'' + s.id + '\')" class="bg-red-600 hover:bg-red-500 text-white text-xs px-2 py-1 rounded" title="刪除"><i class="fa-solid fa-trash"></i></button>';
                 html += '</td>';
                 html += '</tr>';
@@ -15569,6 +15683,8 @@ window.clearLocalStorage = function() {
         
         // 新增/調整外倉庫存
         window.submitExternalAdjust = async function() {
+            var companyRadio = document.querySelector('input[name="ext-adj-company"]:checked');
+            var company = companyRadio ? companyRadio.value : '崇文';
             var wh = document.getElementById('ext-adj-wh').value;
             var name = document.getElementById('ext-adj-name').value.trim();
             var spec = document.getElementById('ext-adj-spec').value.trim();
@@ -15588,9 +15704,9 @@ window.clearLocalStorage = function() {
             if (qty === 0) { alert('請輸入調整數量'); return; }
             
             try {
-                // 查找是否已存在
+                // 查找是否已存在（需要同時比對公司）
                 var existing = window.externalStock.find(function(s) {
-                    return s.warehouseId === wh && s.productName === name && s.batchNo === batch;
+                    return s.warehouseId === wh && s.productName === name && s.batchNo === batch && s.company === company;
                 });
                 
                 if (existing) {
@@ -15611,6 +15727,7 @@ window.clearLocalStorage = function() {
                     
                     // 新增
                     await window.addDoc(window.collection(window.db, 'externalStock'), {
+                        company: company,
                         warehouseId: wh,
                         productName: name,
                         spec: spec,
@@ -19290,15 +19407,36 @@ window.clearLocalStorage = function() {
 
         // ========== 品項主檔管理 ==========
         
-        // 品項主檔資料（本地儲存）
-        window.productMasterData = JSON.parse(localStorage.getItem('wms_product_master') || '[]');
+        // 品項主檔資料
+        window.productMasterData = [];
         
-        // 儲存品項主檔到本地
-        function saveProductMasterToStorage() {
-            localStorage.setItem('wms_product_master', JSON.stringify(window.productMasterData));
-        }
+        // 從 Firebase 載入品項主檔
+        window.loadProductMasterFromFirebase = async function() {
+            try {
+                if (!window.db || !window.collection || !window.getDocs) {
+                    console.log('Firebase 尚未初始化，使用 localStorage');
+                    window.productMasterData = JSON.parse(localStorage.getItem('wms_product_master') || '[]');
+                    loadProductMasterList();
+                    return;
+                }
+                
+                var snapshot = await window.getDocs(window.collection(window.db, 'productMaster'));
+                window.productMasterData = [];
+                snapshot.forEach(function(doc) {
+                    window.productMasterData.push({ id: doc.id, ...doc.data() });
+                });
+                
+                console.log('品項主檔已載入:', window.productMasterData.length, '筆');
+                loadProductMasterList();
+            } catch(e) {
+                console.error('載入品項主檔失敗:', e);
+                // 失敗時使用 localStorage 備援
+                window.productMasterData = JSON.parse(localStorage.getItem('wms_product_master') || '[]');
+                loadProductMasterList();
+            }
+        };
         
-        // 載入品項主檔清單
+        // 載入品項主檔清單（渲染 UI）
         window.loadProductMasterList = function() {
             var tbody = document.getElementById('product-master-list');
             if (!tbody) return;
@@ -19323,6 +19461,7 @@ window.clearLocalStorage = function() {
             data.forEach(function(p, idx) {
                 var shelfLife = p.shelfLife || 0;
                 var shelfLifeText = shelfLife > 0 ? shelfLife + '月' : '<span class="text-slate-500">未設定</span>';
+                var docId = p.id || idx;
                 
                 html += '<tr class="border-b border-slate-700 hover:bg-slate-800">';
                 html += '<td class="p-2 text-white font-bold">' + p.name + '</td>';
@@ -19331,8 +19470,8 @@ window.clearLocalStorage = function() {
                 html += '<td class="p-2 text-center"><span class="text-cyan-400">' + shelfLifeText + '</span></td>';
                 html += '<td class="p-2"><span class="badge badge-blue">' + (p.category || '成品') + '</span></td>';
                 html += '<td class="p-2 text-center">';
-                html += '<button onclick="editProductMaster(' + idx + ')" class="text-blue-400 hover:bg-blue-500/20 rounded px-2 py-1 mr-1"><i class="fa-solid fa-edit"></i></button>';
-                html += '<button onclick="deleteProductMaster(' + idx + ')" class="text-red-400 hover:bg-red-500/20 rounded px-2 py-1"><i class="fa-solid fa-trash"></i></button>';
+                html += '<button onclick="editProductMaster(\'' + docId + '\')" class="text-blue-400 hover:bg-blue-500/20 rounded px-2 py-1 mr-1"><i class="fa-solid fa-edit"></i></button>';
+                html += '<button onclick="deleteProductMaster(\'' + docId + '\')" class="text-red-400 hover:bg-red-500/20 rounded px-2 py-1"><i class="fa-solid fa-trash"></i></button>';
                 html += '</td>';
                 html += '</tr>';
             });
@@ -19347,7 +19486,7 @@ window.clearLocalStorage = function() {
         };
         
         // 儲存品項主檔
-        window.saveProductMaster = function() {
+        window.saveProductMaster = async function() {
             var name = document.getElementById('pm-name').value.trim();
             var spec = document.getElementById('pm-spec').value.trim();
             var palletCapacity = parseInt(document.getElementById('pm-pallet-capacity').value) || 0;
@@ -19377,36 +19516,66 @@ window.clearLocalStorage = function() {
                 updatedAt: new Date().toISOString()
             };
             
-            if (editId !== '') {
-                // 編輯模式
-                var idx = parseInt(editId);
-                window.productMasterData[idx] = item;
-                alert('✅ 品項已更新');
-            } else {
-                // 檢查是否重複
-                var exists = window.productMasterData.find(function(p) {
-                    return p.name === name && p.spec === spec;
-                });
-                if (exists) {
-                    if (!confirm('品項「' + name + ' ' + spec + '」已存在，是否覆蓋？')) {
-                        return;
+            try {
+                if (editId) {
+                    // 編輯模式 - 更新 Firebase
+                    if (window.db && window.updateDoc) {
+                        await window.updateDoc(window.doc(window.db, 'productMaster', editId), item);
                     }
-                    var existIdx = window.productMasterData.indexOf(exists);
-                    window.productMasterData[existIdx] = item;
+                    // 更新本地資料
+                    var idx = window.productMasterData.findIndex(function(p) { return p.id === editId; });
+                    if (idx >= 0) {
+                        window.productMasterData[idx] = { id: editId, ...item };
+                    }
+                    alert('✅ 品項已更新');
                 } else {
-                    window.productMasterData.push(item);
+                    // 檢查是否重複
+                    var exists = window.productMasterData.find(function(p) {
+                        return p.name === name && p.spec === spec;
+                    });
+                    
+                    if (exists) {
+                        if (!confirm('品項「' + name + ' ' + spec + '」已存在，是否覆蓋？')) {
+                            return;
+                        }
+                        // 覆蓋現有的
+                        if (window.db && window.updateDoc && exists.id) {
+                            await window.updateDoc(window.doc(window.db, 'productMaster', exists.id), item);
+                        }
+                        var existIdx = window.productMasterData.findIndex(function(p) { return p.id === exists.id; });
+                        if (existIdx >= 0) {
+                            window.productMasterData[existIdx] = { id: exists.id, ...item };
+                        }
+                    } else {
+                        // 新增到 Firebase
+                        if (window.db && window.addDoc) {
+                            var docRef = await window.addDoc(window.collection(window.db, 'productMaster'), item);
+                            window.productMasterData.push({ id: docRef.id, ...item });
+                        } else {
+                            window.productMasterData.push(item);
+                        }
+                    }
+                    alert('✅ 品項已儲存');
                 }
-                alert('✅ 品項已儲存');
+                
+                // 同時備份到 localStorage
+                localStorage.setItem('wms_product_master', JSON.stringify(window.productMasterData));
+                
+                clearProductMasterForm();
+                loadProductMasterList();
+            } catch(e) {
+                console.error('儲存品項失敗:', e);
+                alert('❌ 儲存失敗：' + e.message);
             }
-            
-            saveProductMasterToStorage();
-            clearProductMasterForm();
-            loadProductMasterList();
         };
         
         // 編輯品項主檔
-        window.editProductMaster = function(idx) {
-            var item = window.productMasterData[idx];
+        window.editProductMaster = function(docId) {
+            var item = window.productMasterData.find(function(p) { return p.id === docId; });
+            if (!item) {
+                // 相容舊的 index 模式
+                item = window.productMasterData[parseInt(docId)];
+            }
             if (!item) return;
             
             document.getElementById('pm-name').value = item.name || '';
@@ -19416,21 +19585,42 @@ window.clearLocalStorage = function() {
             document.getElementById('pm-shelf-life').value = item.shelfLife || '';
             document.getElementById('pm-category').value = item.category || '成品';
             document.getElementById('pm-note').value = item.note || '';
-            document.getElementById('pm-edit-id').value = idx;
+            document.getElementById('pm-edit-id').value = item.id || docId;
         };
         
         // 刪除品項主檔
-        window.deleteProductMaster = function(idx) {
-            var item = window.productMasterData[idx];
+        window.deleteProductMaster = async function(docId) {
+            var item = window.productMasterData.find(function(p) { return p.id === docId; });
+            if (!item) {
+                item = window.productMasterData[parseInt(docId)];
+            }
             if (!item) return;
             
             if (!confirm('確定刪除品項「' + item.name + ' ' + (item.spec || '') + '」？')) {
                 return;
             }
             
-            window.productMasterData.splice(idx, 1);
-            saveProductMasterToStorage();
-            loadProductMasterList();
+            try {
+                // 從 Firebase 刪除
+                if (window.db && window.deleteDoc && item.id) {
+                    await window.deleteDoc(window.doc(window.db, 'productMaster', item.id));
+                }
+                
+                // 從本地資料刪除
+                var idx = window.productMasterData.findIndex(function(p) { return p.id === item.id; });
+                if (idx >= 0) {
+                    window.productMasterData.splice(idx, 1);
+                }
+                
+                // 同步到 localStorage
+                localStorage.setItem('wms_product_master', JSON.stringify(window.productMasterData));
+                
+                loadProductMasterList();
+                alert('✅ 品項已刪除');
+            } catch(e) {
+                console.error('刪除品項失敗:', e);
+                alert('❌ 刪除失敗：' + e.message);
+            }
         };
         
         // 清除表單
@@ -19446,7 +19636,7 @@ window.clearLocalStorage = function() {
         };
         
         // 從庫存自動匯入品項
-        window.autoImportFromInventory = function() {
+        window.autoImportFromInventory = async function() {
             var pallets = window.currentPallets();
             if (!pallets || pallets.length === 0) {
                 alert('目前沒有庫存資料');
@@ -19486,21 +19676,38 @@ window.clearLocalStorage = function() {
                 return;
             }
             
-            newProducts.forEach(function(p) {
-                window.productMasterData.push({
-                    name: p.name,
-                    spec: p.spec,
-                    palletCapacity: 45, // 預設值
-                    partialThreshold: 50,
-                    category: '成品',
-                    note: '自動匯入',
-                    updatedAt: new Date().toISOString()
-                });
-            });
-            
-            saveProductMasterToStorage();
-            loadProductMasterList();
-            alert('✅ 已匯入 ' + newProducts.length + ' 個品項\n\n請編輯設定正確的板容量');
+            try {
+                for (var i = 0; i < newProducts.length; i++) {
+                    var p = newProducts[i];
+                    var item = {
+                        name: p.name,
+                        spec: p.spec,
+                        palletCapacity: 45, // 預設值
+                        partialThreshold: 50,
+                        shelfLife: 0,
+                        category: '成品',
+                        note: '自動匯入',
+                        updatedAt: new Date().toISOString()
+                    };
+                    
+                    // 寫入 Firebase
+                    if (window.db && window.addDoc) {
+                        var docRef = await window.addDoc(window.collection(window.db, 'productMaster'), item);
+                        window.productMasterData.push({ id: docRef.id, ...item });
+                    } else {
+                        window.productMasterData.push(item);
+                    }
+                }
+                
+                // 同步到 localStorage
+                localStorage.setItem('wms_product_master', JSON.stringify(window.productMasterData));
+                
+                loadProductMasterList();
+                alert('✅ 已匯入 ' + newProducts.length + ' 個品項\n\n請編輯設定正確的板容量');
+            } catch(e) {
+                console.error('匯入品項失敗:', e);
+                alert('❌ 匯入失敗：' + e.message);
+            }
         };
         
         // 取得品項的板容量設定
@@ -19520,8 +19727,14 @@ window.clearLocalStorage = function() {
         // 初始化時載入外倉庫存
         setTimeout(function() { loadExternalStock(); }, 2000);
         
-        // 初始化品項主檔
-        setTimeout(function() { loadProductMasterList(); }, 500);
+        // 初始化品項主檔（從 Firebase 載入）
+        setTimeout(function() { loadProductMasterFromFirebase(); }, 1500);
+        
+        // 初始化倉租設定（從 Firebase 載入）
+        setTimeout(function() { loadRentalSettingsFromFirebase(); }, 1800);
+        
+        // 初始化寄倉資料（從 Firebase 載入）
+        setTimeout(function() { loadConsignmentsFromFirebase(); }, 2200);
 
         setInboundMode('Raw');
         // 預設顯示數位倉庫頁面
@@ -22211,7 +22424,7 @@ console.log('📥 庫存匯入功能已載入');
 // ========== 倉租管理模組 ==========
 
 // 倉租設定（預設值）
-window.rentalSettings = JSON.parse(localStorage.getItem('wms_rental_settings') || JSON.stringify({
+window.rentalSettings = {
     chargeOwnStock: {
         chungwen: false,
         bafang: false,
@@ -22236,20 +22449,134 @@ window.rentalSettings = JSON.parse(localStorage.getItem('wms_rental_settings') |
         settleDay: 25,
         freeUntilDay: 25
     }
-}));
+};
 
 // 寄倉資料
-window.consignmentData = JSON.parse(localStorage.getItem('wms_consignments') || '[]');
+window.consignmentData = [];
 
-// 儲存設定到本地
-function saveRentalSettingsToStorage() {
-    localStorage.setItem('wms_rental_settings', JSON.stringify(window.rentalSettings));
-}
+// 從 Firebase 載入倉租設定
+window.loadRentalSettingsFromFirebase = async function() {
+    try {
+        if (!window.db || !window.getDoc) {
+            console.log('Firebase 尚未初始化，使用 localStorage');
+            var stored = localStorage.getItem('wms_rental_settings');
+            if (stored) window.rentalSettings = JSON.parse(stored);
+            loadRentalSettingsUI();
+            return;
+        }
+        
+        var docRef = window.doc(window.db, 'settings', 'rentalSettings');
+        var docSnap = await window.getDoc(docRef);
+        
+        if (docSnap.exists()) {
+            window.rentalSettings = docSnap.data();
+            console.log('倉租設定已從 Firebase 載入');
+        }
+        
+        // 同步備份到 localStorage
+        localStorage.setItem('wms_rental_settings', JSON.stringify(window.rentalSettings));
+        
+        loadRentalSettingsUI();
+    } catch(e) {
+        console.error('載入倉租設定失敗:', e);
+        var stored = localStorage.getItem('wms_rental_settings');
+        if (stored) window.rentalSettings = JSON.parse(stored);
+        loadRentalSettingsUI();
+    }
+};
 
-// 儲存寄倉資料到本地
-function saveConsignmentsToStorage() {
-    localStorage.setItem('wms_consignments', JSON.stringify(window.consignmentData));
-}
+// 從 Firebase 載入寄倉資料
+window.loadConsignmentsFromFirebase = async function() {
+    try {
+        if (!window.db || !window.getDocs) {
+            console.log('Firebase 尚未初始化，使用 localStorage');
+            window.consignmentData = JSON.parse(localStorage.getItem('wms_consignments') || '[]');
+            loadConsignmentList();
+            return;
+        }
+        
+        var snapshot = await window.getDocs(window.collection(window.db, 'consignments'));
+        window.consignmentData = [];
+        snapshot.forEach(function(doc) {
+            window.consignmentData.push({ id: doc.id, ...doc.data() });
+        });
+        
+        console.log('寄倉資料已載入:', window.consignmentData.length, '筆');
+        
+        // 同步備份到 localStorage
+        localStorage.setItem('wms_consignments', JSON.stringify(window.consignmentData));
+        
+        loadConsignmentList();
+    } catch(e) {
+        console.error('載入寄倉資料失敗:', e);
+        window.consignmentData = JSON.parse(localStorage.getItem('wms_consignments') || '[]');
+        loadConsignmentList();
+    }
+};
+
+// 儲存倉租設定到 Firebase
+window.saveRentalSettingsToFirebase = async function() {
+    try {
+        if (window.db && window.setDoc) {
+            var docRef = window.doc(window.db, 'settings', 'rentalSettings');
+            await window.setDoc(docRef, window.rentalSettings);
+            console.log('倉租設定已儲存到 Firebase');
+        }
+        // 同步備份到 localStorage
+        localStorage.setItem('wms_rental_settings', JSON.stringify(window.rentalSettings));
+    } catch(e) {
+        console.error('儲存倉租設定失敗:', e);
+        localStorage.setItem('wms_rental_settings', JSON.stringify(window.rentalSettings));
+    }
+};
+
+// 儲存寄倉資料到 Firebase
+window.saveConsignmentToFirebase = async function(consignment) {
+    try {
+        if (window.db && window.addDoc) {
+            var docRef = await window.addDoc(window.collection(window.db, 'consignments'), consignment);
+            consignment.id = docRef.id;
+            console.log('寄倉資料已儲存到 Firebase');
+        }
+        window.consignmentData.push(consignment);
+        localStorage.setItem('wms_consignments', JSON.stringify(window.consignmentData));
+        return consignment;
+    } catch(e) {
+        console.error('儲存寄倉資料失敗:', e);
+        window.consignmentData.push(consignment);
+        localStorage.setItem('wms_consignments', JSON.stringify(window.consignmentData));
+        return consignment;
+    }
+};
+
+// 更新寄倉資料
+window.updateConsignmentInFirebase = async function(id, data) {
+    try {
+        if (window.db && window.updateDoc) {
+            await window.updateDoc(window.doc(window.db, 'consignments', id), data);
+        }
+        var idx = window.consignmentData.findIndex(function(c) { return c.id === id; });
+        if (idx >= 0) {
+            Object.assign(window.consignmentData[idx], data);
+        }
+        localStorage.setItem('wms_consignments', JSON.stringify(window.consignmentData));
+    } catch(e) {
+        console.error('更新寄倉資料失敗:', e);
+    }
+};
+
+// 刪除寄倉資料
+window.deleteConsignmentFromFirebase = async function(id) {
+    try {
+        if (window.db && window.deleteDoc) {
+            await window.deleteDoc(window.doc(window.db, 'consignments', id));
+        }
+        window.consignmentData = window.consignmentData.filter(function(c) { return c.id !== id; });
+        localStorage.setItem('wms_consignments', JSON.stringify(window.consignmentData));
+    } catch(e) {
+        console.error('刪除寄倉資料失敗:', e);
+    }
+};
 
 // 更新設定值（即時）
 window.updateRentalSettings = function() {
@@ -22277,9 +22604,9 @@ window.updateRentalSettings = function() {
 };
 
 // 儲存設定
-window.saveRentalSettings = function() {
+window.saveRentalSettings = async function() {
     updateRentalSettings();
-    saveRentalSettingsToStorage();
+    await saveRentalSettingsToFirebase();
     showNotification('✅ 費率設定已儲存', 'success');
 };
 
@@ -22859,62 +23186,62 @@ window.saveConsignmentFromSelection = async function() {
     
     // 建立寄倉記錄
     const timestamp = Date.now();
-    const newConsignments = [];
     
-    for (let i = 0; i < window.consignSelectedItems.length; i++) {
-        const item = window.consignSelectedItems[i];
-        
-        // 取得每板件數
-        const productMaster = window.productMasterData?.find(p => 
-            p.name === item.productName && (p.spec === item.spec || (!p.spec && !item.spec))
-        );
-        
-        const unitsPerPallet = productMaster?.palletCapacity || 60;
-        const ratePerUnit = getConsignmentRate('崇文', 1, unitsPerPallet);
-        
-        const consignment = {
-            id: `CON-${timestamp}-${i}`,
-            source: item.isInternal ? 'internal' : 'external',
-            sourceWarehouse: item.warehouseName,
-            targetWarehouse: targetWarehouse,
-            productName: item.productName,
-            spec: item.spec,
-            batchNo: item.batchNo,
-            customer: customer,
-            originalQty: item.qty,
-            remainingQty: item.qty,
-            consignmentDate: consignDate,
-            freeUntil: freeUntil,
-            chargeStartDate: chargeStartStr,
-            unitsPerPallet: unitsPerPallet,
-            ratePerUnit: ratePerUnit,
-            note: '',
-            pickups: [],
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            sourceLocations: item.isInternal && item.locationId ? [{
-                palletId: item.palletId,
-                locationId: item.locationId,
+    try {
+        for (let i = 0; i < window.consignSelectedItems.length; i++) {
+            const item = window.consignSelectedItems[i];
+            
+            // 取得每板件數
+            const productMaster = window.productMasterData?.find(p => 
+                p.name === item.productName && (p.spec === item.spec || (!p.spec && !item.spec))
+            );
+            
+            const unitsPerPallet = productMaster?.palletCapacity || 60;
+            const ratePerUnit = getConsignmentRate('崇文', 1, unitsPerPallet);
+            
+            const consignment = {
+                source: item.isInternal ? 'internal' : 'external',
+                sourceWarehouse: item.warehouseName,
+                targetWarehouse: targetWarehouse,
+                productName: item.productName,
+                spec: item.spec,
                 batchNo: item.batchNo,
-                qty: item.qty
-            }] : null
-        };
+                customer: customer,
+                originalQty: item.qty,
+                remainingQty: item.qty,
+                consignmentDate: consignDate,
+                freeUntil: freeUntil,
+                chargeStartDate: chargeStartStr,
+                unitsPerPallet: unitsPerPallet,
+                ratePerUnit: ratePerUnit,
+                note: '',
+                pickups: [],
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                sourceLocations: item.isInternal && item.locationId ? [{
+                    palletId: item.palletId,
+                    locationId: item.locationId,
+                    batchNo: item.batchNo,
+                    qty: item.qty
+                }] : null
+            };
+            
+            // 儲存到 Firebase
+            await window.saveConsignmentToFirebase(consignment);
+        }
         
-        newConsignments.push(consignment);
+        // 關閉並刷新
+        WMS.closeModal('consignment-modal');
+        
+        const totalQty = window.consignSelectedItems.reduce((sum, item) => sum + item.qty, 0);
+        showNotification(`✅ 已新增 ${window.consignSelectedItems.length} 筆寄倉：${customer}，共 ${totalQty} 件`, 'success');
+        
+        // 立即刷新
+        setTimeout(() => loadConsignmentList(), 50);
+    } catch(e) {
+        console.error('儲存寄倉失敗:', e);
+        alert('❌ 儲存失敗：' + e.message);
     }
-    
-    // 儲存
-    window.consignmentData.push(...newConsignments);
-    saveConsignmentsToStorage();
-    
-    // 關閉並刷新
-    WMS.closeModal('consignment-modal');
-    
-    const totalQty = window.consignSelectedItems.reduce((sum, item) => sum + item.qty, 0);
-    showNotification(`✅ 已新增 ${newConsignments.length} 筆寄倉：${customer}，共 ${totalQty} 件`, 'success');
-    
-    // 立即刷新
-    setTimeout(() => loadConsignmentList(), 50);
 };
 
 // 取得儲位的寄倉資訊（供 tooltip 使用）
@@ -23128,7 +23455,7 @@ window.openPickupModal = function(consignmentId) {
 };
 
 // 儲存提貨
-window.savePickup = function(consignmentId) {
+window.savePickup = async function(consignmentId) {
     const pickupDate = document.getElementById('pickup-date')?.value;
     const pickupQty = parseInt(document.getElementById('pickup-qty')?.value) || 0;
     
@@ -23159,22 +23486,35 @@ window.savePickup = function(consignmentId) {
         c.completedAt = new Date().toISOString();
     }
     
-    saveConsignmentsToStorage();
-    WMS.closeModal('pickup-modal');
-    showNotification(`✅ 已提貨 ${pickupQty} 件`, 'success');
-    loadConsignmentList();
+    // 更新到 Firebase
+    try {
+        await window.updateConsignmentInFirebase(consignmentId, {
+            pickups: c.pickups,
+            remainingQty: c.remainingQty,
+            status: c.status,
+            completedAt: c.completedAt || null
+        });
+        
+        WMS.closeModal('pickup-modal');
+        showNotification(`✅ 已提貨 ${pickupQty} 件`, 'success');
+        loadConsignmentList();
+    } catch(e) {
+        console.error('提貨儲存失敗:', e);
+        alert('❌ 儲存失敗：' + e.message);
+    }
 };
 
 // 刪除寄倉
-window.deleteConsignment = function(consignmentId) {
+window.deleteConsignment = async function(consignmentId) {
     if (!confirm('確定要刪除此寄倉記錄嗎？')) return;
     
-    const idx = window.consignmentData.findIndex(c => c.id === consignmentId);
-    if (idx >= 0) {
-        window.consignmentData.splice(idx, 1);
-        saveConsignmentsToStorage();
+    try {
+        await window.deleteConsignmentFromFirebase(consignmentId);
         showNotification('✅ 已刪除寄倉記錄', 'success');
         loadConsignmentList();
+    } catch(e) {
+        console.error('刪除失敗:', e);
+        alert('❌ 刪除失敗：' + e.message);
     }
 };
 
