@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WMS 全功能旗艦版 (V50.1 使用者管理優化)</title>
+    <title>WMS 全功能旗艦版 (V50.6 導航列整合優化)</title>
     <script>
         // 在 Tailwind 載入前先攔截警告
         (function() {
@@ -302,8 +302,16 @@
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-1" id="main-nav">
-            <!-- 核心監控（常駐） -->
-            <div class="nav-item active" onclick="switchTab('visual-map', event)"><i class="fa-solid fa-map-location-dot w-5 text-center mr-2"></i> 數位倉庫</div>
+            <!-- 數位倉庫 -->
+            <div class="nav-group-header" onclick="toggleNavGroup('grp-warehouse-view')">
+                <span><i class="fa-solid fa-map-location-dot w-4 text-center mr-1 text-cyan-400"></i>數位倉庫</span>
+                <i class="fa-solid fa-chevron-down nav-chevron"></i>
+            </div>
+            <div class="nav-group-items" id="grp-warehouse-view">
+                <div class="nav-item active" onclick="switchTab('visual-map', event)"><i class="fa-solid fa-map w-4 text-center mr-2"></i>倉庫地圖</div>
+                <div class="nav-item" onclick="switchTab('inventory-query', event)"><i class="fa-solid fa-magnifying-glass w-4 text-center mr-2"></i>庫存查詢</div>
+            </div>
+            
             <div class="nav-item" onclick="switchTab('dashboard', event)"><i class="fa-solid fa-chart-pie w-5 text-center mr-2"></i> 戰情分析</div>
 
             <!-- 入庫管理 -->
@@ -317,28 +325,27 @@
                 <div class="nav-item" onclick="switchTab('approval', event)" id="nav-approval"><i class="fa-solid fa-clipboard-check w-4 text-center mr-2 text-yellow-400"></i>待財務核准 <span id="approval-count" class="ml-auto bg-yellow-500 text-black text-xs px-1.5 rounded-full">0</span></div>
             </div>
 
-            <!-- 庫內作業 -->
-            <div class="nav-group-header" onclick="toggleNavGroup('grp-warehouse')">
-                <span><i class="fa-solid fa-warehouse w-4 text-center mr-1 text-blue-400"></i>庫內作業</span>
-                <i class="fa-solid fa-chevron-down nav-chevron"></i>
-            </div>
-            <div class="nav-group-items" id="grp-warehouse">
-                <div class="nav-item" onclick="switchTab('inventory-query', event)"><i class="fa-solid fa-magnifying-glass w-4 text-center mr-2"></i>庫存查詢</div>
-                <div class="nav-item" onclick="switchTab('move', event)"><i class="fa-solid fa-layer-group w-4 text-center mr-2"></i>智能調度</div>
-                <div class="nav-item" onclick="switchTab('merge', event)"><i class="fa-solid fa-arrows-turn-to-dots w-4 text-center mr-2"></i>板號異動</div>
-                <div class="nav-item" onclick="switchTab('transfer', event)"><i class="fa-solid fa-right-left w-4 text-center mr-2"></i>倉庫調撥</div>
-                <div class="nav-item" onclick="switchTab('stocktake', event)"><i class="fa-solid fa-clipboard-check w-4 text-center mr-2"></i>庫存盤點</div>
-            </div>
-
-            <!-- 出庫物流 -->
+            <!-- 出庫管理 -->
             <div class="nav-group-header" onclick="toggleNavGroup('grp-outbound')">
-                <span><i class="fa-solid fa-arrow-up w-4 text-center mr-1 text-red-400"></i>出庫物流</span>
+                <span><i class="fa-solid fa-arrow-up w-4 text-center mr-1 text-red-400"></i>出庫管理</span>
                 <i class="fa-solid fa-chevron-down nav-chevron"></i>
             </div>
             <div class="nav-group-items" id="grp-outbound">
                 <div class="nav-item" onclick="switchTab('wave-picking', event)"><i class="fa-solid fa-layer-group w-4 text-center mr-2 text-orange-400"></i>波次揀貨</div>
                 <div class="nav-item" onclick="switchTab('picking-rm', event)"><i class="fa-solid fa-fish w-4 text-center mr-2"></i>原料領用</div>
                 <div class="nav-item" onclick="switchTab('shipping', event)" style="display:none"><i class="fa-solid fa-truck-ramp-box w-4 text-center mr-2"></i>訂單出貨</div>
+            </div>
+
+            <!-- 庫存異動作業 -->
+            <div class="nav-group-header" onclick="toggleNavGroup('grp-warehouse')">
+                <span><i class="fa-solid fa-warehouse w-4 text-center mr-1 text-blue-400"></i>庫存異動作業</span>
+                <i class="fa-solid fa-chevron-down nav-chevron"></i>
+            </div>
+            <div class="nav-group-items" id="grp-warehouse">
+                <div class="nav-item" onclick="switchTab('move', event)"><i class="fa-solid fa-layer-group w-4 text-center mr-2"></i>智能調度</div>
+                <div class="nav-item" onclick="switchTab('merge', event)"><i class="fa-solid fa-arrows-turn-to-dots w-4 text-center mr-2"></i>板號異動</div>
+                <div class="nav-item" onclick="switchTab('transfer', event)"><i class="fa-solid fa-right-left w-4 text-center mr-2"></i>倉庫調撥</div>
+                <div class="nav-item" onclick="switchTab('stocktake', event)"><i class="fa-solid fa-clipboard-check w-4 text-center mr-2"></i>庫存盤點</div>
             </div>
 
             <!-- 外部倉庫 -->
@@ -730,6 +737,22 @@
                                     <optgroup label="──"><option value="MANAGE">⚙️ 管理倉庫</option></optgroup>
                                 </select>
                                 
+                                <!-- 公司 -->
+                                <div class="flex gap-1 bg-slate-900 rounded p-1">
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="in-company" value="崇文" class="hidden peer" checked>
+                                        <div class="text-center py-1.5 rounded text-xs font-bold peer-checked:bg-blue-600 peer-checked:text-white text-slate-400 transition-all">
+                                            崇文
+                                        </div>
+                                    </label>
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="in-company" value="八方" class="hidden peer">
+                                        <div class="text-center py-1.5 rounded text-xs font-bold peer-checked:bg-purple-600 peer-checked:text-white text-slate-400 transition-all">
+                                            八方
+                                        </div>
+                                    </label>
+                                </div>
+                                
                                 <!-- 廠商 -->
                                 <input type="text" id="in-vendor" class="w-full p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm" placeholder="廠商" oninput="updateLivePreview()">
                                 
@@ -974,6 +997,17 @@
                     <div class="mb-2 bg-slate-800 p-2 rounded border border-slate-700">
                         <div class="text-xs text-cyan-400 font-bold mb-2">1. 手動新增品項</div>
                         <div class="space-y-1.5">
+                            <!-- 公司選擇 -->
+                            <div class="flex gap-1 bg-slate-900 rounded p-1">
+                                <label class="flex-1 cursor-pointer">
+                                    <input type="radio" name="pre-company" value="崇文" class="hidden peer" checked>
+                                    <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-blue-600 peer-checked:text-white text-slate-400">崇文</div>
+                                </label>
+                                <label class="flex-1 cursor-pointer">
+                                    <input type="radio" name="pre-company" value="八方" class="hidden peer">
+                                    <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-purple-600 peer-checked:text-white text-slate-400">八方</div>
+                                </label>
+                            </div>
                             <input type="text" id="pre-vendor" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="廠商">
                             <input type="text" id="pre-name" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="品名 *">
                             <input type="text" id="pre-spec" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="規格">
@@ -1092,7 +1126,7 @@
                 </div>
             </div>
             
-            <div id="view-inventory-query" class="view-panel h-full hidden flex flex-col p-4"><div class="flex gap-2 mb-3 items-center"><input type="text" id="global-search" class="scan-input pl-9" placeholder="萬用搜尋..." oninput="filterInventory()"><button onclick="exportInventoryToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-500 flex items-center gap-2"><i class="fa-solid fa-file-excel"></i> 匯出庫存</button><button onclick="document.getElementById('stockImportInput').click()" class="bg-orange-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-orange-500 ml-auto flex items-center gap-2"><i class="fa-solid fa-file-import"></i> 期初匯入</button><button onclick="downloadTemplate('stock')" class="text-slate-400 text-xs hover:text-white underline">範本</button><input type="file" id="stockImportInput" accept=".xlsx" class="hidden" onchange="handleStockImport(event)"></div><div class="glass-panel flex-1 overflow-auto"><table class="w-full dense-table"><thead><tr><th class="text-left">品名</th><th class="text-left">規格</th><th class="text-left">批號</th><th class="text-right">數量</th><th class="text-right">重量</th><th class="text-left">位置</th><th class="text-left">效期</th><th class="text-right">操作</th></tr></thead><tbody id="inventory-list-body"></tbody></table></div></div>
+            <div id="view-inventory-query" class="view-panel h-full hidden flex flex-col p-4"><div class="flex gap-2 mb-3 items-center"><div class="flex gap-1 bg-slate-800 rounded p-1 mr-2"><button onclick="setInventoryCompany('all')" id="btn-inv-all" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-600 text-white">全部</button><button onclick="setInventoryCompany('崇文')" id="btn-inv-cw" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">崇文</button><button onclick="setInventoryCompany('八方')" id="btn-inv-bf" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">八方</button></div><input type="text" id="global-search" class="scan-input pl-9 flex-1" placeholder="萬用搜尋..." oninput="filterInventory()"><button onclick="exportInventoryToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-500 flex items-center gap-2"><i class="fa-solid fa-file-excel"></i> 匯出庫存</button><button onclick="document.getElementById('stockImportInput').click()" class="bg-orange-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-orange-500 ml-auto flex items-center gap-2"><i class="fa-solid fa-file-import"></i> 期初匯入</button><button onclick="downloadTemplate('stock')" class="text-slate-400 text-xs hover:text-white underline">範本</button><input type="file" id="stockImportInput" accept=".xlsx" class="hidden" onchange="handleStockImport(event)"></div><div class="glass-panel flex-1 overflow-auto"><table class="w-full dense-table"><thead><tr><th class="text-left">公司</th><th class="text-left">品名</th><th class="text-left">規格</th><th class="text-left">批號</th><th class="text-right">數量</th><th class="text-right">重量</th><th class="text-left">位置</th><th class="text-left">效期</th><th class="text-right">操作</th></tr></thead><tbody id="inventory-list-body"></tbody></table></div></div>
             
             <!-- 成品出貨（自動揀貨） -->
 
@@ -1104,7 +1138,12 @@
                         <h2 class="text-white font-bold text-2xl"><i class="fa-solid fa-layer-group mr-2 text-orange-400"></i>波次揀貨</h2>
                         <p class="text-orange-200 text-sm mt-1">依物流商分波次，產生揀貨單與分貨標籤</p>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 items-center">
+                        <!-- 公司選擇 -->
+                        <div class="flex gap-1 bg-slate-900/50 rounded p-1 mr-2">
+                            <button onclick="setWaveCompany('崇文')" id="btn-wave-cw" class="px-3 py-1.5 rounded text-xs font-bold bg-blue-600 text-white">崇文</button>
+                            <button onclick="setWaveCompany('八方')" id="btn-wave-bf" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">八方</button>
+                        </div>
                         <input type="file" id="order-excel-import" accept=".xlsx,.xls" class="hidden" onchange="importERPExcel(event)">
                         <button onclick="document.getElementById('order-excel-import').click()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-bold mr-2">
                             <i class="fa-solid fa-file-excel mr-1"></i>匯入訂單
@@ -1303,8 +1342,17 @@
             <!-- 原料領用（建議+確認） -->
             <div id="view-picking-rm" class="view-panel h-full hidden flex flex-col p-4">
                 <div class="bg-gradient-to-r from-cyan-900 to-cyan-800 border border-cyan-600 p-4 rounded-lg mb-4">
-                    <h2 class="text-white font-bold text-xl"><i class="fa-solid fa-fish mr-2 text-cyan-400"></i>原料領用 - 建議確認模式</h2>
-                    <p class="text-cyan-200 text-sm mt-1">系統提供建議清單，倉管現場判斷棧板狀態、疊板平整度後確認實際取用</p>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-white font-bold text-xl"><i class="fa-solid fa-fish mr-2 text-cyan-400"></i>原料領用 - 建議確認模式</h2>
+                            <p class="text-cyan-200 text-sm mt-1">系統提供建議清單，倉管現場判斷棧板狀態、疊板平整度後確認實際取用</p>
+                        </div>
+                        <!-- 公司選擇 -->
+                        <div class="flex gap-1 bg-slate-900/50 rounded p-1">
+                            <button onclick="setRmCompany('崇文')" id="btn-rm-cw" class="px-4 py-2 rounded text-sm font-bold bg-blue-600 text-white">崇文</button>
+                            <button onclick="setRmCompany('八方')" id="btn-rm-bf" class="px-4 py-2 rounded text-sm font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">八方</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="flex gap-4 flex-1">
                     <!-- 左側：需求輸入 -->
@@ -1954,123 +2002,155 @@
             </div>
 
             <!-- 倉庫調撥 -->
-            <div id="view-transfer" class="view-panel h-full hidden flex flex-col p-6">
-                <div class="bg-gradient-to-r from-purple-900 to-purple-800 border border-purple-600 p-4 rounded-lg mb-4">
-                    <h2 class="text-white font-bold text-xl"><i class="fa-solid fa-right-left mr-2 text-purple-400"></i>倉庫調撥</h2>
-                    <p class="text-purple-200 text-sm mt-1">內倉與外倉之間的庫存調撥</p>
+            <div id="view-transfer" class="view-panel h-full hidden flex flex-col p-4">
+                <!-- 頂部控制列：公司選擇和調撥方向 -->
+                <div class="glass-panel p-3 mb-3">
+                    <div class="flex items-center gap-4 flex-wrap">
+                        <!-- 標題 -->
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-right-left text-purple-400"></i>
+                            <span class="text-white font-bold">倉庫調撥</span>
+                        </div>
+                        
+                        <div class="w-px h-6 bg-slate-600"></div>
+                        
+                        <!-- 公司選擇 -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-400 text-xs">公司：</span>
+                            <button onclick="setTransferCompany('崇文')" id="btn-transfer-cw" class="px-3 py-1.5 rounded font-bold text-xs bg-blue-600 text-white">崇文</button>
+                            <button onclick="setTransferCompany('八方')" id="btn-transfer-bf" class="px-3 py-1.5 rounded font-bold text-xs bg-slate-700 text-slate-300 hover:bg-slate-600">八方</button>
+                        </div>
+                        
+                        <div class="w-px h-6 bg-slate-600"></div>
+                        
+                        <!-- 調撥方向 -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-400 text-xs">調撥方向：</span>
+                            <button onclick="setTransferMode('in')" id="btn-mode-in" class="px-3 py-1.5 rounded font-bold text-xs bg-emerald-600 text-white">
+                                <i class="fa-solid fa-arrow-right mr-1"></i>調撥入庫
+                            </button>
+                            <button onclick="setTransferMode('out')" id="btn-mode-out" class="px-3 py-1.5 rounded font-bold text-xs bg-slate-700 text-slate-300 hover:bg-slate-600">
+                                <i class="fa-solid fa-arrow-left mr-1"></i>調撥出庫
+                            </button>
+                            <button onclick="setTransferMode('ext')" id="btn-mode-ext" class="px-3 py-1.5 rounded font-bold text-xs bg-slate-700 text-slate-300 hover:bg-slate-600">
+                                <i class="fa-solid fa-arrows-left-right mr-1"></i>外庫調撥
+                            </button>
+                        </div>
+                        
+                        <!-- 說明文字 -->
+                        <div class="ml-auto text-xs" id="transfer-mode-desc">
+                            <span class="text-emerald-400"><i class="fa-solid fa-info-circle mr-1"></i>外倉 → 進貨暫存區（之後移板上架）</span>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="flex gap-4 flex-1">
+                <div class="flex gap-3 flex-1 min-h-0">
                     <!-- 左側：調撥設定 -->
-                    <div class="w-96 glass-panel p-4 flex flex-col">
-                        <h3 class="text-white font-bold mb-3 border-b border-slate-700 pb-2">
-                            <i class="fa-solid fa-truck-arrow-right mr-2 text-purple-400"></i>建立調撥單
+                    <div class="w-80 glass-panel p-3 flex flex-col">
+                        <h3 class="text-white font-bold mb-2 border-b border-slate-700 pb-2 text-sm" id="transfer-form-title">
+                            <i class="fa-solid fa-truck-arrow-right mr-2 text-emerald-400"></i>調撥入庫（外倉→本倉）
                         </h3>
-                        <div class="space-y-3">
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="text-xs text-slate-400">來源倉庫 *</label>
-                                    <select id="transfer-from" class="scan-input" onchange="loadTransferSource()">
-                                        <option value="">選擇來源</option>
-                                        <optgroup label="內倉">
-                                            <option value="I">I 庫（原料）</option>
-                                            <option value="J">J 庫（成品）</option>
-                                            <option value="K">K 庫（大型）</option>
-                                        </optgroup>
-                                        <optgroup label="外倉">
-                                            <option value="EXT-TP">台北倉</option>
-                                            <option value="EXT-TC">台中倉</option>
-                                            <option value="EXT-KH">高雄倉</option>
-                                            <option value="STORE">門市</option>
-                                        </optgroup>
+                        
+                        <div class="space-y-2 flex-1 overflow-auto">
+                            <!-- 來源/目標倉庫 -->
+                            <div class="grid grid-cols-2 gap-2" id="transfer-warehouse-row">
+                                <div id="transfer-source-div">
+                                    <label class="text-xs text-slate-400" id="transfer-source-label">來源外倉 *</label>
+                                    <select id="transfer-source" class="scan-input text-sm" onchange="onTransferSourceChange()">
+                                        <option value="">選擇外倉</option>
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="text-xs text-slate-400">目標倉庫 *</label>
-                                    <select id="transfer-to" class="scan-input">
-                                        <option value="">選擇目標</option>
-                                        <optgroup label="內倉">
-                                            <option value="I">I 庫（原料）</option>
-                                            <option value="J">J 庫（成品）</option>
-                                            <option value="K">K 庫（大型）</option>
-                                        </optgroup>
-                                        <optgroup label="外倉">
-                                            <option value="EXT-TP">台北倉</option>
-                                            <option value="EXT-TC">台中倉</option>
-                                            <option value="EXT-KH">高雄倉</option>
-                                            <option value="STORE">門市</option>
-                                        </optgroup>
+                                <div id="transfer-target-div" style="display:none;">
+                                    <label class="text-xs text-slate-400">目標外倉 *</label>
+                                    <select id="transfer-target" class="scan-input text-sm">
+                                        <option value="">選擇外倉</option>
                                     </select>
                                 </div>
                             </div>
                             
+                            <!-- 品名搜尋 -->
                             <div>
                                 <label class="text-xs text-slate-400">品名 *</label>
-                                <input type="text" id="transfer-product" class="scan-input" placeholder="搜尋品名" oninput="searchTransferProduct()">
-                                <div id="transfer-product-list" class="max-h-24 overflow-y-auto"></div>
+                                <input type="text" id="transfer-product" class="scan-input text-sm" placeholder="搜尋品名..." oninput="searchTransferProduct()">
+                                <div id="transfer-product-list" class="max-h-28 overflow-y-auto bg-slate-800 rounded mt-1"></div>
                             </div>
-                            <div class="grid grid-cols-2 gap-3">
+                            
+                            <!-- 規格/批號 -->
+                            <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="text-xs text-slate-400">規格</label>
-                                    <input type="text" id="transfer-spec" class="scan-input" readonly>
+                                    <input type="text" id="transfer-spec" class="scan-input text-sm" readonly>
                                 </div>
                                 <div>
                                     <label class="text-xs text-slate-400">批號</label>
-                                    <input type="text" id="transfer-batch" class="scan-input" readonly>
+                                    <input type="text" id="transfer-batch" class="scan-input text-sm" readonly>
                                 </div>
                             </div>
+                            
+                            <!-- 效期 -->
                             <div>
                                 <label class="text-xs text-slate-400">效期</label>
-                                <input type="text" id="transfer-exp" class="scan-input" readonly>
+                                <input type="text" id="transfer-exp" class="scan-input text-sm" readonly>
                             </div>
-                            <div>
-                                <label class="text-xs text-slate-400">可調數量</label>
-                                <div class="text-lg font-bold text-yellow-400" id="transfer-available">0</div>
+                            
+                            <!-- 來源儲位（調撥出庫專用） -->
+                            <div id="transfer-location-div" style="display:none;">
+                                <label class="text-xs text-slate-400">來源儲位 *</label>
+                                <select id="transfer-location" class="scan-input text-sm" onchange="onTransferLocationChange()">
+                                    <option value="">選擇儲位</option>
+                                </select>
                             </div>
+                            
+                            <!-- 可調數量 -->
+                            <div class="flex items-center gap-4">
+                                <div>
+                                    <label class="text-xs text-slate-400">可調數量</label>
+                                    <div class="text-lg font-bold text-yellow-400" id="transfer-available">0</div>
+                                </div>
+                            </div>
+                            
+                            <!-- 調撥數量 -->
                             <div>
                                 <label class="text-xs text-slate-400">調撥數量 *</label>
-                                <input type="number" id="transfer-qty" class="scan-input text-center text-xl font-bold" placeholder="0">
+                                <input type="number" id="transfer-qty" class="scan-input text-center text-lg font-bold" placeholder="0" min="1">
                             </div>
-                            <button onclick="addTransferItem()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold">
-                                <i class="fa-solid fa-plus mr-2"></i>加入調撥清單
+                            
+                            <!-- 加入按鈕 -->
+                            <button onclick="addTransferItem()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold text-sm">
+                                <i class="fa-solid fa-plus mr-1"></i>加入調撥清單
                             </button>
                         </div>
                     </div>
 
                     <!-- 右側：調撥清單 -->
-                    <div class="flex-1 glass-panel p-4 flex flex-col">
-                        <div class="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
-                            <h3 class="text-white font-bold"><i class="fa-solid fa-list-check mr-2 text-yellow-400"></i>調撥清單</h3>
-                            <div class="flex gap-2">
-                                <button onclick="clearTransferList()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded text-xs">
-                                    <i class="fa-solid fa-trash mr-1"></i>清空
-                                </button>
-                                <button onclick="printTransferSlip()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs">
-                                    <i class="fa-solid fa-print mr-1"></i>列印調撥單
-                                </button>
-                            </div>
+                    <div class="flex-1 glass-panel p-3 flex flex-col">
+                        <div class="flex justify-between items-center mb-2 border-b border-slate-700 pb-2">
+                            <h3 class="text-white font-bold text-sm"><i class="fa-solid fa-list-check mr-2 text-yellow-400"></i>調撥清單</h3>
+                            <button onclick="clearTransferList()" class="bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded text-xs">
+                                <i class="fa-solid fa-trash mr-1"></i>清空
+                            </button>
                         </div>
                         <div class="flex-1 overflow-auto">
-                            <table class="w-full text-sm">
+                            <table class="w-full text-xs">
                                 <thead class="sticky top-0 bg-slate-800">
-                                    <tr class="text-slate-400 text-xs">
-                                        <th class="text-left p-2">品名</th>
-                                        <th class="text-left p-2">規格</th>
-                                        <th class="text-left p-2">批號</th>
-                                        <th class="text-left p-2">效期</th>
-                                        <th class="text-left p-2">來源</th>
-                                        <th class="text-left p-2">目標</th>
-                                        <th class="text-right p-2">數量</th>
-                                        <th class="text-center p-2">操作</th>
+                                    <tr class="text-slate-400">
+                                        <th class="text-left p-1.5">品名</th>
+                                        <th class="text-left p-1.5">規格</th>
+                                        <th class="text-left p-1.5">批號</th>
+                                        <th class="text-left p-1.5">效期</th>
+                                        <th class="text-left p-1.5">來源</th>
+                                        <th class="text-left p-1.5">目標</th>
+                                        <th class="text-right p-1.5">數量</th>
+                                        <th class="text-center p-1.5">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="transfer-list">
-                                    <tr><td colspan="8" class="text-center text-slate-500 py-10">尚未加入調撥品項</td></tr>
+                                    <tr><td colspan="8" class="text-center text-slate-500 py-8">尚未加入調撥品項</td></tr>
                                 </tbody>
                             </table>
                         </div>
-                        <div class="border-t border-slate-700 pt-3 mt-3">
-                            <button onclick="executeTransfer()" class="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-lg" id="btn-execute-transfer" disabled>
+                        <div class="border-t border-slate-700 pt-2 mt-2">
+                            <button onclick="executeTransfer()" class="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold" id="btn-execute-transfer" disabled>
                                 <i class="fa-solid fa-check-double mr-2"></i>確認執行調撥
                             </button>
                         </div>
@@ -2265,9 +2345,9 @@
                                         <input type="checkbox" id="perm-approve" class="perm-checkbox w-3 h-3"> 入庫核准
                                     </label>
                                 </div>
-                                <!-- 庫內作業 -->
+                                <!-- 庫存異動作業 -->
                                 <div class="bg-blue-900/20 border border-blue-700/30 rounded-lg p-2">
-                                    <div class="text-blue-400 text-xs font-bold mb-2"><i class="fa-solid fa-warehouse mr-1"></i>庫內作業</div>
+                                    <div class="text-blue-400 text-xs font-bold mb-2"><i class="fa-solid fa-warehouse mr-1"></i>庫存異動作業</div>
                                     <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white">
                                         <input type="checkbox" id="perm-inventory" class="perm-checkbox w-3 h-3"> 庫存查詢
                                     </label>
@@ -2281,9 +2361,9 @@
                                         <input type="checkbox" id="perm-stocktake" class="perm-checkbox w-3 h-3"> 庫存盤點
                                     </label>
                                 </div>
-                                <!-- 出庫物流 -->
+                                <!-- 出庫管理 -->
                                 <div class="bg-red-900/20 border border-red-700/30 rounded-lg p-2">
-                                    <div class="text-red-400 text-xs font-bold mb-2"><i class="fa-solid fa-arrow-up mr-1"></i>出庫物流</div>
+                                    <div class="text-red-400 text-xs font-bold mb-2"><i class="fa-solid fa-arrow-up mr-1"></i>出庫管理</div>
                                     <label class="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:text-white">
                                         <input type="checkbox" id="perm-outbound" class="perm-checkbox w-3 h-3"> 波次揀貨
                                     </label>
@@ -4123,7 +4203,7 @@
                                 }
                             }
                             
-                            tbody.innerHTML += `<tr class="border-b border-slate-700 hover:bg-slate-800"><td class="text-white p-2">${data.productName}</td><td class="text-yellow-400 p-2">${data.spec||'-'}</td><td class="text-slate-400 font-mono p-2">${data.batchNo||'-'}</td><td class="text-right text-white p-2">${data.quantity||'-'}</td><td class="text-right p-2">${weightDisplay}</td><td class="p-2 text-cyan-400 font-mono">${data.locationId}</td><td class="p-2 ${expClass}">${expDisplay}</td><td class="p-2 text-right"><button onclick="deletePallet('${d.id}')" class="text-red-500 hover:bg-red-500/20 rounded px-2" title="刪除"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+                            tbody.innerHTML += `<tr class="border-b border-slate-700 hover:bg-slate-800" data-company="${data.company || ''}"><td class="p-2"><span class="px-1.5 py-0.5 rounded text-xs ${data.company === '八方' ? 'bg-purple-900/50 text-purple-300' : 'bg-blue-900/50 text-blue-300'}">${data.company || '-'}</span></td><td class="text-white p-2">${data.productName}</td><td class="text-yellow-400 p-2">${data.spec||'-'}</td><td class="text-slate-400 font-mono p-2">${data.batchNo||'-'}</td><td class="text-right text-white p-2">${data.quantity||'-'}</td><td class="text-right p-2">${weightDisplay}</td><td class="p-2 text-cyan-400 font-mono">${data.locationId}</td><td class="p-2 ${expClass}">${expDisplay}</td><td class="p-2 text-right"><button onclick="deletePallet('${d.id}')" class="text-red-500 hover:bg-red-500/20 rounded px-2" title="刪除"><i class="fa-solid fa-trash"></i></button></td></tr>`;
                         }
                     }
                 });
@@ -5424,6 +5504,10 @@ console.log('✅ WMS 工具函數庫已載入');
                 var category = document.getElementById('in-category').value;
                 var vendor = document.getElementById('in-vendor') ? document.getElementById('in-vendor').value : '';
                 
+                // 取得公司
+                var companyRadio = document.querySelector('input[name="in-company"]:checked');
+                var company = companyRadio ? companyRadio.value : '崇文';
+                
                 // 記錄每板的分配結果
                 var palletList = [];
                 
@@ -5440,6 +5524,7 @@ console.log('✅ WMS 工具函數庫已載入');
                         locationId: allocation.allocations[i],
                         category: category,
                         vendor: vendor,
+                        company: company,
                         status: "Available",
                         inboundDate: now,
                         source: "BatchInbound"
@@ -5804,6 +5889,10 @@ console.log('✅ WMS 工具函數庫已載入');
              var batchNo = document.getElementById('in-batch') ? document.getElementById('in-batch').value : '';
              var expDate = document.getElementById('in-exp') ? document.getElementById('in-exp').value : '';
              var vendor = document.getElementById('in-vendor') ? document.getElementById('in-vendor').value : '';
+             
+             // 取得公司
+             var companyRadio = document.querySelector('input[name="in-company"]:checked');
+             var company = companyRadio ? companyRadio.value : '崇文';
 
              try {
                 await window.addDoc(window.collection(window.db, "pallets"), {
@@ -5823,6 +5912,7 @@ console.log('✅ WMS 工具函數庫已載入');
                     inboundDate: new Date(), 
                     status: "Available",
                     vendor: vendor,
+                    company: company,
                     workOrder: document.getElementById('in-wo') ? document.getElementById('in-wo').value : '',
                     source: 'Inbound'
                 });
@@ -6262,6 +6352,10 @@ console.log('✅ WMS 工具函數庫已載入');
         
         // 手動新增品項
         window.addContainerItem = function() {
+            // 取得公司
+            var companyRadio = document.querySelector('input[name="pre-company"]:checked');
+            var company = companyRadio ? companyRadio.value : '崇文';
+            
             var vendor = document.getElementById('pre-vendor').value.trim();
             var name = document.getElementById('pre-name').value.trim();
             var spec = document.getElementById('pre-spec').value.trim();
@@ -6292,6 +6386,7 @@ console.log('✅ WMS 工具函數庫已載入');
             
             var item = {
                 id: 'CI-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+                company: company,
                 vendor: vendor,
                 productName: name,
                 spec: spec,
@@ -6593,6 +6688,7 @@ console.log('✅ WMS 工具函數庫已載入');
                     
                     var allocation = {
                         id: 'PL-' + item.batchNo + '-' + String(palletNo).padStart(3, '0'),
+                        company: item.company || '崇文',
                         vendor: item.vendor,
                         productName: item.productName,
                         spec: item.spec,
@@ -6987,6 +7083,7 @@ console.log('✅ WMS 工具函數庫已載入');
                     
                     batch.set(docRef, {
                         palletId: palletId,
+                        company: label.company || '崇文',
                         vendor: label.vendor || '',
                         productName: label.productName,
                         spec: label.spec || '',
@@ -7092,9 +7189,38 @@ console.log('✅ WMS 工具函數庫已載入');
             alert("巷道已清空"); 
         }
 
+        // 庫存查詢公司過濾
+        window.inventoryCompanyFilter = 'all';
+        
+        window.setInventoryCompany = function(company) {
+            window.inventoryCompanyFilter = company;
+            
+            // 更新按鈕樣式
+            document.getElementById('btn-inv-all').className = company === 'all' 
+                ? 'px-3 py-1.5 rounded text-xs font-bold bg-slate-600 text-white' 
+                : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
+            document.getElementById('btn-inv-cw').className = company === '崇文' 
+                ? 'px-3 py-1.5 rounded text-xs font-bold bg-blue-600 text-white' 
+                : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
+            document.getElementById('btn-inv-bf').className = company === '八方' 
+                ? 'px-3 py-1.5 rounded text-xs font-bold bg-purple-600 text-white' 
+                : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
+            
+            // 重新過濾
+            filterInventory();
+        };
+        
         function filterInventory() {
             const term = document.getElementById('global-search').value.toLowerCase();
-            document.querySelectorAll('#inventory-list-body tr').forEach(row => { row.style.display = row.innerText.toLowerCase().includes(term) ? '' : 'none'; });
+            const companyFilter = window.inventoryCompanyFilter || 'all';
+            
+            document.querySelectorAll('#inventory-list-body tr').forEach(row => {
+                const matchesTerm = row.innerText.toLowerCase().includes(term);
+                const rowCompany = row.getAttribute('data-company') || '';
+                const matchesCompany = companyFilter === 'all' || rowCompany === companyFilter;
+                
+                row.style.display = (matchesTerm && matchesCompany) ? '' : 'none';
+            });
         }
         function downloadTemplate(type) {
             let data = [];
@@ -9908,6 +10034,46 @@ console.log('✅ WMS 工具函數庫已載入');
             var seq = todayWaves.length + 1;
             return 'W' + dateStr + '-' + String(seq).padStart(3, '0');
         }
+        
+        // 波次揀貨公司狀態
+        window.waveCompany = '崇文';
+        
+        // 設定波次揀貨公司
+        window.setWaveCompany = function(company) {
+            window.waveCompany = company;
+            
+            // 更新按鈕樣式
+            document.getElementById('btn-wave-cw').className = company === '崇文' 
+                ? 'px-3 py-1.5 rounded text-xs font-bold bg-blue-600 text-white' 
+                : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
+            document.getElementById('btn-wave-bf').className = company === '八方' 
+                ? 'px-3 py-1.5 rounded text-xs font-bold bg-purple-600 text-white' 
+                : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
+            
+            // 重新整理波次清單（依公司過濾）
+            refreshWaveList();
+        };
+        
+        // 原料領用公司狀態
+        window.rmCompany = '崇文';
+        
+        // 設定原料領用公司
+        window.setRmCompany = function(company) {
+            window.rmCompany = company;
+            
+            // 更新按鈕樣式
+            document.getElementById('btn-rm-cw').className = company === '崇文' 
+                ? 'px-4 py-2 rounded text-sm font-bold bg-blue-600 text-white' 
+                : 'px-4 py-2 rounded text-sm font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
+            document.getElementById('btn-rm-bf').className = company === '八方' 
+                ? 'px-4 py-2 rounded text-sm font-bold bg-purple-600 text-white' 
+                : 'px-4 py-2 rounded text-sm font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
+            
+            // 清空搜尋結果
+            document.getElementById('rm-product-suggestions').innerHTML = '';
+            document.getElementById('rm-pick-name').value = '';
+            document.getElementById('rm-pick-spec').value = '';
+        };
         
         // 重新整理波次清單
         window.refreshWaveList = function() {
@@ -14532,8 +14698,14 @@ window.clearLocalStorage = function() {
                 return;
             }
             
+            // 取得目前選擇的公司
+            var selectedCompany = mode === 'rm' ? (window.rmCompany || '崇文') : '崇文';
+            
             var products = {};
             window.currentPallets().forEach(function(p) {
+                // 依公司過濾
+                if (p.company && p.company !== selectedCompany) return;
+                
                 var key = p.productName + '|' + (p.spec || '');
                 if (p.productName.toLowerCase().indexOf(searchInput) > -1) {
                     if (!products[key]) {
@@ -16566,37 +16738,190 @@ window.clearLocalStorage = function() {
             }
         };
 
-        // ========== 倉庫調撥功能 ==========
+        // ========== 倉庫調撥功能（新版）==========
         
-        // 載入來源庫存
-        window.loadTransferSource = function() {
-            var from = document.getElementById('transfer-from').value;
+        // 調撥狀態
+        window.transferState = {
+            company: '崇文',      // 目前選擇的公司
+            mode: 'in',           // 調撥模式: 'in'=調撥入庫, 'out'=調撥出庫, 'ext'=外庫調撥
+            selectedItem: null,   // 選中的品項
+            locationItems: []     // 儲位列表（調撥出庫用）
+        };
+        
+        // 設定調撥公司
+        window.setTransferCompany = function(company) {
+            window.transferState.company = company;
+            
+            // 更新按鈕樣式
+            document.getElementById('btn-transfer-cw').className = company === '崇文' 
+                ? 'px-3 py-1.5 rounded font-bold text-xs bg-blue-600 text-white' 
+                : 'px-3 py-1.5 rounded font-bold text-xs bg-slate-700 text-slate-300 hover:bg-slate-600';
+            document.getElementById('btn-transfer-bf').className = company === '八方' 
+                ? 'px-3 py-1.5 rounded font-bold text-xs bg-blue-600 text-white' 
+                : 'px-3 py-1.5 rounded font-bold text-xs bg-slate-700 text-slate-300 hover:bg-slate-600';
+            
+            // 更新倉庫下拉選單
+            updateTransferWarehouseOptions();
+            clearTransferForm();
+        };
+        
+        // 設定調撥模式
+        window.setTransferMode = function(mode) {
+            window.transferState.mode = mode;
+            
+            // 更新按鈕樣式
+            var modes = ['in', 'out', 'ext'];
+            var colors = { 'in': 'bg-emerald-600', 'out': 'bg-orange-600', 'ext': 'bg-purple-600' };
+            modes.forEach(function(m) {
+                var btn = document.getElementById('btn-mode-' + m);
+                btn.className = m === mode 
+                    ? 'px-3 py-1.5 rounded font-bold text-xs ' + colors[m] + ' text-white'
+                    : 'px-3 py-1.5 rounded font-bold text-xs bg-slate-700 text-slate-300 hover:bg-slate-600';
+            });
+            
+            // 更新標題和欄位
+            var titleEl = document.getElementById('transfer-form-title');
+            var descEl = document.getElementById('transfer-mode-desc');
+            var sourceLabelEl = document.getElementById('transfer-source-label');
+            var targetDiv = document.getElementById('transfer-target-div');
+            var locationDiv = document.getElementById('transfer-location-div');
+            
+            if (mode === 'in') {
+                titleEl.innerHTML = '<i class="fa-solid fa-truck-arrow-right mr-2 text-emerald-400"></i>調撥入庫（外倉→本倉）';
+                descEl.innerHTML = '<span class="text-emerald-400"><i class="fa-solid fa-info-circle mr-1"></i>外倉 → 進貨暫存區（之後移板上架）</span>';
+                sourceLabelEl.textContent = '來源外倉 *';
+                targetDiv.style.display = 'none';
+                locationDiv.style.display = 'none';
+            } else if (mode === 'out') {
+                titleEl.innerHTML = '<i class="fa-solid fa-truck-arrow-right mr-2 text-orange-400"></i>調撥出庫（本倉→外倉）';
+                descEl.innerHTML = '<span class="text-orange-400"><i class="fa-solid fa-info-circle mr-1"></i>本倉儲位 → 出貨暫存區 → 外倉</span>';
+                sourceLabelEl.textContent = '目標外倉 *';
+                targetDiv.style.display = 'none';
+                locationDiv.style.display = 'block';
+            } else {
+                titleEl.innerHTML = '<i class="fa-solid fa-arrows-left-right mr-2 text-purple-400"></i>外庫調撥（外倉→外倉）';
+                descEl.innerHTML = '<span class="text-purple-400"><i class="fa-solid fa-info-circle mr-1"></i>外倉之間直接調撥（數量增減）</span>';
+                sourceLabelEl.textContent = '來源外倉 *';
+                targetDiv.style.display = 'block';
+                locationDiv.style.display = 'none';
+            }
+            
+            updateTransferWarehouseOptions();
+            clearTransferForm();
+        };
+        
+        // 更新倉庫下拉選單
+        function updateTransferWarehouseOptions() {
+            var company = window.transferState.company;
+            var mode = window.transferState.mode;
+            var sourceSelect = document.getElementById('transfer-source');
+            var targetSelect = document.getElementById('transfer-target');
+            
+            // 取得該公司的外倉
+            var warehouses = window.warehousesData.filter(function(w) {
+                return w.company === company && w.active !== false;
+            }).sort(function(a, b) { return (a.sortOrder || 99) - (b.sortOrder || 99); });
+            
+            // 填入來源倉庫
+            var sourceHtml = '<option value="">選擇外倉</option>';
+            warehouses.forEach(function(w) {
+                var icon = w.icon === 'store' ? '🏪' : '🏢';
+                sourceHtml += '<option value="' + w.code + '">' + icon + ' ' + w.name + '</option>';
+            });
+            sourceSelect.innerHTML = sourceHtml;
+            
+            // 填入目標倉庫（外庫調撥模式）
+            if (mode === 'ext') {
+                var targetHtml = '<option value="">選擇外倉</option>';
+                warehouses.forEach(function(w) {
+                    var icon = w.icon === 'store' ? '🏪' : '🏢';
+                    targetHtml += '<option value="' + w.code + '">' + icon + ' ' + w.name + '</option>';
+                });
+                targetSelect.innerHTML = targetHtml;
+            }
+        }
+        
+        // 來源倉庫變更
+        window.onTransferSourceChange = function() {
+            clearTransferForm();
+        };
+        
+        // 儲位變更（調撥出庫用）
+        window.onTransferLocationChange = function() {
+            var locId = document.getElementById('transfer-location').value;
+            if (!locId) {
+                document.getElementById('transfer-available').innerText = '0';
+                return;
+            }
+            
+            var item = window.transferState.locationItems.find(function(i) { return i.locationId === locId; });
+            if (item) {
+                document.getElementById('transfer-available').innerText = item.quantity;
+                window.transferState.selectedItem = item;
+            }
+        };
+        
+        // 清空表單
+        function clearTransferForm() {
             document.getElementById('transfer-product').value = '';
             document.getElementById('transfer-spec').value = '';
             document.getElementById('transfer-batch').value = '';
+            document.getElementById('transfer-exp').value = '';
             document.getElementById('transfer-available').innerText = '0';
+            document.getElementById('transfer-qty').value = '';
             document.getElementById('transfer-product-list').innerHTML = '';
-        };
+            document.getElementById('transfer-location').innerHTML = '<option value="">選擇儲位</option>';
+            window.transferState.selectedItem = null;
+            window.transferState.locationItems = [];
+        }
         
         // 搜尋調撥產品
         window.searchTransferProduct = function() {
-            var from = document.getElementById('transfer-from').value;
+            var mode = window.transferState.mode;
+            var company = window.transferState.company;
             var keyword = document.getElementById('transfer-product').value.trim().toLowerCase();
             var listDiv = document.getElementById('transfer-product-list');
             
-            if (!from) { alert('請先選擇來源倉庫'); return; }
             if (keyword.length < 1) { listDiv.innerHTML = ''; return; }
             
             var source = [];
             
-            // 內倉或外倉
-            if (['I', 'J', 'K'].includes(from)) {
+            if (mode === 'out') {
+                // 調撥出庫：從本倉庫存搜尋（該公司的）
                 source = window.inventory.filter(function(p) {
-                    return p.locationId && p.locationId.startsWith(from + '-') && p.productName.toLowerCase().includes(keyword);
+                    return p.company === company && p.productName && p.productName.toLowerCase().includes(keyword);
                 });
+                
+                // 依品名+規格+批號分組
+                var grouped = {};
+                source.forEach(function(p) {
+                    var key = p.productName + '|' + (p.spec || '') + '|' + (p.batchNo || '');
+                    if (!grouped[key]) {
+                        grouped[key] = {
+                            productName: p.productName,
+                            spec: p.spec || '',
+                            batchNo: p.batchNo || '',
+                            expiryDate: p.expiryDate || '',
+                            totalQty: 0,
+                            items: []
+                        };
+                    }
+                    grouped[key].totalQty += (p.quantity || 0);
+                    grouped[key].items.push(p);
+                });
+                source = Object.values(grouped);
+                
             } else {
+                // 調撥入庫或外庫調撥：從外倉庫存搜尋
+                var warehouseId = document.getElementById('transfer-source').value;
+                if (!warehouseId) { 
+                    listDiv.innerHTML = '<div class="text-slate-500 text-xs p-2">請先選擇外倉</div>'; 
+                    return; 
+                }
+                
                 source = window.externalStock.filter(function(s) {
-                    return s.warehouseId === from && s.productName.toLowerCase().includes(keyword);
+                    return s.warehouseId === warehouseId && s.company === company && 
+                           s.productName && s.productName.toLowerCase().includes(keyword);
                 });
             }
             
@@ -16607,9 +16932,10 @@ window.clearLocalStorage = function() {
             
             var html = '';
             source.slice(0, 10).forEach(function(s, idx) {
-                html += '<div class="p-2 hover:bg-slate-700 cursor-pointer text-sm border-b border-slate-700" onclick="selectTransferProduct(' + idx + ', \'' + from + '\')">';
-                html += '<div class="text-white">' + s.productName + '</div>';
-                html += '<div class="text-xs text-slate-400">' + (s.spec || '-') + ' | 批號：' + (s.batchNo || '-') + ' | 數量：' + s.quantity + '</div>';
+                var qty = mode === 'out' ? s.totalQty : s.quantity;
+                html += '<div class="p-2 hover:bg-slate-700 cursor-pointer text-sm border-b border-slate-700" onclick="selectTransferProduct(' + idx + ')">';
+                html += '<div class="text-white font-bold">' + s.productName + '</div>';
+                html += '<div class="text-xs text-slate-400">' + (s.spec || '-') + ' | 批號：' + (s.batchNo || '-') + ' | 數量：<span class="text-yellow-400">' + qty + '</span></div>';
                 html += '</div>';
             });
             
@@ -16618,60 +16944,115 @@ window.clearLocalStorage = function() {
         };
         
         // 選擇調撥產品
-        window.selectTransferProduct = function(idx, from) {
+        window.selectTransferProduct = function(idx) {
             var item = window._transferSearchResults[idx];
+            var mode = window.transferState.mode;
+            
             document.getElementById('transfer-product').value = item.productName;
             document.getElementById('transfer-spec').value = item.spec || '';
             document.getElementById('transfer-batch').value = item.batchNo || '';
-            document.getElementById('transfer-exp').value = item.expDate || item.expiryDate || '';
-            document.getElementById('transfer-available').innerText = item.quantity;
+            document.getElementById('transfer-exp').value = item.expiryDate || item.expDate || '';
             document.getElementById('transfer-product-list').innerHTML = '';
-            window._selectedTransferItem = item;
+            
+            if (mode === 'out') {
+                // 調撥出庫：列出儲位選項
+                var locationSelect = document.getElementById('transfer-location');
+                var html = '<option value="">選擇儲位</option>';
+                
+                item.items.forEach(function(p) {
+                    html += '<option value="' + p.locationId + '">' + p.locationId + ' (數量: ' + p.quantity + ')</option>';
+                });
+                
+                locationSelect.innerHTML = html;
+                window.transferState.locationItems = item.items;
+                document.getElementById('transfer-available').innerText = '0';
+                window.transferState.selectedItem = null;
+            } else {
+                // 調撥入庫或外庫調撥
+                document.getElementById('transfer-available').innerText = item.quantity;
+                window.transferState.selectedItem = item;
+            }
         };
         
         // 加入調撥清單
         window.addTransferItem = function() {
-            var from = document.getElementById('transfer-from').value;
-            var to = document.getElementById('transfer-to').value;
+            var mode = window.transferState.mode;
+            var company = window.transferState.company;
+            var source = document.getElementById('transfer-source').value;
+            var target = document.getElementById('transfer-target').value;
             var product = document.getElementById('transfer-product').value.trim();
+            var spec = document.getElementById('transfer-spec').value;
+            var batch = document.getElementById('transfer-batch').value;
             var exp = document.getElementById('transfer-exp').value;
             var qty = parseInt(document.getElementById('transfer-qty').value) || 0;
+            var location = document.getElementById('transfer-location').value;
             
-            if (!from) { alert('請選擇來源倉庫'); return; }
-            if (!to) { alert('請選擇目標倉庫'); return; }
-            if (from === to) { alert('來源和目標不能相同'); return; }
+            // 驗證
+            if (mode === 'in') {
+                if (!source) { alert('請選擇來源外倉'); return; }
+            } else if (mode === 'out') {
+                if (!source) { alert('請選擇目標外倉'); return; }
+                if (!location) { alert('請選擇來源儲位'); return; }
+            } else {
+                if (!source) { alert('請選擇來源外倉'); return; }
+                if (!target) { alert('請選擇目標外倉'); return; }
+                if (source === target) { alert('來源和目標不能相同'); return; }
+            }
+            
             if (!product) { alert('請選擇產品'); return; }
-            if (!exp) { alert('⚠️ 此產品無效期資料，請確認'); }
             if (qty <= 0) { alert('請輸入有效數量'); return; }
             
             var available = parseInt(document.getElementById('transfer-available').innerText) || 0;
-            if (qty > available) { alert('調撥數量不能超過可用數量'); return; }
+            if (qty > available) { alert('調撥數量不能超過可用數量 (' + available + ')'); return; }
             
-            var fromName = from.startsWith('EXT') || from === 'STORE' ? extWhNames[from] : from + '庫';
-            var toName = to.startsWith('EXT') || to === 'STORE' ? extWhNames[to] : to + '庫';
+            // 取得倉庫名稱
+            var getWhName = function(code) {
+                var wh = window.warehousesData.find(function(w) { return w.code === code; });
+                return wh ? wh.name : code;
+            };
             
-            window.transferList.push({
-                fromWh: from,
-                fromName: fromName,
-                toWh: to,
-                toName: toName,
+            // 建立調撥項目
+            var transferItem = {
+                mode: mode,
+                company: company,
                 productName: product,
-                spec: document.getElementById('transfer-spec').value,
-                batchNo: document.getElementById('transfer-batch').value,
+                spec: spec,
+                batchNo: batch,
                 expDate: exp,
                 quantity: qty,
-                sourceItem: window._selectedTransferItem
-            });
+                sourceItem: window.transferState.selectedItem
+            };
             
+            if (mode === 'in') {
+                transferItem.fromWh = source;
+                transferItem.fromName = getWhName(source);
+                transferItem.toWh = 'TEMP-IN';
+                transferItem.toName = '進貨暫存區';
+            } else if (mode === 'out') {
+                transferItem.fromWh = location;
+                transferItem.fromName = location;
+                transferItem.toWh = source;  // source 在此模式是目標外倉
+                transferItem.toName = getWhName(source);
+                transferItem.tempLocation = 'TEMP-OUT';
+            } else {
+                transferItem.fromWh = source;
+                transferItem.fromName = getWhName(source);
+                transferItem.toWh = target;
+                transferItem.toName = getWhName(target);
+            }
+            
+            window.transferList.push(transferItem);
             renderTransferList();
             
-            // 清空
+            // 清空部分欄位
             document.getElementById('transfer-product').value = '';
             document.getElementById('transfer-spec').value = '';
             document.getElementById('transfer-batch').value = '';
             document.getElementById('transfer-exp').value = '';
             document.getElementById('transfer-available').innerText = '0';
             document.getElementById('transfer-qty').value = '';
+            document.getElementById('transfer-location').innerHTML = '<option value="">選擇儲位</option>';
+            window.transferState.selectedItem = null;
         };
         
         // 渲染調撥清單
@@ -16696,8 +17077,12 @@ window.clearLocalStorage = function() {
                     else if (days < 90) expClass = 'text-yellow-400';
                 }
                 
+                var modeLabel = t.mode === 'in' ? '<span class="text-emerald-400 text-xs">入庫</span>' 
+                              : t.mode === 'out' ? '<span class="text-orange-400 text-xs">出庫</span>'
+                              : '<span class="text-purple-400 text-xs">外調</span>';
+                
                 html += '<tr class="border-b border-slate-700">';
-                html += '<td class="p-2 text-white font-bold">' + t.productName + '</td>';
+                html += '<td class="p-2"><div class="text-white font-bold">' + t.productName + '</div>' + modeLabel + '</td>';
                 html += '<td class="p-2 text-slate-400">' + (t.spec || '-') + '</td>';
                 html += '<td class="p-2 text-slate-400">' + (t.batchNo || '-') + '</td>';
                 html += '<td class="p-2 ' + expClass + '">' + (t.expDate || '-') + '</td>';
@@ -16730,141 +17115,198 @@ window.clearLocalStorage = function() {
             if (!confirm('確認執行 ' + window.transferList.length + ' 筆調撥？')) return;
             
             try {
-                var batch = window.writeBatch(window.db);
                 var logPromises = [];
                 
                 for (var i = 0; i < window.transferList.length; i++) {
                     var t = window.transferList[i];
                     
-                    // 來源扣減
-                    if (['I', 'J', 'K'].includes(t.fromWh)) {
-                        // 內倉扣減
-                        var srcItem = t.sourceItem;
-                        if (srcItem && srcItem.id) {
-                            var newQty = srcItem.quantity - t.quantity;
-                            var srcRef = window.doc(window.db, 'pallets', srcItem.id);
-                            if (newQty <= 0) {
-                                batch.delete(srcRef);
-                            } else {
-                                batch.update(srcRef, { quantity: newQty });
-                            }
-                        }
-                    } else {
-                        // 外倉扣減
+                    if (t.mode === 'in') {
+                        // ========== 調撥入庫（外倉→進貨暫存區）==========
+                        // 1. 外倉扣減
                         var extItem = window.externalStock.find(function(s) {
-                            return s.warehouseId === t.fromWh && s.productName === t.productName && s.batchNo === t.batchNo;
+                            return s.warehouseId === t.fromWh && s.productName === t.productName && 
+                                   s.batchNo === t.batchNo && s.company === t.company;
                         });
                         if (extItem) {
                             var newQty = extItem.quantity - t.quantity;
                             var extRef = window.doc(window.db, 'externalStock', extItem.id);
                             if (newQty <= 0) {
-                                batch.delete(extRef);
+                                await window.deleteDoc(extRef);
                             } else {
-                                batch.update(extRef, { quantity: newQty });
+                                await window.updateDoc(extRef, { quantity: newQty });
                             }
                         }
-                    }
-                    
-                    // 目標增加
-                    if (['I', 'J', 'K'].includes(t.toWh)) {
-                        // 內倉增加（需要指定儲位，這裡簡化處理）
+                        
+                        // 2. 新增到進貨暫存區
                         await window.addDoc(window.collection(window.db, 'pallets'), {
+                            palletId: 'TRI-' + Date.now() + '-' + i,
                             productName: t.productName,
-                            spec: t.spec,
-                            batchNo: t.batchNo,
+                            spec: t.spec || '',
+                            batchNo: t.batchNo || '',
+                            expiryDate: t.expDate || '',
                             quantity: t.quantity,
-                            locationId: t.toWh + '-調入待上架',
-                            source: 'Transfer',
+                            totalWeight: 0,
+                            locationId: 'TEMP-IN',
+                            company: t.company,
+                            source: '調撥入庫',
+                            sourceWarehouse: t.fromName,
                             createdAt: new Date().toISOString()
                         });
-                    } else {
-                        // 外倉增加
+                        
+                        // 記錄異動
+                        logPromises.push(window.logInventoryChange({
+                            type: 'transfer-in',
+                            productName: t.productName,
+                            spec: t.spec || '',
+                            quantity: t.quantity,
+                            fromLocation: t.fromWh,
+                            toLocation: 'TEMP-IN',
+                            batchNo: t.batchNo || '',
+                            company: t.company,
+                            note: '調撥入庫: ' + t.fromName + ' → 進貨暫存區'
+                        }));
+                        
+                    } else if (t.mode === 'out') {
+                        // ========== 調撥出庫（本倉儲位→出貨暫存區→外倉）==========
+                        // 1. 本倉儲位扣減
+                        var srcItem = t.sourceItem;
+                        if (srcItem && srcItem.id) {
+                            var newQty = srcItem.quantity - t.quantity;
+                            var srcRef = window.doc(window.db, 'pallets', srcItem.id);
+                            if (newQty <= 0) {
+                                await window.deleteDoc(srcRef);
+                            } else {
+                                await window.updateDoc(srcRef, { quantity: newQty });
+                            }
+                        }
+                        
+                        // 2. 新增到出貨暫存區
+                        await window.addDoc(window.collection(window.db, 'pallets'), {
+                            palletId: 'TRO-' + Date.now() + '-' + i,
+                            productName: t.productName,
+                            spec: t.spec || '',
+                            batchNo: t.batchNo || '',
+                            expiryDate: t.expDate || '',
+                            quantity: t.quantity,
+                            totalWeight: 0,
+                            locationId: 'TEMP-OUT',
+                            company: t.company,
+                            source: '調撥出庫',
+                            targetWarehouse: t.toName,
+                            targetWarehouseId: t.toWh,
+                            createdAt: new Date().toISOString()
+                        });
+                        
+                        // 3. 外倉增加庫存
                         var existExt = window.externalStock.find(function(s) {
-                            return s.warehouseId === t.toWh && s.productName === t.productName && s.batchNo === t.batchNo;
+                            return s.warehouseId === t.toWh && s.productName === t.productName && 
+                                   s.batchNo === t.batchNo && s.company === t.company;
                         });
                         if (existExt) {
                             var extRef = window.doc(window.db, 'externalStock', existExt.id);
-                            batch.update(extRef, { quantity: existExt.quantity + t.quantity });
+                            await window.updateDoc(extRef, { quantity: existExt.quantity + t.quantity });
                         } else {
                             await window.addDoc(window.collection(window.db, 'externalStock'), {
                                 warehouseId: t.toWh,
                                 productName: t.productName,
-                                spec: t.spec,
-                                batchNo: t.batchNo,
-                                expDate: t.sourceItem ? t.sourceItem.expDate : '',
+                                spec: t.spec || '',
+                                batchNo: t.batchNo || '',
+                                expDate: t.expDate || '',
                                 quantity: t.quantity,
-                                source: 'Transfer',
+                                company: t.company,
+                                source: '調撥出庫',
                                 createdAt: new Date().toISOString()
                             });
                         }
+                        
+                        // 記錄異動
+                        logPromises.push(window.logInventoryChange({
+                            type: 'transfer-out',
+                            productName: t.productName,
+                            spec: t.spec || '',
+                            quantity: t.quantity,
+                            fromLocation: t.fromWh,
+                            toLocation: t.toWh,
+                            batchNo: t.batchNo || '',
+                            company: t.company,
+                            note: '調撥出庫: ' + t.fromName + ' → ' + t.toName
+                        }));
+                        
+                    } else {
+                        // ========== 外庫調撥（外倉→外倉）==========
+                        // 1. 來源外倉扣減
+                        var srcExt = window.externalStock.find(function(s) {
+                            return s.warehouseId === t.fromWh && s.productName === t.productName && 
+                                   s.batchNo === t.batchNo && s.company === t.company;
+                        });
+                        if (srcExt) {
+                            var newQty = srcExt.quantity - t.quantity;
+                            var srcRef = window.doc(window.db, 'externalStock', srcExt.id);
+                            if (newQty <= 0) {
+                                await window.deleteDoc(srcRef);
+                            } else {
+                                await window.updateDoc(srcRef, { quantity: newQty });
+                            }
+                        }
+                        
+                        // 2. 目標外倉增加
+                        var dstExt = window.externalStock.find(function(s) {
+                            return s.warehouseId === t.toWh && s.productName === t.productName && 
+                                   s.batchNo === t.batchNo && s.company === t.company;
+                        });
+                        if (dstExt) {
+                            var dstRef = window.doc(window.db, 'externalStock', dstExt.id);
+                            await window.updateDoc(dstRef, { quantity: dstExt.quantity + t.quantity });
+                        } else {
+                            await window.addDoc(window.collection(window.db, 'externalStock'), {
+                                warehouseId: t.toWh,
+                                productName: t.productName,
+                                spec: t.spec || '',
+                                batchNo: t.batchNo || '',
+                                expDate: t.expDate || '',
+                                quantity: t.quantity,
+                                company: t.company,
+                                source: '外庫調撥',
+                                createdAt: new Date().toISOString()
+                            });
+                        }
+                        
+                        // 記錄異動
+                        logPromises.push(window.logInventoryChange({
+                            type: 'transfer-ext',
+                            productName: t.productName,
+                            spec: t.spec || '',
+                            quantity: t.quantity,
+                            fromLocation: t.fromWh,
+                            toLocation: t.toWh,
+                            batchNo: t.batchNo || '',
+                            company: t.company,
+                            note: '外庫調撥: ' + t.fromName + ' → ' + t.toName
+                        }));
                     }
-                    
-                    // 記錄調撥異動
-                    logPromises.push(window.logInventoryChange({
-                        type: 'transfer',
-                        productName: t.productName,
-                        spec: t.spec || '',
-                        quantity: t.quantity,
-                        fromLocation: t.fromWh,
-                        toLocation: t.toWh,
-                        batchNo: t.batchNo || '',
-                        note: '調撥: ' + t.fromWh + ' → ' + t.toWh
-                    }));
                 }
-                
-                await batch.commit();
                 
                 // 等待所有異動記錄完成
                 await Promise.all(logPromises);
                 
-                alert('✅ 調撥完成！');
+                showNotification('✅ 調撥完成！共 ' + window.transferList.length + ' 筆', 'success');
                 window.transferList = [];
                 renderTransferList();
-                loadExternalStock();
+                
+                // 重新載入資料
+                await loadExternalStock();
+                await fetchInventory();
+                
             } catch(e) {
+                console.error('調撥失敗:', e);
                 alert('❌ 調撥失敗：' + e.message);
             }
         };
         
-        // 列印調撥單
-        window.printTransferSlip = function() {
-            if (window.transferList.length === 0) { alert('調撥清單為空'); return; }
-            
-            var now = new Date();
-            var slipNo = 'TR-' + now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2) + '-' + ('0'+now.getHours()).slice(-2) + ('0'+now.getMinutes()).slice(-2);
-            
-            var html = '<style>';
-            html += '.header{text-align:center;border-bottom:3px solid #000;padding-bottom:15px;margin-bottom:15px}';
-            html += '.title{font-size:28px;font-weight:900}';
-            html += '.slip-no{font-size:14px;color:#666;margin-top:5px}';
-            html += 'table{width:100%;border-collapse:collapse;margin:20px 0}';
-            html += 'th,td{border:1px solid #000;padding:10px;text-align:center}';
-            html += 'th{background:#333;color:#fff}';
-            html += '.sign{display:flex;justify-content:space-around;margin-top:40px}';
-            html += '.sign-box{text-align:center;width:120px}';
-            html += '.sign-line{border-bottom:1px solid #000;height:40px;margin-bottom:5px}';
-            html += '</style>';
-            
-            html += '<div class="header"><div class="title">倉庫調撥單</div><div class="slip-no">單號：' + slipNo + '　日期：' + now.toLocaleDateString() + '</div></div>';
-            
-            html += '<table><thead><tr><th>品名</th><th>規格</th><th>批號</th><th>效期</th><th>來源</th><th>目標</th><th>數量</th></tr></thead><tbody>';
-            
-            window.transferList.forEach(function(t) {
-                html += '<tr><td>' + t.productName + '</td><td>' + (t.spec || '-') + '</td><td>' + (t.batchNo || '-') + '</td><td>' + (t.expDate || '-') + '</td>';
-                html += '<td>' + t.fromName + '</td><td>' + t.toName + '</td><td style="font-weight:bold">' + t.quantity + '</td></tr>';
-            });
-            
-            html += '</tbody></table>';
-            
-            html += '<div class="sign">';
-            html += '<div class="sign-box"><div class="sign-line"></div>製單</div>';
-            html += '<div class="sign-box"><div class="sign-line"></div>出庫</div>';
-            html += '<div class="sign-box"><div class="sign-line"></div>入庫</div>';
-            html += '<div class="sign-box"><div class="sign-line"></div>主管</div>';
-            html += '</div>';
-            
-            // 使用預覽列印
-            openPrintPreview(html, '倉庫調撥單 - ' + slipNo, 900, 700);
+        // 頁面載入時初始化
+        window.initTransferPage = function() {
+            setTransferCompany('崇文');
+            setTransferMode('in');
         };
 
 
@@ -22878,6 +23320,11 @@ window.switchTab = function(viewId, event) {
         if (monthInput && !monthInput.value) {
             const today = new Date();
             monthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        }
+    } else if (viewId === 'transfer') {
+        // 初始化調撥頁面
+        if (window.initTransferPage) {
+            window.initTransferPage();
         }
     }
 };
