@@ -822,50 +822,13 @@
                                 </div>
                             </div>
 
-                            <!-- 區塊2: 入庫類型 -->
+                            <!-- 區塊2: 產品資訊 -->
                             <div class="mb-3">
                                 <div class="text-xs text-slate-500 mb-1.5 flex items-center">
-                                    <i class="fa-solid fa-tags w-4 text-center mr-1"></i>入庫類型
+                                    <i class="fa-solid fa-box w-4 text-center mr-1"></i>產品資訊
                                 </div>
-                                <div class="grid grid-cols-4 gap-1">
-                                    <button type="button" onclick="selectInboundType('Raw')" id="btn-type-Raw" class="inbound-type-btn active py-2 rounded-md border-2 border-emerald-500 bg-emerald-900/50 text-white text-xs font-bold">
-                                        <i class="fa-solid fa-truck-ramp-box block text-base mb-0.5"></i>採購
-                                    </button>
-                                    <button type="button" onclick="selectInboundType('FG')" id="btn-type-FG" class="inbound-type-btn py-2 rounded-md border border-slate-600 bg-slate-800 text-slate-400 text-xs hover:border-blue-500">
-                                        <i class="fa-solid fa-box block text-base mb-0.5"></i>成品
-                                    </button>
-                                    <button type="button" onclick="selectInboundType('WIP')" id="btn-type-WIP" class="inbound-type-btn py-2 rounded-md border border-slate-600 bg-slate-800 text-slate-400 text-xs hover:border-yellow-500">
-                                        <i class="fa-solid fa-gears block text-base mb-0.5"></i>半成品
-                                    </button>
-                                    <button type="button" onclick="selectInboundType('Return')" id="btn-type-Return" class="inbound-type-btn py-2 rounded-md border border-slate-600 bg-slate-800 text-slate-400 text-xs hover:border-orange-500">
-                                        <i class="fa-solid fa-rotate-left block text-base mb-0.5"></i>退庫
-                                    </button>
-                                </div>
-                                <select id="in-type-select" class="hidden" onchange="onInboundTypeChange()">
-                                    <option value="Raw">採購進貨</option><option value="FG">產線成品</option><option value="WIP">半成品</option><option value="Return">餘料退庫</option>
-                                </select>
-                            </div>
-
-                            <!-- 區塊3: 目標倉庫 -->
-                            <div class="mb-3">
-                                <div class="text-xs text-slate-500 mb-1.5 flex items-center">
-                                    <i class="fa-solid fa-warehouse w-4 text-center mr-1"></i>目標倉庫
-                                </div>
-                                <select id="in-warehouse" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white text-sm font-bold" onchange="onWarehouseChange()">
-                                    <optgroup label="本倉"><option value="MAIN">🏭 一般庫存</option><option value="MAIN-CONSIGN">📦 客戶寄倉</option></optgroup>
-                                    <optgroup label="崇文外倉" id="optgroup-cw"></optgroup>
-                                    <optgroup label="八方外倉" id="optgroup-bf"></optgroup>
-                                    <optgroup label="──"><option value="MANAGE">⚙️ 管理倉庫</option></optgroup>
-                                </select>
-                            </div>
-
-                            <!-- 分隔線 -->
-                            <div class="border-t border-slate-700 my-2"></div>
-
-                            <!-- 區塊4: 產品資料（簡化版）-->
-                            <div class="flex-1">
                                 <div class="space-y-2">
-                                    <!-- 品名（核心欄位）-->
+                                    <!-- 品名 -->
                                     <div class="relative">
                                         <input type="text" id="in-name" class="w-full p-2.5 pr-16 bg-slate-800 border-2 border-emerald-500 rounded-lg text-white font-bold" placeholder="點擊選擇品項..." oninput="updateLivePreview(); updateInboundProgress();" readonly>
                                         <button onclick="openProductSelectModal('inbound')" class="absolute right-1 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold">
@@ -873,16 +836,25 @@
                                         </button>
                                     </div>
                                     <input type="hidden" id="in-product-code" value="">
-
-                                    <!-- 規格顯示（選擇品項後顯示，唯讀風格）-->
-                                    <div id="spec-display-row" class="hidden">
-                                        <div class="px-2 py-1.5 bg-slate-800/50 rounded border border-slate-700 text-sm">
-                                            <span class="text-slate-500">規格：</span>
-                                            <span id="spec-display-text" class="text-yellow-400">-</span>
-                                        </div>
+                                    
+                                    <!-- 規格 -->
+                                    <div class="relative">
+                                        <span class="absolute left-2 top-1/2 -translate-y-1/2 text-yellow-400 text-[10px]">規格</span>
+                                        <input type="text" id="in-spec" class="w-full p-2 pl-10 bg-slate-800 border border-yellow-500/30 rounded text-yellow-400 text-sm" placeholder="自動帶入" oninput="updateLivePreview();">
                                     </div>
+                                </div>
+                            </div>
 
-                                    <!-- 批號 + 效期（核心欄位）-->
+                            <!-- 分隔線 -->
+                            <div class="border-t border-slate-700 my-2"></div>
+
+                            <!-- 區塊3: 入庫資料 -->
+                            <div class="flex-1">
+                                <div class="text-xs text-slate-500 mb-1.5 flex items-center">
+                                    <i class="fa-solid fa-clipboard-list w-4 text-center mr-1"></i>入庫資料
+                                </div>
+                                <div class="space-y-2">
+                                    <!-- 批號 + 效期 -->
                                     <div class="grid grid-cols-2 gap-2">
                                         <div class="relative">
                                             <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">批號</span>
@@ -894,7 +866,7 @@
                                         </div>
                                     </div>
 
-                                    <!-- 品項類型標籤（自動判斷，僅顯示不可選）-->
+                                    <!-- 品項類型標籤（自動判斷）-->
                                     <div id="product-type-badge" class="hidden">
                                         <span id="type-badge-label" class="px-2 py-1 rounded text-xs font-bold bg-blue-600/20 text-blue-400 border border-blue-500/30">
                                             📦 定重品
@@ -903,7 +875,7 @@
                                         <input type="radio" name="in-product-type" value="variable" class="hidden">
                                     </div>
 
-                                    <!-- 定重品：數量（箱容預設隱藏）-->
+                                    <!-- 定重品：數量 -->
                                     <div id="fixed-weight-fields">
                                         <div class="relative">
                                             <span class="absolute left-2 top-1/2 -translate-y-1/2 text-cyan-400 text-xs font-bold">數量*</span>
@@ -931,35 +903,30 @@
                                         </div>
                                     </div>
 
-                                    <!-- 更多選項（預設隱藏）-->
+                                    <!-- 更多選項 -->
                                     <div class="border-t border-dashed border-slate-700 pt-2 mt-2">
                                         <button onclick="toggleInboundMoreOptions()" id="btn-more-options" class="w-full py-1 text-slate-500 hover:text-slate-300 text-xs flex items-center justify-center gap-1">
                                             <i class="fa-solid fa-chevron-down" id="more-options-icon"></i>
                                             <span id="more-options-text">更多選項</span>
                                         </button>
                                         <div id="more-options-panel" class="hidden mt-2 space-y-2">
-                                            <!-- 廠商 -->
                                             <div class="relative">
                                                 <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">廠商</span>
                                                 <input type="text" id="in-vendor" class="w-full p-1.5 pl-10 bg-slate-800 border border-slate-600 rounded text-white text-sm" oninput="updateLivePreview()">
                                             </div>
-                                            <!-- 規格（可編輯）-->
-                                            <div class="relative">
-                                                <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">規格</span>
-                                                <input type="text" id="in-spec" class="w-full p-1.5 pl-10 bg-slate-800 border border-slate-600 rounded text-white text-sm" oninput="updateLivePreview(); updateSpecDisplayText();">
-                                            </div>
-                                            <!-- 箱容（定重品）-->
                                             <div id="unit-weight-option" class="relative">
                                                 <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">箱容</span>
                                                 <input type="number" id="in-unit-weight" class="w-full p-1.5 pl-10 pr-8 bg-slate-800 border border-slate-600 rounded text-white text-sm" step="0.1" oninput="updateLivePreview();">
                                                 <span class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">kg</span>
                                             </div>
-                                            <!-- 入庫類型 -->
-                                            <div class="grid grid-cols-4 gap-1">
-                                                <button type="button" onclick="selectInboundType('Raw')" id="btn-type-Raw" class="inbound-type-btn active py-1 rounded border border-emerald-500 bg-emerald-900/50 text-white text-[10px] font-bold">採購</button>
-                                                <button type="button" onclick="selectInboundType('FG')" id="btn-type-FG" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">成品</button>
-                                                <button type="button" onclick="selectInboundType('WIP')" id="btn-type-WIP" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">半成品</button>
-                                                <button type="button" onclick="selectInboundType('Return')" id="btn-type-Return" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">退庫</button>
+                                            <div>
+                                                <div class="text-[10px] text-slate-500 mb-1">入庫類型</div>
+                                                <div class="grid grid-cols-4 gap-1">
+                                                    <button type="button" onclick="selectInboundType('Raw')" id="btn-type-Raw" class="inbound-type-btn active py-1 rounded border border-emerald-500 bg-emerald-900/50 text-white text-[10px] font-bold">採購</button>
+                                                    <button type="button" onclick="selectInboundType('FG')" id="btn-type-FG" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">成品</button>
+                                                    <button type="button" onclick="selectInboundType('WIP')" id="btn-type-WIP" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">半成品</button>
+                                                    <button type="button" onclick="selectInboundType('Return')" id="btn-type-Return" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">退庫</button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -968,23 +935,38 @@
                         </div>
                     </div>
 
-                    <!-- STEP 2: 指定儲位 / 外倉選擇 -->
+                    <!-- 中間區塊: 目標倉庫 + 儲位選擇 -->
                     <div class="flex-1 flex flex-col min-w-0">
-                        <!-- 外倉選擇區域（外倉模式時顯示）-->
-                        <div id="external-wh-section" class="bg-cyan-900/40 border border-cyan-500 rounded-lg p-3 flex-col h-full hidden">
-                            <div class="text-cyan-400 font-bold text-sm mb-2" id="inbound-wh-title">
-                                <i class="fa-solid fa-building mr-1"></i>外倉入庫（不需指定儲位）
+                        
+                        <!-- 目標倉庫選擇 -->
+                        <div class="bg-slate-900 border border-slate-600 rounded-lg p-3 mb-2">
+                            <div class="text-xs text-slate-500 mb-1.5 flex items-center">
+                                <i class="fa-solid fa-warehouse w-4 text-center mr-1"></i>目標倉庫
                             </div>
-                            <div class="flex-1 flex items-center justify-center">
+                            <select id="in-warehouse" class="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white text-sm font-bold" onchange="onWarehouseChange()">
+                                <optgroup label="本倉"><option value="MAIN">🏭 一般庫存</option><option value="MAIN-CONSIGN">📦 客戶寄倉</option></optgroup>
+                                <optgroup label="崇文外倉" id="optgroup-cw"></optgroup>
+                                <optgroup label="八方外倉" id="optgroup-bf"></optgroup>
+                                <optgroup label="──"><option value="MANAGE">⚙️ 管理倉庫</option></optgroup>
+                            </select>
+                        </div>
+                        
+                        <!-- 外倉提示區域 -->
+                        <div id="external-wh-section" class="bg-teal-900/40 border border-teal-500 rounded-lg p-4 flex-1 hidden">
+                            <div class="text-teal-400 font-bold text-sm mb-2" id="inbound-wh-title">
+                                <i class="fa-solid fa-building mr-1"></i>外倉入庫
+                            </div>
+                            <div class="flex-1 flex items-center justify-center h-full">
                                 <div class="text-center">
-                                    <i class="fa-solid fa-building text-4xl text-cyan-400 mb-2"></i>
-                                    <p class="text-slate-400 text-sm">外倉自動記錄庫存</p>
+                                    <i class="fa-solid fa-building text-5xl text-teal-400 mb-3"></i>
+                                    <p class="text-slate-300 text-sm mb-1">外倉入庫不需指定儲位</p>
+                                    <p class="text-slate-500 text-xs">系統將自動記錄到外倉庫存</p>
                                 </div>
                             </div>
                         </div>
 
                         <!-- 本倉儲位選擇區域 -->
-                        <div id="location-section" class="bg-emerald-900/40 border border-emerald-500 rounded-lg p-3 flex flex-col h-full">
+                        <div id="location-section" class="bg-emerald-900/40 border border-emerald-500 rounded-lg p-3 flex flex-col flex-1">
                             <div class="flex justify-between items-center mb-2">
                                 <div class="text-emerald-400 font-bold text-sm"><i class="fa-solid fa-map-marker-alt mr-1"></i>選擇儲位</div>
                                 <div class="flex gap-2 items-center">
@@ -2701,8 +2683,8 @@
                 </div>
 
                 <div class="flex gap-3 flex-1 overflow-hidden">
-                    <!-- 左側：新增/編輯（更緊湊） -->
-                    <div class="w-72 glass-panel p-3 flex flex-col overflow-y-auto">
+                    <!-- 左側：新增/編輯（新增欄位）-->
+                    <div class="w-80 glass-panel p-3 flex flex-col overflow-y-auto">
                         <h3 class="text-white font-bold mb-2 text-sm border-b border-slate-700 pb-2">
                             <i class="fa-solid fa-plus-circle mr-1 text-cyan-400"></i>新增/編輯品項
                         </h3>
@@ -2730,13 +2712,60 @@
                                 <label class="text-xs text-slate-400">規格</label>
                                 <input type="text" id="pm-spec" class="scan-input py-1" placeholder="300/400">
                             </div>
-                            <div class="grid grid-cols-2 gap-2">
+                            
+                            <!-- 新增：計重方式 -->
+                            <div class="bg-slate-800/50 rounded p-2 border border-slate-700">
+                                <label class="text-xs text-cyan-400 font-bold mb-1 block">計重方式</label>
+                                <div class="flex gap-2">
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="pm-weight-type" value="fixed" class="hidden peer" checked>
+                                        <div class="text-center py-1.5 rounded text-xs font-bold peer-checked:bg-blue-600 peer-checked:text-white bg-slate-700 text-slate-400 transition-all">
+                                            📦 定重品
+                                        </div>
+                                    </label>
+                                    <label class="flex-1 cursor-pointer">
+                                        <input type="radio" name="pm-weight-type" value="variable" class="hidden peer">
+                                        <div class="text-center py-1.5 rounded text-xs font-bold peer-checked:bg-amber-600 peer-checked:text-white bg-slate-700 text-slate-400 transition-all">
+                                            ⚖️ 不定重
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- 新增：入庫類型 -->
+                            <div class="bg-slate-800/50 rounded p-2 border border-slate-700">
+                                <label class="text-xs text-cyan-400 font-bold mb-1 block">入庫類型</label>
+                                <div class="grid grid-cols-4 gap-1">
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="pm-inbound-type" value="Raw" class="hidden peer" checked>
+                                        <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-emerald-600 peer-checked:text-white bg-slate-700 text-slate-400">採購</div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="pm-inbound-type" value="FG" class="hidden peer">
+                                        <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-blue-600 peer-checked:text-white bg-slate-700 text-slate-400">成品</div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="pm-inbound-type" value="WIP" class="hidden peer">
+                                        <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-yellow-600 peer-checked:text-white bg-slate-700 text-slate-400">半成品</div>
+                                    </label>
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="pm-inbound-type" value="Return" class="hidden peer">
+                                        <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-orange-600 peer-checked:text-white bg-slate-700 text-slate-400">退庫</div>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-3 gap-2">
                                 <div>
-                                    <label class="text-xs text-slate-400">板容量(件)*</label>
+                                    <label class="text-xs text-slate-400">板容量(件)</label>
                                     <input type="number" id="pm-pallet-capacity" class="scan-input py-1" placeholder="40" min="1">
                                 </div>
                                 <div>
-                                    <label class="text-xs text-slate-400">餘板門檻%</label>
+                                    <label class="text-xs text-cyan-400 font-bold">箱容(kg)</label>
+                                    <input type="number" id="pm-unit-weight" class="scan-input py-1 border-cyan-500/50" placeholder="10" step="0.1" min="0">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-slate-400">餘板%</label>
                                     <input type="number" id="pm-partial-threshold" class="scan-input py-1" value="50" min="10" max="90">
                                 </div>
                             </div>
@@ -2770,6 +2799,13 @@
                                 <button onclick="document.getElementById('pm-pallet-capacity').value=50" class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-[10px]">50</button>
                                 <button onclick="document.getElementById('pm-pallet-capacity').value=60" class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-[10px]">60</button>
                             </div>
+                            <div class="flex flex-wrap gap-1 mb-1">
+                                <span class="text-[10px] text-slate-500">箱容kg:</span>
+                                <button onclick="document.getElementById('pm-unit-weight').value=5" class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-[10px]">5</button>
+                                <button onclick="document.getElementById('pm-unit-weight').value=10" class="px-1.5 py-0.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-[10px] font-bold">10</button>
+                                <button onclick="document.getElementById('pm-unit-weight').value=15" class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-[10px]">15</button>
+                                <button onclick="document.getElementById('pm-unit-weight').value=20" class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-[10px]">20</button>
+                            </div>
                             <div class="flex flex-wrap gap-1">
                                 <span class="text-[10px] text-slate-500">保存期:</span>
                                 <button onclick="document.getElementById('pm-shelf-life').value=12" class="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-[10px]">12月</button>
@@ -2780,7 +2816,7 @@
                         </div>
                     </div>
 
-                    <!-- 右側：品項清單 -->
+                    <!-- 右側：品項清單（更新表頭）-->
                     <div class="flex-1 glass-panel flex flex-col overflow-hidden">
                         <div class="p-2 border-b border-slate-700 flex justify-between items-center">
                             <h3 class="text-white font-bold text-sm">
@@ -2800,20 +2836,21 @@
                                         <th>品號</th>
                                         <th>品名</th>
                                         <th>規格</th>
-                                        <th class="text-center">板容量</th>
-                                        <th class="text-center">保存期</th>
-                                        <th>類別</th>
+                                        <th class="text-center">計重</th>
+                                        <th class="text-center">箱容</th>
+                                        <th class="text-center">板容</th>
+                                        <th class="text-center">入庫類型</th>
                                         <th class="text-center">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="product-master-list">
-                                    <tr><td colspan="7" class="text-center text-slate-500 py-10">載入中...</td></tr>
+                                    <tr><td colspan="8" class="text-center text-slate-500 py-10">載入中...</td></tr>
                                 </tbody>
                             </table>
                         </div>
                         <div class="p-2 border-t border-slate-700 flex justify-between items-center text-xs">
                             <span class="text-slate-400">共 <span id="pm-total-count" class="text-white font-bold">0</span> 筆</span>
-                            <span class="text-slate-500">未設定板容量的品項將使用「方案D」自動判斷</span>
+                            <span class="text-slate-500">新增欄位：計重方式、箱容、入庫類型</span>
                         </div>
                     </div>
                 </div>
@@ -19160,24 +19197,40 @@ window.clearLocalStorage = function() {
             }
 
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-slate-500 py-10">無品項資料，請新增或從庫存匯入</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-500 py-10">無品項資料，請新增或從庫存匯入</td></tr>';
                 document.getElementById('pm-total-count').innerText = '0';
                 return;
             }
 
             var html = '';
             data.forEach(function(p, idx) {
-                var shelfLife = p.shelfLife || 0;
-                var shelfLifeText = shelfLife > 0 ? shelfLife + '月' : '<span class="text-slate-500">未設定</span>';
                 var docId = p.id || idx;
+                
+                // 計重方式
+                var weightType = p.weightType || 'fixed';
+                var weightBadge = weightType === 'variable' 
+                    ? '<span class="px-1.5 py-0.5 rounded text-[10px] bg-amber-600/30 text-amber-400">不定重</span>'
+                    : '<span class="px-1.5 py-0.5 rounded text-[10px] bg-blue-600/30 text-blue-400">定重</span>';
+                
+                // 箱容
+                var unitWeight = p.unitWeight || 0;
+                var unitWeightText = unitWeight > 0 ? unitWeight + '<span class="text-slate-500 text-[10px]">kg</span>' : '<span class="text-slate-600">-</span>';
+                
+                // 入庫類型
+                var inboundType = p.inboundType || 'Raw';
+                var inboundTypeMap = { 'Raw': '採購', 'FG': '成品', 'WIP': '半成品', 'Return': '退庫' };
+                var inboundTypeColors = { 'Raw': 'emerald', 'FG': 'blue', 'WIP': 'yellow', 'Return': 'orange' };
+                var itColor = inboundTypeColors[inboundType] || 'slate';
+                var inboundBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] bg-' + itColor + '-600/30 text-' + itColor + '-400">' + (inboundTypeMap[inboundType] || inboundType) + '</span>';
 
                 html += '<tr class="border-b border-slate-700 hover:bg-slate-800">';
                 html += '<td class="p-2 text-cyan-400 font-mono text-xs">' + (p.code || '-') + '</td>';
                 html += '<td class="p-2 text-white font-bold">' + p.name + '</td>';
-                html += '<td class="p-2 text-slate-400">' + (p.spec || '-') + '</td>';
-                html += '<td class="p-2 text-center"><span class="text-yellow-400 font-bold">' + (p.palletCapacity || '-') + '</span><span class="text-slate-500 text-xs ml-1">件</span></td>';
-                html += '<td class="p-2 text-center"><span class="text-cyan-400">' + shelfLifeText + '</span></td>';
-                html += '<td class="p-2"><span class="badge badge-blue">' + (p.category || '成品') + '</span></td>';
+                html += '<td class="p-2 text-yellow-400 text-sm">' + (p.spec || '-') + '</td>';
+                html += '<td class="p-2 text-center">' + weightBadge + '</td>';
+                html += '<td class="p-2 text-center text-sm">' + unitWeightText + '</td>';
+                html += '<td class="p-2 text-center"><span class="text-cyan-400 font-bold">' + (p.palletCapacity || '-') + '</span></td>';
+                html += '<td class="p-2 text-center">' + inboundBadge + '</td>';
                 html += '<td class="p-2 text-center">';
                 html += '<button onclick="editProductMaster(\'' + docId + '\')" class="text-blue-400 hover:bg-blue-500/20 rounded px-2 py-1 mr-1"><i class="fa-solid fa-edit"></i></button>';
                 html += '<button onclick="deleteProductMaster(\'' + docId + '\')" class="text-red-400 hover:bg-red-500/20 rounded px-2 py-1"><i class="fa-solid fa-trash"></i></button>';
@@ -19203,13 +19256,16 @@ window.clearLocalStorage = function() {
             var category = document.getElementById('pm-category').value;
             var note = document.getElementById('pm-note').value.trim();
             var editId = document.getElementById('pm-edit-id').value;
+            
+            // 新增欄位
+            var weightTypeRadio = document.querySelector('input[name="pm-weight-type"]:checked');
+            var weightType = weightTypeRadio ? weightTypeRadio.value : 'fixed';
+            var inboundTypeRadio = document.querySelector('input[name="pm-inbound-type"]:checked');
+            var inboundType = inboundTypeRadio ? inboundTypeRadio.value : 'Raw';
+            var unitWeight = parseFloat(document.getElementById('pm-unit-weight').value) || 0;
 
             if (!name) {
                 alert('請輸入品名');
-                return;
-            }
-            if (!palletCapacity || palletCapacity < 1) {
-                alert('請輸入板容量');
                 return;
             }
 
@@ -19222,6 +19278,9 @@ window.clearLocalStorage = function() {
                 shelfLife: shelfLife,
                 category: category,
                 note: note,
+                weightType: weightType,
+                inboundType: inboundType,
+                unitWeight: unitWeight,
                 updatedAt: new Date().toISOString()
             };
 
@@ -19288,6 +19347,15 @@ window.clearLocalStorage = function() {
             document.getElementById('pm-category').value = item.category || '成品';
             document.getElementById('pm-note').value = item.note || '';
             document.getElementById('pm-edit-id').value = item.id || docId;
+            
+            // 新增欄位
+            document.getElementById('pm-unit-weight').value = item.unitWeight || '';
+            var weightType = item.weightType || 'fixed';
+            var wtRadio = document.querySelector('input[name="pm-weight-type"][value="' + weightType + '"]');
+            if (wtRadio) wtRadio.checked = true;
+            var inboundType = item.inboundType || 'Raw';
+            var itRadio = document.querySelector('input[name="pm-inbound-type"][value="' + inboundType + '"]');
+            if (itRadio) itRadio.checked = true;
         };
 
         window.deleteProductMaster = async function(docId) {
@@ -19371,6 +19439,13 @@ window.clearLocalStorage = function() {
             document.getElementById('pm-category').value = '成品';
             document.getElementById('pm-note').value = '';
             document.getElementById('pm-edit-id').value = '';
+            
+            // 重置新欄位
+            document.getElementById('pm-unit-weight').value = '';
+            var fixedRadio = document.querySelector('input[name="pm-weight-type"][value="fixed"]');
+            if (fixedRadio) fixedRadio.checked = true;
+            var rawRadio = document.querySelector('input[name="pm-inbound-type"][value="Raw"]');
+            if (rawRadio) rawRadio.checked = true;
         };
 
         window.clearAllProductMaster = async function() {
@@ -23590,10 +23665,32 @@ console.log('💰 倉租管理模組已載入');
         var formData = getInboundFormData();
         if (!formData) return;
         
-        var validation = validateInboundData(formData, formData.isExternal);
-        if (!validation.valid) {
-            alert('❌ ' + validation.error);
+        // 先驗證基本資料
+        if (!formData.productName) { alert('❌ 請選擇品項'); return; }
+        if (!formData.quantity || formData.quantity <= 0) { alert('❌ 請填寫數量'); return; }
+        if (!formData.expDate) { alert('❌ 請填寫效期'); return; }
+        if (formData.productType === 'variable' && (!formData.totalWeight || formData.totalWeight <= 0)) {
+            alert('❌ 不定重品請填寫總重量');
             return;
+        }
+        
+        // 本倉入庫時檢查儲位
+        if (!formData.isExternal && mode !== 'external') {
+            if (!formData.locationId || formData.locationId.trim() === '') {
+                alert('❌ 請選擇儲位');
+                // 聚焦到儲位輸入框
+                var locInput = document.getElementById('in-loc');
+                if (locInput) {
+                    locInput.focus();
+                    locInput.classList.add('animate-pulse');
+                    setTimeout(function() { locInput.classList.remove('animate-pulse'); }, 2000);
+                }
+                // 自動觸發智能建議
+                if (typeof calculateSmartSuggest === 'function') {
+                    calculateSmartSuggest();
+                }
+                return;
+            }
         }
         
         if (formData.isExternal || mode === 'external') {
@@ -23766,21 +23863,36 @@ console.log('💰 倉租管理模組已載入');
         
         var name = document.getElementById('in-name')?.value;
         var exp = document.getElementById('in-exp')?.value;
-        var loc = document.getElementById('in-loc')?.value;
         
         var productType = document.querySelector('input[name="in-product-type"]:checked')?.value || 'fixed';
         var qty = productType === 'variable' ? (parseInt(document.getElementById('in-qty-var')?.value) || 0) : (parseInt(document.getElementById('in-qty')?.value) || 0);
         
+        // 只檢查基本資料（品名、效期、數量），儲位改為提交時檢查
         var hasBasicData = name && exp && qty > 0;
-        var hasLocation = loc && loc.trim() !== '';
         
         var btnPrint = document.getElementById('btn-inbound-print');
         var btnDirect = document.getElementById('btn-inbound-direct');
-        if (btnPrint) btnPrint.disabled = !(hasBasicData && hasLocation);
-        if (btnDirect) btnDirect.disabled = !(hasBasicData && hasLocation);
+        if (btnPrint) btnPrint.disabled = !hasBasicData;
+        if (btnDirect) btnDirect.disabled = !hasBasicData;
         
         var btnExternal = document.getElementById('btn-inbound-external');
         if (btnExternal) btnExternal.disabled = !hasBasicData;
+        
+        // 更新儲位檢查狀態顯示（視覺提示，但不阻止按鈕）
+        var loc = document.getElementById('in-loc')?.value;
+        var checkLoc = document.getElementById('check-loc');
+        if (checkLoc && !isExternal) {
+            var hasLocation = loc && loc.trim() !== '';
+            var icon = checkLoc.querySelector('i');
+            var text = checkLoc.querySelector('span');
+            if (hasLocation) {
+                if (icon) icon.className = 'fa-solid fa-check-circle text-emerald-400 text-[6px]';
+                if (text) { text.className = 'text-emerald-400'; text.textContent = '儲位 ✓'; }
+            } else {
+                if (icon) icon.className = 'fa-solid fa-circle text-orange-400 text-[6px]';
+                if (text) { text.className = 'text-orange-400'; text.textContent = '儲位（待選）'; }
+            }
+        }
     }
     
     var originalUpdateInboundProgress = window.updateInboundProgress;
