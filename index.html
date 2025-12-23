@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WMS 全功能旗艦版 (V51.3 品項開窗+工單看板)</title>
+    <title>WMS 全功能旗艦版 (V56.0 智能入庫+多筆模式)</title>
     <script>
         (function() {
             var w = console.warn;
@@ -862,95 +862,106 @@
                             <!-- 分隔線 -->
                             <div class="border-t border-slate-700 my-2"></div>
 
-                            <!-- 區塊4: 產品資料 -->
+                            <!-- 區塊4: 產品資料（簡化版）-->
                             <div class="flex-1">
-                                <div class="text-xs text-slate-500 mb-1.5 flex items-center">
-                                    <i class="fa-solid fa-clipboard-list w-4 text-center mr-1"></i>產品資料
-                                </div>
-
                                 <div class="space-y-2">
-                                    <!-- 廠商 -->
+                                    <!-- 品名（核心欄位）-->
                                     <div class="relative">
-                                        <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">廠商</span>
-                                        <input type="text" id="in-vendor" class="w-full p-2 pl-12 bg-slate-800 border border-slate-600 rounded-md text-white text-sm" placeholder="選填" oninput="updateLivePreview()">
-                                    </div>
-
-                                    <!-- 品名（必填）- 從品項主檔開窗選擇 -->
-                                    <div class="relative">
-                                        <span class="absolute left-2 top-1/2 -translate-y-1/2 text-emerald-400 text-xs font-bold">品名*</span>
-                                        <input type="text" id="in-name" class="w-full p-2 pl-12 pr-10 bg-slate-800 border-2 border-emerald-500 rounded-md text-white font-bold" placeholder="點擊右側按鈕選擇品項..." oninput="updateLivePreview(); updateInboundProgress();" readonly>
-                                        <button onclick="openProductSelectModal('inbound')" class="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold">
+                                        <input type="text" id="in-name" class="w-full p-2.5 pr-16 bg-slate-800 border-2 border-emerald-500 rounded-lg text-white font-bold" placeholder="點擊選擇品項..." oninput="updateLivePreview(); updateInboundProgress();" readonly>
+                                        <button onclick="openProductSelectModal('inbound')" class="absolute right-1 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold">
                                             <i class="fa-solid fa-search mr-1"></i>選擇
                                         </button>
                                     </div>
                                     <input type="hidden" id="in-product-code" value="">
 
-                                    <!-- 規格（從品項主檔自動帶入）-->
-                                    <div class="relative">
-                                        <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">規格</span>
-                                        <input type="text" id="in-spec" class="w-full p-2 pl-12 bg-slate-800 border border-slate-600 rounded-md text-white text-sm" placeholder="自動帶入或手動輸入" oninput="updateLivePreview()">
+                                    <!-- 規格顯示（選擇品項後顯示，唯讀風格）-->
+                                    <div id="spec-display-row" class="hidden">
+                                        <div class="px-2 py-1.5 bg-slate-800/50 rounded border border-slate-700 text-sm">
+                                            <span class="text-slate-500">規格：</span>
+                                            <span id="spec-display-text" class="text-yellow-400">-</span>
+                                        </div>
                                     </div>
 
-                                    <!-- 批號 + 效期 -->
+                                    <!-- 批號 + 效期（核心欄位）-->
                                     <div class="grid grid-cols-2 gap-2">
                                         <div class="relative">
-                                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">批號</span>
-                                            <input type="text" id="in-batch" class="w-full p-2 pl-10 bg-slate-800 border border-slate-600 rounded-md text-white text-sm" oninput="updateLivePreview()">
+                                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">批號</span>
+                                            <input type="text" id="in-batch" class="w-full p-2 pl-9 bg-slate-800 border border-slate-600 rounded text-white text-sm" oninput="updateLivePreview()">
                                         </div>
                                         <div class="relative">
-                                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-orange-400 text-xs font-bold">效期*</span>
-                                            <input type="date" id="in-exp" class="w-full p-2 pl-10 bg-slate-800 border border-orange-500/50 rounded-md text-white text-sm" oninput="updateLivePreview(); updateInboundProgress();">
+                                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-orange-400 text-[10px] font-bold">效期*</span>
+                                            <input type="date" id="in-exp" class="w-full p-2 pl-9 bg-slate-800 border border-orange-500/50 rounded text-white text-sm" oninput="updateLivePreview(); updateInboundProgress();">
                                         </div>
                                     </div>
 
-                                    <!-- 分隔線 -->
-                                    <div class="border-t border-dashed border-slate-700 my-1"></div>
-
-                                    <!-- 品項類型選擇 -->
-                                    <div class="flex gap-2 bg-slate-800 rounded-lg p-1.5">
-                                        <label class="flex-1 cursor-pointer">
-                                            <input type="radio" name="in-product-type" value="fixed" class="hidden peer" checked onchange="toggleProductType('fixed')">
-                                            <div class="text-center py-1.5 rounded-md text-xs font-bold peer-checked:bg-blue-600 peer-checked:text-white text-slate-400 transition-all">
-                                                📦 定重品
-                                            </div>
-                                        </label>
-                                        <label class="flex-1 cursor-pointer">
-                                            <input type="radio" name="in-product-type" value="variable" class="hidden peer" onchange="toggleProductType('variable')">
-                                            <div class="text-center py-1.5 rounded-md text-xs font-bold peer-checked:bg-amber-600 peer-checked:text-white text-slate-400 transition-all">
-                                                ⚖️ 不定重
-                                            </div>
-                                        </label>
+                                    <!-- 品項類型標籤（自動判斷，僅顯示不可選）-->
+                                    <div id="product-type-badge" class="hidden">
+                                        <span id="type-badge-label" class="px-2 py-1 rounded text-xs font-bold bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                                            📦 定重品
+                                        </span>
+                                        <input type="radio" name="in-product-type" value="fixed" class="hidden" checked>
+                                        <input type="radio" name="in-product-type" value="variable" class="hidden">
                                     </div>
 
-                                    <!-- 定重品：數量 + 箱容 -->
-                                    <div id="fixed-weight-fields" class="grid grid-cols-2 gap-2">
+                                    <!-- 定重品：數量（箱容預設隱藏）-->
+                                    <div id="fixed-weight-fields">
                                         <div class="relative">
                                             <span class="absolute left-2 top-1/2 -translate-y-1/2 text-cyan-400 text-xs font-bold">數量*</span>
-                                            <input type="number" id="in-qty" class="w-full p-2 pl-12 pr-8 bg-slate-800 border border-cyan-500/50 rounded-md text-white text-sm font-bold" placeholder="" oninput="updateLivePreview(); updateInboundProgress();">
-                                            <span class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">件</span>
-                                        </div>
-                                        <div class="relative">
-                                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">箱容</span>
-                                            <input type="number" id="in-unit-weight" class="w-full p-2 pl-10 pr-12 bg-slate-800 border border-slate-600 rounded-md text-white text-sm" placeholder="" oninput="updateLivePreview();" step="0.1">
-                                            <span class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">kg</span>
+                                            <input type="number" id="in-qty" class="w-full p-2.5 pl-12 pr-10 bg-slate-800 border-2 border-cyan-500/50 rounded-lg text-white text-lg font-bold text-center" placeholder="0" oninput="updateLivePreview(); updateInboundProgress();">
+                                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">件</span>
                                         </div>
                                     </div>
 
                                     <!-- 不定重品：數量 + 總重量 -->
-                                    <div id="variable-weight-fields" class="grid grid-cols-2 gap-2 hidden">
-                                        <div class="relative">
-                                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-amber-400 text-xs font-bold">數量*</span>
-                                            <input type="number" id="in-qty-var" class="w-full p-2 pl-12 pr-8 bg-slate-800 border border-amber-500/50 rounded-md text-white text-sm font-bold" oninput="updateLivePreview(); updateInboundProgress(); calcAvgWeight();">
-                                            <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-xs">件</span>
+                                    <div id="variable-weight-fields" class="hidden space-y-2">
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div class="relative">
+                                                <span class="absolute left-2 top-1/2 -translate-y-1/2 text-amber-400 text-[10px] font-bold">數量*</span>
+                                                <input type="number" id="in-qty-var" class="w-full p-2 pl-10 pr-6 bg-slate-800 border border-amber-500/50 rounded text-white text-sm font-bold text-center" oninput="updateLivePreview(); updateInboundProgress(); calcAvgWeight();">
+                                                <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-[10px]">件</span>
+                                            </div>
+                                            <div class="relative">
+                                                <span class="absolute left-2 top-1/2 -translate-y-1/2 text-amber-400 text-[10px] font-bold">總重*</span>
+                                                <input type="number" id="in-weight" class="w-full p-2 pl-10 pr-6 bg-slate-800 border border-amber-500/50 rounded text-white text-sm font-bold text-center" step="0.1" oninput="updateLivePreview(); calcAvgWeight(); updateInboundProgress();">
+                                                <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-[10px]">kg</span>
+                                            </div>
                                         </div>
-                                        <div class="relative">
-                                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-amber-400 text-xs font-bold">總重*</span>
-                                            <input type="number" id="in-weight" class="w-full p-2 pl-10 pr-8 bg-slate-800 border border-amber-500/50 rounded-md text-white text-sm font-bold" oninput="updateLivePreview(); calcAvgWeight(); updateInboundProgress();" step="0.1">
-                                            <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-xs">kg</span>
+                                        <div id="avg-weight-hint" class="text-[10px] text-amber-400 bg-amber-900/20 rounded px-2 py-1 hidden">
+                                            <i class="fa-solid fa-calculator mr-1"></i>均重：<span id="avg-weight-value">-</span> kg/件
                                         </div>
                                     </div>
-                                    <div id="avg-weight-hint" class="text-xs text-amber-400 hidden bg-amber-900/30 rounded p-1.5">
-                                        <i class="fa-solid fa-calculator mr-1"></i>每件均重：<span id="avg-weight-value" class="font-bold">-</span> kg
+
+                                    <!-- 更多選項（預設隱藏）-->
+                                    <div class="border-t border-dashed border-slate-700 pt-2 mt-2">
+                                        <button onclick="toggleInboundMoreOptions()" id="btn-more-options" class="w-full py-1 text-slate-500 hover:text-slate-300 text-xs flex items-center justify-center gap-1">
+                                            <i class="fa-solid fa-chevron-down" id="more-options-icon"></i>
+                                            <span id="more-options-text">更多選項</span>
+                                        </button>
+                                        <div id="more-options-panel" class="hidden mt-2 space-y-2">
+                                            <!-- 廠商 -->
+                                            <div class="relative">
+                                                <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">廠商</span>
+                                                <input type="text" id="in-vendor" class="w-full p-1.5 pl-10 bg-slate-800 border border-slate-600 rounded text-white text-sm" oninput="updateLivePreview()">
+                                            </div>
+                                            <!-- 規格（可編輯）-->
+                                            <div class="relative">
+                                                <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">規格</span>
+                                                <input type="text" id="in-spec" class="w-full p-1.5 pl-10 bg-slate-800 border border-slate-600 rounded text-white text-sm" oninput="updateLivePreview(); updateSpecDisplayText();">
+                                            </div>
+                                            <!-- 箱容（定重品）-->
+                                            <div id="unit-weight-option" class="relative">
+                                                <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">箱容</span>
+                                                <input type="number" id="in-unit-weight" class="w-full p-1.5 pl-10 pr-8 bg-slate-800 border border-slate-600 rounded text-white text-sm" step="0.1" oninput="updateLivePreview();">
+                                                <span class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">kg</span>
+                                            </div>
+                                            <!-- 入庫類型 -->
+                                            <div class="grid grid-cols-4 gap-1">
+                                                <button type="button" onclick="selectInboundType('Raw')" id="btn-type-Raw" class="inbound-type-btn active py-1 rounded border border-emerald-500 bg-emerald-900/50 text-white text-[10px] font-bold">採購</button>
+                                                <button type="button" onclick="selectInboundType('FG')" id="btn-type-FG" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">成品</button>
+                                                <button type="button" onclick="selectInboundType('WIP')" id="btn-type-WIP" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">半成品</button>
+                                                <button type="button" onclick="selectInboundType('Return')" id="btn-type-Return" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">退庫</button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1050,17 +1061,34 @@
                                 </div>
                             </div>
 
-                            <!-- 操作按鈕（精簡版）-->
+                            <!-- 操作按鈕（智能判斷版）-->
                             <div class="space-y-1.5 flex-1 flex flex-col justify-end">
-                                <button onclick="createAndPrintInbound()" id="btn-inbound-main" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded font-bold text-sm" disabled>
-                                    <i class="fa-solid fa-print mr-1"></i>建單列印
-                                </button>
-                                <button onclick="createInboundOrder()" class="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs">
-                                    <i class="fa-solid fa-plus mr-1"></i>僅建單
-                                </button>
-                                <button onclick="directInbound()" class="w-full py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs border border-slate-600">
-                                    <i class="fa-solid fa-bolt mr-1"></i>直接入庫
-                                </button>
+                                <!-- 本倉模式按鈕 -->
+                                <div id="main-wh-buttons">
+                                    <button onclick="smartInbound('print')" id="btn-inbound-print" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded font-bold text-sm mb-1.5" disabled>
+                                        <i class="fa-solid fa-print mr-1"></i>🖨️ 列印並入庫
+                                    </button>
+                                    <button onclick="smartInbound('direct')" id="btn-inbound-direct" class="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded text-sm" disabled>
+                                        <i class="fa-solid fa-bolt mr-1"></i>📦 確認入庫
+                                    </button>
+                                </div>
+                                <!-- 外倉模式按鈕 -->
+                                <div id="external-wh-buttons" class="hidden">
+                                    <button onclick="smartInbound('external')" id="btn-inbound-external" class="w-full py-3 bg-teal-600 hover:bg-teal-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded font-bold text-sm" disabled>
+                                        <i class="fa-solid fa-building mr-1"></i>📦 確認入庫（外倉）
+                                    </button>
+                                </div>
+                                <!-- 進階選項 -->
+                                <div class="pt-1 border-t border-slate-700">
+                                    <button onclick="toggleAdvancedOptions()" class="w-full py-1 text-slate-500 hover:text-slate-300 text-xs">
+                                        <i class="fa-solid fa-chevron-down mr-1" id="advanced-icon"></i>進階選項
+                                    </button>
+                                    <div id="advanced-options" class="hidden mt-1 space-y-1">
+                                        <button onclick="createInboundOrder()" class="w-full py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs border border-slate-600">
+                                            <i class="fa-solid fa-clock mr-1"></i>加入待執行入庫單（排程）
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -4511,7 +4539,7 @@
                                 }
                             }
 
-                            tbody.innerHTML += `<tr class="border-b border-slate-700 hover:bg-slate-800" data-company="${data.company || ''}"><td class="p-2"><span class="px-1.5 py-0.5 rounded text-xs ${data.company === '八方' ? 'bg-purple-900/50 text-purple-300' : 'bg-blue-900/50 text-blue-300'}">${data.company || '-'}</span></td><td class="text-white p-2">${data.productName}</td><td class="text-yellow-400 p-2">${data.spec||'-'}</td><td class="text-slate-400 font-mono p-2">${data.batchNo||'-'}</td><td class="text-right text-white p-2">${data.quantity||'-'}</td><td class="text-right p-2">${weightDisplay}</td><td class="p-2 text-cyan-400 font-mono">${data.locationId}</td><td class="p-2 ${expClass}">${expDisplay}</td><td class="p-2 text-right"><button onclick="deletePallet('${d.id}')" class="text-red-500 hover:bg-red-500/20 rounded px-2" title="刪除"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+                            tbody.innerHTML += `<tr class="border-b border-slate-700 hover:bg-slate-800" data-company="${data.company || ''}" data-type="internal"><td class="p-2"><span class="px-1.5 py-0.5 rounded text-xs ${data.company === '八方' ? 'bg-purple-900/50 text-purple-300' : 'bg-blue-900/50 text-blue-300'}">${data.company || '崇文'}</span></td><td class="text-white p-2">${data.productName}</td><td class="text-yellow-400 p-2">${data.spec||'-'}</td><td class="text-slate-400 font-mono p-2">${data.batchNo||'-'}</td><td class="text-right text-white p-2">${data.quantity||'-'}</td><td class="text-right p-2">${weightDisplay}</td><td class="p-2 text-cyan-400 font-mono">${data.locationId}</td><td class="p-2 ${expClass}">${expDisplay}</td><td class="p-2 text-right"><button onclick="editPallet('${d.id}')" class="text-blue-400 hover:text-blue-300 mr-2" title="編輯"><i class="fa-solid fa-edit"></i></button><button onclick="deletePallet('${d.id}')" class="text-red-500 hover:bg-red-500/20 rounded px-2" title="刪除"><i class="fa-solid fa-trash"></i></button></td></tr>`;
                         }
                     }
                 });
@@ -7093,60 +7121,70 @@ console.log('✅ WMS 工具函數庫已載入');
             html += '@page { size: A4 landscape; margin: 0; }';
             html += '* { margin: 0; padding: 0; box-sizing: border-box; }';
             html += 'body { font-family: Microsoft JhengHei, Arial, sans-serif; background: #fff; }';
-            html += '.label-page { width: 297mm; height: 210mm; padding: 5mm; box-sizing: border-box; page-break-after: always; }';
+            html += '.label-page { width: 297mm; height: 210mm; padding: 3mm; box-sizing: border-box; page-break-after: always; overflow: hidden; }';
             html += '.label-page:last-child { page-break-after: auto; }';
-            html += '.label-content { height: 100%; border: 3px solid #000; display: flex; flex-direction: column; }';
-            html += '.row-1 { flex: 2; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #000; }';
-            html += '.product-name { font-size: 144px; font-weight: 900; text-align: center; line-height: 1; }';
-            html += '.row-2 { flex: 1; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #000; }';
-            html += '.product-spec { font-size: 100px; font-weight: 700; color: #333; text-align: center; }';
-            html += '.row-3 { display: flex; border-bottom: 2px solid #000; }';
-            html += '.info-cell { text-align: center; padding: 4mm 2mm; border-right: 1px solid #ccc; }';
+            html += '.label-content { height: 100%; border: 3px solid #000; display: flex; flex-direction: column; overflow: hidden; }';
+            // 第一列：QR code 8x8cm + 品名144px (固定高度80mm)
+            html += '.row-1 { height: 80mm; min-height: 80mm; max-height: 80mm; display: flex; align-items: center; border-bottom: 3px solid #000; padding: 0 8mm; overflow: hidden; }';
+            html += '.qr-container { width: 80mm; height: 76mm; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }';
+            html += '.qr-box { width: 68mm; height: 68mm; }';
+            html += '.qr-box svg { width: 100% !important; height: 100% !important; }';
+            html += '.qr-label { font-size: 11px; color: #666; margin-top: 1mm; text-align: center; white-space: nowrap; }';
+            html += '.product-name { flex: 1; font-size: 144px; font-weight: 900; text-align: center; line-height: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; }';
+            // 第二列：規格自動縮放 (固定高度35mm)
+            html += '.row-2 { height: 35mm; min-height: 35mm; max-height: 35mm; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #000; overflow: hidden; padding: 0 5mm; }';
+            html += '.product-spec { font-weight: 700; color: #333; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }';
+            // 第三列：數量、批號、效期60px (固定高度45mm，不折行)
+            html += '.row-3 { height: 45mm; min-height: 45mm; max-height: 45mm; display: flex; border-bottom: 2px solid #000; }';
+            html += '.info-cell { flex: 1; text-align: center; padding: 2mm; border-right: 1px solid #ccc; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }';
             html += '.info-cell:last-child { border-right: none; }';
-            html += '.info-cell.batch { flex: 1.2; }';
-            html += '.info-cell.expiry { flex: 1.5; white-space: nowrap; }';
-            html += '.info-cell.qty { flex: 1; }';
-            html += '.info-cell.vendor { flex: 1.2; }';
-            html += '.info-label { font-size: 14px; color: #666; margin-bottom: 2mm; }';
-            html += '.info-value { font-size: 48px; font-weight: 900; }';
-            html += '.info-value.qty-val { font-size: 100px; color: #dc2626; }';
-            html += '.info-value.vendor-val { font-size: 100px; }';
-            html += '.row-4 { display: flex; align-items: center; padding: 3mm 5mm; }';
-            html += '.location-box { background: #000; color: #fff; font-size: 56px; font-weight: 900; padding: 3mm 8mm; margin-right: 5mm; }';
-            html += '.barcode-box { flex: 1; text-align: center; }';
+            html += '.info-label { font-size: 12px; color: #666; margin-bottom: 1mm; }';
+            html += '.info-value { font-size: 60px; font-weight: 900; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }';
+            html += '.info-value.qty-val { color: #dc2626; }';
+            // 第四列：儲位36px + 廠商36px (剩餘空間)
+            html += '.row-4 { flex: 1; display: flex; align-items: center; padding: 2mm 8mm; min-height: 30mm; }';
+            html += '.location-box { background: #000; color: #fff; font-size: 36px; font-weight: 900; padding: 3mm 10mm; margin-right: 10mm; white-space: nowrap; }';
+            html += '.vendor-box { font-size: 36px; font-weight: 700; color: #333; flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }';
             html += '.no-print { text-align: center; padding: 20px; }';
             html += '.no-print button { padding: 15px 40px; font-size: 18px; border: none; cursor: pointer; font-weight: bold; margin: 0 10px; border-radius: 8px; }';
             html += '.btn-print { background: #059669; color: white; }';
             html += '.btn-close { background: #666; color: white; }';
             html += '@media print { .no-print { display: none !important; } }';
             html += '</style>';
-            html += '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>';
             html += '</head><body>';
 
             labels.forEach(function(label, idx) {
                 var expDisplay = label.expiryDate ? formatDate(label.expiryDate) : '-';
+                var specText = label.spec || '-';
+                // 根據規格文字長度動態調整字體大小 100/80/60/45/36
+                var specFontSize = 100;
+                if (specText.length > 10) specFontSize = 80;
+                if (specText.length > 15) specFontSize = 60;
+                if (specText.length > 25) specFontSize = 45;
+                if (specText.length > 35) specFontSize = 36;
 
                 html += '<div class="label-page"><div class="label-content">';
 
-                html += '<div class="row-1" style="display:flex;align-items:center;padding:0 8mm;">';
-                html += '<div id="qrcode-' + idx + '" style="width:200px;height:200px;flex-shrink:0;margin-right:15mm;"></div>';
-                html += '<div class="product-name" style="flex:1;text-align:center;">' + label.productName + '</div>';
+                // 第一列：QR code + 品名
+                html += '<div class="row-1">';
+                html += '<div class="qr-container"><div id="qrcode-' + idx + '" class="qr-box"></div><div class="qr-label">' + (label.palletNo || label.id) + '</div></div>';
+                html += '<div class="product-name">' + label.productName + '</div>';
                 html += '</div>';
 
-                html += '<div class="row-2"><div class="product-spec">' + (label.spec || '-') + '</div></div>';
+                // 第二列：規格 (自動縮放字體)
+                html += '<div class="row-2"><div class="product-spec" style="font-size:' + specFontSize + 'px;">' + specText + '</div></div>';
 
+                // 第三列：數量、批號、效期
                 html += '<div class="row-3">';
-                html += '<div class="info-cell batch"><div class="info-label">批號</div><div class="info-value">' + label.batchNo + '</div></div>';
-                html += '<div class="info-cell expiry"><div class="info-label">效期</div><div class="info-value">' + expDisplay + '</div></div>';
-                html += '<div class="info-cell qty"><div class="info-label">數量</div><div class="info-value qty-val">' + label.quantity + '</div></div>';
-                html += '<div class="info-cell vendor"><div class="info-label">廠商</div><div class="info-value vendor-val">' + (label.vendor || '-') + '</div></div>';
+                html += '<div class="info-cell"><div class="info-label">數量</div><div class="info-value qty-val">' + label.quantity + '</div></div>';
+                html += '<div class="info-cell"><div class="info-label">批號</div><div class="info-value">' + (label.batchNo || '-') + '</div></div>';
+                html += '<div class="info-cell"><div class="info-label">效期</div><div class="info-value">' + expDisplay + '</div></div>';
                 html += '</div>';
 
-                html += '<div class="row-4" style="display:flex;align-items:center;padding:5mm 8mm;">';
-                html += '<div class="location-box" style="font-size:64px;padding:5mm 12mm;min-width:200px;text-align:center;">' + label.locationId + '</div>';
-                html += '<div style="flex:1;display:flex;align-items:center;justify-content:center;">';
-                html += '<svg id="barcode-' + idx + '"></svg>';
-                html += '</div>';
+                // 第四列：儲位、廠商
+                html += '<div class="row-4">';
+                html += '<div class="location-box">' + label.locationId + '</div>';
+                html += '<div class="vendor-box">' + (label.vendor || '-') + '</div>';
                 html += '</div>';
 
                 html += '</div></div>';
@@ -7160,8 +7198,8 @@ console.log('✅ WMS 工具函數庫已載入');
             html += '<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>';
             html += '<script>window.onload = function() {';
             labels.forEach(function(label, idx) {
-                html += 'try { var qr' + idx + ' = qrcode(0, "L"); qr' + idx + '.addData("' + label.id + '"); qr' + idx + '.make(); document.getElementById("qrcode-' + idx + '").innerHTML = qr' + idx + '.createSvgTag(8, 0); } catch(e) {}';
-                html += 'try { JsBarcode("#barcode-' + idx + '", "' + label.id + '", {format:"CODE128",height:60,width:1.5,displayValue:true,fontSize:14,margin:5,textMargin:2}); } catch(e) {}';
+                var qrData = label.palletNo || label.id;
+                html += 'try { var qr' + idx + ' = qrcode(0, "M"); qr' + idx + '.addData("' + qrData + '"); qr' + idx + '.make(); document.getElementById("qrcode-' + idx + '").innerHTML = qr' + idx + '.createSvgTag(0, 0); } catch(e) { console.error(e); }';
             });
             html += '};<\/script>';
 
@@ -15934,69 +15972,79 @@ window.clearLocalStorage = function() {
             html += '@page { size: A4 landscape; margin: 0; }';
             html += '* { margin: 0; padding: 0; box-sizing: border-box; }';
             html += 'body { font-family: Microsoft JhengHei, Arial, sans-serif; background: #fff; }';
-            html += '.label-page { width: 297mm; height: 210mm; padding: 5mm; box-sizing: border-box; }';
-            html += '.label-content { height: 100%; border: 3px solid #000; display: flex; flex-direction: column; }';
-            html += '.row-1 { flex: 2; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #000; }';
-            html += '.product-name { font-size: 144px; font-weight: 900; text-align: center; line-height: 1; }';
-            html += '.row-2 { flex: 1; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #000; }';
-            html += '.product-spec { font-size: 100px; font-weight: 700; color: #333; text-align: center; }';
-            html += '.row-3 { display: flex; border-bottom: 2px solid #000; }';
-            html += '.info-cell { text-align: center; padding: 4mm 2mm; border-right: 1px solid #ccc; }';
+            html += '.label-page { width: 297mm; height: 210mm; padding: 3mm; box-sizing: border-box; overflow: hidden; }';
+            html += '.label-content { height: 100%; border: 3px solid #000; display: flex; flex-direction: column; overflow: hidden; }';
+            // 第一列：QR code 8x8cm + 品名144px (固定高度80mm)
+            html += '.row-1 { height: 80mm; min-height: 80mm; max-height: 80mm; display: flex; align-items: center; border-bottom: 3px solid #000; padding: 0 8mm; overflow: hidden; }';
+            html += '.qr-container { width: 80mm; height: 76mm; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }';
+            html += '.qr-box { width: 68mm; height: 68mm; }';
+            html += '.qr-box svg { width: 100% !important; height: 100% !important; }';
+            html += '.qr-label { font-size: 11px; color: #666; margin-top: 1mm; text-align: center; white-space: nowrap; }';
+            html += '.product-name { flex: 1; font-size: 144px; font-weight: 900; text-align: center; line-height: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; }';
+            // 第二列：規格自動縮放 (固定高度35mm)
+            html += '.row-2 { height: 35mm; min-height: 35mm; max-height: 35mm; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #000; overflow: hidden; padding: 0 5mm; }';
+            html += '.product-spec { font-weight: 700; color: #333; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }';
+            // 第三列：數量、批號、效期60px (固定高度45mm，不折行)
+            html += '.row-3 { height: 45mm; min-height: 45mm; max-height: 45mm; display: flex; border-bottom: 2px solid #000; }';
+            html += '.info-cell { flex: 1; text-align: center; padding: 2mm; border-right: 1px solid #ccc; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }';
             html += '.info-cell:last-child { border-right: none; }';
-            html += '.info-cell.batch { flex: 1.2; }';
-            html += '.info-cell.expiry { flex: 1.5; white-space: nowrap; }';
-            html += '.info-cell.qty { flex: 1; }';
-            html += '.info-cell.vendor { flex: 1.2; }';
-            html += '.info-label { font-size: 14px; color: #666; margin-bottom: 2mm; }';
-            html += '.info-value { font-size: 48px; font-weight: 900; }';
-            html += '.info-value.qty-val { font-size: 100px; color: #dc2626; }';
-            html += '.info-value.vendor-val { font-size: 100px; }';
-            html += '.row-4 { display: flex; align-items: center; padding: 3mm 5mm; }';
-            html += '.location-box { background: #000; color: #fff; font-size: 56px; font-weight: 900; padding: 3mm 8mm; margin-right: 5mm; }';
-            html += '.barcode-box { flex: 1; text-align: center; }';
+            html += '.info-label { font-size: 12px; color: #666; margin-bottom: 1mm; }';
+            html += '.info-value { font-size: 60px; font-weight: 900; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }';
+            html += '.info-value.qty-val { color: #dc2626; }';
+            // 第四列：儲位36px + 廠商36px (剩餘空間)
+            html += '.row-4 { flex: 1; display: flex; align-items: center; padding: 2mm 8mm; min-height: 30mm; }';
+            html += '.location-box { background: #000; color: #fff; font-size: 36px; font-weight: 900; padding: 3mm 10mm; margin-right: 10mm; white-space: nowrap; }';
+            html += '.vendor-box { font-size: 36px; font-weight: 700; color: #333; flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }';
             html += '.no-print { text-align: center; padding: 20px; }';
             html += '.no-print button { padding: 15px 40px; font-size: 18px; border: none; cursor: pointer; font-weight: bold; margin: 0 10px; border-radius: 8px; }';
             html += '.btn-print { background: #059669; color: white; }';
             html += '.btn-close { background: #666; color: white; }';
             html += '@media print { .no-print { display: none !important; } }';
             html += '</style>';
-            html += '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>';
             html += '</head><body>';
+
+            // 根據規格文字長度動態調整字體大小 100/80/60/45/36
+            var specText = order.spec || '-';
+            var specFontSize = 100;
+            if (specText.length > 10) specFontSize = 80;
+            if (specText.length > 15) specFontSize = 60;
+            if (specText.length > 25) specFontSize = 45;
+            if (specText.length > 35) specFontSize = 36;
 
             html += '<div class="label-page"><div class="label-content">';
 
-            html += '<div class="row-1" style="display:flex;align-items:center;padding:0 8mm;">';
-            html += '<div id="qrcode" style="width:200px;height:200px;flex-shrink:0;margin-right:15mm;"></div>';
-            html += '<div class="product-name" style="flex:1;text-align:center;">' + order.productName + '</div>';
+            // 第一列：QR code + 品名
+            html += '<div class="row-1">';
+            html += '<div class="qr-container"><div id="qrcode" class="qr-box"></div><div class="qr-label">' + order.docNo + '</div></div>';
+            html += '<div class="product-name">' + order.productName + '</div>';
             html += '</div>';
 
-            html += '<div class="row-2"><div class="product-spec">' + (order.spec || '-') + '</div></div>';
+            // 第二列：規格 (自動縮放字體)
+            html += '<div class="row-2"><div class="product-spec" style="font-size:' + specFontSize + 'px;">' + specText + '</div></div>';
 
+            // 第三列：數量、批號、效期
             html += '<div class="row-3">';
-            html += '<div class="info-cell batch"><div class="info-label">批號</div><div class="info-value">' + (order.batchNo || '-') + '</div></div>';
-            html += '<div class="info-cell expiry"><div class="info-label">效期</div><div class="info-value">' + (order.expDate || '-') + '</div></div>';
-            html += '<div class="info-cell qty"><div class="info-label">數量</div><div class="info-value qty-val">' + order.quantity + '</div></div>';
-            html += '<div class="info-cell vendor"><div class="info-label">廠商</div><div class="info-value vendor-val">' + (order.vendor || '-') + '</div></div>';
+            html += '<div class="info-cell"><div class="info-label">數量</div><div class="info-value qty-val">' + order.quantity + '</div></div>';
+            html += '<div class="info-cell"><div class="info-label">批號</div><div class="info-value">' + (order.batchNo || '-') + '</div></div>';
+            html += '<div class="info-cell"><div class="info-label">效期</div><div class="info-value">' + (order.expDate || '-') + '</div></div>';
             html += '</div>';
 
-            html += '<div class="row-4" style="display:flex;align-items:center;padding:5mm 8mm;">';
-            html += '<div class="location-box" style="font-size:64px;padding:5mm 12mm;min-width:200px;text-align:center;">' + (order.locationId || '待分配') + '</div>';
-            html += '<div style="flex:1;display:flex;align-items:center;justify-content:center;">';
-            html += '<svg id="slip-barcode"></svg>';
-            html += '</div>';
+            // 第四列：儲位、廠商
+            html += '<div class="row-4">';
+            html += '<div class="location-box">' + (order.locationId || '待分配') + '</div>';
+            html += '<div class="vendor-box">' + (order.vendor || '-') + '</div>';
             html += '</div>';
 
             html += '</div></div>';
 
             html += '<div class="no-print">';
-            html += '<button class="btn-print" onclick="window.print()">🖨️ 列印全部 1 張插單</button>';
+            html += '<button class="btn-print" onclick="window.print()">🖨️ 列印插單</button>';
             html += '<button class="btn-close" onclick="window.close()">關閉</button>';
             html += '</div>';
 
             html += '<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>';
             html += '<script>window.onload = function() {';
-            html += 'try { var qr = qrcode(0, "L"); qr.addData("' + order.docNo + '"); qr.make(); document.getElementById("qrcode").innerHTML = qr.createSvgTag(8, 0); } catch(e) {}';
-            html += 'try { JsBarcode("#slip-barcode", "' + order.docNo + '", {format:"CODE128",height:60,width:1.5,displayValue:true,fontSize:14,margin:5,textMargin:2}); } catch(e) {}';
+            html += 'try { var qr = qrcode(0, "M"); qr.addData("' + order.docNo + '"); qr.make(); document.getElementById("qrcode").innerHTML = qr.createSvgTag(0, 0); } catch(e) { console.error(e); }';
             html += '};<\/script>';
             html += '</body></html>';
 
@@ -23510,6 +23558,520 @@ window.switchTab = function(viewId, event) {
 
 console.log('💰 倉租管理模組已載入');
 
+</script>
+
+
+<!-- ========== WMS V56.0 升級補丁 - 智能入庫+多筆模式 ========== -->
+<script>
+(function() {
+    'use strict';
+    
+    console.log('🚀 WMS V56.0 升級補丁載入中...');
+
+    // ========== 全域變數 ==========
+    window.batchInboundList = []; // 多筆入庫清單
+    
+    // ========== 1. 智能入庫核心邏輯 ==========
+    
+    window.toggleAdvancedOptions = function() {
+        var options = document.getElementById('advanced-options');
+        var icon = document.getElementById('advanced-icon');
+        if (!options) return;
+        if (options.classList.contains('hidden')) {
+            options.classList.remove('hidden');
+            if (icon) { icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-up'); }
+        } else {
+            options.classList.add('hidden');
+            if (icon) { icon.classList.remove('fa-chevron-up'); icon.classList.add('fa-chevron-down'); }
+        }
+    };
+    
+    window.smartInbound = async function(mode) {
+        var formData = getInboundFormData();
+        if (!formData) return;
+        
+        var validation = validateInboundData(formData, formData.isExternal);
+        if (!validation.valid) {
+            alert('❌ ' + validation.error);
+            return;
+        }
+        
+        if (formData.isExternal || mode === 'external') {
+            await executeExternalInbound(formData, formData.warehouseId);
+        } else if (mode === 'print') {
+            await executeMainInboundWithPrint(formData);
+        } else if (mode === 'direct') {
+            await executeMainInboundDirect(formData);
+        }
+    };
+    
+    function getInboundFormData() {
+        var name = document.getElementById('in-name').value;
+        var spec = document.getElementById('in-spec').value || '';
+        var batchNo = document.getElementById('in-batch').value || '';
+        var vendor = document.getElementById('in-vendor').value || '';
+        var exp = document.getElementById('in-exp').value;
+        var category = document.getElementById('in-category') ? document.getElementById('in-category').value : 'Raw';
+        
+        var warehouseSelect = document.getElementById('in-warehouse');
+        var warehouseId = warehouseSelect ? warehouseSelect.value : 'MAIN';
+        var mainWarehouses = ['MAIN', 'MAIN-CONSIGN', 'MAIN-RESERVE', 'MANAGE', ''];
+        var isExternal = warehouseId && mainWarehouses.indexOf(warehouseId) === -1;
+        
+        var locationId = '';
+        if (isExternal) {
+            locationId = warehouseId;
+        } else {
+            var locEl = document.getElementById('in-loc');
+            locationId = locEl ? locEl.value : '';
+        }
+        
+        var company = '崇文';
+        var companyRadio = document.querySelector('input[name="in-company"]:checked');
+        if (companyRadio) company = companyRadio.value;
+        
+        var productType = 'fixed';
+        var typeRadio = document.querySelector('input[name="in-product-type"]:checked');
+        if (typeRadio) productType = typeRadio.value;
+        
+        var quantity = 0, totalWeight = 0, unitWeight = 0;
+        
+        if (productType === 'variable') {
+            quantity = parseInt(document.getElementById('in-qty-var')?.value) || 0;
+            totalWeight = parseFloat(document.getElementById('in-weight')?.value) || 0;
+        } else {
+            quantity = parseInt(document.getElementById('in-qty')?.value) || 0;
+            unitWeight = parseFloat(document.getElementById('in-unit-weight')?.value) || 0;
+            if (unitWeight > 0 && quantity > 0) totalWeight = quantity * unitWeight;
+        }
+        
+        return { company, productName: name, spec, batchNo, vendor, expDate: exp, locationId, warehouseId, isExternal, category, productType, quantity, totalWeight, unitWeight };
+    }
+    
+    function validateInboundData(data, isExternal) {
+        if (!data.productName) return { valid: false, error: '請填寫品名' };
+        if (!data.quantity || data.quantity <= 0) return { valid: false, error: '請填寫數量' };
+        if (!data.expDate) return { valid: false, error: '請填寫效期' };
+        if (!isExternal && !data.locationId) return { valid: false, error: '請選擇儲位' };
+        if (data.productType === 'variable' && (!data.totalWeight || data.totalWeight <= 0)) return { valid: false, error: '不定重品請填寫總重量' };
+        return { valid: true };
+    }
+    
+    async function executeExternalInbound(data, warehouseId) {
+        var whName = getWarehouseName(warehouseId);
+        if (!confirm('確定入庫到外倉？\n\n倉庫：' + whName + '\n品名：' + data.productName + '\n數量：' + data.quantity)) return;
+        
+        try {
+            var existing = (window.externalStock || []).find(s => s.warehouseId === warehouseId && s.productName === data.productName && s.batchNo === data.batchNo && s.company === data.company);
+            
+            if (existing) {
+                await window.updateDoc(window.doc(window.db, 'externalStock', existing.id), { quantity: existing.quantity + data.quantity, totalWeight: (existing.totalWeight || 0) + data.totalWeight, updatedAt: new Date().toISOString() });
+            } else {
+                await window.addDoc(window.collection(window.db, 'externalStock'), { company: data.company, warehouseId, productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, vendor: data.vendor, productType: data.productType, createdAt: new Date().toISOString() });
+            }
+            
+            if (typeof window.logInventoryChange === 'function') {
+                await window.logInventoryChange({ type: 'inbound', company: data.company, productName: data.productName, spec: data.spec, quantity: data.quantity, totalWeight: data.totalWeight, quantityChange: data.quantity, locationId: warehouseId, batchNo: data.batchNo, note: '外倉入庫 - ' + whName });
+            }
+            
+            alert('✅ 外倉入庫成功！\n\n倉庫：' + whName + '\n品名：' + data.productName + '\n數量：' + data.quantity);
+            if (typeof clearInboundForm === 'function') clearInboundForm();
+            if (typeof loadExternalStock === 'function') loadExternalStock();
+        } catch (e) { alert('❌ 入庫失敗：' + e.message); }
+    }
+    
+    async function executeMainInboundDirect(data) {
+        if (!confirm('確定入庫到 ' + data.locationId + '？\n\n品名：' + data.productName + '\n數量：' + data.quantity)) return;
+        
+        try {
+            var now = new Date();
+            var docNo = 'IN-' + now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2) + '-' + ('0'+now.getHours()).slice(-2) + ('0'+now.getMinutes()).slice(-2) + ('0'+now.getSeconds()).slice(-2) + '-' + Math.random().toString(36).substr(2, 4).toUpperCase();
+            
+            await window.addDoc(window.collection(window.db, 'pallets'), { palletId: docNo, company: data.company, productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight, locationId: data.locationId, vendor: data.vendor, category: data.category, productType: data.productType, source: 'SmartInbound', createdAt: now.toISOString() });
+            
+            if (typeof window.logInventoryChange === 'function') {
+                await window.logInventoryChange({ type: 'inbound', company: data.company, productName: data.productName, spec: data.spec, quantity: data.quantity, totalWeight: data.totalWeight, quantityChange: data.quantity, locationId: data.locationId, batchNo: data.batchNo, palletId: docNo, expDate: data.expDate, note: '入庫' });
+            }
+            
+            alert('✅ 入庫成功！\n\n儲位：' + data.locationId + '\n品名：' + data.productName + '\n數量：' + data.quantity);
+            if (typeof clearInboundForm === 'function') clearInboundForm();
+        } catch (e) { alert('❌ 入庫失敗：' + e.message); }
+    }
+    
+    async function executeMainInboundWithPrint(data) {
+        if (!confirm('確定入庫並列印棧板插單？\n\n儲位：' + data.locationId + '\n品名：' + data.productName + '\n數量：' + data.quantity)) return;
+        
+        try {
+            var now = new Date();
+            var docNo = 'IN-' + now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2) + '-' + ('0'+now.getHours()).slice(-2) + ('0'+now.getMinutes()).slice(-2) + ('0'+now.getSeconds()).slice(-2) + '-' + Math.random().toString(36).substr(2, 4).toUpperCase();
+            
+            await window.addDoc(window.collection(window.db, 'pallets'), { palletId: docNo, company: data.company, productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight, locationId: data.locationId, vendor: data.vendor, category: data.category, productType: data.productType, source: 'SmartInbound', createdAt: now.toISOString() });
+            
+            if (typeof window.logInventoryChange === 'function') {
+                await window.logInventoryChange({ type: 'inbound', company: data.company, productName: data.productName, spec: data.spec, quantity: data.quantity, totalWeight: data.totalWeight, quantityChange: data.quantity, locationId: data.locationId, batchNo: data.batchNo, palletId: docNo, expDate: data.expDate, note: '入庫' });
+            }
+            
+            if (typeof window.printInboundSlip === 'function') {
+                window.printInboundSlip({ docNo, productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, quantity: data.quantity, locationId: data.locationId, vendor: data.vendor });
+            }
+            
+            alert('✅ 入庫成功！已開啟列印視窗\n\n儲位：' + data.locationId + '\n品名：' + data.productName);
+            if (typeof clearInboundForm === 'function') clearInboundForm();
+        } catch (e) { alert('❌ 入庫失敗：' + e.message); }
+    }
+    
+    // ========== 2. 倉庫切換 ==========
+    
+    var originalOnWarehouseChange = window.onWarehouseChange;
+    window.onWarehouseChange = function() {
+        if (typeof originalOnWarehouseChange === 'function') originalOnWarehouseChange();
+        
+        var warehouseSelect = document.getElementById('in-warehouse');
+        var warehouseId = warehouseSelect ? warehouseSelect.value : 'MAIN';
+        var mainWarehouses = ['MAIN', 'MAIN-CONSIGN', 'MAIN-RESERVE', 'MANAGE', ''];
+        var isExternal = warehouseId && mainWarehouses.indexOf(warehouseId) === -1;
+        
+        var mainButtons = document.getElementById('main-wh-buttons');
+        var externalButtons = document.getElementById('external-wh-buttons');
+        var locationSection = document.getElementById('location-section');
+        var externalSection = document.getElementById('external-wh-section');
+        var checkLoc = document.getElementById('check-loc');
+        
+        if (isExternal) {
+            if (mainButtons) mainButtons.classList.add('hidden');
+            if (externalButtons) externalButtons.classList.remove('hidden');
+            if (locationSection) locationSection.classList.add('hidden');
+            if (externalSection) externalSection.classList.remove('hidden');
+            if (checkLoc) checkLoc.style.display = 'none';
+            
+            var whName = getWarehouseName(warehouseId);
+            var titleEl = document.getElementById('inbound-wh-title');
+            if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-building mr-1"></i>外倉入庫：' + whName;
+        } else {
+            if (mainButtons) mainButtons.classList.remove('hidden');
+            if (externalButtons) externalButtons.classList.add('hidden');
+            if (locationSection) locationSection.classList.remove('hidden');
+            if (externalSection) externalSection.classList.add('hidden');
+            if (checkLoc) checkLoc.style.display = '';
+        }
+        
+        updateInboundButtonState();
+    };
+    
+    function updateInboundButtonState() {
+        var warehouseSelect = document.getElementById('in-warehouse');
+        var warehouseId = warehouseSelect ? warehouseSelect.value : 'MAIN';
+        var mainWarehouses = ['MAIN', 'MAIN-CONSIGN', 'MAIN-RESERVE', 'MANAGE', ''];
+        var isExternal = warehouseId && mainWarehouses.indexOf(warehouseId) === -1;
+        
+        var name = document.getElementById('in-name')?.value;
+        var exp = document.getElementById('in-exp')?.value;
+        var loc = document.getElementById('in-loc')?.value;
+        
+        var productType = document.querySelector('input[name="in-product-type"]:checked')?.value || 'fixed';
+        var qty = productType === 'variable' ? (parseInt(document.getElementById('in-qty-var')?.value) || 0) : (parseInt(document.getElementById('in-qty')?.value) || 0);
+        
+        var hasBasicData = name && exp && qty > 0;
+        var hasLocation = loc && loc.trim() !== '';
+        
+        var btnPrint = document.getElementById('btn-inbound-print');
+        var btnDirect = document.getElementById('btn-inbound-direct');
+        if (btnPrint) btnPrint.disabled = !(hasBasicData && hasLocation);
+        if (btnDirect) btnDirect.disabled = !(hasBasicData && hasLocation);
+        
+        var btnExternal = document.getElementById('btn-inbound-external');
+        if (btnExternal) btnExternal.disabled = !hasBasicData;
+    }
+    
+    var originalUpdateInboundProgress = window.updateInboundProgress;
+    window.updateInboundProgress = function() {
+        if (typeof originalUpdateInboundProgress === 'function') originalUpdateInboundProgress();
+        updateInboundButtonState();
+    };
+    
+    // ========== 3. 品項主檔整合 ==========
+    
+    // 更多選項切換
+    window.toggleInboundMoreOptions = function() {
+        var panel = document.getElementById('more-options-panel');
+        var icon = document.getElementById('more-options-icon');
+        var text = document.getElementById('more-options-text');
+        if (!panel) return;
+        
+        if (panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            if (icon) { icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-up'); }
+            if (text) text.textContent = '收合選項';
+        } else {
+            panel.classList.add('hidden');
+            if (icon) { icon.classList.remove('fa-chevron-up'); icon.classList.add('fa-chevron-down'); }
+            if (text) text.textContent = '更多選項';
+        }
+    };
+    
+    // 更新規格顯示文字
+    window.updateSpecDisplayText = function() {
+        var specEl = document.getElementById('in-spec');
+        var displayRow = document.getElementById('spec-display-row');
+        var displayText = document.getElementById('spec-display-text');
+        
+        if (specEl && displayText) {
+            var spec = specEl.value;
+            displayText.textContent = spec || '-';
+            if (displayRow) {
+                if (spec) displayRow.classList.remove('hidden');
+                else displayRow.classList.add('hidden');
+            }
+        }
+    };
+    
+    // 設定品項類型（定重/不定重）並更新 UI
+    function setProductType(type) {
+        var fixedFields = document.getElementById('fixed-weight-fields');
+        var variableFields = document.getElementById('variable-weight-fields');
+        var typeBadge = document.getElementById('product-type-badge');
+        var badgeLabel = document.getElementById('type-badge-label');
+        var unitWeightOption = document.getElementById('unit-weight-option');
+        
+        // 設定 radio
+        var fixedRadio = document.querySelector('input[name="in-product-type"][value="fixed"]');
+        var variableRadio = document.querySelector('input[name="in-product-type"][value="variable"]');
+        
+        if (type === 'variable') {
+            // 不定重品
+            if (fixedRadio) fixedRadio.checked = false;
+            if (variableRadio) variableRadio.checked = true;
+            if (fixedFields) fixedFields.classList.add('hidden');
+            if (variableFields) variableFields.classList.remove('hidden');
+            if (badgeLabel) {
+                badgeLabel.textContent = '⚖️ 不定重品';
+                badgeLabel.className = 'px-2 py-1 rounded text-xs font-bold bg-amber-600/20 text-amber-400 border border-amber-500/30';
+            }
+            if (unitWeightOption) unitWeightOption.classList.add('hidden');
+        } else {
+            // 定重品（預設）
+            if (fixedRadio) fixedRadio.checked = true;
+            if (variableRadio) variableRadio.checked = false;
+            if (fixedFields) fixedFields.classList.remove('hidden');
+            if (variableFields) variableFields.classList.add('hidden');
+            if (badgeLabel) {
+                badgeLabel.textContent = '📦 定重品';
+                badgeLabel.className = 'px-2 py-1 rounded text-xs font-bold bg-blue-600/20 text-blue-400 border border-blue-500/30';
+            }
+            if (unitWeightOption) unitWeightOption.classList.remove('hidden');
+        }
+        
+        // 顯示類型標籤
+        if (typeBadge) typeBadge.classList.remove('hidden');
+        
+        // 呼叫原本的 toggleProductType（如果存在）
+        if (typeof window.originalToggleProductType === 'function') {
+            window.originalToggleProductType(type);
+        }
+    }
+    
+    // 保存原本的 toggleProductType
+    window.originalToggleProductType = window.toggleProductType;
+    window.toggleProductType = setProductType;
+    
+    var originalFillProductFromMaster = window.fillProductFromMaster;
+    window.fillProductFromMaster = function(product) {
+        var nameEl = document.getElementById('in-name');
+        var specEl = document.getElementById('in-spec');
+        var codeEl = document.getElementById('in-product-code');
+        
+        if (nameEl) nameEl.value = product.name || product.productName || '';
+        if (specEl) specEl.value = product.spec || '';
+        if (codeEl) codeEl.value = product.code || product.id || '';
+        
+        // 更新規格顯示
+        updateSpecDisplayText();
+        
+        // 自動判斷定重/不定重
+        var isVariable = product.productType === 'variable' || product.isVariable === true || product.weightType === 'variable';
+        setProductType(isVariable ? 'variable' : 'fixed');
+        
+        // 自動填入箱容
+        if (product.unitWeight) {
+            var unitWeightEl = document.getElementById('in-unit-weight');
+            if (unitWeightEl) unitWeightEl.value = product.unitWeight;
+        }
+        
+        // 自動設定入庫類型
+        if (product.category) {
+            var categoryMap = { 'RAW': 'Raw', 'FG': 'FG', 'WIP': 'WIP', 'raw': 'Raw', 'fg': 'FG', 'wip': 'WIP' };
+            var category = categoryMap[product.category] || product.category;
+            var categoryEl = document.getElementById('in-category');
+            if (categoryEl) categoryEl.value = category;
+            
+            // 更新入庫類型按鈕樣式
+            if (typeof selectInboundType === 'function') {
+                selectInboundType(category);
+            }
+        }
+        
+        if (typeof updateLivePreview === 'function') updateLivePreview();
+        if (typeof updateInboundProgress === 'function') updateInboundProgress();
+        
+        // 自動跳到批號欄位
+        setTimeout(function() { var batchEl = document.getElementById('in-batch'); if (batchEl) batchEl.focus(); }, 100);
+    };
+    
+    // ========== 4. 公司別篩選外倉 ==========
+    
+    function updateWarehouseOptions() {
+        var companyRadio = document.querySelector('input[name="in-company"]:checked');
+        var company = companyRadio ? companyRadio.value : '崇文';
+        
+        var optgroupCW = document.getElementById('optgroup-cw');
+        var optgroupBF = document.getElementById('optgroup-bf');
+        if (!optgroupCW || !optgroupBF) return;
+        
+        if (company === '崇文') {
+            optgroupCW.style.display = '';
+            optgroupBF.style.display = 'none';
+        } else {
+            optgroupCW.style.display = 'none';
+            optgroupBF.style.display = '';
+        }
+        
+        var warehouseSelect = document.getElementById('in-warehouse');
+        if (warehouseSelect) {
+            var selectedOption = warehouseSelect.selectedOptions[0];
+            var parent = selectedOption ? selectedOption.parentElement : null;
+            if ((company === '崇文' && parent === optgroupBF) || (company === '八方' && parent === optgroupCW)) {
+                warehouseSelect.value = 'MAIN';
+                if (typeof onWarehouseChange === 'function') onWarehouseChange();
+            }
+        }
+    }
+    
+    document.addEventListener('change', function(e) { if (e.target.name === 'in-company') updateWarehouseOptions(); });
+    
+    // ========== 5. 效期輸入優化 ==========
+    
+    function initExpiryDateInput() {
+        var expInput = document.getElementById('in-exp');
+        if (!expInput || expInput.dataset.enhanced === 'true') return;
+        
+        var newInput = document.createElement('input');
+        newInput.type = 'text';
+        newInput.id = 'in-exp';
+        newInput.className = expInput.className;
+        newInput.placeholder = 'YYYY/MM/DD';
+        newInput.maxLength = 10;
+        newInput.dataset.enhanced = 'true';
+        
+        newInput.addEventListener('input', function(e) {
+            var value = e.target.value.replace(/\D/g, '');
+            var formatted = '';
+            if (value.length >= 4) {
+                formatted = value.substring(0, 4);
+                if (value.length > 4) { formatted += '/' + value.substring(4, 6); if (value.length > 6) formatted += '/' + value.substring(6, 8); }
+            } else { formatted = value; }
+            e.target.value = formatted;
+            if (typeof updateLivePreview === 'function') updateLivePreview();
+            if (typeof updateInboundProgress === 'function') updateInboundProgress();
+        });
+        
+        if (expInput.parentNode) expInput.parentNode.replaceChild(newInput, expInput);
+    }
+    
+    // ========== 6. 庫存編輯 ==========
+    
+    window.editPallet = async function(id) {
+        var item = (window.currentInventory || []).find(p => p.id === id);
+        if (!item) { alert('找不到此筆資料'); return; }
+        
+        var expVal = '';
+        if (item.expiryDate) { var ed = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate); expVal = ed.getFullYear() + '-' + String(ed.getMonth()+1).padStart(2,'0') + '-' + String(ed.getDate()).padStart(2,'0'); }
+        
+        var modalHtml = '<div id="edit-pallet-modal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999]"><div class="bg-slate-800 rounded-xl p-6 w-[500px] max-h-[90vh] overflow-auto border border-slate-600"><h3 class="text-xl font-bold text-white mb-4"><i class="fa-solid fa-edit text-blue-400 mr-2"></i>編輯庫存</h3><div class="space-y-3"><div class="grid grid-cols-2 gap-3"><div><label class="text-slate-400 text-xs">公司</label><select id="edit-company" class="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white"><option value="崇文"' + (item.company === '崇文' ? ' selected' : '') + '>崇文</option><option value="八方"' + (item.company === '八方' ? ' selected' : '') + '>八方</option></select></div><div><label class="text-slate-400 text-xs">儲位</label><input type="text" id="edit-location" value="' + (item.locationId || '') + '" class="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white"></div></div><div><label class="text-slate-400 text-xs">品名</label><input type="text" id="edit-name" value="' + (item.productName || '') + '" class="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white"></div><div><label class="text-slate-400 text-xs">規格</label><input type="text" id="edit-spec" value="' + (item.spec || '') + '" class="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white"></div><div class="grid grid-cols-2 gap-3"><div><label class="text-slate-400 text-xs">批號</label><input type="text" id="edit-batch" value="' + (item.batchNo || '') + '" class="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white"></div><div><label class="text-slate-400 text-xs">數量</label><input type="number" id="edit-qty" value="' + (item.quantity || 0) + '" class="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white"></div></div><div class="grid grid-cols-2 gap-3"><div><label class="text-slate-400 text-xs">重量 (kg)</label><input type="number" step="0.01" id="edit-weight" value="' + (item.totalWeight || 0) + '" class="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white"></div><div><label class="text-slate-400 text-xs">效期</label><input type="date" id="edit-expiry" value="' + expVal + '" class="w-full p-2 bg-slate-700 border border-slate-600 rounded text-white"></div></div></div><div class="flex gap-3 mt-6"><button onclick="document.getElementById(\'edit-pallet-modal\').remove()" class="flex-1 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg">取消</button><button onclick="savePalletEdit(\'' + id + '\')" class="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">儲存修改</button></div></div></div>';
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    };
+    
+    window.savePalletEdit = async function(id) {
+        var updateData = { company: document.getElementById('edit-company').value, locationId: document.getElementById('edit-location').value, productName: document.getElementById('edit-name').value, spec: document.getElementById('edit-spec').value, batchNo: document.getElementById('edit-batch').value, quantity: parseInt(document.getElementById('edit-qty').value) || 0, totalWeight: parseFloat(document.getElementById('edit-weight').value) || 0, updatedAt: new Date().toISOString() };
+        if (!updateData.productName) { alert('品名不能為空'); return; }
+        if (!updateData.locationId) { alert('儲位不能為空'); return; }
+        var expiryStr = document.getElementById('edit-expiry').value;
+        if (expiryStr) updateData.expiryDate = new Date(expiryStr);
+        try { await window.updateDoc(window.doc(window.db, 'pallets', id), updateData); document.getElementById('edit-pallet-modal').remove(); alert('✅ 更新成功'); } catch (e) { alert('❌ 更新失敗：' + e.message); }
+    };
+    
+    // ========== 7. 外倉庫存顯示 ==========
+    
+    function getWarehouseName(code) {
+        if (!code) return '本倉';
+        var wh = (window.warehousesData || []).find(w => w.code === code);
+        return wh ? wh.company + '_' + wh.name : code;
+    }
+    
+    function checkAndRenderExternal() {
+        var tbody = document.getElementById('inventory-list-body');
+        if (!tbody) return;
+        tbody.querySelectorAll('tr[data-type="external"]').forEach(row => row.remove());
+        var externalStock = window.externalStock || [];
+        if (externalStock.length === 0) return;
+        
+        externalStock.forEach(function(item) {
+            var expClass = 'text-slate-400';
+            if (item.expDate) { var days = Math.floor((new Date(item.expDate) - new Date()) / 86400000); if (days < 0) expClass = 'text-red-500 font-bold'; else if (days < 30) expClass = 'text-orange-400'; else if (days < 90) expClass = 'text-yellow-400'; }
+            var companyClass = item.company === '八方' ? 'bg-purple-900/50 text-purple-300' : 'bg-blue-900/50 text-blue-300';
+            var row = document.createElement('tr');
+            row.className = 'border-b border-slate-700 hover:bg-slate-800 bg-teal-900/20';
+            row.setAttribute('data-company', item.company || '');
+            row.setAttribute('data-type', 'external');
+            row.innerHTML = '<td class="p-2"><span class="px-1.5 py-0.5 rounded text-xs ' + companyClass + '">' + (item.company || '崇文') + '</span></td><td class="text-white p-2">' + (item.productName || '-') + '</td><td class="text-yellow-400 p-2">' + (item.spec || '-') + '</td><td class="text-slate-400 font-mono p-2">' + (item.batchNo || '-') + '</td><td class="text-right text-white p-2">' + (item.quantity || 0) + '</td><td class="text-right p-2">' + (item.totalWeight ? '<span class="text-amber-400">' + item.totalWeight + ' kg</span>' : '-') + '</td><td class="p-2 text-teal-400 font-mono"><span class="bg-teal-800/50 px-1.5 py-0.5 rounded text-xs mr-1">外</span>' + getWarehouseName(item.warehouseId) + '</td><td class="p-2 ' + expClass + '">' + (item.expDate || '-') + '</td><td class="p-2 text-right"><button onclick="editExternalStock(\'' + item.id + '\')" class="text-blue-400 hover:text-blue-300 mr-2"><i class="fa-solid fa-edit"></i></button><button onclick="deleteExternalStock(\'' + item.id + '\')" class="text-red-500 hover:bg-red-500/20 rounded px-2"><i class="fa-solid fa-trash"></i></button></td>';
+            tbody.appendChild(row);
+        });
+    }
+    
+    window.editExternalStock = async function(id) {
+        var item = (window.externalStock || []).find(s => s.id === id);
+        if (!item) { alert('找不到此筆資料'); return; }
+        var newQty = prompt('編輯數量\n\n倉庫：' + getWarehouseName(item.warehouseId) + '\n品名：' + item.productName + '\n目前數量：' + item.quantity, item.quantity);
+        if (newQty === null) return;
+        var qty = parseInt(newQty);
+        if (isNaN(qty) || qty < 0) { alert('請輸入有效的數量'); return; }
+        try {
+            if (qty === 0) { if (!confirm('數量為 0，是否刪除此筆資料？')) return; await window.deleteDoc(window.doc(window.db, 'externalStock', id)); }
+            else { await window.updateDoc(window.doc(window.db, 'externalStock', id), { quantity: qty, updatedAt: new Date().toISOString() }); }
+            alert('✅ 更新成功');
+            setTimeout(checkAndRenderExternal, 500);
+        } catch (e) { alert('❌ 更新失敗：' + e.message); }
+    };
+    
+    window.deleteExternalStock = async function(id) {
+        var item = (window.externalStock || []).find(s => s.id === id);
+        if (!item) { alert('找不到此筆資料'); return; }
+        if (!confirm('確定刪除？\n\n倉庫：' + getWarehouseName(item.warehouseId) + '\n品名：' + item.productName + '\n數量：' + item.quantity)) return;
+        try { await window.deleteDoc(window.doc(window.db, 'externalStock', id)); alert('✅ 已刪除'); setTimeout(checkAndRenderExternal, 500); } catch (e) { alert('❌ 刪除失敗：' + e.message); }
+    };
+    
+    var originalLoadExternalStock = window.loadExternalStock;
+    if (typeof originalLoadExternalStock === 'function') { window.loadExternalStock = function() { originalLoadExternalStock(); setTimeout(checkAndRenderExternal, 500); }; }
+    setInterval(function() { var tbody = document.getElementById('inventory-list-body'); if (tbody && window.externalStock && window.externalStock.length > 0 && !tbody.querySelector('tr[data-type="external"]')) checkAndRenderExternal(); }, 2000);
+    
+    // ========== 8. 初始化 ==========
+    
+    function init() {
+        initExpiryDateInput();
+        updateWarehouseOptions();
+        setTimeout(function() { if (typeof onWarehouseChange === 'function') onWarehouseChange(); }, 1000);
+    }
+    
+    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); }
+    else { setTimeout(init, 500); }
+    
+    console.log('✅ WMS V56.0 升級補丁載入完成');
+    console.log('📋 更新內容：');
+    console.log('   - 智能入庫流程優化');
+    console.log('   - 品項主檔整合（自動判斷定重/不定重）');
+    console.log('   - 公司別篩選外倉');
+    console.log('   - 效期輸入優化');
+
+})();
 </script>
 </body>
 </html>
