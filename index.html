@@ -2920,26 +2920,16 @@
                             <div class="bg-slate-800/50 rounded p-2 border border-slate-700">
                                 <div class="flex justify-between items-center">
                                     <label class="text-xs text-slate-400">
-                                        <i class="fa-solid fa-cube mr-1"></i>容積係數（依箱容自動計算）
+                                        <i class="fa-solid fa-cube mr-1"></i>箱子尺寸（依箱容自動判斷）
                                     </label>
                                     <span id="pm-box-size-badge" class="text-[10px] px-2 py-0.5 rounded bg-blue-600 text-white">標準箱</span>
                                 </div>
-                                <div class="grid grid-cols-3 gap-2 mt-1 text-center text-xs">
-                                    <div class="bg-slate-700/50 rounded p-1">
-                                        <div class="text-slate-500">整板</div>
-                                        <div id="pm-vol-full" class="text-white font-bold">1.0</div>
-                                    </div>
-                                    <div class="bg-slate-700/50 rounded p-1">
-                                        <div class="text-slate-500">不足板</div>
-                                        <div id="pm-vol-partial" class="text-white font-bold">0.75</div>
-                                    </div>
-                                    <div class="bg-slate-700/50 rounded p-1">
-                                        <div class="text-slate-500">散板</div>
-                                        <div id="pm-vol-scattered" class="text-white font-bold">0.5</div>
-                                    </div>
-                                </div>
                                 <div class="text-[10px] text-slate-500 mt-1">
                                     ≤5kg=小箱 | 6~15kg=標準箱 | >15kg=大箱
+                                </div>
+                                <div class="text-[10px] text-cyan-400 mt-1">
+                                    <i class="fa-solid fa-layer-group mr-1"></i>
+                                    3F: 只放整板(8板) | 2F: 整板4/不足板5 | 1F: 整板8/不足板16
                                 </div>
                             </div>
                             
@@ -5455,18 +5445,14 @@ console.log('✅ WMS 工具函數庫已載入');
         
         // ========== 貨架配置表（統一管理）==========
         window.RACK_CONFIG = {
-            // 每層的總容積點數
-            LEVEL_VOLUME: {
-                '1F': 16,   // 底層容積
-                '2F': 5,    // 中層容積（空間最小）
-                '3F': 8     // 頂層容積
-            },
-            
-            // 每層的整板最大數量（物理限制）
-            LEVEL_MAX_FULL_PALLETS: {
-                '1F': 8,    // 底層最多放 8 整板
-                '2F': 4,    // 中層最多放 4 整板
-                '3F': 8     // 頂層最多放 8 整板
+            // 每層的容量設定
+            // 3F: 只放整板，最多 8 板
+            // 2F: 混放，整板 4 板 / 不足板 5 板
+            // 1F: 混放，整板 8 板 / 不足板 16 板
+            LEVEL_CAPACITY: {
+                '3F': { full: 8, partial: 0, scattered: 0 },   // 3F 只放整板
+                '2F': { full: 4, partial: 5, scattered: 6 },   // 2F 混放
+                '1F': { full: 8, partial: 16, scattered: 20 }  // 1F 混放
             },
             
             // 入庫優先順序（2F → 3F → 1F）
@@ -5474,17 +5460,12 @@ console.log('✅ WMS 工具函數庫已載入');
             
             // 各區域的巷道數
             ZONE_LANES: {
-                'I-A': 8,
-                'I-B': 8,
-                'J-C': 8,
-                'J-D': 8,
-                'K-E': 22,
-                'K-F': 22,
-                'K-G': 22,
-                'K-H': 22
+                'I-A': 8, 'I-B': 8,
+                'J-C': 8, 'J-D': 8,
+                'K-E': 22, 'K-F': 22, 'K-G': 22, 'K-H': 22
             },
             
-            // 不足板判斷閾值
+            // 板型判斷閾值（依填充率）
             PALLET_FILL_THRESHOLDS: {
                 full: 0.75,      // ≥75% = 整板
                 partial: 0.50,   // 50%~74% = 不足板
@@ -5497,18 +5478,12 @@ console.log('✅ WMS 工具函數庫已載入');
                 standard: 15     // 6~15kg = 標準箱, >15kg = 大箱
             },
             
-            // 各箱子尺寸的容積係數
-            BOX_SIZE_VOLUME: {
-                small:    { full: 0.8,  partial: 0.6,  scattered: 0.4  },
-                standard: { full: 1.0,  partial: 0.75, scattered: 0.5  },
-                large:    { full: 1.25, partial: 0.9,  scattered: 0.6  }
-            },
-            
-            // 計算單巷總容積
-            get LANE_TOTAL_VOLUME() {
-                return this.LEVEL_VOLUME['1F'] + 
-                       this.LEVEL_VOLUME['2F'] + 
-                       this.LEVEL_VOLUME['3F'];  // 16+5+8 = 29
+            // 各箱子尺寸的容量調整係數
+            // 大箱佔空間較大，所以能放的板數較少
+            BOX_SIZE_FACTOR: {
+                small: 1.2,      // 小箱可多放 20%
+                standard: 1.0,   // 標準箱為基準
+                large: 0.8       // 大箱少放 20%
             }
         };
         
@@ -5520,52 +5495,33 @@ console.log('✅ WMS 工具函數庫已載入');
             return 'large';
         };
         
-        // 計算板的容積（依品項和件數）
-        window.calculatePalletVolume = function(product, quantity) {
-            var palletCapacity = product.palletCapacity || 40;
-            var unitWeight = product.unitWeight || 10;
-            var fillRate = quantity / palletCapacity;
-            
-            // 判斷板型
-            var palletType = 'scattered';
-            if (fillRate >= RACK_CONFIG.PALLET_FILL_THRESHOLDS.full) {
-                palletType = 'full';
-            } else if (fillRate >= RACK_CONFIG.PALLET_FILL_THRESHOLDS.partial) {
-                palletType = 'partial';
-            }
-            
-            // 依箱容判斷箱子尺寸，取得對應容積係數
-            var boxSize = getBoxSizeByWeight(unitWeight);
-            var volumeConfig = RACK_CONFIG.BOX_SIZE_VOLUME[boxSize];
-            var volume = volumeConfig[palletType];
-            
-            return {
-                type: palletType,
-                boxSize: boxSize,
-                volume: volume,
-                fillRate: fillRate
-            };
+        // 判斷板型（依填充率）
+        window.getPalletType = function(quantity, palletCapacity) {
+            var fillRate = quantity / (palletCapacity || 40);
+            if (fillRate >= RACK_CONFIG.PALLET_FILL_THRESHOLDS.full) return 'full';
+            if (fillRate >= RACK_CONFIG.PALLET_FILL_THRESHOLDS.partial) return 'partial';
+            return 'scattered';
         };
         
-        // 計算儲位剩餘容積
-        window.calculateLocationRemainingVolume = function(locationId, inventory) {
-            var parsed = parseLocationId(locationId);
-            if (!parsed) return 0;
+        // 取得某層對特定板型的容量
+        window.getLevelCapacity = function(levelStr, palletType, boxSize) {
+            var capacity = RACK_CONFIG.LEVEL_CAPACITY[levelStr];
+            if (!capacity) return 0;
             
-            var levelVolume = RACK_CONFIG.LEVEL_VOLUME[parsed.level] || 8;
-            var usedVolume = 0;
+            var baseCapacity = capacity[palletType] || 0;
+            var factor = RACK_CONFIG.BOX_SIZE_FACTOR[boxSize || 'standard'] || 1.0;
             
-            // 計算該儲位已使用的容積
-            inventory.forEach(function(item) {
-                if (item.locationId === locationId) {
-                    usedVolume += item.palletVolume || RACK_CONFIG.BOX_SIZE_VOLUME.standard.full;
-                }
-            });
-            
-            return Math.max(0, levelVolume - usedVolume);
+            return Math.floor(baseCapacity * factor);
         };
         
-        const LANE_CAPACITY = RACK_CONFIG.LANE_TOTAL_VOLUME; // 使用配置表的值
+        // 檢查某層是否可放特定板型
+        window.canLevelAccept = function(levelStr, palletType) {
+            var capacity = RACK_CONFIG.LEVEL_CAPACITY[levelStr];
+            if (!capacity) return false;
+            return capacity[palletType] > 0;
+        };
+        
+        const LANE_CAPACITY = 20; // 預設巷道容量
 
         function renderMapUI(gridId) {
             const container = document.getElementById(gridId); if(!container) return; container.innerHTML = '';
@@ -7558,129 +7514,77 @@ console.log('✅ WMS 工具函數庫已載入');
 
         window.smartAllocateLocations = function(items, options) {
             var opts = options || {};
-            var strategy = opts.strategy || 'clustered';
-            var available = [];
-            
-            try {
-                available = getFilteredAvailableLocations(opts) || [];
-            } catch (e) {
-                console.warn('getFilteredAvailableLocations 錯誤:', e);
-                available = [];
-            }
-            
             var allocations = [];
-
-            // ========== 使用統一的貨架配置 ==========
-            var LEVEL_VOLUME = window.RACK_CONFIG ? window.RACK_CONFIG.LEVEL_VOLUME : { '1F': 16, '2F': 5, '3F': 8 };
+            
+            // 取得配置
+            var LEVEL_CAPACITY = window.RACK_CONFIG ? window.RACK_CONFIG.LEVEL_CAPACITY : {
+                '3F': { full: 8, partial: 0, scattered: 0 },
+                '2F': { full: 4, partial: 5, scattered: 6 },
+                '1F': { full: 8, partial: 16, scattered: 20 }
+            };
             var LEVEL_PRIORITY = window.RACK_CONFIG ? window.RACK_CONFIG.LEVEL_PRIORITY : ['2F', '3F', '1F'];
-            var DEFAULT_VOLUME = window.RACK_CONFIG ? window.RACK_CONFIG.DEFAULT_VOLUME : { full: 1.0, partial: 0.75, scattered: 0.5 };
             var FILL_THRESHOLDS = window.RACK_CONFIG ? window.RACK_CONFIG.PALLET_FILL_THRESHOLDS : { full: 0.75, partial: 0.50 };
-
-            if (!available || available.length === 0) {
-                console.warn('沒有可用儲位，使用預設儲位');
-                var zones = opts.zones || ['A', 'B'];
-                for (var z = 0; z < zones.length; z++) {
-                    for (var lp = 0; lp < LEVEL_PRIORITY.length; lp++) {
-                        var levelStr = LEVEL_PRIORITY[lp];
-                        var l = parseInt(levelStr.replace('F', ''));
-                        for (var r = 1; r <= 10; r++) {
-                            available.push({
-                                locationId: 'I-' + zones[z] + '-' + (r < 10 ? '0' + r : r) + '-' + l + 'F',
-                                zone: zones[z],
-                                zoneChar: zones[z],
-                                row: r,
-                                level: l,
-                                levelStr: l + 'F',
-                                warehouse: 'I',
-                                volumeCapacity: LEVEL_VOLUME[l + 'F'] || 8,
-                                usedVolume: 0
-                            });
-                        }
-                    }
-                }
-            } else {
-                // 為現有空位加上容積資訊
-                available.forEach(function(loc) {
-                    loc.levelStr = loc.level + 'F';
-                    loc.volumeCapacity = LEVEL_VOLUME[loc.levelStr] || 8;
-                    loc.usedVolume = 0;
-                });
-            }
             
-            // 按優先順序排序儲位：區域 → 層數(2F優先) → 排號
-            available.sort(function(a, b) {
-                // 先按區域
-                if (a.zoneChar !== b.zoneChar) return a.zoneChar.localeCompare(b.zoneChar);
-                // 再按層數優先順序
-                var aPriority = LEVEL_PRIORITY.indexOf(a.levelStr);
-                var bPriority = LEVEL_PRIORITY.indexOf(b.levelStr);
-                if (aPriority === -1) aPriority = 99;
-                if (bPriority === -1) bPriority = 99;
-                if (aPriority !== bPriority) return aPriority - bPriority;
-                // 最後按排號
-                return a.row - b.row;
+            // 建立儲位追蹤表
+            // key: locationId, value: { full: 已用整板數, partial: 已用不足板數, scattered: 已用散板數 }
+            var locationUsage = {};
+            
+            // 初始化儲位
+            var zones = opts.zones || ['A', 'B'];
+            var warehouse = opts.warehouse || 'I';
+            
+            // 為每個區域的每個巷道建立儲位
+            zones.forEach(function(zone) {
+                for (var row = 1; row <= 10; row++) {
+                    LEVEL_PRIORITY.forEach(function(levelStr) {
+                        var locId = warehouse + '-' + zone + '-' + (row < 10 ? '0' + row : row) + '-' + levelStr;
+                        locationUsage[locId] = { full: 0, partial: 0, scattered: 0, levelStr: levelStr };
+                    });
+                }
             });
-
-            console.log('📦 儲位分析完成，共', available.length, '個儲位可用');
+            
+            console.log('📦 儲位初始化完成');
             console.log('📦 層數優先順序:', LEVEL_PRIORITY.join(' → '));
-            console.log('📦 各層容積: 2F=' + LEVEL_VOLUME['2F'] + ', 3F=' + LEVEL_VOLUME['3F'] + ', 1F=' + LEVEL_VOLUME['1F']);
+            console.log('📦 各層容量: 3F=整板' + LEVEL_CAPACITY['3F'].full + ', 2F=整板' + LEVEL_CAPACITY['2F'].full + '/不足板' + LEVEL_CAPACITY['2F'].partial + ', 1F=整板' + LEVEL_CAPACITY['1F'].full + '/不足板' + LEVEL_CAPACITY['1F'].partial);
             
-            // 取得現有庫存資料
-            function getExistingInventory() {
-                var pallets = [];
-                try {
-                    if (window.currentInventory && Array.isArray(window.currentInventory)) {
-                        pallets = window.currentInventory;
-                    } else if (typeof window.currentInventory === 'function') {
-                        pallets = window.currentInventory() || [];
-                    } else if (window._inventoryData && Array.isArray(window._inventoryData.pallets)) {
-                        pallets = window._inventoryData.pallets;
-                    }
-                } catch (e) {
-                    pallets = [];
-                }
-                return Array.isArray(pallets) ? pallets : [];
-            }
-            
-            // 查找現有庫存中同品項的儲位
-            function findExistingLocations(productName) {
-                var inventory = getExistingInventory();
-                var existingLocs = [];
+            // 找到可用的儲位
+            function findAvailableLocation(palletType, boxSize) {
+                var factor = (window.RACK_CONFIG && window.RACK_CONFIG.BOX_SIZE_FACTOR) ? 
+                    window.RACK_CONFIG.BOX_SIZE_FACTOR[boxSize || 'standard'] || 1.0 : 1.0;
                 
-                inventory.forEach(function(p) {
-                    if (p && p.productName === productName && p.locationId) {
-                        existingLocs.push(p.locationId);
-                    }
+                // 根據板型決定可用的層數
+                var allowedLevels = LEVEL_PRIORITY.filter(function(levelStr) {
+                    var cap = LEVEL_CAPACITY[levelStr];
+                    return cap && cap[palletType] > 0;
                 });
                 
-                return existingLocs;
-            }
-            
-            // 當前使用的儲位索引
-            var currentLocIdx = 0;
-            
-            items.forEach(function(item) {
-                var palletCount = item.palletCount || Math.ceil(item.quantity / item.perPallet);
-                console.log('🏷️ 處理品項:', item.productName, '需要', palletCount, '板');
-                
-                // 查找該品項現有庫存的儲位
-                var existingLocs = findExistingLocations(item.productName);
-                var isNearExisting = existingLocs.length > 0;
-                
-                // 如果有現有庫存，優先找同儲位或相鄰儲位
-                if (isNearExisting) {
-                    // 找到現有庫存的儲位在 available 中的位置
-                    for (var i = 0; i < available.length; i++) {
-                        if (existingLocs.indexOf(available[i].locationId) !== -1) {
-                            // 檢查該儲位是否還有容積
-                            if (available[i].usedVolume < available[i].volumeCapacity) {
-                                currentLocIdx = i;
-                                console.log('📍 找到現有庫存儲位:', available[i].locationId);
-                                break;
+                // 遍歷所有儲位找到可用的
+                for (var z = 0; z < zones.length; z++) {
+                    for (var row = 1; row <= 10; row++) {
+                        for (var lp = 0; lp < allowedLevels.length; lp++) {
+                            var levelStr = allowedLevels[lp];
+                            var locId = warehouse + '-' + zones[z] + '-' + (row < 10 ? '0' + row : row) + '-' + levelStr;
+                            var usage = locationUsage[locId];
+                            
+                            if (!usage) continue;
+                            
+                            // 計算該儲位的容量
+                            var maxCapacity = Math.floor(LEVEL_CAPACITY[levelStr][palletType] * factor);
+                            var currentUsed = usage[palletType] || 0;
+                            
+                            if (currentUsed < maxCapacity) {
+                                return locId;
                             }
                         }
                     }
                 }
+                
+                return 'OVERFLOW';
+            }
+            
+            // 處理每個品項
+            items.forEach(function(item) {
+                console.log('🏷️ 處理品項:', item.productName, '數量:', item.quantity, '每板:', item.perPallet);
                 
                 // 從品項主檔取得設定
                 var productMaster = window.productMasterData ? window.productMasterData.find(function(p) {
@@ -7689,26 +7593,23 @@ console.log('✅ WMS 工具函數庫已載入');
                 
                 var palletCapacity = (productMaster && productMaster.palletCapacity) ? productMaster.palletCapacity : (item.perPallet || 40);
                 var unitWeight = (productMaster && productMaster.unitWeight) ? productMaster.unitWeight : (item.unitWeight || 10);
-                
-                // 依箱容自動判斷箱子尺寸，取得對應容積係數
                 var boxSize = window.getBoxSizeByWeight ? window.getBoxSizeByWeight(unitWeight) : 'standard';
-                var volumeConfig = RACK_CONFIG.BOX_SIZE_VOLUME ? RACK_CONFIG.BOX_SIZE_VOLUME[boxSize] : { full: 1.0, partial: 0.75, scattered: 0.5 };
                 
-                // 分配板數
+                // 分配每一板
                 var remaining = item.quantity;
                 var palletNo = 1;
                 
+                // 生成統一的棧板編號基底
+                var now = new Date();
+                var dateStr = now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2);
+                var timeStr = ('0'+now.getHours()).slice(-2) + ('0'+now.getMinutes()).slice(-2) + ('0'+now.getSeconds()).slice(-2);
+                var randomStr = Math.random().toString(36).substr(2, 4).toUpperCase();
+                var palletIdBase = 'IN-' + dateStr + '-' + timeStr + '-' + randomStr;
+                
                 while (remaining > 0) {
-                    var palletQty = Math.min(remaining, item.perPallet);
-                    var palletWeight = 0;
+                    var palletQty = Math.min(remaining, palletCapacity);
                     
-                    if (item.productType === 'variable' && item.totalWeight > 0) {
-                        palletWeight = Math.round((palletQty / item.quantity) * item.totalWeight * 10) / 10;
-                    } else if (item.unitWeight > 0) {
-                        palletWeight = palletQty * item.unitWeight;
-                    }
-                    
-                    // 計算這板的容積（依填充率和箱子尺寸）
+                    // 判斷板型
                     var fillRate = palletQty / palletCapacity;
                     var palletType = 'scattered';
                     if (fillRate >= FILL_THRESHOLDS.full) {
@@ -7716,33 +7617,24 @@ console.log('✅ WMS 工具函數庫已載入');
                     } else if (fillRate >= FILL_THRESHOLDS.partial) {
                         palletType = 'partial';
                     }
-                    var palletVolume = volumeConfig[palletType] || 1.0;
                     
-                    // 找一個有足夠容積的儲位
-                    while (currentLocIdx < available.length && 
-                           (available[currentLocIdx].usedVolume + palletVolume) > available[currentLocIdx].volumeCapacity) {
-                        currentLocIdx++;
+                    // 計算重量
+                    var palletWeight = 0;
+                    if (item.productType === 'variable' && item.totalWeight > 0) {
+                        palletWeight = Math.round((palletQty / item.quantity) * item.totalWeight * 10) / 10;
+                    } else if (item.unitWeight > 0) {
+                        palletWeight = palletQty * item.unitWeight;
                     }
                     
-                    var locationId = 'OVERFLOW';
-                    if (currentLocIdx < available.length) {
-                        var loc = available[currentLocIdx];
-                        locationId = loc.locationId;
-                        loc.usedVolume += palletVolume;
-                        
-                        // 如果這個儲位快滿了，記錄一下
-                        if (loc.usedVolume >= loc.volumeCapacity * 0.9) {
-                            console.log('📍 儲位', locationId, '容積:', loc.usedVolume.toFixed(2) + '/' + loc.volumeCapacity, '(' + boxSize + ')');
-                        }
+                    // 找到可用儲位
+                    var locationId = findAvailableLocation(palletType, boxSize);
+                    
+                    // 更新儲位使用量
+                    if (locationId !== 'OVERFLOW' && locationUsage[locationId]) {
+                        locationUsage[locationId][palletType]++;
                     }
                     
-                    // 生成統一的棧板編號：IN-YYYYMMDD-HHMMSS-XXXX
-                    var now = new Date();
-                    var dateStr = now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2);
-                    var timeStr = ('0'+now.getHours()).slice(-2) + ('0'+now.getMinutes()).slice(-2) + ('0'+now.getSeconds()).slice(-2);
-                    var randomStr = Math.random().toString(36).substr(2, 4).toUpperCase();
-                    var palletIdBase = 'IN-' + dateStr + '-' + timeStr + '-' + randomStr;
-                    
+                    // 建立標籤
                     var allocation = {
                         id: palletIdBase + '-' + String(palletNo).padStart(3, '0'),
                         company: item.company || '崇文',
@@ -7758,12 +7650,13 @@ console.log('✅ WMS 工具函數庫已載入');
                         locationId: locationId,
                         palletNo: palletIdBase + '-' + String(palletNo).padStart(3, '0'),
                         palletType: palletType,
-                        palletVolume: palletVolume,
-                        nearExisting: isNearExisting && palletNo === 1,
+                        boxSize: boxSize,
                         overflow: locationId === 'OVERFLOW'
                     };
                     
                     allocations.push(allocation);
+                    console.log('  板' + palletNo + ':', palletQty + '件', '(' + palletType + ')', '→', locationId);
+                    
                     remaining -= palletQty;
                     palletNo++;
                 }
@@ -8024,13 +7917,15 @@ console.log('✅ WMS 工具函數庫已載入');
             html += '.cell-batch { width: 40%; border-right: 2px solid #000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2mm; }';
             html += '.cell-exp { width: 40%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2mm; }';
             html += '.cell-label { font-size: 14px; color: #666; margin-bottom: 2mm; }';
-            html += '.cell-value { font-size: 48px; font-weight: 900; white-space: nowrap; }';
+            html += '.cell-value { font-weight: 900; white-space: nowrap; }';
             html += '.cell-value.qty { color: #dc2626; font-size: 64px; }';
+            html += '.cell-value.batch { font-size: 60px; }';
+            html += '.cell-value.exp { font-size: 60px; }';
             
             // 第四列：儲位 + 公司 (剩餘空間約 30mm)
             html += '.row-4 { flex: 1; display: flex; align-items: center; padding: 3mm 8mm; }';
-            html += '.location-box { background: #000; color: #fff; font-size: 48px; font-weight: 900; padding: 4mm 15mm; margin-right: 15mm; }';
-            html += '.company-box { font-size: 48px; font-weight: 700; color: #333; }';
+            html += '.location-box { background: #000; color: #fff; font-size: 64px; font-weight: 900; padding: 4mm 15mm; margin-right: 15mm; }';
+            html += '.company-box { font-size: 64px; font-weight: 700; color: #333; }';
             
             html += '.no-print { text-align: center; padding: 20px; background: #f0f0f0; }';
             html += '.no-print button { padding: 15px 40px; font-size: 18px; border: none; cursor: pointer; font-weight: bold; margin: 0 10px; border-radius: 8px; }';
@@ -8047,29 +7942,17 @@ console.log('✅ WMS 工具函數庫已載入');
                 var palletNo = label.palletNo || label.id || ('P-' + (idx + 1));
                 var company = label.company || '崇文';
                 
-                // 品名字體大小：預設144px，超過6字折行縮小到72px
+                // 品名字體大小：預設144px
                 var nameFontSize = 144;
-                if (productName.length > 6) {
-                    nameFontSize = 72;
-                }
-                if (productName.length > 12) {
-                    nameFontSize = 56;
-                }
-                if (productName.length > 18) {
-                    nameFontSize = 42;
-                }
+                if (productName.length > 6) nameFontSize = 72;
+                if (productName.length > 12) nameFontSize = 56;
+                if (productName.length > 18) nameFontSize = 42;
                 
-                // 規格字體大小：預設120px，超過8字折行縮小到60px
+                // 規格字體大小：預設120px
                 var specFontSize = 120;
-                if (specText.length > 8) {
-                    specFontSize = 60;
-                }
-                if (specText.length > 16) {
-                    specFontSize = 42;
-                }
-                if (specText.length > 24) {
-                    specFontSize = 32;
-                }
+                if (specText.length > 8) specFontSize = 100;
+                if (specText.length > 16) specFontSize = 60;
+                if (specText.length > 24) specFontSize = 44;
 
                 html += '<div class="label-page"><div class="label-content">';
 
@@ -8092,8 +7975,8 @@ console.log('✅ WMS 工具函數庫已載入');
                 // 第三列：數量20%、批號40%、效期40%
                 html += '<div class="row-3">';
                 html += '<div class="cell-qty"><div class="cell-label">數量</div><div class="cell-value qty">' + label.quantity + '</div></div>';
-                html += '<div class="cell-batch"><div class="cell-label">批號</div><div class="cell-value">' + (label.batchNo || '-') + '</div></div>';
-                html += '<div class="cell-exp"><div class="cell-label">效期</div><div class="cell-value">' + expDisplay + '</div></div>';
+                html += '<div class="cell-batch"><div class="cell-label">批號</div><div class="cell-value batch">' + (label.batchNo || '-') + '</div></div>';
+                html += '<div class="cell-exp"><div class="cell-label">效期</div><div class="cell-value exp">' + expDisplay + '</div></div>';
                 html += '</div>';
 
                 // 第四列：儲位、公司
@@ -16989,29 +16872,38 @@ window.clearLocalStorage = function() {
             html += '@page { size: A4 landscape; margin: 0; }';
             html += '* { margin: 0; padding: 0; box-sizing: border-box; }';
             html += 'body { font-family: Microsoft JhengHei, Arial, sans-serif; background: #fff; }';
-            html += '.label-page { width: 297mm; height: 210mm; padding: 3mm; box-sizing: border-box; overflow: hidden; }';
-            html += '.label-content { height: 100%; border: 3px solid #000; display: flex; flex-direction: column; overflow: hidden; }';
-            // 第一列：QR code 8x8cm + 品名144px (固定高度80mm)
-            html += '.row-1 { height: 80mm; min-height: 80mm; max-height: 80mm; display: flex; align-items: center; border-bottom: 3px solid #000; padding: 0 8mm; overflow: hidden; }';
-            html += '.qr-container { width: 80mm; height: 76mm; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }';
-            html += '.qr-box { width: 68mm; height: 68mm; }';
+            html += '.label-page { width: 297mm; height: 210mm; padding: 5mm; box-sizing: border-box; overflow: hidden; }';
+            html += '.label-content { width: 100%; height: 100%; border: 3px solid #000; display: flex; flex-direction: column; overflow: hidden; }';
+            
+            // 第一列：QR code 8x8cm + 品名 (高度 85mm)
+            html += '.row-1 { height: 85mm; display: flex; border-bottom: 3px solid #000; }';
+            html += '.qr-section { width: 90mm; border-right: 2px solid #000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3mm; }';
+            html += '.qr-box { width: 80mm; height: 80mm; }';
             html += '.qr-box svg { width: 100% !important; height: 100% !important; }';
-            html += '.qr-label { font-size: 11px; color: #666; margin-top: 1mm; text-align: center; white-space: nowrap; }';
-            html += '.product-name { flex: 1; font-size: 144px; font-weight: 900; text-align: center; line-height: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; }';
-            // 第二列：規格自動縮放 (固定高度35mm)
-            html += '.row-2 { height: 35mm; min-height: 35mm; max-height: 35mm; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #000; overflow: hidden; padding: 0 5mm; }';
-            html += '.product-spec { font-weight: 700; color: #333; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }';
-            // 第三列：數量、批號、效期60px (固定高度45mm，不折行)
-            html += '.row-3 { height: 45mm; min-height: 45mm; max-height: 45mm; display: flex; border-bottom: 2px solid #000; }';
-            html += '.info-cell { flex: 1; text-align: center; padding: 2mm; border-right: 1px solid #ccc; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }';
-            html += '.info-cell:last-child { border-right: none; }';
-            html += '.info-label { font-size: 12px; color: #666; margin-bottom: 1mm; }';
-            html += '.info-value { font-size: 60px; font-weight: 900; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }';
-            html += '.info-value.qty-val { color: #dc2626; }';
-            // 第四列：儲位36px + 廠商36px (剩餘空間)
-            html += '.row-4 { flex: 1; display: flex; align-items: center; padding: 2mm 8mm; min-height: 30mm; }';
-            html += '.location-box { background: #000; color: #fff; font-size: 36px; font-weight: 900; padding: 3mm 10mm; margin-right: 10mm; white-space: nowrap; }';
-            html += '.vendor-box { font-size: 36px; font-weight: 700; color: #333; flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }';
+            html += '.pallet-no { font-size: 14px; font-weight: bold; color: #333; margin-top: 2mm; text-align: center; }';
+            html += '.name-section { flex: 1; display: flex; align-items: center; justify-content: center; padding: 5mm; overflow: hidden; }';
+            html += '.product-name { font-weight: 900; text-align: center; line-height: 1.1; word-break: break-word; }';
+            
+            // 第二列：規格 (高度 40mm)
+            html += '.row-2 { height: 40mm; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #000; padding: 3mm 8mm; overflow: hidden; }';
+            html += '.product-spec { font-weight: 700; color: #333; text-align: center; line-height: 1.2; word-break: break-word; }';
+            
+            // 第三列：數量20%、批號40%、效期40% (高度 45mm)
+            html += '.row-3 { height: 45mm; display: flex; border-bottom: 3px solid #000; }';
+            html += '.cell-qty { width: 20%; border-right: 2px solid #000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2mm; }';
+            html += '.cell-batch { width: 40%; border-right: 2px solid #000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2mm; }';
+            html += '.cell-exp { width: 40%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2mm; }';
+            html += '.cell-label { font-size: 14px; color: #666; margin-bottom: 2mm; }';
+            html += '.cell-value { font-weight: 900; white-space: nowrap; }';
+            html += '.cell-value.qty { color: #dc2626; font-size: 64px; }';
+            html += '.cell-value.batch { font-size: 60px; }';
+            html += '.cell-value.exp { font-size: 60px; }';
+            
+            // 第四列：儲位 + 公司 (剩餘空間約 30mm)
+            html += '.row-4 { flex: 1; display: flex; align-items: center; padding: 3mm 8mm; }';
+            html += '.location-box { background: #000; color: #fff; font-size: 64px; font-weight: 900; padding: 4mm 15mm; margin-right: 15mm; }';
+            html += '.company-box { font-size: 64px; font-weight: 700; color: #333; }';
+            
             html += '.no-print { text-align: center; padding: 20px; }';
             html += '.no-print button { padding: 15px 40px; font-size: 18px; border: none; cursor: pointer; font-weight: bold; margin: 0 10px; border-radius: 8px; }';
             html += '.btn-print { background: #059669; color: white; }';
@@ -17020,36 +16912,52 @@ window.clearLocalStorage = function() {
             html += '</style>';
             html += '</head><body>';
 
-            // 根據規格文字長度動態調整字體大小 100/80/60/45/36
+            var productName = order.productName || '-';
             var specText = order.spec || '-';
-            var specFontSize = 100;
-            if (specText.length > 10) specFontSize = 80;
-            if (specText.length > 15) specFontSize = 60;
-            if (specText.length > 25) specFontSize = 45;
-            if (specText.length > 35) specFontSize = 36;
+            var palletNo = order.docNo || '-';
+            var company = order.company || '崇文';
+            
+            // 品名字體大小：預設144px
+            var nameFontSize = 144;
+            if (productName.length > 6) nameFontSize = 72;
+            if (productName.length > 12) nameFontSize = 56;
+            if (productName.length > 18) nameFontSize = 42;
+            
+            // 規格字體大小：預設120px
+            var specFontSize = 120;
+            if (specText.length > 8) specFontSize = 100;
+            if (specText.length > 16) specFontSize = 60;
+            if (specText.length > 24) specFontSize = 44;
 
             html += '<div class="label-page"><div class="label-content">';
 
-            // 第一列：QR code + 品名
+            // 第一列：QR code + 棧板號 | 品名
             html += '<div class="row-1">';
-            html += '<div class="qr-container"><div id="qrcode" class="qr-box"></div><div class="qr-label">' + order.docNo + '</div></div>';
-            html += '<div class="product-name">' + order.productName + '</div>';
+            html += '<div class="qr-section">';
+            html += '<div id="qrcode" class="qr-box"></div>';
+            html += '<div class="pallet-no">' + palletNo + '</div>';
+            html += '</div>';
+            html += '<div class="name-section">';
+            html += '<div class="product-name" style="font-size:' + nameFontSize + 'px;">' + productName + '</div>';
+            html += '</div>';
             html += '</div>';
 
-            // 第二列：規格 (自動縮放字體)
-            html += '<div class="row-2"><div class="product-spec" style="font-size:' + specFontSize + 'px;">' + specText + '</div></div>';
+            // 第二列：規格
+            html += '<div class="row-2">';
+            html += '<div class="product-spec" style="font-size:' + specFontSize + 'px;">' + specText + '</div>';
+            html += '</div>';
 
-            // 第三列：數量、批號、效期
+            // 第三列：數量20%、批號40%、效期40%
             html += '<div class="row-3">';
-            html += '<div class="info-cell"><div class="info-label">數量</div><div class="info-value qty-val">' + order.quantity + '</div></div>';
-            html += '<div class="info-cell"><div class="info-label">批號</div><div class="info-value">' + (order.batchNo || '-') + '</div></div>';
-            html += '<div class="info-cell"><div class="info-label">效期</div><div class="info-value">' + (order.expDate || '-') + '</div></div>';
+            html += '<div class="cell-qty"><div class="cell-label">數量</div><div class="cell-value qty">' + order.quantity + '</div></div>';
+            html += '<div class="cell-batch"><div class="cell-label">批號</div><div class="cell-value batch">' + (order.batchNo || '-') + '</div></div>';
+            html += '<div class="cell-exp"><div class="cell-label">效期</div><div class="cell-value exp">' + (order.expDate || '-') + '</div></div>';
             html += '</div>';
 
-            // 第四列：儲位、廠商
+            // 第四列：儲位、公司
             html += '<div class="row-4">';
             html += '<div class="location-box">' + (order.locationId || '待分配') + '</div>';
-            html += '<div class="vendor-box">' + (order.vendor || '-') + '</div>';
+            html += '<div class="company-box">' + company + '</div>';
             html += '</div>';
 
             html += '</div></div>';
@@ -17061,7 +16969,7 @@ window.clearLocalStorage = function() {
 
             html += '<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>';
             html += '<script>window.onload = function() {';
-            html += 'try { var qr = qrcode(0, "M"); qr.addData("' + order.docNo + '"); qr.make(); document.getElementById("qrcode").innerHTML = qr.createSvgTag(0, 0); } catch(e) { console.error(e); }';
+            html += 'try { var qr = qrcode(0, "M"); qr.addData("' + palletNo + '"); qr.make(); document.getElementById("qrcode").innerHTML = qr.createSvgTag(0, 0); } catch(e) { console.error(e); }';
             html += '};<\/script>';
             html += '</body></html>';
 
