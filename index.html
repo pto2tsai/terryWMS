@@ -925,7 +925,7 @@
                                                     <button type="button" onclick="selectInboundType('Raw')" id="btn-type-Raw" class="inbound-type-btn active py-1 rounded border border-emerald-500 bg-emerald-900/50 text-white text-[10px] font-bold">採購</button>
                                                     <button type="button" onclick="selectInboundType('FG')" id="btn-type-FG" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">成品</button>
                                                     <button type="button" onclick="selectInboundType('WIP')" id="btn-type-WIP" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">半成品</button>
-                                                    <button type="button" onclick="selectInboundType('Return')" id="btn-type-Return" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">退庫</button>
+                                                    <button type="button" onclick="selectInboundType('RM')" id="btn-type-RM" class="inbound-type-btn py-1 rounded border border-slate-600 bg-slate-800 text-slate-400 text-[10px]">原料</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -969,12 +969,7 @@
                         <div id="location-section" class="bg-emerald-900/40 border border-emerald-500 rounded-lg p-3 flex flex-col flex-1">
                             <div class="flex justify-between items-center mb-2">
                                 <div class="text-emerald-400 font-bold text-sm"><i class="fa-solid fa-map-marker-alt mr-1"></i>選擇儲位</div>
-                                <div class="flex gap-2 items-center">
-                                    <button onclick="calculateSmartSuggest()" class="px-2 py-1 bg-yellow-600 hover:bg-yellow-500 text-white rounded text-xs font-bold">
-                                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>建議
-                                    </button>
-                                    <input type="text" id="in-loc" class="w-28 p-1.5 bg-slate-800 border-2 border-emerald-500 rounded text-sm font-bold text-emerald-400 text-center" placeholder="儲位" oninput="validateLocationInput(); updateInboundProgress();" onchange="validateLocationInput()">
-                                </div>
+                                <input type="text" id="in-loc" class="w-32 p-1.5 bg-slate-800 border-2 border-emerald-500 rounded text-sm font-bold text-emerald-400 text-center" placeholder="儲位" oninput="validateLocationInput(); updateInboundProgress();" onchange="validateLocationInput()">
                             </div>
 
                             <!-- 快速選擇暫存區（精簡版）-->
@@ -994,9 +989,15 @@
                                 </div>
                             </div>
 
-                            <!-- 智能建議列表 -->
-                            <div id="smart-suggest-panel" class="mb-2 hidden">
-                                <div id="smart-suggest-list"></div>
+                            <!-- 智能建議列表（自動顯示）-->
+                            <div id="smart-suggest-panel" class="mb-2">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-xs text-yellow-400 font-bold"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>智能建議</span>
+                                    <span id="suggest-loading" class="text-[10px] text-slate-500 hidden"><i class="fa-solid fa-spinner fa-spin mr-1"></i>分析中...</span>
+                                </div>
+                                <div id="smart-suggest-list">
+                                    <div class="text-slate-500 text-xs text-center py-2">請先選擇品項</div>
+                                </div>
                             </div>
 
                             <!-- 倉庫地圖 -->
@@ -1021,12 +1022,13 @@
                         <div class="bg-purple-900/40 border border-purple-500 rounded-lg p-3 flex flex-col h-full">
                             <div class="text-purple-400 font-bold text-sm mb-2"><i class="fa-solid fa-check-circle mr-1"></i>確認入庫</div>
 
-                            <!-- 完成度檢查（精簡版）-->
+                            <!-- 待確認清單（公司、品名、數量、效期、儲位）-->
                             <div id="inbound-checklist" class="bg-slate-800/70 rounded p-2 mb-2 text-xs space-y-1">
-                                <div class="flex items-center gap-1" id="check-name"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-400">品名</span></div>
-                                <div class="flex items-center gap-1" id="check-qty"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-400">數量</span></div>
-                                <div class="flex items-center gap-1" id="check-exp"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-400">效期</span></div>
-                                <div class="flex items-center gap-1" id="check-loc"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-400">儲位</span></div>
+                                <div class="flex items-center gap-1" id="check-company"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-500">公司</span></div>
+                                <div class="flex items-center gap-1" id="check-name"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-500">品名</span></div>
+                                <div class="flex items-center gap-1" id="check-qty"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-500">數量</span></div>
+                                <div class="flex items-center gap-1" id="check-exp"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-500">效期</span></div>
+                                <div class="flex items-center gap-1" id="check-loc"><i class="fa-solid fa-circle text-slate-600 text-[8px]"></i><span class="text-slate-500">儲位</span></div>
                             </div>
 
                             <!-- 入庫指令單預覽（精簡版）-->
@@ -1129,96 +1131,166 @@
             </div>
 
             <div id="view-pre-inbound" class="view-panel h-full hidden flex p-3 gap-3">
-                <!-- 左側：匯入與設定 -->
-                <div class="w-80 glass-panel p-3 flex flex-col">
-                    <h3 class="text-white font-bold mb-2 text-sm border-b border-slate-700 pb-2">📦 貨櫃入庫作業</h3>
-
-                    <!-- 1. Excel 匯入 -->
-                    <div class="mb-2 bg-slate-800 p-2 rounded border border-slate-700">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-xs text-blue-400 font-bold">1. Excel 匯入</span>
-                            <button onclick="downloadTemplate('container')" class="text-[10px] text-slate-400 underline">下載範本</button>
+                <!-- 左側：品項輸入 -->
+                <div class="w-64 glass-panel p-3 flex flex-col overflow-y-auto flex-shrink-0">
+                    <!-- 區塊1: 公司別 -->
+                    <div class="mb-3">
+                        <div class="text-xs text-slate-500 mb-1 flex items-center">
+                            <i class="fa-solid fa-building w-4 text-center mr-1"></i>公司別
                         </div>
-                        <input type="file" id="containerExcel" accept=".xlsx" class="hidden" onchange="handleContainerImport(event)">
-                        <button onclick="document.getElementById('containerExcel').click()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-bold">
-                            <i class="fa-solid fa-file-excel mr-1"></i>上傳 Excel
-                        </button>
-                        <div class="text-[10px] text-slate-500 mt-1">欄位：廠商、品名、規格、批號、效期、數量、每板數、箱容kg、總重量kg、類型(定重/不定重)</div>
+                        <div class="flex gap-1 bg-slate-800 rounded-lg p-1">
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="pre-company" value="崇文" class="hidden peer" checked>
+                                <div class="text-center py-1.5 rounded text-xs font-bold peer-checked:bg-blue-600 peer-checked:text-white text-slate-400 transition-all">崇文</div>
+                            </label>
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="pre-company" value="八方" class="hidden peer">
+                                <div class="text-center py-1.5 rounded text-xs font-bold peer-checked:bg-purple-600 peer-checked:text-white text-slate-400 transition-all">八方</div>
+                            </label>
+                        </div>
                     </div>
 
-                    <!-- 1. 手動新增品項（與 Excel 並行）-->
-                    <div class="mb-2 bg-slate-800 p-2 rounded border border-slate-700">
-                        <div class="text-xs text-cyan-400 font-bold mb-2">1. 手動新增品項</div>
-                        <div class="space-y-1.5">
-                            <!-- 公司選擇 -->
-                            <div class="flex gap-1 bg-slate-900 rounded p-1">
-                                <label class="flex-1 cursor-pointer">
-                                    <input type="radio" name="pre-company" value="崇文" class="hidden peer" checked>
-                                    <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-blue-600 peer-checked:text-white text-slate-400">崇文</div>
-                                </label>
-                                <label class="flex-1 cursor-pointer">
-                                    <input type="radio" name="pre-company" value="八方" class="hidden peer">
-                                    <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-purple-600 peer-checked:text-white text-slate-400">八方</div>
-                                </label>
+                    <!-- 區塊2: 匯入方式切換 -->
+                    <div class="mb-3">
+                        <div class="flex gap-1 bg-slate-900 rounded-lg p-0.5 mb-2">
+                            <button onclick="switchContainerInputMode('manual')" id="btn-mode-manual" class="flex-1 py-1.5 rounded text-xs font-bold bg-cyan-600 text-white transition-all">
+                                <i class="fa-solid fa-keyboard mr-1"></i>手動新增
+                            </button>
+                            <button onclick="switchContainerInputMode('excel')" id="btn-mode-excel" class="flex-1 py-1.5 rounded text-xs font-bold bg-slate-800 text-slate-400 hover:bg-slate-700 transition-all">
+                                <i class="fa-solid fa-file-excel mr-1"></i>Excel匯入
+                            </button>
+                        </div>
+
+                        <!-- Excel 匯入區（預設隱藏）-->
+                        <div id="container-excel-panel" class="hidden">
+                            <input type="file" id="containerExcel" accept=".xlsx" class="hidden" onchange="handleContainerImport(event)">
+                            <button onclick="document.getElementById('containerExcel').click()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold mb-2">
+                                <i class="fa-solid fa-upload mr-1"></i>上傳 Excel 檔案
+                            </button>
+                            <div class="flex justify-between items-center">
+                                <span class="text-[10px] text-slate-500">支援 .xlsx 格式</span>
+                                <button onclick="downloadTemplate('container')" class="text-[10px] text-blue-400 hover:text-blue-300 underline">下載範本</button>
                             </div>
-                            <input type="text" id="pre-vendor" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="廠商">
-                            <!-- 品名（從品項主檔開窗選擇）-->
+                        </div>
+
+                        <!-- 手動新增區（預設顯示）-->
+                        <div id="container-manual-panel" class="space-y-2">
+                            <!-- 產品資訊 -->
+                            <div class="text-xs text-slate-500 mb-1 flex items-center">
+                                <i class="fa-solid fa-box w-4 text-center mr-1"></i>產品資訊
+                            </div>
                             <div class="relative">
-                                <input type="text" id="pre-name" class="w-full p-1.5 pr-12 bg-slate-900 border border-emerald-600/50 rounded text-white text-sm font-bold" placeholder="點擊選擇品項..." readonly>
-                                <button onclick="openProductSelectModal('container')" class="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold">
-                                    <i class="fa-solid fa-search"></i>
+                                <input type="text" id="pre-name" class="w-full p-2 pr-14 bg-slate-800 border-2 border-emerald-500 rounded-lg text-white text-sm font-bold" placeholder="點擊選擇品項..." readonly>
+                                <button onclick="openProductSelectModal('container')" class="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold">
+                                    <i class="fa-solid fa-search mr-0.5"></i>選擇
                                 </button>
                             </div>
                             <input type="hidden" id="pre-product-code" value="">
-                            <input type="text" id="pre-spec" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="規格（自動帶入）">
+                            <div class="relative">
+                                <span class="absolute left-2 top-1/2 -translate-y-1/2 text-yellow-400 text-[10px]">規格</span>
+                                <input type="text" id="pre-spec" class="w-full p-1.5 pl-10 bg-slate-800 border border-yellow-500/30 rounded text-yellow-400 text-sm" placeholder="自動帶入">
+                            </div>
+
+                            <!-- 分隔線 -->
+                            <div class="border-t border-slate-700 my-1"></div>
+
+                            <!-- 入庫資料 -->
+                            <div class="text-xs text-slate-500 mb-1 flex items-center">
+                                <i class="fa-solid fa-clipboard-list w-4 text-center mr-1"></i>入庫資料
+                            </div>
                             <div class="grid grid-cols-2 gap-1.5">
-                                <input type="text" id="pre-batch" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="批號 *">
-                                <input type="date" id="pre-exp" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm">
+                                <div class="relative">
+                                    <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">批號</span>
+                                    <input type="text" id="pre-batch" class="w-full p-1.5 pl-9 bg-slate-800 border border-slate-600 rounded text-white text-sm">
+                                </div>
+                                <div class="relative">
+                                    <span class="absolute left-2 top-1/2 -translate-y-1/2 text-orange-400 text-[10px]">效期*</span>
+                                    <input type="date" id="pre-exp" class="w-full p-1.5 pl-9 bg-slate-800 border border-orange-500/30 rounded text-white text-sm">
+                                </div>
                             </div>
-                            <!-- 品項類型選擇 -->
-                            <div class="flex gap-1 bg-slate-900 rounded p-1">
-                                <label class="flex-1 cursor-pointer">
-                                    <input type="radio" name="pre-product-type" value="fixed" class="hidden peer" checked onchange="togglePreProductType('fixed')">
-                                    <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-blue-600 peer-checked:text-white text-slate-400">📦 定重</div>
-                                </label>
-                                <label class="flex-1 cursor-pointer">
-                                    <input type="radio" name="pre-product-type" value="variable" class="hidden peer" onchange="togglePreProductType('variable')">
-                                    <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-amber-600 peer-checked:text-white text-slate-400">⚖️ 不定重</div>
-                                </label>
+
+                            <!-- 品項類型標籤（自動判斷）-->
+                            <div id="pre-product-type-badge" class="hidden">
+                                <span id="pre-type-badge-label" class="px-2 py-1 rounded text-xs font-bold bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                                    📦 定重品
+                                </span>
+                                <input type="radio" name="pre-product-type" value="fixed" class="hidden" checked>
+                                <input type="radio" name="pre-product-type" value="variable" class="hidden">
                             </div>
+
                             <!-- 定重品欄位 -->
-                            <div id="pre-fixed-fields" class="grid grid-cols-3 gap-1.5">
-                                <input type="number" id="pre-qty" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center" placeholder="數量 *">
-                                <input type="number" id="pre-per-pallet" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center" value="50" placeholder="每板數">
-                                <input type="number" id="pre-unit-weight" class="p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center" placeholder="箱容kg" step="0.1">
+                            <div id="pre-fixed-fields">
+                                <div class="relative">
+                                    <span class="absolute left-2 top-1/2 -translate-y-1/2 text-cyan-400 text-xs font-bold">數量*</span>
+                                    <input type="number" id="pre-qty" class="w-full p-2 pl-12 pr-8 bg-slate-800 border-2 border-cyan-500/50 rounded-lg text-white text-lg font-bold text-center" placeholder="0">
+                                    <span class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm">件</span>
+                                </div>
                             </div>
+
                             <!-- 不定重品欄位 -->
                             <div id="pre-variable-fields" class="hidden space-y-1.5">
                                 <div class="grid grid-cols-2 gap-1.5">
                                     <div class="relative">
-                                        <input type="number" id="pre-qty-var" class="w-full p-1.5 bg-slate-900 border border-amber-600/50 rounded text-white text-sm text-center pr-6" placeholder="數量 *">
+                                        <span class="absolute left-2 top-1/2 -translate-y-1/2 text-amber-400 text-[10px]">數量*</span>
+                                        <input type="number" id="pre-qty-var" class="w-full p-1.5 pl-10 pr-6 bg-slate-800 border border-amber-500/50 rounded text-white text-sm font-bold text-center">
                                         <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-[10px]">件</span>
                                     </div>
                                     <div class="relative">
-                                        <input type="number" id="pre-total-weight" class="w-full p-1.5 bg-slate-900 border border-amber-600/50 rounded text-white text-sm text-center pr-6" placeholder="總重量 *" step="0.1">
+                                        <span class="absolute left-2 top-1/2 -translate-y-1/2 text-amber-400 text-[10px]">總重*</span>
+                                        <input type="number" id="pre-total-weight" class="w-full p-1.5 pl-10 pr-6 bg-slate-800 border border-amber-500/50 rounded text-white text-sm font-bold text-center" step="0.1">
                                         <span class="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 text-[10px]">kg</span>
                                     </div>
                                 </div>
-                                <input type="number" id="pre-per-pallet-var" class="w-full p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm text-center" value="50" placeholder="每板數">
                             </div>
-                            <button onclick="addContainerItemAndGenerate()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold">
-                                <i class="fa-solid fa-plus mr-1"></i>新增品項
+
+                            <!-- 更多選項 -->
+                            <div class="border-t border-dashed border-slate-700 pt-2">
+                                <button onclick="toggleContainerMoreOptions()" id="btn-container-more" class="w-full py-1 text-slate-500 hover:text-slate-300 text-xs flex items-center justify-center gap-1">
+                                    <i class="fa-solid fa-chevron-down" id="container-more-icon"></i>
+                                    <span id="container-more-text">更多選項</span>
+                                </button>
+                                <div id="container-more-panel" class="hidden mt-2 space-y-1.5">
+                                    <div class="relative">
+                                        <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">廠商</span>
+                                        <input type="text" id="pre-vendor" class="w-full p-1.5 pl-10 bg-slate-800 border border-slate-600 rounded text-white text-sm">
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-1.5">
+                                        <div class="relative">
+                                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">每板數</span>
+                                            <input type="number" id="pre-per-pallet" class="w-full p-1.5 pl-14 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center" value="40">
+                                        </div>
+                                        <div class="relative" id="pre-unit-weight-row">
+                                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">箱容</span>
+                                            <input type="number" id="pre-unit-weight" class="w-full p-1.5 pl-10 pr-6 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center" step="0.1">
+                                            <span class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">kg</span>
+                                        </div>
+                                    </div>
+                                    <!-- 不定重每板數 -->
+                                    <div id="pre-per-pallet-var-row" class="hidden relative">
+                                        <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">每板數</span>
+                                        <input type="number" id="pre-per-pallet-var" class="w-full p-1.5 pl-14 bg-slate-800 border border-slate-600 rounded text-white text-sm text-center" value="40">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 新增按鈕 -->
+                            <button onclick="addContainerItemAndGenerate()" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold mt-2">
+                                <i class="fa-solid fa-plus mr-1"></i>新增到清單
                             </button>
                         </div>
                     </div>
+                </div>
 
-                    <!-- 2. 儲位區域設定 -->
-                    <div class="flex-1 bg-slate-800 p-2 rounded border border-slate-700">
+                <!-- 中間：儲位策略 + 品項清單（加寬）-->
+                <div class="flex-1 flex flex-col gap-2 min-w-0">
+                    <!-- 儲位策略（移到這裡）-->
+                    <div class="glass-panel p-3">
                         <div class="flex justify-between items-center mb-2">
-                            <span class="text-xs text-yellow-400 font-bold">2. 儲位區域設定</span>
-                            <button onclick="showAvailableLocations()" class="text-[10px] text-blue-400 underline">查看空位</button>
+                            <span class="text-xs text-yellow-400 font-bold flex items-center">
+                                <i class="fa-solid fa-map-location-dot w-4 text-center mr-1"></i>儲位區域設定
+                            </span>
+                            <button onclick="showAvailableLocations()" class="text-[10px] text-blue-400 hover:text-blue-300 underline">查看空位</button>
                         </div>
-                        <!-- 區域勾選按鈕 -->
                         <div class="grid grid-cols-8 gap-1 mb-2">
                             <label class="zone-check-btn"><input type="checkbox" value="A" checked class="container-zone-cb hidden"><span class="block text-center py-1.5 rounded text-xs font-bold cursor-pointer bg-blue-600 text-white">A</span></label>
                             <label class="zone-check-btn"><input type="checkbox" value="B" checked class="container-zone-cb hidden"><span class="block text-center py-1.5 rounded text-xs font-bold cursor-pointer bg-blue-600 text-white">B</span></label>
@@ -1231,7 +1303,7 @@
                         </div>
                         <select id="container-zones" class="hidden"></select>
                         <div class="flex items-center gap-2">
-                            <select id="container-strategy" class="flex-1 p-1.5 bg-slate-900 border border-slate-600 rounded text-white text-xs">
+                            <select id="container-strategy" class="flex-1 p-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs">
                                 <option value="clustered" selected>同品項集中</option>
                                 <option value="sequential">順序分配</option>
                             </select>
@@ -1240,36 +1312,43 @@
                             </label>
                         </div>
                         <div id="available-count" class="text-xs text-emerald-400 mt-1"></div>
-                    </div>
-                </div>
-
-                <!-- 中間：品項清單 -->
-                <div class="w-72 glass-panel p-3 flex flex-col">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="text-white font-bold text-sm">📋 入庫品項清單</h3>
-                        <button onclick="clearContainerItems()" class="text-xs text-red-400 hover:text-red-300">清除全部</button>
-                    </div>
-                    <div id="container-items-list" class="flex-1 overflow-y-auto space-y-2">
-                        <div class="text-center text-slate-500 py-6">
-                            <i class="fa-solid fa-box-open text-3xl mb-2"></i>
-                            <div class="text-sm">尚無品項</div>
-                            <div class="text-xs text-slate-600">請匯入 Excel 或手動新增</div>
+                        <!-- 智能邏輯說明 -->
+                        <div class="mt-2 pt-2 border-t border-slate-700">
+                            <div class="text-[10px] text-slate-500 flex items-start gap-1">
+                                <i class="fa-solid fa-lightbulb text-yellow-500 mt-0.5"></i>
+                                <span>智能分配：系統會自動檢查品項現有庫存位置，優先分配到相鄰空位，讓同品項集中便於盤點與揀貨。</span>
+                            </div>
                         </div>
                     </div>
-                    <div id="container-summary" class="mt-2 pt-2 border-t border-slate-700 hidden">
-                        <div class="flex justify-between text-sm"><span class="text-slate-400">品項數</span><span class="text-white font-bold" id="container-item-count">0</span></div>
-                        <div class="flex justify-between text-sm"><span class="text-slate-400">總板數</span><span class="text-yellow-400 font-bold" id="container-pallet-count">0</span></div>
-                        <div class="flex justify-between text-sm"><span class="text-slate-400">總數量</span><span class="text-emerald-400 font-bold" id="container-total-qty">0</span></div>
+
+                    <!-- 品項清單 -->
+                    <div class="glass-panel p-3 flex flex-col flex-1">
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="text-white font-bold text-sm">📋 入庫品項清單</h3>
+                            <button onclick="clearContainerItems()" class="text-xs text-red-400 hover:text-red-300">清除全部</button>
+                        </div>
+                        <div id="container-items-list" class="flex-1 overflow-y-auto space-y-2">
+                            <div class="text-center text-slate-500 py-6">
+                                <i class="fa-solid fa-box-open text-3xl mb-2"></i>
+                                <div class="text-sm">尚無品項</div>
+                                <div class="text-xs text-slate-600">請匯入 Excel 或手動新增</div>
+                            </div>
+                        </div>
+                        <div id="container-summary" class="mt-2 pt-2 border-t border-slate-700 hidden">
+                            <div class="flex justify-between text-sm"><span class="text-slate-400">品項數</span><span class="text-white font-bold" id="container-item-count">0</span></div>
+                            <div class="flex justify-between text-sm"><span class="text-slate-400">總板數</span><span class="text-yellow-400 font-bold" id="container-pallet-count">0</span></div>
+                            <div class="flex justify-between text-sm"><span class="text-slate-400">總數量</span><span class="text-emerald-400 font-bold" id="container-total-qty">0</span></div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 右側：標籤預覽 -->
-                <div class="flex-1 glass-panel p-3 flex flex-col">
+                <!-- 右側：標籤預覽（縮窄）-->
+                <div class="w-72 glass-panel p-3 flex flex-col flex-shrink-0">
                     <div class="flex justify-between items-center mb-2">
                         <h3 class="text-white font-bold text-sm">🏷️ 棧板插單預覽</h3>
                     </div>
-                    <div id="container-labels-preview" class="flex-1 overflow-y-auto grid grid-cols-3 gap-2 content-start">
-                        <div class="col-span-3 text-center text-slate-500 py-8">
+                    <div id="container-labels-preview" class="flex-1 overflow-y-auto grid grid-cols-2 gap-2 content-start">
+                        <div class="col-span-2 text-center text-slate-500 py-8">
                             <i class="fa-solid fa-tags text-3xl mb-2"></i>
                             <div>請先新增品項</div>
                         </div>
@@ -2749,8 +2828,8 @@
                                         <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-yellow-600 peer-checked:text-white bg-slate-700 text-slate-400">半成品</div>
                                     </label>
                                     <label class="cursor-pointer">
-                                        <input type="radio" name="pm-inbound-type" value="Return" class="hidden peer">
-                                        <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-orange-600 peer-checked:text-white bg-slate-700 text-slate-400">退庫</div>
+                                        <input type="radio" name="pm-inbound-type" value="RM" class="hidden peer">
+                                        <div class="text-center py-1 rounded text-[10px] font-bold peer-checked:bg-orange-600 peer-checked:text-white bg-slate-700 text-slate-400">原料</div>
                                     </label>
                                 </div>
                             </div>
@@ -2833,24 +2912,25 @@
                             <table class="w-full dense-table">
                                 <thead>
                                     <tr>
-                                        <th>品號</th>
-                                        <th>品名</th>
-                                        <th>規格</th>
+                                        <th class="text-left">品號</th>
+                                        <th class="text-left">品名</th>
+                                        <th class="text-left">規格</th>
                                         <th class="text-center">計重</th>
-                                        <th class="text-center">箱容</th>
-                                        <th class="text-center">板容</th>
+                                        <th class="text-right">箱容</th>
+                                        <th class="text-right">板容</th>
+                                        <th class="text-right">保存期</th>
                                         <th class="text-center">入庫類型</th>
                                         <th class="text-center">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="product-master-list">
-                                    <tr><td colspan="8" class="text-center text-slate-500 py-10">載入中...</td></tr>
+                                    <tr><td colspan="9" class="text-center text-slate-500 py-10">載入中...</td></tr>
                                 </tbody>
                             </table>
                         </div>
                         <div class="p-2 border-t border-slate-700 flex justify-between items-center text-xs">
                             <span class="text-slate-400">共 <span id="pm-total-count" class="text-white font-bold">0</span> 筆</span>
-                            <span class="text-slate-500">新增欄位：計重方式、箱容、入庫類型</span>
+                            <span class="text-slate-500">排序：同品項集中、板容量降羃</span>
                         </div>
                     </div>
                 </div>
@@ -4537,49 +4617,65 @@
                 const tbody = document.getElementById('inventory-list-body');
                 if(tbody) tbody.innerHTML = '';
                 let stats = { total:0, fg:0, ret:0, virt:0, chart:{raw:0, fg:0, wip:0} };
+                
+                // 先收集所有資料
+                var inventoryList = [];
 
                 snapshot.forEach(d => {
                     const data = d.data();
                     if(data.quantity > 0 || data.totalWeight > 0) {
                         currentInventory.push({ id: d.id, ...data });
+                        inventoryList.push({ id: d.id, ...data });
                         stats.total++;
                         if(data.category === 'FG') { stats.fg++; stats.chart.fg++; } else if(data.category === 'WIP') { stats.chart.wip++; } else { stats.chart.raw++; }
                         if(data.source === 'Factory_Return') stats.ret++;
                         if(data.locationId && data.locationId.startsWith('V-')) stats.virt++;
-                        let badge = '<span class="badge badge-green">原料</span>';
-                        if(data.category === 'FG') badge = '<span class="badge badge-purple">成品</span>';
-                        if(data.category === 'WIP') badge = '<span class="badge badge-yellow">半成品</span>';
-                        if(data.source === 'Factory_Return') badge = '<span class="badge badge-orange">餘料</span>';
-                        if(tbody) {
-                            var weightDisplay = '-';
-                            if (data.productType === 'variable' && data.totalWeight > 0) {
-                                weightDisplay = '<span class="text-amber-400">' + data.totalWeight + ' kg</span>';
-                            } else if (data.unitWeight > 0) {
-                                weightDisplay = '<span class="text-slate-400">@' + data.unitWeight + ' kg</span>';
-                            } else if (data.totalWeight > 0) {
-                                weightDisplay = '<span class="text-amber-400">' + data.totalWeight + ' kg</span>';
-                            }
-
-                            var expDisplay = '-';
-                            var expClass = 'text-slate-400';
-                            if (data.expiryDate) {
-                                var expDate = data.expiryDate.toDate ? data.expiryDate.toDate() : new Date(data.expiryDate);
-                                var today = new Date();
-                                var diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
-                                expDisplay = expDate.toLocaleDateString('zh-TW');
-                                if (diffDays < 0) {
-                                    expClass = 'text-red-500 font-bold';
-                                } else if (diffDays < 30) {
-                                    expClass = 'text-red-400';
-                                } else if (diffDays < 90) {
-                                    expClass = 'text-yellow-400';
-                                }
-                            }
-
-                            tbody.innerHTML += `<tr class="border-b border-slate-700 hover:bg-slate-800" data-company="${data.company || ''}" data-type="internal"><td class="p-2"><span class="px-1.5 py-0.5 rounded text-xs ${data.company === '八方' ? 'bg-purple-900/50 text-purple-300' : 'bg-blue-900/50 text-blue-300'}">${data.company || '崇文'}</span></td><td class="text-white p-2">${data.productName}</td><td class="text-yellow-400 p-2">${data.spec||'-'}</td><td class="text-slate-400 font-mono p-2">${data.batchNo||'-'}</td><td class="text-right text-white p-2">${data.quantity||'-'}</td><td class="text-right p-2">${weightDisplay}</td><td class="p-2 text-cyan-400 font-mono">${data.locationId}</td><td class="p-2 ${expClass}">${expDisplay}</td><td class="p-2 text-right"><button onclick="editPallet('${d.id}')" class="text-blue-400 hover:text-blue-300 mr-2" title="編輯"><i class="fa-solid fa-edit"></i></button><button onclick="deletePallet('${d.id}')" class="text-red-500 hover:bg-red-500/20 rounded px-2" title="刪除"><i class="fa-solid fa-trash"></i></button></td></tr>`;
-                        }
                     }
                 });
+                
+                // 排序：同品項集中、數量降羃
+                inventoryList.sort(function(a, b) {
+                    var nameCompare = (a.productName || '').localeCompare(b.productName || '', 'zh-TW');
+                    if (nameCompare !== 0) return nameCompare;
+                    return (b.quantity || 0) - (a.quantity || 0);
+                });
+                
+                // 渲染表格
+                inventoryList.forEach(function(data) {
+                    let badge = '<span class="badge badge-green">原料</span>';
+                    if(data.category === 'FG') badge = '<span class="badge badge-purple">成品</span>';
+                    if(data.category === 'WIP') badge = '<span class="badge badge-yellow">半成品</span>';
+                    if(data.source === 'Factory_Return') badge = '<span class="badge badge-orange">餘料</span>';
+                    if(tbody) {
+                        var weightDisplay = '-';
+                        if (data.productType === 'variable' && data.totalWeight > 0) {
+                            weightDisplay = '<span class="text-amber-400">' + data.totalWeight + ' kg</span>';
+                        } else if (data.unitWeight > 0) {
+                            weightDisplay = '<span class="text-slate-400">@' + data.unitWeight + ' kg</span>';
+                        } else if (data.totalWeight > 0) {
+                            weightDisplay = '<span class="text-amber-400">' + data.totalWeight + ' kg</span>';
+                        }
+
+                        var expDisplay = '-';
+                        var expClass = 'text-slate-400';
+                        if (data.expiryDate) {
+                            var expDate = data.expiryDate.toDate ? data.expiryDate.toDate() : new Date(data.expiryDate);
+                            var today = new Date();
+                            var diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+                            expDisplay = expDate.toLocaleDateString('zh-TW');
+                            if (diffDays < 0) {
+                                expClass = 'text-red-500 font-bold';
+                            } else if (diffDays < 30) {
+                                expClass = 'text-red-400';
+                            } else if (diffDays < 90) {
+                                expClass = 'text-yellow-400';
+                            }
+                        }
+
+                        tbody.innerHTML += `<tr class="border-b border-slate-700 hover:bg-slate-800" data-company="${data.company || ''}" data-type="internal"><td class="p-2 text-left"><span class="px-1.5 py-0.5 rounded text-xs ${data.company === '八方' ? 'bg-purple-900/50 text-purple-300' : 'bg-blue-900/50 text-blue-300'}">${data.company || '崇文'}</span></td><td class="text-left text-white p-2">${data.productName}</td><td class="text-left text-yellow-400 p-2">${data.spec||'-'}</td><td class="text-left text-slate-400 font-mono p-2">${data.batchNo||'-'}</td><td class="text-right text-white p-2">${data.quantity||'-'}</td><td class="text-right p-2">${weightDisplay}</td><td class="text-left p-2 text-cyan-400 font-mono">${data.locationId}</td><td class="text-left p-2 ${expClass}">${expDisplay}</td><td class="p-2 text-right"><button onclick="editPallet('${data.id}')" class="text-blue-400 hover:text-blue-300 mr-2" title="編輯"><i class="fa-solid fa-edit"></i></button><button onclick="deletePallet('${data.id}')" class="text-red-500 hover:bg-red-500/20 rounded px-2" title="刪除"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+                    }
+                });
+                
                 if(document.getElementById('kpi-total-pallets')) {
                     document.getElementById('kpi-total-pallets').innerText = stats.total;
                     var fgEl = document.getElementById('kpi-fg-count');
@@ -6004,13 +6100,15 @@ console.log('✅ WMS 工具函數庫已載入');
         }
 
         window.selectInboundType = function(type) {
-            document.getElementById('in-type-select').value = type;
+            var typeSelect = document.getElementById('in-type-select');
+            if (typeSelect) typeSelect.value = type;
 
             document.querySelectorAll('.inbound-type-btn').forEach(function(btn) {
                 btn.classList.remove('active', 'border-blue-500', 'bg-blue-900/50', 'text-white');
                 btn.classList.remove('border-purple-500', 'bg-purple-900/50', 'text-purple-400');
                 btn.classList.remove('border-yellow-500', 'bg-yellow-900/50', 'text-yellow-400');
                 btn.classList.remove('border-orange-500', 'bg-orange-900/50', 'text-orange-400');
+                btn.classList.remove('border-emerald-500', 'bg-emerald-900/50');
                 btn.classList.add('border-slate-600', 'bg-slate-800', 'text-slate-400');
             });
 
@@ -6018,16 +6116,17 @@ console.log('✅ WMS 工具函數庫已載入');
             if (activeBtn) {
                 activeBtn.classList.remove('border-slate-600', 'bg-slate-800', 'text-slate-400');
                 var colors = {
-                    'Raw': ['border-blue-500', 'bg-blue-900/50', 'text-white'],
+                    'Raw': ['border-emerald-500', 'bg-emerald-900/50', 'text-white'],
                     'FG': ['border-purple-500', 'bg-purple-900/50', 'text-white'],
                     'WIP': ['border-yellow-500', 'bg-yellow-900/50', 'text-white'],
+                    'RM': ['border-orange-500', 'bg-orange-900/50', 'text-white'],
                     'Return': ['border-orange-500', 'bg-orange-900/50', 'text-white']
                 };
                 activeBtn.classList.add(...(colors[type] || colors['Raw']));
                 activeBtn.classList.add('active');
             }
 
-            onInboundTypeChange();
+            if (typeof onInboundTypeChange === 'function') onInboundTypeChange();
         };
 
         window.updateInboundProgress = function() {
@@ -6764,7 +6863,16 @@ console.log('✅ WMS 工具函數庫已載入');
         };
 
         window.getAllAvailableLocations = function() {
-            var pallets = window._inventoryData && window._inventoryData.pallets ? window._inventoryData.pallets : [];
+            // 取得當前庫存資料（支援多種資料來源）
+            var pallets = [];
+            if (window.currentInventory && Array.isArray(window.currentInventory)) {
+                pallets = window.currentInventory;
+            } else if (typeof window.currentInventory === 'function') {
+                pallets = window.currentInventory();
+            } else if (window._inventoryData && window._inventoryData.pallets) {
+                pallets = window._inventoryData.pallets;
+            }
+            
             var occupiedSet = new Set();
 
             var skipOccupied = document.getElementById('container-skip-occupied');
@@ -6864,11 +6972,153 @@ console.log('✅ WMS 工具函數庫已載入');
                 return [];
             }
 
+            // ========== 同品項庫存鄰近原則 ==========
+            // 查找現有庫存中同品項的儲位，優先分配到相鄰空位
+            function findExistingProductLocations(productName) {
+                var existingLocations = [];
+                var pallets = window.currentInventory || [];
+                
+                pallets.forEach(function(p) {
+                    if (p.productName === productName && p.locationId) {
+                        var parsed = parseLocationId(p.locationId);
+                        if (parsed) {
+                            existingLocations.push({
+                                locationId: p.locationId,
+                                zone: parsed.zone,
+                                row: parsed.row,
+                                level: parsed.level,
+                                warehouse: parsed.warehouse,
+                                quantity: p.quantity || 0
+                            });
+                        }
+                    }
+                });
+                
+                return existingLocations;
+            }
+            
+            // 解析儲位編號（例如：I-A-01-3F → { warehouse: 'I', zone: 'A', row: 1, level: 3 }）
+            function parseLocationId(locId) {
+                if (!locId) return null;
+                var parts = locId.split('-');
+                if (parts.length >= 4) {
+                    var levelStr = parts[3].replace('F', '');
+                    return {
+                        warehouse: parts[0],
+                        zone: parts[1],
+                        row: parseInt(parts[2]) || 1,
+                        level: parseInt(levelStr) || 1
+                    };
+                }
+                return null;
+            }
+            
+            // 計算兩個儲位的距離分數（越小越近）
+            function calculateDistance(loc1, loc2) {
+                if (!loc1 || !loc2) return 999;
+                // 不同區域：基礎分數 100 + 排數差異
+                if (loc1.zone !== loc2.zone) return 100 + Math.abs(loc1.row - loc2.row);
+                // 同區域：排數差異 x 10 + 層數差異
+                var rowDiff = Math.abs(loc1.row - loc2.row);
+                var levelDiff = Math.abs(loc1.level - loc2.level);
+                return rowDiff * 10 + levelDiff;
+            }
+            
+            // 找到最接近參考點的空位
+            function findNearestToPoint(availableLocs, centerPoint, preferSameZone) {
+                if (!centerPoint) return null;
+                
+                var bestLoc = null;
+                var bestDistance = 999;
+                
+                availableLocs.forEach(function(loc) {
+                    var dist = calculateDistance(loc, centerPoint);
+                    // 同區域額外加分
+                    if (preferSameZone && loc.zone === centerPoint.zone) dist -= 50;
+                    
+                    if (dist < bestDistance) {
+                        bestDistance = dist;
+                        bestLoc = loc;
+                    }
+                });
+                
+                return bestLoc;
+            }
+            
+            // 找到最接近現有庫存的空位（計算庫存重心）
+            function findNearestToExisting(availableLocs, existingLocs, preferredZones) {
+                if (!existingLocs || existingLocs.length === 0) return null;
+                
+                // 計算現有庫存的重心（最多的那個區域和排）
+                var zoneCount = {};
+                var rowSum = {};
+                var rowCount = {};
+                existingLocs.forEach(function(loc) {
+                    zoneCount[loc.zone] = (zoneCount[loc.zone] || 0) + 1;
+                    if (!rowSum[loc.zone]) { rowSum[loc.zone] = 0; rowCount[loc.zone] = 0; }
+                    rowSum[loc.zone] += loc.row;
+                    rowCount[loc.zone]++;
+                });
+                
+                // 找出現有庫存最集中的區域（且在使用者選擇的區域內）
+                var mainZone = null;
+                var maxCount = 0;
+                Object.keys(zoneCount).forEach(function(z) {
+                    if (zoneCount[z] > maxCount && preferredZones.indexOf(z) !== -1) {
+                        maxCount = zoneCount[z];
+                        mainZone = z;
+                    }
+                });
+                
+                // 如果現有庫存區域不在選擇範圍內，使用第一個現有位置的區域
+                if (!mainZone && existingLocs.length > 0) {
+                    mainZone = existingLocs[0].zone;
+                }
+                
+                var avgRow = mainZone && rowCount[mainZone] ? Math.round(rowSum[mainZone] / rowCount[mainZone]) : 1;
+                var centerPoint = { zone: mainZone, row: avgRow, level: 3 };
+                
+                return findNearestToPoint(availableLocs, centerPoint, true);
+            }
+            // ========== 同品項庫存鄰近原則 結束 ==========
+
             items.forEach(function(item) {
                 var remaining = item.quantity;
                 var remainingWeight = item.totalWeight || 0;
                 var palletNo = 1;
                 var itemLocations = [];
+                
+                // 查找該品項的現有庫存位置
+                var existingProductLocs = findExistingProductLocations(item.productName);
+                var hasExistingStock = existingProductLocs.length > 0;
+                
+                // 計算現有庫存的重心點（用於後續板數的鄰近分配）
+                var existingCenter = null;
+                if (hasExistingStock) {
+                    var zoneCount = {};
+                    var rowSum = {};
+                    var rowCount = {};
+                    existingProductLocs.forEach(function(loc) {
+                        zoneCount[loc.zone] = (zoneCount[loc.zone] || 0) + 1;
+                        if (!rowSum[loc.zone]) { rowSum[loc.zone] = 0; rowCount[loc.zone] = 0; }
+                        rowSum[loc.zone] += loc.row;
+                        rowCount[loc.zone]++;
+                    });
+                    
+                    var mainZone = null;
+                    var maxCount = 0;
+                    Object.keys(zoneCount).forEach(function(z) {
+                        if (zoneCount[z] > maxCount) { maxCount = zoneCount[z]; mainZone = z; }
+                    });
+                    
+                    if (mainZone) {
+                        existingCenter = { 
+                            zone: mainZone, 
+                            row: Math.round(rowSum[mainZone] / rowCount[mainZone]), 
+                            level: 3 
+                        };
+                    }
+                }
 
                 while (remaining > 0 && available.length > 0) {
                     var palletQty = Math.min(remaining, item.perPallet);
@@ -6880,11 +7130,36 @@ console.log('✅ WMS 工具函數庫已載入');
                     }
 
                     var selectedLoc;
+                    var isNearExisting = false;
 
-                    if (strategy === 'clustered' && itemLocations.length > 0) {
+                    // 智能儲位選擇邏輯
+                    if (hasExistingStock) {
+                        // 有現有庫存：優先找相鄰空位
+                        if (palletNo === 1) {
+                            // 第一板：找現有庫存的相鄰空位
+                            selectedLoc = findNearestToExisting(available, existingProductLocs, opts.zones || []);
+                        } else if (itemLocations.length > 0) {
+                            // 後續板數：找已分配位置的相鄰空位（保持集中）
+                            var lastLoc = itemLocations[itemLocations.length - 1];
+                            selectedLoc = findNearestToPoint(available, lastLoc, true);
+                        }
+                        
+                        if (selectedLoc) {
+                            isNearExisting = true;
+                            if (palletNo === 1) {
+                                console.log('📍 ' + item.productName + ': 找到現有庫存相鄰空位 ' + selectedLoc.locationId);
+                            }
+                        }
+                    }
+                    
+                    if (!selectedLoc && strategy === 'clustered' && itemLocations.length > 0) {
+                        // 同品項集中策略：找最近的空位
                         var lastLoc = itemLocations[itemLocations.length - 1];
                         selectedLoc = findNearestLocation(available, lastLoc);
-                    } else {
+                    }
+                    
+                    if (!selectedLoc) {
+                        // 預設：取第一個可用空位
                         selectedLoc = available[0];
                     }
 
@@ -6912,7 +7187,8 @@ console.log('✅ WMS 工具函數庫已載入');
                         palletNo: palletNo + '/' + item.palletCount,
                         zone: selectedLoc.zone,
                         warehouse: selectedLoc.warehouse,
-                        level: selectedLoc.level
+                        level: selectedLoc.level,
+                        nearExisting: isNearExisting // 標記是否鄰近現有庫存
                     };
 
                     allocations.push(allocation);
@@ -6952,6 +7228,12 @@ console.log('✅ WMS 工具函數庫已載入');
                     palletNo++;
                 }
             });
+            
+            // 輸出分配摘要
+            var nearExistingCount = allocations.filter(function(a) { return a.nearExisting; }).length;
+            if (nearExistingCount > 0) {
+                console.log('✅ 智能儲位分配完成：' + nearExistingCount + ' 個品項已分配到現有庫存相鄰位置');
+            }
 
             return allocations;
         };
@@ -7021,8 +7303,25 @@ console.log('✅ WMS 工具函數庫已載入');
             });
 
             var overflowCount = labels.filter(function(l) { return l.overflow; }).length;
+            var nearExistingCount = labels.filter(function(l) { return l.nearExisting; }).length;
+            
+            // 顯示分配結果摘要
+            var summaryMsg = '✅ 儲位分配完成！\n\n';
+            summaryMsg += '📦 總板數：' + labels.length + ' 板\n';
+            
+            if (nearExistingCount > 0) {
+                summaryMsg += '📍 鄰近現有庫存：' + nearExistingCount + ' 個品項\n';
+                summaryMsg += '   （已優先分配到同品項相鄰位置）\n';
+            }
+            
             if (overflowCount > 0) {
-                alert('警告：有 ' + overflowCount + ' 板找不到空位！\n請考慮擴大搜尋區域。');
+                summaryMsg += '\n⚠️ 警告：有 ' + overflowCount + ' 板找不到空位！\n';
+                summaryMsg += '請考慮擴大搜尋區域。';
+            }
+            
+            // 只有在有特殊情況時才顯示提示
+            if (nearExistingCount > 0 || overflowCount > 0) {
+                alert(summaryMsg);
             }
 
             window._containerData.labels = labels;
@@ -7103,8 +7402,13 @@ console.log('✅ WMS 工具函數庫已載入');
             var html = '';
             labels.forEach(function(label, idx) {
                 var expDisplay = label.expiryDate ? formatDate(label.expiryDate) : '-';
+                
+                // 鄰近現有庫存的標籤使用特殊邊框顏色
+                var borderClass = label.nearExisting ? 'border-emerald-500' : 'border-black';
+                var nearBadge = label.nearExisting ? '<div class="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center" title="鄰近現有庫存"><i class="fa-solid fa-link text-white" style="font-size: 8px;"></i></div>' : '';
 
-                html += '<div class="bg-white rounded border-2 border-black overflow-hidden" style="aspect-ratio: 297/210;">' +
+                html += '<div class="relative bg-white rounded border-2 ' + borderClass + ' overflow-hidden" style="aspect-ratio: 297/210;">' +
+                    nearBadge +
                     '<div class="border-b-2 border-black p-1 text-center" style="height: 35%;">' +
                     '<div class="font-black text-black leading-tight" style="font-size: clamp(12px, 3vw, 18px);">' + label.productName + '</div>' +
                     '</div>' +
@@ -7137,6 +7441,15 @@ console.log('✅ WMS 工具函數庫已載入');
             });
 
             container.innerHTML = html;
+            
+            // 顯示智能分配統計
+            var nearCount = labels.filter(function(l) { return l.nearExisting; }).length;
+            if (nearCount > 0) {
+                var statsHtml = '<div class="col-span-3 text-center text-emerald-400 text-xs py-1 bg-emerald-900/30 rounded mb-2">' +
+                    '<i class="fa-solid fa-link mr-1"></i>' + nearCount + ' 個品項已分配到現有庫存相鄰位置' +
+                    '</div>';
+                container.insertAdjacentHTML('afterbegin', statsHtml);
+            }
         };
 
         function formatDate(dateStr) {
@@ -14490,243 +14803,344 @@ window.clearLocalStorage = function() {
         var smartSuggestTimer = null;
         window.autoTriggerSmartSuggest = function() {
             var name = document.getElementById('in-name').value.trim();
+            var list = document.getElementById('smart-suggest-list');
 
             if (smartSuggestTimer) {
                 clearTimeout(smartSuggestTimer);
             }
 
             if (!name) {
-                document.getElementById('smart-suggest-panel').classList.add('hidden');
+                if (list) list.innerHTML = '<div class="text-slate-500 text-xs text-center py-2">請先選擇品項</div>';
                 return;
             }
 
+            // 立即顯示載入狀態
+            if (list) list.innerHTML = '<div class="text-slate-500 text-xs text-center py-2"><i class="fa-solid fa-spinner fa-spin mr-1"></i>分析中...</div>';
+
+            // 短延遲後計算（確保庫存資料已載入）
             smartSuggestTimer = setTimeout(function() {
-                calculateSmartSuggest();
-            }, 500);
+                calculateSmartSuggest(true);
+            }, 200);
         };
 
-        window.calculateSmartSuggest = function() {
+        window.calculateSmartSuggest = function(silent) {
             var targetName = document.getElementById('in-name').value;
             var targetSpec = document.getElementById('in-spec').value || '';
             var targetBatch = document.getElementById('in-batch').value || '';
             var targetExp = document.getElementById('in-exp').value || '';
-
-            if (!targetName) {
-                if (arguments.length === 0 || arguments[0] !== 'auto') {
-                    alert('請先輸入品名');
-                }
-                return;
-            }
-
-            var inventory = window.currentInventory ? window.currentInventory() : [];
-
-            var lanes = {};
-            var allZones = ['I-A', 'I-B', 'J-C', 'J-D', 'K-E', 'K-F', 'K-G', 'K-H'];
-
-            allZones.forEach(function(zone) {
-                var laneCount = zone.startsWith('K-') ? 22 : 8;
-                for (var i = 1; i <= laneCount; i++) {
-                    var laneKey = zone + '-' + (i < 10 ? '0' + i : i);
-                    lanes[laneKey] = {
-                        zone: zone,
-                        row: i,
-                        laneKey: laneKey,
-                        totalQty: 0,
-                        palletCount: 0,
-                        capacity: 20,
-                        items: [],
-                        hasSameName: false,
-                        hasSameSpec: false,
-                        hasSameBatch: false,
-                        hasSameExp: false,
-                        expDates: []
-                    };
-                }
-            });
-
-            inventory.forEach(function(item) {
-                if (!item.locationId || item.locationId.startsWith('V-') || item.locationId.startsWith('O-')) return;
-
-                var parsed = parseLocationId(item.locationId);
-                if (!parsed) return;
-
-                var laneKey = parsed.laneKey;
-                if (!lanes[laneKey]) return;
-
-                lanes[laneKey].totalQty += (item.quantity || 0);
-                lanes[laneKey].palletCount++;
-                lanes[laneKey].items.push(item);
-
-                if (item.productName === targetName) {
-                    lanes[laneKey].hasSameName = true;
-                    if ((item.spec || '') === targetSpec) {
-                        lanes[laneKey].hasSameSpec = true;
-                    }
-                    if (targetBatch && (item.batchNo || '') === targetBatch) {
-                        lanes[laneKey].hasSameBatch = true;
-                    }
-                    var itemExp = item.expDate || item.expiryDate || '';
-                    if (itemExp) lanes[laneKey].expDates.push(itemExp);
-                    if (targetExp && itemExp === targetExp) {
-                        lanes[laneKey].hasSameExp = true;
-                    }
-                }
-            });
-
-            var suggestions = [];
-
-            Object.keys(lanes).forEach(function(laneKey) {
-                var lane = lanes[laneKey];
-                var available = lane.capacity - lane.palletCount;
-
-                if (available <= 0) return; // 已滿，跳過
-
-                var score = 0;
-                var reasons = [];
-                var stars = 0;
-
-                if (lane.hasSameBatch && lane.hasSameSpec && lane.hasSameName) {
-                    score += 1000;
-                    stars = 3;
-                    reasons.push('同品+同規+同批號');
-
-                    if (lane.hasSameExp) {
-                        score += 100;
-                        reasons.push('同效期');
-                    }
-                } else if (lane.hasSameSpec && lane.hasSameName) {
-                    score += 500;
-                    stars = 2;
-                    reasons.push('同品+同規格');
-
-                    if (lane.hasSameExp) {
-                        score += 100;
-                        reasons.push('同效期');
-                    }
-                } else if (lane.hasSameName) {
-                    score += 200;
-                    stars = 1;
-                    reasons.push('同品名');
-                } else if (lane.hasSameSpec) {
-                    score += 150;
-                    stars = 1;
-                    reasons.push('同規格');
-                }
-
-                if (lane.hasSameName) {
-                    score += lane.palletCount * 10;
-                    if (lane.palletCount >= 3) {
-                        reasons.push('集中度高(' + lane.palletCount + '板)');
-                    }
-                }
-
-                if (available <= 5 && lane.hasSameName) {
-                    score += 50;
-                    reasons.push('即將填滿');
-                }
-
-                if (lane.palletCount === 0) {
-                    score += 10;
-                    stars = 0;
-                    reasons.push('空巷道');
-                }
-
-                if (score > 0 || lane.palletCount === 0) {
-                    var levelUsage = { '3F': 0, '2F': 0, '1F': 0 };
-                    var levelCapacity = { '3F': 8, '2F': 5, '1F': 16 }; // 更新容量
-
-                    lane.items.forEach(function(item) {
-                        var parsed = parseLocationId(item.locationId);
-                        if (parsed && parsed.level && levelUsage[parsed.level] !== undefined) {
-                            levelUsage[parsed.level]++;
-                        }
-                    });
-
-                    var emptyLevel = null;
-                    var emptyCount = 0;
-
-                    ['3F', '2F', '1F'].forEach(function(lvl) {
-                        if (!emptyLevel && levelUsage[lvl] < levelCapacity[lvl]) {
-                            emptyLevel = lvl;
-                            emptyCount = levelCapacity[lvl] - levelUsage[lvl];
-                        }
-                    });
-
-                    if (emptyLevel) {
-                        var fullLocationId = laneKey + '-' + emptyLevel;
-
-                        suggestions.push({
-                            laneKey: laneKey,
-                            fullLocationId: fullLocationId,
-                            level: emptyLevel,
-                            zone: lane.zone,
-                            row: lane.row,
-                            score: score,
-                            stars: stars,
-                            reasons: reasons,
-                            available: available,
-                            levelAvailable: emptyCount,
-                            palletCount: lane.palletCount,
-                            totalQty: lane.totalQty,
-                            expDates: lane.expDates
-                        });
-                    }
-                }
-            });
-
-            suggestions.sort(function(a, b) {
-                return b.score - a.score;
-            });
-
-            suggestions = suggestions.slice(0, 3);
-
-            renderSmartSuggestions(suggestions, targetName, targetSpec);
-        };
-
-        function renderSmartSuggestions(suggestions, targetName, targetSpec) {
+            
             var panel = document.getElementById('smart-suggest-panel');
             var list = document.getElementById('smart-suggest-list');
+            var loading = document.getElementById('suggest-loading');
+            
+            if (!panel || !list) return;
+
+            if (!targetName) {
+                list.innerHTML = '<div class="text-slate-500 text-xs text-center py-2">請先選擇品項</div>';
+                return;
+            }
+            
+            // 顯示載入中
+            if (loading) loading.classList.remove('hidden');
+
+            // 非同步執行以避免阻塞 UI
+            setTimeout(function() {
+                var inventory = [];
+                if (typeof window.currentInventory === 'function') {
+                    inventory = window.currentInventory();
+                } else if (Array.isArray(window.currentInventory)) {
+                    inventory = window.currentInventory;
+                }
+
+                var lanes = {};
+                var allZones = ['I-A', 'I-B', 'J-C', 'J-D', 'K-E', 'K-F', 'K-G', 'K-H'];
+
+                allZones.forEach(function(zone) {
+                    var laneCount = zone.startsWith('K-') ? 22 : 8;
+                    for (var i = 1; i <= laneCount; i++) {
+                        var laneKey = zone + '-' + (i < 10 ? '0' + i : i);
+                        lanes[laneKey] = {
+                            zone: zone,
+                            row: i,
+                            laneKey: laneKey,
+                            totalQty: 0,
+                            palletCount: 0,
+                            capacity: 20,
+                            items: [],
+                            hasSameName: false,
+                            hasSameSpec: false,
+                            hasSameBatch: false,
+                            hasSameExp: false,
+                            expDates: [],
+                            sameNameCount: 0,
+                            nearestExpiry: null,
+                            avgWeight: 0,
+                            totalWeight: 0
+                        };
+                    }
+                });
+
+                // 分析現有庫存
+                inventory.forEach(function(item) {
+                    if (!item.locationId || item.locationId.startsWith('V-') || item.locationId.startsWith('O-') || item.locationId.startsWith('TEMP')) return;
+
+                    var parsed = parseLocationId(item.locationId);
+                    if (!parsed) return;
+
+                    var laneKey = parsed.laneKey;
+                    if (!lanes[laneKey]) return;
+
+                    lanes[laneKey].totalQty += (item.quantity || 0);
+                    lanes[laneKey].palletCount++;
+                    lanes[laneKey].items.push(item);
+                    lanes[laneKey].totalWeight += (item.totalWeight || 0);
+
+                    if (item.productName === targetName) {
+                        lanes[laneKey].hasSameName = true;
+                        lanes[laneKey].sameNameCount++;
+                        
+                        if ((item.spec || '') === targetSpec) {
+                            lanes[laneKey].hasSameSpec = true;
+                        }
+                        if (targetBatch && (item.batchNo || '') === targetBatch) {
+                            lanes[laneKey].hasSameBatch = true;
+                        }
+                        
+                        var itemExp = item.expDate || item.expiryDate || '';
+                        if (itemExp) {
+                            lanes[laneKey].expDates.push(itemExp);
+                            // 追蹤最近效期
+                            if (!lanes[laneKey].nearestExpiry || itemExp < lanes[laneKey].nearestExpiry) {
+                                lanes[laneKey].nearestExpiry = itemExp;
+                            }
+                        }
+                        if (targetExp && itemExp === targetExp) {
+                            lanes[laneKey].hasSameExp = true;
+                        }
+                    }
+                });
+
+                var suggestions = [];
+
+                Object.keys(lanes).forEach(function(laneKey) {
+                    var lane = lanes[laneKey];
+                    var available = lane.capacity - lane.palletCount;
+
+                    if (available <= 0) return; // 已滿，跳過
+
+                    var score = 0;
+                    var reasons = [];
+                    var priority = 'low'; // low, medium, high
+                    var icon = '📍';
+
+                    // ========== 智能評分邏輯 ==========
+                    
+                    // 1. 同品項集中原則（最高優先）
+                    if (lane.hasSameName) {
+                        score += 500;
+                        priority = 'high';
+                        icon = '🎯';
+                        
+                        // 同品項數量加分（集中度）
+                        score += lane.sameNameCount * 50;
+                        
+                        if (lane.hasSameSpec) {
+                            score += 200;
+                            reasons.push('同品名+規格');
+                        } else {
+                            reasons.push('同品名');
+                        }
+                        
+                        if (lane.hasSameBatch) {
+                            score += 150;
+                            reasons.push('同批號');
+                        }
+                        
+                        // 2. 效期整合原則（FEFO）
+                        if (targetExp && lane.nearestExpiry) {
+                            var targetExpDate = new Date(targetExp);
+                            var nearestExpDate = new Date(lane.nearestExpiry);
+                            var daysDiff = Math.abs((targetExpDate - nearestExpDate) / (1000 * 60 * 60 * 24));
+                            
+                            if (lane.hasSameExp) {
+                                score += 100;
+                                reasons.push('同效期');
+                            } else if (daysDiff <= 30) {
+                                score += 50;
+                                reasons.push('效期相近');
+                            } else if (targetExpDate < nearestExpDate) {
+                                // 新品效期較早，應放前面（但巷道系統難以區分，給予中等分數）
+                                score += 30;
+                            }
+                        }
+                        
+                        // 3. 即將填滿的巷道優先（減少碎片）
+                        if (available <= 3) {
+                            score += 80;
+                            reasons.push('即將滿載');
+                        } else if (available <= 5) {
+                            score += 40;
+                        }
+                        
+                        // 4. 高集中度加分
+                        if (lane.sameNameCount >= 5) {
+                            score += 100;
+                            reasons.push('高集中(' + lane.sameNameCount + '板)');
+                        } else if (lane.sameNameCount >= 3) {
+                            score += 50;
+                            reasons.push('集中(' + lane.sameNameCount + '板)');
+                        }
+                    }
+                    // 5. 空巷道（新品項或無法找到同品項時）
+                    else if (lane.palletCount === 0) {
+                        score += 100;
+                        priority = 'medium';
+                        icon = '📦';
+                        reasons.push('空巷道');
+                        
+                        // 靠近入口的區域優先（A、B區）
+                        if (lane.zone === 'I-A' || lane.zone === 'I-B') {
+                            score += 30;
+                            reasons.push('靠近入口');
+                        }
+                    }
+                    // 6. 低佔用巷道（次選）
+                    else if (lane.palletCount <= 3) {
+                        score += 50;
+                        priority = 'low';
+                        icon = '📍';
+                        reasons.push('低佔用');
+                    }
+
+                    if (score > 0) {
+                        // 計算層級空位
+                        var levelUsage = { '3F': 0, '2F': 0, '1F': 0 };
+                        var levelCapacity = { '3F': 8, '2F': 5, '1F': 16 };
+
+                        lane.items.forEach(function(item) {
+                            var parsed = parseLocationId(item.locationId);
+                            if (parsed && parsed.level && levelUsage[parsed.level] !== undefined) {
+                                levelUsage[parsed.level]++;
+                            }
+                        });
+
+                        // 優先推薦有空位的層級（3F優先，因為先進後出）
+                        var emptyLevel = null;
+                        var emptyCount = 0;
+
+                        ['3F', '2F', '1F'].forEach(function(lvl) {
+                            if (!emptyLevel && levelUsage[lvl] < levelCapacity[lvl]) {
+                                emptyLevel = lvl;
+                                emptyCount = levelCapacity[lvl] - levelUsage[lvl];
+                            }
+                        });
+
+                        if (emptyLevel) {
+                            var fullLocationId = laneKey + '-' + emptyLevel;
+
+                            suggestions.push({
+                                laneKey: laneKey,
+                                fullLocationId: fullLocationId,
+                                level: emptyLevel,
+                                zone: lane.zone,
+                                row: lane.row,
+                                score: score,
+                                priority: priority,
+                                icon: icon,
+                                reasons: reasons,
+                                available: available,
+                                levelAvailable: emptyCount,
+                                palletCount: lane.palletCount,
+                                sameNameCount: lane.sameNameCount,
+                                totalQty: lane.totalQty
+                            });
+                        }
+                    }
+                });
+
+                // 排序：分數高的優先
+                suggestions.sort(function(a, b) {
+                    return b.score - a.score;
+                });
+
+                // 取前三名
+                suggestions = suggestions.slice(0, 3);
+
+                // 渲染建議
+                renderSmartSuggestionsEnhanced(suggestions, targetName, targetSpec);
+                
+                // 隱藏載入中
+                if (loading) loading.classList.add('hidden');
+            }, 50);
+        };
+
+        function renderSmartSuggestionsEnhanced(suggestions, targetName, targetSpec) {
+            var list = document.getElementById('smart-suggest-list');
+            if (!list) return;
 
             if (suggestions.length === 0) {
-                list.innerHTML = '<div class="text-slate-400 text-sm text-center py-4">無符合條件的建議儲位</div>';
-                panel.classList.remove('hidden');
+                list.innerHTML = '<div class="flex gap-2">' +
+                    '<div class="flex-1 bg-slate-800 border border-slate-600 rounded-lg p-2 text-center">' +
+                    '<div class="text-slate-400 text-xs">暫無建議</div>' +
+                    '<div class="text-slate-500 text-[10px]">請從地圖選擇</div>' +
+                    '</div></div>';
                 return;
             }
 
-            var html = '';
-
-            html += '<div class="flex gap-2">';
+            var html = '<div class="flex gap-2">';
+            
             suggestions.forEach(function(s, idx) {
-                var starsHtml = '';
-                for (var i = 0; i < s.stars; i++) {
-                    starsHtml += '<i class="fa-solid fa-star text-yellow-400 text-xs"></i>';
+                var bgClass, borderClass, textClass;
+                
+                // 只有第一名使用金色漸層，其他統一使用深色背景
+                if (idx === 0) {
+                    bgClass = 'bg-gradient-to-br from-yellow-900/60 to-amber-900/40';
+                    borderClass = 'border-yellow-500';
+                    textClass = 'text-yellow-400';
+                } else {
+                    bgClass = 'bg-slate-800/80';
+                    borderClass = 'border-slate-600';
+                    textClass = 'text-slate-300';
                 }
-                for (var i = s.stars; i < 3; i++) {
-                    starsHtml += '<i class="fa-regular fa-star text-slate-600 text-xs"></i>';
-                }
-
-                var bgClass = idx === 0 ? 'bg-yellow-900/50 border-yellow-500' : 'bg-slate-800 border-slate-600';
+                
                 var rankLabel = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : '🥉');
+                var reasonText = s.reasons.slice(0, 2).join('、');
 
-                html += '<div class="' + bgClass + ' border rounded-lg p-2 cursor-pointer hover:bg-slate-700 transition flex-1 min-w-0" onclick="selectSmartSuggestDirect(\'' + s.fullLocationId + '\')">';
-                html += '<div class="flex items-center gap-1 mb-1">';
-                html += '<span>' + rankLabel + '</span>';
-                html += '<span class="text-white font-bold font-mono">' + s.fullLocationId + '</span>';
-                html += '<span>' + starsHtml + '</span>';
+                html += '<div data-location="' + s.fullLocationId + '" class="smart-suggest-card ' + bgClass + ' border ' + borderClass + ' rounded-lg p-2 cursor-pointer hover:border-emerald-400 transition-all flex-1 min-w-0" onclick="selectSmartSuggestDirect(\'' + s.fullLocationId + '\')">';
+                html += '<div class="flex items-center gap-1 mb-0.5">';
+                html += '<span class="text-sm">' + rankLabel + '</span>';
+                html += '<span class="' + textClass + ' font-bold font-mono text-sm">' + s.fullLocationId + '</span>';
                 html += '</div>';
-                html += '<div class="text-xs text-emerald-400 truncate">' + s.reasons[0] + '</div>';
-                html += '<div class="text-xs text-slate-500">' + s.level + '層空' + s.levelAvailable + '位</div>';
+                html += '<div class="text-[10px] text-emerald-400 truncate">' + s.icon + ' ' + reasonText + '</div>';
+                if (s.sameNameCount > 0) {
+                    html += '<div class="text-[10px] text-cyan-400">現有 ' + s.sameNameCount + ' 板同品項</div>';
+                }
+                html += '<div class="text-[10px] text-slate-500">' + s.level + '層空' + s.levelAvailable + '位</div>';
                 html += '</div>';
             });
+            
             html += '</div>';
-
+            
             list.innerHTML = html;
-            panel.classList.remove('hidden');
         }
 
         window.selectSmartSuggestDirect = function(fullLocationId) {
-            document.getElementById('in-loc').value = fullLocationId;
-            document.getElementById('smart-suggest-panel').classList.add('hidden');
+            var locInput = document.getElementById('in-loc');
+            if (locInput) {
+                locInput.value = fullLocationId;
+                // 觸發更新
+                if (typeof validateLocationInput === 'function') validateLocationInput();
+                if (typeof updateInboundProgress === 'function') updateInboundProgress();
+                if (typeof updateLivePreview === 'function') updateLivePreview();
+            }
+            
+            // 視覺反饋：標記已選擇的建議（綠色邊框）
+            document.querySelectorAll('.smart-suggest-card').forEach(function(card) {
+                card.classList.remove('ring-2', 'ring-emerald-400', 'border-emerald-400');
+                if (card.getAttribute('data-location') === fullLocationId) {
+                    card.classList.add('ring-2', 'ring-emerald-400');
+                }
+            });
         };
 
         window.selectSmartSuggest = function(laneKey) {
@@ -14734,13 +15148,13 @@ window.clearLocalStorage = function() {
             var zone = parts[0] + '-' + parts[1];
             var row = parseInt(parts[2]);
 
-            openLevelSelector(zone, row);
-
-            document.getElementById('smart-suggest-panel').classList.add('hidden');
+            if (typeof openLevelSelector === 'function') {
+                openLevelSelector(zone, row);
+            }
         };
 
         window.hideSmartSuggest = function() {
-            document.getElementById('smart-suggest-panel').classList.add('hidden');
+            // 保持面板顯示，不再隱藏
         };
 
         // ========== 揀貨系統 ==========
@@ -15514,14 +15928,15 @@ window.clearLocalStorage = function() {
                 }
             });
 
-            document.getElementById('ext-tp-count').innerText = summary['EXT-TP'].qty;
-            document.getElementById('ext-tp-items').innerText = summary['EXT-TP'].items;
-            document.getElementById('ext-tc-count').innerText = summary['EXT-TC'].qty;
-            document.getElementById('ext-tc-items').innerText = summary['EXT-TC'].items;
-            document.getElementById('ext-kh-count').innerText = summary['EXT-KH'].qty;
-            document.getElementById('ext-kh-items').innerText = summary['EXT-KH'].items;
-            document.getElementById('ext-store-count').innerText = summary['STORE'].qty;
-            document.getElementById('ext-store-items').innerText = summary['STORE'].items;
+            var el;
+            el = document.getElementById('ext-tp-count'); if (el) el.innerText = summary['EXT-TP'].qty;
+            el = document.getElementById('ext-tp-items'); if (el) el.innerText = summary['EXT-TP'].items;
+            el = document.getElementById('ext-tc-count'); if (el) el.innerText = summary['EXT-TC'].qty;
+            el = document.getElementById('ext-tc-items'); if (el) el.innerText = summary['EXT-TC'].items;
+            el = document.getElementById('ext-kh-count'); if (el) el.innerText = summary['EXT-KH'].qty;
+            el = document.getElementById('ext-kh-items'); if (el) el.innerText = summary['EXT-KH'].items;
+            el = document.getElementById('ext-store-count'); if (el) el.innerText = summary['STORE'].qty;
+            el = document.getElementById('ext-store-items'); if (el) el.innerText = summary['STORE'].items;
         }
 
         window.extCompanyFilter = 'all';
@@ -19185,7 +19600,7 @@ window.clearLocalStorage = function() {
             var tbody = document.getElementById('product-master-list');
             if (!tbody) return;
 
-            var data = window.productMasterData;
+            var data = window.productMasterData.slice(); // 複製陣列
             var search = (document.getElementById('pm-search')?.value || '').toLowerCase();
 
             if (search) {
@@ -19195,9 +19610,16 @@ window.clearLocalStorage = function() {
                            (p.spec || '').toLowerCase().includes(search);
                 });
             }
+            
+            // 排序：按品名排序，同品名按板容量降羃
+            data.sort(function(a, b) {
+                var nameCompare = (a.name || '').localeCompare(b.name || '', 'zh-TW');
+                if (nameCompare !== 0) return nameCompare;
+                return (b.palletCapacity || 0) - (a.palletCapacity || 0);
+            });
 
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-500 py-10">無品項資料，請新增或從庫存匯入</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-slate-500 py-10">無品項資料，請新增或從庫存匯入</td></tr>';
                 document.getElementById('pm-total-count').innerText = '0';
                 return;
             }
@@ -19216,20 +19638,25 @@ window.clearLocalStorage = function() {
                 var unitWeight = p.unitWeight || 0;
                 var unitWeightText = unitWeight > 0 ? unitWeight + '<span class="text-slate-500 text-[10px]">kg</span>' : '<span class="text-slate-600">-</span>';
                 
+                // 保存期（預設 24 個月 = 2 年）
+                var shelfLife = p.shelfLife || 24;
+                var shelfLifeText = shelfLife + '<span class="text-slate-500 text-[10px]">月</span>';
+                
                 // 入庫類型
                 var inboundType = p.inboundType || 'Raw';
-                var inboundTypeMap = { 'Raw': '採購', 'FG': '成品', 'WIP': '半成品', 'Return': '退庫' };
-                var inboundTypeColors = { 'Raw': 'emerald', 'FG': 'blue', 'WIP': 'yellow', 'Return': 'orange' };
+                var inboundTypeMap = { 'Raw': '採購', 'FG': '成品', 'WIP': '半成品', 'RM': '原料', 'Return': '原料' };
+                var inboundTypeColors = { 'Raw': 'emerald', 'FG': 'blue', 'WIP': 'yellow', 'RM': 'orange', 'Return': 'orange' };
                 var itColor = inboundTypeColors[inboundType] || 'slate';
                 var inboundBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] bg-' + itColor + '-600/30 text-' + itColor + '-400">' + (inboundTypeMap[inboundType] || inboundType) + '</span>';
 
                 html += '<tr class="border-b border-slate-700 hover:bg-slate-800">';
-                html += '<td class="p-2 text-cyan-400 font-mono text-xs">' + (p.code || '-') + '</td>';
-                html += '<td class="p-2 text-white font-bold">' + p.name + '</td>';
-                html += '<td class="p-2 text-yellow-400 text-sm">' + (p.spec || '-') + '</td>';
+                html += '<td class="p-2 text-left text-cyan-400 font-mono text-xs">' + (p.code || '-') + '</td>';
+                html += '<td class="p-2 text-left text-white font-bold">' + p.name + '</td>';
+                html += '<td class="p-2 text-left text-yellow-400 text-sm">' + (p.spec || '-') + '</td>';
                 html += '<td class="p-2 text-center">' + weightBadge + '</td>';
-                html += '<td class="p-2 text-center text-sm">' + unitWeightText + '</td>';
-                html += '<td class="p-2 text-center"><span class="text-cyan-400 font-bold">' + (p.palletCapacity || '-') + '</span></td>';
+                html += '<td class="p-2 text-right text-sm">' + unitWeightText + '</td>';
+                html += '<td class="p-2 text-right"><span class="text-cyan-400 font-bold">' + (p.palletCapacity || '-') + '</span></td>';
+                html += '<td class="p-2 text-right text-sm">' + shelfLifeText + '</td>';
                 html += '<td class="p-2 text-center">' + inboundBadge + '</td>';
                 html += '<td class="p-2 text-center">';
                 html += '<button onclick="editProductMaster(\'' + docId + '\')" class="text-blue-400 hover:bg-blue-500/20 rounded px-2 py-1 mr-1"><i class="fa-solid fa-edit"></i></button>';
@@ -23861,8 +24288,12 @@ console.log('💰 倉租管理模組已載入');
         var mainWarehouses = ['MAIN', 'MAIN-CONSIGN', 'MAIN-RESERVE', 'MANAGE', ''];
         var isExternal = warehouseId && mainWarehouses.indexOf(warehouseId) === -1;
         
+        // 取得各欄位值
+        var companyRadio = document.querySelector('input[name="in-company"]:checked');
+        var company = companyRadio ? companyRadio.value : '';
         var name = document.getElementById('in-name')?.value;
         var exp = document.getElementById('in-exp')?.value;
+        var loc = document.getElementById('in-loc')?.value;
         
         var productType = document.querySelector('input[name="in-product-type"]:checked')?.value || 'fixed';
         var qty = productType === 'variable' ? (parseInt(document.getElementById('in-qty-var')?.value) || 0) : (parseInt(document.getElementById('in-qty')?.value) || 0);
@@ -23878,20 +24309,87 @@ console.log('💰 倉租管理模組已載入');
         var btnExternal = document.getElementById('btn-inbound-external');
         if (btnExternal) btnExternal.disabled = !hasBasicData;
         
-        // 更新儲位檢查狀態顯示（視覺提示，但不阻止按鈕）
-        var loc = document.getElementById('in-loc')?.value;
+        // ========== 更新待確認清單（公司、品名、數量、效期、儲位）==========
+        // 有值時顯示橘色，無值時顯示灰色
+        
+        // 公司
+        var checkCompany = document.getElementById('check-company');
+        if (checkCompany) {
+            var hasCompany = company && company.trim() !== '';
+            var icon = checkCompany.querySelector('i');
+            var text = checkCompany.querySelector('span');
+            if (hasCompany) {
+                if (icon) icon.className = 'fa-solid fa-check-circle text-orange-400 text-[8px]';
+                if (text) { text.className = 'text-orange-400 font-bold'; text.textContent = company; }
+            } else {
+                if (icon) icon.className = 'fa-solid fa-circle text-slate-600 text-[8px]';
+                if (text) { text.className = 'text-slate-500'; text.textContent = '公司'; }
+            }
+        }
+        
+        // 品名
+        var checkName = document.getElementById('check-name');
+        if (checkName) {
+            var hasName = name && name.trim() !== '';
+            var icon = checkName.querySelector('i');
+            var text = checkName.querySelector('span');
+            if (hasName) {
+                if (icon) icon.className = 'fa-solid fa-check-circle text-orange-400 text-[8px]';
+                var displayName = name.length > 8 ? name.substring(0, 8) + '...' : name;
+                if (text) { text.className = 'text-orange-400 font-bold'; text.textContent = displayName; }
+            } else {
+                if (icon) icon.className = 'fa-solid fa-circle text-slate-600 text-[8px]';
+                if (text) { text.className = 'text-slate-500'; text.textContent = '品名'; }
+            }
+        }
+        
+        // 數量
+        var checkQty = document.getElementById('check-qty');
+        if (checkQty) {
+            var hasQty = qty > 0;
+            var icon = checkQty.querySelector('i');
+            var text = checkQty.querySelector('span');
+            if (hasQty) {
+                if (icon) icon.className = 'fa-solid fa-check-circle text-orange-400 text-[8px]';
+                if (text) { text.className = 'text-orange-400 font-bold'; text.textContent = qty + ' 件'; }
+            } else {
+                if (icon) icon.className = 'fa-solid fa-circle text-slate-600 text-[8px]';
+                if (text) { text.className = 'text-slate-500'; text.textContent = '數量'; }
+            }
+        }
+        
+        // 效期
+        var checkExp = document.getElementById('check-exp');
+        if (checkExp) {
+            var hasExp = exp && exp.trim() !== '';
+            var icon = checkExp.querySelector('i');
+            var text = checkExp.querySelector('span');
+            if (hasExp) {
+                if (icon) icon.className = 'fa-solid fa-check-circle text-orange-400 text-[8px]';
+                // 格式化效期顯示
+                var expDisplay = exp.replace(/-/g, '/').replace(/\//g, '/');
+                if (text) { text.className = 'text-orange-400 font-bold'; text.textContent = expDisplay; }
+            } else {
+                if (icon) icon.className = 'fa-solid fa-circle text-slate-600 text-[8px]';
+                if (text) { text.className = 'text-slate-500'; text.textContent = '效期'; }
+            }
+        }
+        
+        // 儲位
         var checkLoc = document.getElementById('check-loc');
         if (checkLoc && !isExternal) {
             var hasLocation = loc && loc.trim() !== '';
             var icon = checkLoc.querySelector('i');
             var text = checkLoc.querySelector('span');
             if (hasLocation) {
-                if (icon) icon.className = 'fa-solid fa-check-circle text-emerald-400 text-[6px]';
-                if (text) { text.className = 'text-emerald-400'; text.textContent = '儲位 ✓'; }
+                if (icon) icon.className = 'fa-solid fa-check-circle text-orange-400 text-[8px]';
+                if (text) { text.className = 'text-orange-400 font-bold'; text.textContent = loc; }
             } else {
-                if (icon) icon.className = 'fa-solid fa-circle text-orange-400 text-[6px]';
-                if (text) { text.className = 'text-orange-400'; text.textContent = '儲位（待選）'; }
+                if (icon) icon.className = 'fa-solid fa-circle text-slate-600 text-[8px]';
+                if (text) { text.className = 'text-slate-500'; text.textContent = '儲位'; }
             }
+        } else if (checkLoc && isExternal) {
+            checkLoc.style.display = 'none';
         }
     }
     
@@ -24024,6 +24522,11 @@ console.log('💰 倉租管理模組已載入');
         
         if (typeof updateLivePreview === 'function') updateLivePreview();
         if (typeof updateInboundProgress === 'function') updateInboundProgress();
+        
+        // 重要：觸發智能儲位建議
+        if (typeof autoTriggerSmartSuggest === 'function') {
+            autoTriggerSmartSuggest();
+        }
         
         // 自動跳到批號欄位
         setTimeout(function() { var batchEl = document.getElementById('in-batch'); if (batchEl) batchEl.focus(); }, 100);
@@ -24165,7 +24668,195 @@ console.log('💰 倉租管理模組已載入');
     if (typeof originalLoadExternalStock === 'function') { window.loadExternalStock = function() { originalLoadExternalStock(); setTimeout(checkAndRenderExternal, 500); }; }
     setInterval(function() { var tbody = document.getElementById('inventory-list-body'); if (tbody && window.externalStock && window.externalStock.length > 0 && !tbody.querySelector('tr[data-type="external"]')) checkAndRenderExternal(); }, 2000);
     
-    // ========== 8. 初始化 ==========
+    // ========== 8. 貨櫃入庫作業優化 ==========
+    
+    // 匯入方式切換
+    window.switchContainerInputMode = function(mode) {
+        var btnManual = document.getElementById('btn-mode-manual');
+        var btnExcel = document.getElementById('btn-mode-excel');
+        var manualPanel = document.getElementById('container-manual-panel');
+        var excelPanel = document.getElementById('container-excel-panel');
+        
+        if (mode === 'excel') {
+            if (btnManual) { btnManual.className = 'flex-1 py-1.5 rounded text-xs font-bold bg-slate-800 text-slate-400 hover:bg-slate-700 transition-all'; }
+            if (btnExcel) { btnExcel.className = 'flex-1 py-1.5 rounded text-xs font-bold bg-emerald-600 text-white transition-all'; }
+            if (manualPanel) manualPanel.classList.add('hidden');
+            if (excelPanel) excelPanel.classList.remove('hidden');
+        } else {
+            if (btnManual) { btnManual.className = 'flex-1 py-1.5 rounded text-xs font-bold bg-cyan-600 text-white transition-all'; }
+            if (btnExcel) { btnExcel.className = 'flex-1 py-1.5 rounded text-xs font-bold bg-slate-800 text-slate-400 hover:bg-slate-700 transition-all'; }
+            if (manualPanel) manualPanel.classList.remove('hidden');
+            if (excelPanel) excelPanel.classList.add('hidden');
+        }
+    };
+    
+    // 貨櫃入庫更多選項切換
+    window.toggleContainerMoreOptions = function() {
+        var panel = document.getElementById('container-more-panel');
+        var icon = document.getElementById('container-more-icon');
+        var text = document.getElementById('container-more-text');
+        if (!panel) return;
+        
+        if (panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            if (icon) { icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-up'); }
+            if (text) text.textContent = '收合選項';
+        } else {
+            panel.classList.add('hidden');
+            if (icon) { icon.classList.remove('fa-chevron-up'); icon.classList.add('fa-chevron-down'); }
+            if (text) text.textContent = '更多選項';
+        }
+    };
+    
+    // 設定貨櫃入庫品項類型
+    function setPreProductType(type) {
+        var fixedFields = document.getElementById('pre-fixed-fields');
+        var variableFields = document.getElementById('pre-variable-fields');
+        var typeBadge = document.getElementById('pre-product-type-badge');
+        var badgeLabel = document.getElementById('pre-type-badge-label');
+        var unitWeightRow = document.getElementById('pre-unit-weight-row');
+        var perPalletVarRow = document.getElementById('pre-per-pallet-var-row');
+        
+        var fixedRadio = document.querySelector('input[name="pre-product-type"][value="fixed"]');
+        var variableRadio = document.querySelector('input[name="pre-product-type"][value="variable"]');
+        
+        if (type === 'variable') {
+            if (fixedRadio) fixedRadio.checked = false;
+            if (variableRadio) variableRadio.checked = true;
+            if (fixedFields) fixedFields.classList.add('hidden');
+            if (variableFields) variableFields.classList.remove('hidden');
+            if (badgeLabel) {
+                badgeLabel.textContent = '⚖️ 不定重品';
+                badgeLabel.className = 'px-2 py-1 rounded text-xs font-bold bg-amber-600/20 text-amber-400 border border-amber-500/30';
+            }
+            if (unitWeightRow) unitWeightRow.classList.add('hidden');
+            if (perPalletVarRow) perPalletVarRow.classList.remove('hidden');
+        } else {
+            if (fixedRadio) fixedRadio.checked = true;
+            if (variableRadio) variableRadio.checked = false;
+            if (fixedFields) fixedFields.classList.remove('hidden');
+            if (variableFields) variableFields.classList.add('hidden');
+            if (badgeLabel) {
+                badgeLabel.textContent = '📦 定重品';
+                badgeLabel.className = 'px-2 py-1 rounded text-xs font-bold bg-blue-600/20 text-blue-400 border border-blue-500/30';
+            }
+            if (unitWeightRow) unitWeightRow.classList.remove('hidden');
+            if (perPalletVarRow) perPalletVarRow.classList.add('hidden');
+        }
+        
+        if (typeBadge) typeBadge.classList.remove('hidden');
+    }
+    
+    // 覆寫原本的 togglePreProductType
+    window.togglePreProductType = setPreProductType;
+    
+    // 覆寫品項選擇後填入函數（貨櫃入庫用）
+    var originalFillContainerProduct = window.fillContainerProductFromMaster;
+    window.fillContainerProductFromMaster = function(product) {
+        var nameEl = document.getElementById('pre-name');
+        var specEl = document.getElementById('pre-spec');
+        var codeEl = document.getElementById('pre-product-code');
+        
+        if (nameEl) nameEl.value = product.name || product.productName || '';
+        if (specEl) specEl.value = product.spec || '';
+        if (codeEl) codeEl.value = product.code || product.id || '';
+        
+        // 自動判斷定重/不定重
+        var isVariable = product.weightType === 'variable' || product.productType === 'variable' || product.isVariable === true;
+        setPreProductType(isVariable ? 'variable' : 'fixed');
+        
+        // 自動填入箱容
+        if (product.unitWeight) {
+            var unitWeightEl = document.getElementById('pre-unit-weight');
+            if (unitWeightEl) unitWeightEl.value = product.unitWeight;
+        }
+        
+        // 自動填入每板數（從品項主檔的板容量）
+        if (product.palletCapacity) {
+            var perPalletEl = document.getElementById('pre-per-pallet');
+            var perPalletVarEl = document.getElementById('pre-per-pallet-var');
+            if (perPalletEl) perPalletEl.value = product.palletCapacity;
+            if (perPalletVarEl) perPalletVarEl.value = product.palletCapacity;
+        }
+        
+        // 自動跳到批號欄位
+        setTimeout(function() { var batchEl = document.getElementById('pre-batch'); if (batchEl) batchEl.focus(); }, 100);
+    };
+    
+    // 擴展 openProductSelectModal 以支援貨櫃入庫
+    var originalOpenProductSelectModal = window.openProductSelectModal;
+    window.openProductSelectModal = function(source) {
+        window.productSelectSource = source;
+        if (typeof originalOpenProductSelectModal === 'function') {
+            originalOpenProductSelectModal(source);
+        }
+    };
+    
+    // 擴展品項選擇確認函數 - 修正參數格式匹配
+    var originalSelectProductFromModal = window.selectProductFromModal;
+    window.selectProductFromModal = function(code, name, spec, palletCapacity, shelfLife) {
+        var source = window.productSelectSource || 'inbound';
+        
+        // 從品項主檔取得完整資料
+        var productData = (window.productMasterData || []).find(function(p) {
+            return p.code === code || p.name === name;
+        }) || {};
+        
+        // 建立完整的 product 物件
+        var product = {
+            code: code,
+            name: name,
+            spec: spec,
+            palletCapacity: palletCapacity || productData.palletCapacity || 40,
+            shelfLife: shelfLife || productData.shelfLife || 24,
+            weightType: productData.weightType || 'fixed',
+            inboundType: productData.inboundType || 'Raw',
+            unitWeight: productData.unitWeight || 0,
+            category: productData.category || ''
+        };
+        
+        if (source === 'container') {
+            if (typeof fillContainerProductFromMaster === 'function') {
+                fillContainerProductFromMaster(product);
+            } else {
+                // 降級處理：直接填入基本欄位
+                var nameEl = document.getElementById('pre-name');
+                var specEl = document.getElementById('pre-spec');
+                var codeEl = document.getElementById('pre-product-code');
+                if (nameEl) nameEl.value = name || '';
+                if (specEl) specEl.value = spec || '';
+                if (codeEl) codeEl.value = code || '';
+            }
+        } else {
+            if (typeof window.fillProductFromMaster === 'function') {
+                window.fillProductFromMaster(product);
+            } else {
+                // 降級處理：直接填入基本欄位
+                var nameEl = document.getElementById('in-name');
+                var specEl = document.getElementById('in-spec');
+                var codeEl = document.getElementById('in-product-code');
+                if (nameEl) nameEl.value = name || '';
+                if (specEl) specEl.value = spec || '';
+                if (codeEl) codeEl.value = code || '';
+                if (typeof updateLivePreview === 'function') updateLivePreview();
+                if (typeof updateInboundProgress === 'function') updateInboundProgress();
+            }
+            // 重要：觸發智能儲位建議
+            if (typeof autoTriggerSmartSuggest === 'function') {
+                autoTriggerSmartSuggest();
+            }
+        }
+        
+        // 關閉 modal
+        if (typeof closeProductSelectModal === 'function') {
+            closeProductSelectModal();
+        } else {
+            var modal = document.getElementById('product-select-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+    };
+    
+    // ========== 9. 初始化 ==========
     
     function init() {
         initExpiryDateInput();
@@ -24179,6 +24870,7 @@ console.log('💰 倉租管理模組已載入');
     console.log('✅ WMS V56.0 升級補丁載入完成');
     console.log('📋 更新內容：');
     console.log('   - 智能入庫流程優化');
+    console.log('   - 貨櫃入庫作業優化');
     console.log('   - 品項主檔整合（自動判斷定重/不定重）');
     console.log('   - 公司別篩選外倉');
     console.log('   - 效期輸入優化');
