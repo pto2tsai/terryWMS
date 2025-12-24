@@ -6753,25 +6753,25 @@ console.log('✅ WMS 工具函數庫已載入');
             if (type === 'container' || type === 'pre') {
                 var wb = XLSX.utils.book_new();
                 var data = [
-                    ['廠商', '品名', '規格', '批號', '效期', '數量', '每板數', '類型', '箱容kg', '總重量kg'],
-                    ['傳鮮', '熟白蝦 50/60', '1.1KG*8盒', 'B240301', '2025/12/31', 400, 50, '定重', 10, ''],
-                    ['傳鮮', '花枝圈', '300g*10包', 'B240302', '2025/11/30', 200, 40, '定重', 3, ''],
-                    ['海洋', '船凍透抽', '40/60', 'B240303', '2025/10/31', 50, 50, '不定重', '', 1250],
-                    ['海洋', '魷魚原料', '-', 'B240304', '2025/09/30', 30, 30, '不定重', '', 680]
+                    ['進口公司', '廠商', '品名', '規格', '批號', '效期', '數量', '每板數', '類型', '箱容kg', '總重量kg'],
+                    ['八方', '傳鮮', '熟白蝦 50/60', '1.1KG*8盒', 'B240301', '2025/12/31', 400, 50, '定重', 10, ''],
+                    ['八方', '傳鮮', '花枝圈', '300g*10包', 'B240302', '2025/11/30', 200, 40, '定重', 3, ''],
+                    ['崇文', '海洋', '船凍透抽', '40/60', 'B240303', '2025/10/31', 50, 50, '不定重', '', 1250],
+                    ['崇文', '海洋', '魷魚原料', '-', 'B240304', '2025/09/30', 30, 30, '不定重', '', 680]
                 ];
                 var ws = XLSX.utils.aoa_to_sheet(data);
-                ws['!cols'] = [{wch:10},{wch:20},{wch:15},{wch:12},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:10}];
+                ws['!cols'] = [{wch:10},{wch:10},{wch:20},{wch:15},{wch:12},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:10}];
                 XLSX.utils.book_append_sheet(wb, ws, '入庫清單');
                 XLSX.writeFile(wb, '貨櫃入庫範本.xlsx');
             } else if (type === 'stock') {
                 var wb = XLSX.utils.book_new();
                 var data = [
-                    ['品名', '規格', '批號', '效期', '數量', '儲位', '類型', '箱容kg', '總重量kg', '條碼'],
-                    ['熟白蝦', '50/60 1.1KG', 'B240101', '2025/06/30', 50, 'I-A-01-3F', '定重', 10, '', 'PL-B240101-001'],
-                    ['船凍透抽', '40/60', 'B240201', '2025/08/31', 30, 'I-A-02-3F', '不定重', '', 750, 'PL-B240201-001']
+                    ['進口公司', '品名', '規格', '批號', '效期', '數量', '儲位', '類型', '箱容kg', '總重量kg', '條碼'],
+                    ['崇文', '熟白蝦', '50/60 1.1KG', 'B240101', '2025/06/30', 50, 'I-A-01-3F', '定重', 10, '', 'PL-B240101-001'],
+                    ['八方', '船凍透抽', '40/60', 'B240201', '2025/08/31', 30, 'I-A-02-3F', '不定重', '', 750, 'PL-B240201-001']
                 ];
                 var ws = XLSX.utils.aoa_to_sheet(data);
-                ws['!cols'] = [{wch:15},{wch:15},{wch:12},{wch:12},{wch:8},{wch:12},{wch:8},{wch:8},{wch:10},{wch:18}];
+                ws['!cols'] = [{wch:10},{wch:15},{wch:15},{wch:12},{wch:12},{wch:8},{wch:12},{wch:8},{wch:8},{wch:10},{wch:18}];
                 XLSX.utils.book_append_sheet(wb, ws, '庫存');
                 XLSX.writeFile(wb, '期初庫存範本.xlsx');
             }
@@ -6784,9 +6784,9 @@ console.log('✅ WMS 工具函數庫已載入');
             var reader = new FileReader();
             reader.onload = function(e) {
                 var data = new Uint8Array(e.target.result);
-                var workbook = XLSX.read(data, { type: 'array' });
+                var workbook = XLSX.read(data, { type: 'array', cellDates: true });
                 var sheet = workbook.Sheets[workbook.SheetNames[0]];
-                var rows = XLSX.utils.sheet_to_json(sheet);
+                var rows = XLSX.utils.sheet_to_json(sheet, { raw: false, dateNF: 'yyyy-mm-dd' });
 
                 var importCount = 0;
                 rows.forEach(function(row) {
@@ -6808,14 +6808,46 @@ console.log('✅ WMS 工具函數庫已載入');
                     } else {
                         unitWeight = qty > 0 ? Math.round(totalWeight / qty * 100) / 100 : 0;
                     }
+                    
+                    // 處理效期格式
+                    var expiryDate = row['效期'] || '';
+                    if (expiryDate) {
+                        // 如果是 Date 物件，轉換為 YYYY-MM-DD
+                        if (expiryDate instanceof Date) {
+                            expiryDate = expiryDate.toISOString().split('T')[0];
+                        } else if (typeof expiryDate === 'number') {
+                            // Excel 序列號轉日期
+                            var date = new Date((expiryDate - 25569) * 86400 * 1000);
+                            expiryDate = date.toISOString().split('T')[0];
+                        } else if (typeof expiryDate === 'string') {
+                            // 嘗試解析各種格式
+                            // 格式：2025/12/31 或 2025-12-31 或 12/31/2025
+                            var parsed = null;
+                            if (/^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}$/.test(expiryDate)) {
+                                // 2025-12-31 或 2025/12/31
+                                parsed = expiryDate.replace(/\//g, '-');
+                            } else if (/^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/.test(expiryDate)) {
+                                // 12/31/2025 或 12-31-2025
+                                var parts = expiryDate.split(/[-\/]/);
+                                parsed = parts[2] + '-' + parts[0].padStart(2,'0') + '-' + parts[1].padStart(2,'0');
+                            }
+                            if (parsed) expiryDate = parsed;
+                        }
+                    }
+                    
+                    // 讀取進口公司欄位（支援多種欄位名稱）
+                    var company = row['進口公司'] || row['公司'] || row['Company'] || '';
+                    // 如果沒有公司欄位，預設為崇文
+                    if (!company) company = '崇文';
 
                     var item = {
                         id: 'CI-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+                        company: company,
                         vendor: row['廠商'] || '',
                         productName: row['品名'] || '',
                         spec: row['規格'] || '',
                         batchNo: row['批號'] || '',
-                        expiryDate: row['效期'] || '',
+                        expiryDate: expiryDate,
                         quantity: qty,
                         perPallet: perPallet,
                         palletCount: Math.ceil(qty / perPallet),
@@ -7525,149 +7557,346 @@ console.log('✅ WMS 工具函數庫已載入');
             var LEVEL_PRIORITY = window.RACK_CONFIG ? window.RACK_CONFIG.LEVEL_PRIORITY : ['2F', '3F', '1F'];
             var FILL_THRESHOLDS = window.RACK_CONFIG ? window.RACK_CONFIG.PALLET_FILL_THRESHOLDS : { full: 0.75, partial: 0.50 };
             
-            // 建立儲位追蹤表
-            // key: locationId, value: { full: 已用整板數, partial: 已用不足板數, scattered: 已用散板數 }
-            var locationUsage = {};
+            // 計算單巷道總容量（整板）
+            var LANE_FULL_CAPACITY = LEVEL_CAPACITY['1F'].full + LEVEL_CAPACITY['2F'].full + LEVEL_CAPACITY['3F'].full; // 8+4+8=20
             
-            // 初始化儲位
+            console.log('═══════════════════════════════════════════════════════════');
+            console.log('📦 貨櫃智能儲位分配系統');
+            console.log('═══════════════════════════════════════════════════════════');
+            
+            // ========== 1. 讀取現有庫存 ==========
+            function getExistingInventory() {
+                var pallets = [];
+                try {
+                    if (typeof window.currentInventory === 'function') {
+                        pallets = window.currentInventory() || [];
+                    } else if (window.currentInventory && Array.isArray(window.currentInventory)) {
+                        pallets = window.currentInventory;
+                    } else if (window._inventoryData && Array.isArray(window._inventoryData.pallets)) {
+                        pallets = window._inventoryData.pallets;
+                    }
+                } catch (e) {
+                    pallets = [];
+                }
+                return Array.isArray(pallets) ? pallets : [];
+            }
+            
+            var existingInventory = getExistingInventory();
+            
+            // ========== 2. 建立巷道狀態表 ==========
             var zones = opts.zones || ['A', 'B'];
             var warehouse = opts.warehouse || 'I';
+            var lanes = {}; // key: 'I-A-01', value: { levels: {...}, products: [...], totalUsed: n }
             
-            // 為每個區域的每個巷道建立儲位
+            // 根據區域決定倉庫和排數
+            function getWarehouseInfo(zone) {
+                if (['A', 'B'].indexOf(zone) >= 0) return { wh: 'I', rows: 8 };
+                if (['C', 'D'].indexOf(zone) >= 0) return { wh: 'J', rows: 8 };
+                if (['E', 'F', 'G', 'H'].indexOf(zone) >= 0) return { wh: 'K', rows: 22 };
+                return { wh: warehouse, rows: 10 };
+            }
+            
+            // 初始化所有巷道
             zones.forEach(function(zone) {
-                for (var row = 1; row <= 10; row++) {
+                var info = getWarehouseInfo(zone);
+                for (var row = 1; row <= info.rows; row++) {
+                    var laneKey = info.wh + '-' + zone + '-' + (row < 10 ? '0' + row : row);
+                    lanes[laneKey] = {
+                        warehouse: info.wh,
+                        zone: zone,
+                        row: row,
+                        levels: {},
+                        products: [],
+                        totalUsed: 0,
+                        totalCapacity: LANE_FULL_CAPACITY
+                    };
                     LEVEL_PRIORITY.forEach(function(levelStr) {
-                        var locId = warehouse + '-' + zone + '-' + (row < 10 ? '0' + row : row) + '-' + levelStr;
-                        locationUsage[locId] = { full: 0, partial: 0, scattered: 0, levelStr: levelStr };
+                        lanes[laneKey].levels[levelStr] = { full: 0, partial: 0, scattered: 0 };
                     });
                 }
             });
             
-            console.log('📦 儲位初始化完成');
-            console.log('📦 層數優先順序:', LEVEL_PRIORITY.join(' → '));
-            console.log('📦 各層容量: 3F=整板' + LEVEL_CAPACITY['3F'].full + ', 2F=整板' + LEVEL_CAPACITY['2F'].full + '/不足板' + LEVEL_CAPACITY['2F'].partial + ', 1F=整板' + LEVEL_CAPACITY['1F'].full + '/不足板' + LEVEL_CAPACITY['1F'].partial);
+            // ========== 3. 統計現有庫存佔用 ==========
+            existingInventory.forEach(function(pallet) {
+                if (!pallet.locationId) return;
+                var parts = pallet.locationId.split('-');
+                if (parts.length < 4) return;
+                var laneKey = parts[0] + '-' + parts[1] + '-' + parts[2];
+                var levelStr = parts[3];
+                if (!lanes[laneKey]) return;
+                var palletType = pallet.palletType || 'full';
+                lanes[laneKey].levels[levelStr][palletType]++;
+                lanes[laneKey].totalUsed++;
+                if (pallet.productName && lanes[laneKey].products.indexOf(pallet.productName) === -1) {
+                    lanes[laneKey].products.push(pallet.productName);
+                }
+            });
             
-            // 找到可用的儲位
-            function findAvailableLocation(palletType, boxSize) {
+            var totalLanes = Object.keys(lanes).length;
+            var usedLanes = 0;
+            for (var lk in lanes) { if (lanes[lk].totalUsed > 0) usedLanes++; }
+            console.log('📊 現有庫存:', existingInventory.length, '板');
+            console.log('📊 巷道使用:', usedLanes + '/' + totalLanes, '(' + Math.round(usedLanes/totalLanes*100) + '%)');
+            
+            // ========== 4. 分析入庫品項（合併同品項） ==========
+            var productSummary = {};
+            items.forEach(function(item) {
+                var key = item.productName;
+                if (!productSummary[key]) {
+                    productSummary[key] = {
+                        productName: item.productName, spec: item.spec,
+                        totalQty: 0, totalPallets: 0, batches: [], items: [],
+                        existingLanes: [], assignedLane: null
+                    };
+                }
+                var productMaster = window.productMasterData ? window.productMasterData.find(function(p) {
+                    return p.name === item.productName;
+                }) : null;
+                var perPallet = (productMaster && productMaster.palletCapacity) ? productMaster.palletCapacity : (item.perPallet || 40);
+                var palletCount = item.palletCount || Math.ceil(item.quantity / perPallet);
+                productSummary[key].totalQty += item.quantity;
+                productSummary[key].totalPallets += palletCount;
+                productSummary[key].batches.push(item.batchNo || '-');
+                productSummary[key].items.push(item);
+                productSummary[key].perPallet = perPallet;
+                productSummary[key].unitWeight = (productMaster && productMaster.unitWeight) ? productMaster.unitWeight : (item.unitWeight || 10);
+            });
+            
+            for (var prodName in productSummary) {
+                for (var laneKey in lanes) {
+                    if (lanes[laneKey].products.indexOf(prodName) >= 0) {
+                        productSummary[prodName].existingLanes.push(laneKey);
+                    }
+                }
+            }
+            
+            var productList = Object.values(productSummary);
+            productList.sort(function(a, b) { return b.totalPallets - a.totalPallets; });
+            
+            console.log('───────────────────────────────────────────────────────────');
+            console.log('📋 入庫品項分析（共 ' + productList.length + ' 品項，' + items.length + ' 批號）：');
+            var totalInboundPallets = 0;
+            productList.forEach(function(p) {
+                var sizeLabel = p.totalPallets >= 20 ? '🔴大量' : (p.totalPallets >= 5 ? '🟡中量' : '🟢少量');
+                var existingInfo = p.existingLanes.length > 0 ? ' [庫存於:' + p.existingLanes.join(',') + ']' : ' [新品]';
+                console.log('  ' + sizeLabel + ' ' + p.productName + ': ' + p.totalPallets + '板 (' + p.batches.length + '批)' + existingInfo);
+                totalInboundPallets += p.totalPallets;
+            });
+            console.log('  📦 總計: ' + totalInboundPallets + ' 板');
+            
+            // ========== 5. 巷道分配規劃 ==========
+            console.log('───────────────────────────────────────────────────────────');
+            console.log('🎯 巷道分配規劃：');
+            
+            function getAvailableLanes() {
+                var available = [];
+                for (var laneKey in lanes) {
+                    var lane = lanes[laneKey];
+                    var remaining = lane.totalCapacity - lane.totalUsed;
+                    if (remaining > 0) {
+                        available.push({ laneKey: laneKey, remaining: remaining, isEmpty: lane.totalUsed === 0, products: lane.products.slice() });
+                    }
+                }
+                available.sort(function(a, b) {
+                    if (a.isEmpty !== b.isEmpty) return a.isEmpty ? -1 : 1;
+                    return b.remaining - a.remaining;
+                });
+                return available;
+            }
+            
+            productList.forEach(function(product) {
+                if (product.existingLanes.length > 0) {
+                    for (var i = 0; i < product.existingLanes.length; i++) {
+                        var laneKey = product.existingLanes[i];
+                        var remaining = lanes[laneKey].totalCapacity - lanes[laneKey].totalUsed;
+                        if (remaining >= product.totalPallets) {
+                            product.assignedLane = laneKey;
+                            console.log('  ✅ ' + product.productName + ' → ' + laneKey + ' (同品項巷道，剩餘' + remaining + '板)');
+                            lanes[laneKey].totalUsed += product.totalPallets;
+                            lanes[laneKey].products.push(product.productName + '(新)');
+                            break;
+                        }
+                    }
+                }
+                if (!product.assignedLane) {
+                    var available = getAvailableLanes();
+                    for (var i = 0; i < available.length; i++) {
+                        if (available[i].remaining >= product.totalPallets) {
+                            product.assignedLane = available[i].laneKey;
+                            var laneKey = available[i].laneKey;
+                            var typeLabel = available[i].isEmpty ? '空巷道' : '共用巷道';
+                            console.log('  ✅ ' + product.productName + ' → ' + laneKey + ' (' + typeLabel + '，剩餘' + available[i].remaining + '板)');
+                            lanes[laneKey].totalUsed += product.totalPallets;
+                            lanes[laneKey].products.push(product.productName + '(新)');
+                            break;
+                        }
+                    }
+                }
+                if (!product.assignedLane) {
+                    product.assignedLane = 'MULTI';
+                    console.log('  ⚠️ ' + product.productName + ' → 需跨多巷道 (' + product.totalPallets + '板)');
+                }
+            });
+            
+            // ========== 6. 實際分配儲位 ==========
+            console.log('───────────────────────────────────────────────────────────');
+            console.log('📍 儲位分配明細：');
+            
+            var laneUsage = {};
+            for (var laneKey in lanes) {
+                laneUsage[laneKey] = { levels: {} };
+                LEVEL_PRIORITY.forEach(function(levelStr) {
+                    laneUsage[laneKey].levels[levelStr] = {
+                        full: lanes[laneKey].levels[levelStr].full || 0,
+                        partial: lanes[laneKey].levels[levelStr].partial || 0,
+                        scattered: lanes[laneKey].levels[levelStr].scattered || 0
+                    };
+                });
+            }
+            
+            function findLocationInLane(laneKey, palletType, boxSize) {
+                if (!laneUsage[laneKey]) return null;
                 var factor = (window.RACK_CONFIG && window.RACK_CONFIG.BOX_SIZE_FACTOR) ? 
                     window.RACK_CONFIG.BOX_SIZE_FACTOR[boxSize || 'standard'] || 1.0 : 1.0;
-                
-                // 根據板型決定可用的層數
                 var allowedLevels = LEVEL_PRIORITY.filter(function(levelStr) {
                     var cap = LEVEL_CAPACITY[levelStr];
                     return cap && cap[palletType] > 0;
                 });
-                
-                // 遍歷所有儲位找到可用的
-                for (var z = 0; z < zones.length; z++) {
-                    for (var row = 1; row <= 10; row++) {
-                        for (var lp = 0; lp < allowedLevels.length; lp++) {
-                            var levelStr = allowedLevels[lp];
-                            var locId = warehouse + '-' + zones[z] + '-' + (row < 10 ? '0' + row : row) + '-' + levelStr;
-                            var usage = locationUsage[locId];
-                            
-                            if (!usage) continue;
-                            
-                            // 計算該儲位的容量
-                            var maxCapacity = Math.floor(LEVEL_CAPACITY[levelStr][palletType] * factor);
-                            var currentUsed = usage[palletType] || 0;
-                            
-                            if (currentUsed < maxCapacity) {
-                                return locId;
-                            }
+                for (var i = 0; i < allowedLevels.length; i++) {
+                    var levelStr = allowedLevels[i];
+                    var maxCapacity = Math.floor(LEVEL_CAPACITY[levelStr][palletType] * factor);
+                    var currentUsed = laneUsage[laneKey].levels[levelStr][palletType] || 0;
+                    if (currentUsed < maxCapacity) {
+                        return laneKey + '-' + levelStr;
+                    }
+                }
+                return null;
+            }
+            
+            function findAnyLocation(palletType, boxSize, preferredProduct) {
+                var factor = (window.RACK_CONFIG && window.RACK_CONFIG.BOX_SIZE_FACTOR) ? 
+                    window.RACK_CONFIG.BOX_SIZE_FACTOR[boxSize || 'standard'] || 1.0 : 1.0;
+                var allowedLevels = LEVEL_PRIORITY.filter(function(levelStr) {
+                    var cap = LEVEL_CAPACITY[levelStr];
+                    return cap && cap[palletType] > 0;
+                });
+                if (preferredProduct) {
+                    for (var laneKey in lanes) {
+                        if (lanes[laneKey].products.indexOf(preferredProduct) >= 0 ||
+                            lanes[laneKey].products.indexOf(preferredProduct + '(新)') >= 0) {
+                            var loc = findLocationInLane(laneKey, palletType, boxSize);
+                            if (loc) return loc;
                         }
                     }
                 }
-                
+                for (var laneKey in laneUsage) {
+                    for (var i = 0; i < allowedLevels.length; i++) {
+                        var levelStr = allowedLevels[i];
+                        var maxCapacity = Math.floor(LEVEL_CAPACITY[levelStr][palletType] * factor);
+                        var currentUsed = laneUsage[laneKey].levels[levelStr][palletType] || 0;
+                        if (currentUsed < maxCapacity) {
+                            return laneKey + '-' + levelStr;
+                        }
+                    }
+                }
                 return 'OVERFLOW';
             }
             
-            // 處理每個品項
-            items.forEach(function(item) {
-                console.log('🏷️ 處理品項:', item.productName, '數量:', item.quantity, '每板:', item.perPallet);
+            var now = new Date();
+            var dateStr = now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2);
+            var timeStr = ('0'+now.getHours()).slice(-2) + ('0'+now.getMinutes()).slice(-2) + ('0'+now.getSeconds()).slice(-2);
+            var randomStr = Math.random().toString(36).substr(2, 4).toUpperCase();
+            var palletIdBase = 'IN-' + dateStr + '-' + timeStr + '-' + randomStr;
+            var globalPalletNo = 1;
+            
+            productList.forEach(function(product) {
+                var assignedLane = product.assignedLane;
+                var boxSize = window.getBoxSizeByWeight ? window.getBoxSizeByWeight(product.unitWeight) : 'standard';
+                console.log('  📦 ' + product.productName + ' (' + product.totalPallets + '板) → ' + (assignedLane === 'MULTI' ? '跨巷道' : assignedLane));
                 
-                // 從品項主檔取得設定
-                var productMaster = window.productMasterData ? window.productMasterData.find(function(p) {
-                    return p.name === item.productName || (p.name + ' ' + p.spec) === item.productName;
-                }) : null;
-                
-                var palletCapacity = (productMaster && productMaster.palletCapacity) ? productMaster.palletCapacity : (item.perPallet || 40);
-                var unitWeight = (productMaster && productMaster.unitWeight) ? productMaster.unitWeight : (item.unitWeight || 10);
-                var boxSize = window.getBoxSizeByWeight ? window.getBoxSizeByWeight(unitWeight) : 'standard';
-                
-                // 分配每一板
-                var remaining = item.quantity;
-                var palletNo = 1;
-                
-                // 生成統一的棧板編號基底
-                var now = new Date();
-                var dateStr = now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2);
-                var timeStr = ('0'+now.getHours()).slice(-2) + ('0'+now.getMinutes()).slice(-2) + ('0'+now.getSeconds()).slice(-2);
-                var randomStr = Math.random().toString(36).substr(2, 4).toUpperCase();
-                var palletIdBase = 'IN-' + dateStr + '-' + timeStr + '-' + randomStr;
-                
-                while (remaining > 0) {
-                    var palletQty = Math.min(remaining, palletCapacity);
+                product.items.forEach(function(item) {
+                    var remaining = item.quantity;
+                    var perPallet = product.perPallet || item.perPallet || 40;
                     
-                    // 判斷板型
-                    var fillRate = palletQty / palletCapacity;
-                    var palletType = 'scattered';
-                    if (fillRate >= FILL_THRESHOLDS.full) {
-                        palletType = 'full';
-                    } else if (fillRate >= FILL_THRESHOLDS.partial) {
-                        palletType = 'partial';
+                    while (remaining > 0) {
+                        var palletQty = Math.min(remaining, perPallet);
+                        var fillRate = palletQty / perPallet;
+                        var palletType = 'scattered';
+                        if (fillRate >= FILL_THRESHOLDS.full) palletType = 'full';
+                        else if (fillRate >= FILL_THRESHOLDS.partial) palletType = 'partial';
+                        
+                        var palletWeight = 0;
+                        if (item.productType === 'variable' && item.totalWeight > 0) {
+                            palletWeight = Math.round((palletQty / item.quantity) * item.totalWeight * 10) / 10;
+                        } else if (item.unitWeight > 0) {
+                            palletWeight = palletQty * item.unitWeight;
+                        }
+                        
+                        var locationId;
+                        if (assignedLane && assignedLane !== 'MULTI') {
+                            locationId = findLocationInLane(assignedLane, palletType, boxSize);
+                            if (!locationId) locationId = findAnyLocation(palletType, boxSize, product.productName);
+                        } else {
+                            locationId = findAnyLocation(palletType, boxSize, product.productName);
+                        }
+                        
+                        if (locationId && locationId !== 'OVERFLOW') {
+                            var parts = locationId.split('-');
+                            var lk = parts[0] + '-' + parts[1] + '-' + parts[2];
+                            var lvl = parts[3];
+                            if (laneUsage[lk] && laneUsage[lk].levels[lvl]) {
+                                laneUsage[lk].levels[lvl][palletType]++;
+                            }
+                        }
+                        
+                        allocations.push({
+                            id: palletIdBase + '-' + String(globalPalletNo).padStart(3, '0'),
+                            company: item.company || '崇文',
+                            vendor: item.vendor,
+                            productName: item.productName,
+                            spec: item.spec,
+                            batchNo: item.batchNo || '',
+                            expiryDate: item.expiryDate,
+                            quantity: palletQty,
+                            totalWeight: palletWeight,
+                            unitWeight: item.unitWeight || 0,
+                            productType: item.productType || 'fixed',
+                            locationId: locationId || 'OVERFLOW',
+                            palletNo: palletIdBase + '-' + String(globalPalletNo).padStart(3, '0'),
+                            palletType: palletType,
+                            boxSize: boxSize,
+                            overflow: !locationId || locationId === 'OVERFLOW'
+                        });
+                        
+                        remaining -= palletQty;
+                        globalPalletNo++;
                     }
-                    
-                    // 計算重量
-                    var palletWeight = 0;
-                    if (item.productType === 'variable' && item.totalWeight > 0) {
-                        palletWeight = Math.round((palletQty / item.quantity) * item.totalWeight * 10) / 10;
-                    } else if (item.unitWeight > 0) {
-                        palletWeight = palletQty * item.unitWeight;
-                    }
-                    
-                    // 找到可用儲位
-                    var locationId = findAvailableLocation(palletType, boxSize);
-                    
-                    // 更新儲位使用量
-                    if (locationId !== 'OVERFLOW' && locationUsage[locationId]) {
-                        locationUsage[locationId][palletType]++;
-                    }
-                    
-                    // 建立標籤
-                    var allocation = {
-                        id: palletIdBase + '-' + String(palletNo).padStart(3, '0'),
-                        company: item.company || '崇文',
-                        vendor: item.vendor,
-                        productName: item.productName,
-                        spec: item.spec,
-                        batchNo: item.batchNo || '',
-                        expiryDate: item.expiryDate,
-                        quantity: palletQty,
-                        totalWeight: palletWeight,
-                        unitWeight: item.unitWeight || 0,
-                        productType: item.productType || 'fixed',
-                        locationId: locationId,
-                        palletNo: palletIdBase + '-' + String(palletNo).padStart(3, '0'),
-                        palletType: palletType,
-                        boxSize: boxSize,
-                        overflow: locationId === 'OVERFLOW'
-                    };
-                    
-                    allocations.push(allocation);
-                    console.log('  板' + palletNo + ':', palletQty + '件', '(' + palletType + ')', '→', locationId);
-                    
-                    remaining -= palletQty;
-                    palletNo++;
-                }
-                
-                console.log('✅ 品項', item.productName, '分配完成，共', palletNo - 1, '板');
+                });
             });
-
-            console.log('🏷️ 總共分配', allocations.length, '個標籤');
+            
+            // ========== 7. 輸出分配結果摘要 ==========
+            console.log('───────────────────────────────────────────────────────────');
+            console.log('📊 分配結果摘要：');
+            var locationSummary = {};
+            allocations.forEach(function(a) {
+                if (!locationSummary[a.locationId]) locationSummary[a.locationId] = { count: 0, products: [] };
+                locationSummary[a.locationId].count++;
+                if (locationSummary[a.locationId].products.indexOf(a.productName) === -1) {
+                    locationSummary[a.locationId].products.push(a.productName);
+                }
+            });
+            Object.keys(locationSummary).sort().forEach(function(locId) {
+                var info = locationSummary[locId];
+                console.log('  ' + locId + ': ' + info.count + '板 [' + info.products.join(', ') + ']');
+            });
+            var overflowCount = allocations.filter(function(a) { return a.overflow; }).length;
+            if (overflowCount > 0) console.log('  ⚠️ 溢位: ' + overflowCount + '板');
+            console.log('═══════════════════════════════════════════════════════════');
+            console.log('✅ 分配完成！共 ' + allocations.length + ' 板');
+            console.log('═══════════════════════════════════════════════════════════');
+            
             return allocations;
         };
-
         function findNearestLocation(available, lastLoc) {
             if (!lastLoc || available.length === 0) return available[0];
 
