@@ -6161,14 +6161,16 @@ console.log('✅ WMS 工具函數庫已載入');
             var productType = typeof getProductType === 'function' ? getProductType() : 'fixed';
             var qty = 0;
             var perPallet = 40;
+            var productName = document.getElementById('in-name').value;
+            
+            // 從品項主檔讀取板容量（不管是定重還是不定重都要讀）
+            var master = (window.productMasterData || []).find(function(p) { return p.name === productName; });
+            if (master && master.palletCapacity) {
+                perPallet = master.palletCapacity;
+            }
             
             if (productType === 'fixed') {
                 qty = parseInt(document.getElementById('in-qty').value) || 0;
-                var productName = document.getElementById('in-name').value;
-                var master = (window.productMasterData || []).find(function(p) { return p.name === productName; });
-                if (master && master.palletCapacity) {
-                    perPallet = master.palletCapacity;
-                }
             } else {
                 qty = parseInt(document.getElementById('in-qty-var').value) || 0;
             }
@@ -6813,6 +6815,13 @@ console.log('✅ WMS 工具函數庫已載入');
              var batchNo = document.getElementById('in-batch') ? document.getElementById('in-batch').value : '';
              var expDate = document.getElementById('in-exp') ? document.getElementById('in-exp').value : '';
              var vendor = document.getElementById('in-vendor') ? document.getElementById('in-vendor').value : '';
+             
+             // 讀取板容量（從品項主檔）
+             var palletCapacity = 40;
+             var master = (window.productMasterData || []).find(function(p) { return p.name === productName; });
+             if (master && master.palletCapacity) {
+                 palletCapacity = master.palletCapacity;
+             }
 
              var companyRadio = document.querySelector('input[name="in-company"]:checked');
              var company = companyRadio ? companyRadio.value : '崇文';
@@ -6827,6 +6836,7 @@ console.log('✅ WMS 工具函數庫已載入');
                     batchNo: batchNo,
                     expiryDate: expDate,
                     quantity: qty,
+                    palletCapacity: palletCapacity,
                     totalWeight: totalWeight,
                     unitWeight: unitWeight,
                     productType: productType,
@@ -7312,13 +7322,13 @@ console.log('✅ WMS 工具函數庫已載入');
 
             if (productType === 'fixed') {
                 qty = parseInt(document.getElementById('pre-qty').value) || 0;
-                perPallet = parseInt(document.getElementById('pre-per-pallet').value) || 50;
+                perPallet = parseInt(document.getElementById('pre-per-pallet').value) || 40;
                 unitWeight = parseFloat(document.getElementById('pre-unit-weight').value) || 0;
                 totalWeight = qty * unitWeight;
             } else {
                 qty = parseInt(document.getElementById('pre-qty-var').value) || 0;
                 totalWeight = parseFloat(document.getElementById('pre-total-weight').value) || 0;
-                perPallet = parseInt(document.getElementById('pre-per-pallet-var').value) || 50;
+                perPallet = parseInt(document.getElementById('pre-per-pallet-var').value) || 40;
                 unitWeight = qty > 0 ? Math.round(totalWeight / qty * 100) / 100 : 0;
             }
 
@@ -7432,6 +7442,7 @@ console.log('✅ WMS 工具函數庫已載入');
                             expiryDate: item.expiryDate,
                             quantity: p === item.palletCount - 1 ? 
                                 item.quantity - (p * item.perPallet) : item.perPallet,
+                            perPallet: item.perPallet,
                             vendor: item.vendor,
                             company: item.company,
                             locationId: 'TEMP-IN',
@@ -7721,19 +7732,24 @@ console.log('✅ WMS 工具函數庫已載入');
             
             // ========== 簡化版：判斷板型後查表 ==========
             var productType = typeof getPreProductType === 'function' ? getPreProductType() : 'fixed';
-            var qty = 0, perPallet = 50;
-            
-            if (productType === 'fixed') {
-                qty = parseInt(document.getElementById('pre-qty').value) || 0;
-                perPallet = parseInt(document.getElementById('pre-per-pallet').value) || 50;
-            } else {
-                qty = parseInt(document.getElementById('pre-qty-var').value) || 0;
-                perPallet = parseInt(document.getElementById('pre-per-pallet-var').value) || 50;
-            }
+            var qty = 0, perPallet = 40;
             
             // 從品項主檔獲取板容量
             var master = (window.productMasterData || []).find(function(p) { return p.name === productName; });
-            if (master && master.palletCapacity) perPallet = master.palletCapacity;
+            if (master && master.palletCapacity) {
+                perPallet = master.palletCapacity;
+            } else if (productType === 'fixed') {
+                // 沒有主檔資料時，從輸入框讀取
+                perPallet = parseInt(document.getElementById('pre-per-pallet').value) || 40;
+            } else {
+                perPallet = parseInt(document.getElementById('pre-per-pallet-var').value) || 40;
+            }
+            
+            if (productType === 'fixed') {
+                qty = parseInt(document.getElementById('pre-qty').value) || 0;
+            } else {
+                qty = parseInt(document.getElementById('pre-qty-var').value) || 0;
+            }
             
             // 貨櫃入庫時，計算尾板的填充率來判斷板型
             var lastPalletQty = qty > 0 ? (qty % perPallet || perPallet) : perPallet;
@@ -8588,6 +8604,7 @@ console.log('✅ WMS 工具函數庫已載入');
                             batchNo: item.batchNo || '',
                             expiryDate: item.expiryDate,
                             quantity: palletQty,
+                            perPallet: perPallet,
                             totalWeight: palletWeight,
                             unitWeight: item.unitWeight || 0,
                             productType: item.productType || 'fixed',
@@ -9007,6 +9024,7 @@ console.log('✅ WMS 工具函數庫已載入');
                         batchNo: label.batchNo || '',
                         expiryDate: label.expiryDate ? new Date(label.expiryDate) : null,
                         quantity: quantity,
+                        palletCapacity: label.perPallet || 40,
                         totalWeight: totalWeight,
                         unitWeight: parseFloat(label.unitWeight) || 0,
                         productType: label.productType || 'fixed',
@@ -16784,10 +16802,12 @@ window.clearLocalStorage = function() {
             var productType = typeof getProductType === 'function' ? getProductType() : 'fixed';
             var qty = 0, perPallet = 40;
             
+            // 從品項主檔讀取板容量（不管是定重還是不定重都要讀）
+            var master = (window.productMasterData || []).find(function(p) { return p.name === targetName; });
+            if (master && master.palletCapacity) perPallet = master.palletCapacity;
+            
             if (productType === 'fixed') {
                 qty = parseInt(document.getElementById('in-qty').value) || 0;
-                var master = (window.productMasterData || []).find(function(p) { return p.name === targetName; });
-                if (master && master.palletCapacity) perPallet = master.palletCapacity;
             } else {
                 qty = parseInt(document.getElementById('in-qty-var').value) || 0;
             }
@@ -16808,6 +16828,7 @@ window.clearLocalStorage = function() {
 
             // 非同步執行以避免阻塞 UI
             setTimeout(function() {
+                try {
                 var inventory = [];
                 if (typeof window.currentInventory === 'function') {
                     inventory = window.currentInventory();
@@ -17026,7 +17047,15 @@ window.clearLocalStorage = function() {
                 }
 
                 // 渲染建議
-                renderSmartSuggestionsEnhanced(uniqueSuggestions, targetName, targetSpec, palletType, boxSize);
+                renderSmartSuggestionsEnhanced(uniqueSuggestions, targetName, targetSpec, palletType);
+                
+                } catch (e) {
+                    console.error('智能建議計算錯誤:', e);
+                    var list = document.getElementById('smart-suggest-list');
+                    if (list) {
+                        list.innerHTML = '<div class="text-red-400 text-xs text-center py-2">計算錯誤，請重試</div>';
+                    }
+                }
                 
                 // 隱藏載入中
                 if (loading) loading.classList.add('hidden');
