@@ -239,6 +239,10 @@
         .mini-label-card .loc { font-weight: 900; font-size: 12px; color: #2563eb; }
         .mini-label-card .qty { font-weight: 900; font-size: 14px; color: #dc2626; text-align: right; }
 
+        /* 報表下拉選單樣式 */
+        #report-type-select option { background: #334155; color: white; padding: 8px; }
+        #report-type-select optgroup { background: #1e293b; color: #94a3b8; font-weight: bold; padding: 4px 0; }
+
         @media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position: absolute; left: 0; top: 0; width: 100%; } .print-page { page-break-after: always; width: 100mm; height: 148mm; border: 3px solid black; padding: 15px; margin: 0 auto; color: black !important; background: white !important; display: flex; flex-direction: column; } .print-header { text-align: center; font-size: 24px; font-weight: 900; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; } .print-row { display: flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 5px; } .print-label { font-size: 14px; color: #333; font-weight: bold; } .print-val { font-size: 18px; font-weight: bold; text-align: right; } .print-big { font-size: 32px; font-weight: 900; } .print-footer { margin-top: auto; text-align: center; } }
     </style>
 </head>
@@ -362,7 +366,7 @@
                 <i class="fa-solid fa-chevron-down nav-chevron"></i>
             </div>
             <div class="nav-group-items collapsed" id="grp-reports">
-                <div class="nav-item" onclick="switchTab('picking-reports', event)"><i class="fa-solid fa-file-export w-4 text-center mr-2 text-green-400"></i>📊 報表匯出</div>
+                <div class="nav-item" onclick="switchTab('picking-reports', event)"><i class="fa-solid fa-chart-pie w-4 text-center mr-2 text-green-400"></i>報表中心</div>
                 <div class="nav-item" onclick="switchTab('expiry-management', event)"><i class="fa-solid fa-calendar-xmark w-4 text-center mr-2 text-red-400"></i>效期管理</div>
                 <div class="nav-item" onclick="switchTab('inventory-log', event)"><i class="fa-solid fa-clock-rotate-left w-4 text-center mr-2"></i>異動查詢</div>
                 <div class="nav-item" onclick="switchTab('product-analysis', event)"><i class="fa-solid fa-chart-bar w-4 text-center mr-2"></i>出貨分析</div>
@@ -692,7 +696,7 @@
                         <button onclick="openTVBoard()" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold">
                             <i class="fa-solid fa-tv mr-2"></i>電視投放
                         </button>
-                        <button onclick="refreshWorkBoard()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
+                        <button onclick="loadWorkBoardData().then(refreshWorkBoard)" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
                             <i class="fa-solid fa-sync mr-2"></i>刷新
                         </button>
                         <button onclick="toggleBoardFullscreen()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">
@@ -710,9 +714,9 @@
                 
                 <!-- 工單統計摘要 -->
                 <div class="grid grid-cols-5 gap-4 mb-4">
-                    <div class="bg-gradient-to-br from-yellow-600 to-yellow-700 rounded-xl p-4 text-center">
+                    <div class="bg-gradient-to-br from-green-600 to-green-700 rounded-xl p-4 text-center">
                         <div class="text-5xl font-bold text-white" id="board-pending-count">0</div>
-                        <div class="text-yellow-200 text-lg mt-1">待入庫</div>
+                        <div class="text-green-200 text-lg mt-1">待領料</div>
                     </div>
                     <div class="bg-gradient-to-br from-orange-600 to-orange-700 rounded-xl p-4 text-center">
                         <div class="text-5xl font-bold text-white" id="board-wave-count">0</div>
@@ -734,11 +738,11 @@
                 
                 <!-- 工單列表區域 -->
                 <div class="flex-1 grid grid-cols-3 gap-4 overflow-hidden">
-                    <!-- 入庫工單 -->
-                    <div class="bg-slate-900 rounded-xl border-2 border-yellow-600 flex flex-col overflow-hidden">
-                        <div class="bg-yellow-600 px-4 py-3 flex items-center justify-between">
-                            <span class="text-xl font-bold text-white"><i class="fa-solid fa-arrow-down mr-2"></i>待入庫</span>
-                            <span class="bg-yellow-800 px-3 py-1 rounded-full text-white font-bold" id="board-pending-badge">0</span>
+                    <!-- 領料工單 -->
+                    <div class="bg-slate-900 rounded-xl border-2 border-green-600 flex flex-col overflow-hidden">
+                        <div class="bg-green-600 px-4 py-3 flex items-center justify-between">
+                            <span class="text-xl font-bold text-white"><i class="fa-solid fa-hand mr-2"></i>待領料</span>
+                            <span class="bg-green-800 px-3 py-1 rounded-full text-white font-bold" id="board-pending-badge">0</span>
                         </div>
                         <div class="flex-1 overflow-y-auto p-3 space-y-2" id="board-pending-list">
                         </div>
@@ -2011,244 +2015,109 @@
             <!-- 外部倉庫管理 -->
 
             <!-- 報表中心 -->
-            <!-- 理貨報表中心 - 左右欄佈局 -->
+            <!-- 報表中心 - 極簡單行式 UI -->
             <div id="view-picking-reports" class="view-panel h-full hidden flex flex-col p-4">
-                <!-- 頂部標題列 -->
-                <div class="flex items-center justify-between bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700 p-3 rounded-xl mb-3">
-                    <div class="flex items-center gap-3">
-                        <i class="fa-solid fa-chart-line text-2xl text-emerald-400"></i>
-                        <h2 class="text-white font-bold text-lg">理貨報表中心</h2>
-                    </div>
-                    <!-- 日期選擇區 -->
-                    <div class="flex items-center gap-2">
+                <!-- 操作列：報表選擇 + 日期區間 + 產生按鈕 -->
+                <div class="bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700 p-4 rounded-xl mb-3">
+                    <div class="flex items-center gap-4 flex-wrap">
+                        <!-- 報表選擇 -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-400 text-sm font-bold whitespace-nowrap">
+                                <i class="fa-solid fa-chart-pie mr-1 text-emerald-400"></i>報表：
+                            </span>
+                            <select id="report-type-select" class="bg-slate-700 text-white px-4 py-2.5 rounded-lg border border-slate-500 min-w-[220px] text-sm focus:border-emerald-500 focus:outline-none">
+                                <option value="">-- 選擇報表 --</option>
+                                <optgroup label="📦 出貨報表">
+                                    <option value="shipping-logistics">依物流商</option>
+                                    <option value="shipping-customer">依客戶</option>
+                                    <option value="shipping-product">依產品</option>
+                                    <option value="today-report">今日總覽</option>
+                                </optgroup>
+                                <optgroup label="📥 入庫報表">
+                                    <option value="inbound-summary">入庫統計</option>
+                                    <option value="inbound-detail">入庫明細</option>
+                                    <option value="inbound-by-product">依品項</option>
+                                    <option value="inbound-by-vendor">依廠商</option>
+                                </optgroup>
+                                <optgroup label="🏭 庫存報表">
+                                    <option value="inventory-summary">庫存彙總</option>
+                                    <option value="inventory-expiry">效期預警</option>
+                                    <option value="low-stock">低庫存</option>
+                                    <option value="inventory-location">儲位分布</option>
+                                </optgroup>
+                                <optgroup label="📋 波次報表">
+                                    <option value="wave-summary">波次統計</option>
+                                    <option value="wave-efficiency">揀貨效率</option>
+                                </optgroup>
+                                <optgroup label="📄 訂單報表">
+                                    <option value="order-status">訂單狀態</option>
+                                    <option value="pending-orders">待處理訂單</option>
+                                </optgroup>
+                                <optgroup label="✋ 領料報表">
+                                    <option value="picking-summary">領料統計</option>
+                                    <option value="picking-detail">領料明細</option>
+                                    <option value="picking-by-user">依領用人</option>
+                                    <option value="picking-by-product">依品項</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        
+                        <!-- 日期區間 -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-400 text-sm font-bold whitespace-nowrap">
+                                <i class="fa-solid fa-calendar mr-1"></i>日期：
+                            </span>
+                            <input type="date" id="report-date-from" class="bg-slate-700 text-white px-3 py-2 rounded-lg border border-slate-500 text-sm focus:border-emerald-500 focus:outline-none">
+                            <span class="text-slate-500 font-bold">～</span>
+                            <input type="date" id="report-date-to" class="bg-slate-700 text-white px-3 py-2 rounded-lg border border-slate-500 text-sm focus:border-emerald-500 focus:outline-none">
+                        </div>
+                        
+                        <!-- 快速日期按鈕 -->
                         <div class="flex bg-slate-700/50 rounded-lg p-1 gap-1">
-                            <button onclick="setReportQuickDate('today')" class="report-date-btn px-3 py-1.5 rounded text-xs font-bold" data-range="today">今天</button>
-                            <button onclick="setReportQuickDate('yesterday')" class="report-date-btn px-3 py-1.5 rounded text-xs font-bold" data-range="yesterday">昨天</button>
-                            <button onclick="setReportQuickDate('week')" class="report-date-btn px-3 py-1.5 rounded text-xs font-bold" data-range="week">本週</button>
-                            <button onclick="setReportQuickDate('month')" class="report-date-btn px-3 py-1.5 rounded text-xs font-bold bg-emerald-600 text-white" data-range="month">本月</button>
-                            <button onclick="setReportQuickDate('lastmonth')" class="report-date-btn px-3 py-1.5 rounded text-xs font-bold" data-range="lastmonth">上月</button>
+                            <button onclick="setReportQuickDate('today')" class="report-date-btn px-2.5 py-1.5 rounded text-xs font-bold text-slate-400 hover:bg-slate-600" data-range="today">今天</button>
+                            <button onclick="setReportQuickDate('week')" class="report-date-btn px-2.5 py-1.5 rounded text-xs font-bold text-slate-400 hover:bg-slate-600" data-range="week">本週</button>
+                            <button onclick="setReportQuickDate('month')" class="report-date-btn px-2.5 py-1.5 rounded text-xs font-bold bg-emerald-600 text-white" data-range="month">本月</button>
+                            <button onclick="setReportQuickDate('lastmonth')" class="report-date-btn px-2.5 py-1.5 rounded text-xs font-bold text-slate-400 hover:bg-slate-600" data-range="lastmonth">上月</button>
                         </div>
-                        <div class="flex items-center gap-1 text-xs">
-                            <input type="date" id="report-date-from" class="scan-input px-2 py-1.5 text-xs w-32">
-                            <span class="text-slate-500">~</span>
-                            <input type="date" id="report-date-to" class="scan-input px-2 py-1.5 text-xs w-32">
-                        </div>
+                        
+                        <!-- 產生報表按鈕 -->
+                        <button onclick="generateReportFromSelect()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-lg font-bold text-sm transition flex items-center gap-2 ml-auto">
+                            <i class="fa-solid fa-play"></i>產生報表
+                        </button>
                     </div>
                 </div>
 
-                <!-- Tab 切換列 -->
-                <div class="flex gap-1 mb-3 bg-slate-800/50 p-1 rounded-xl">
-                    <button onclick="switchReportTab('shipping')" class="report-tab flex-1 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 bg-blue-600 text-white" data-tab="shipping">
-                        <i class="fa-solid fa-truck"></i>出貨報表
-                    </button>
-                    <button onclick="switchReportTab('inventory')" class="report-tab flex-1 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 text-slate-400 hover:bg-slate-700" data-tab="inventory">
-                        <i class="fa-solid fa-warehouse"></i>庫存報表
-                    </button>
-                    <button onclick="switchReportTab('wave')" class="report-tab flex-1 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 text-slate-400 hover:bg-slate-700" data-tab="wave">
-                        <i class="fa-solid fa-layer-group"></i>波次報表
-                    </button>
-                    <button onclick="switchReportTab('order')" class="report-tab flex-1 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 text-slate-400 hover:bg-slate-700" data-tab="order">
-                        <i class="fa-solid fa-receipt"></i>訂單報表
-                    </button>
-                    <button onclick="switchReportTab('picking')" class="report-tab flex-1 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 text-slate-400 hover:bg-slate-700" data-tab="picking">
-                        <i class="fa-solid fa-hand"></i>領料報表
-                    </button>
-                </div>
-
-                <!-- 報表卡片區 -->
-                <div class="mb-3">
-                    <!-- 出貨報表卡片 -->
-                    <div id="report-cards-shipping" class="report-card-group grid grid-cols-4 gap-3">
-                        <div onclick="generateReport('shipping-logistics')" class="report-card bg-gradient-to-br from-blue-900/50 to-blue-800/30 border border-blue-700/50 rounded-xl p-4 cursor-pointer hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-blue-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-truck-fast text-blue-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">依物流商</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">統計各物流商出貨量</div>
-                        </div>
-                        <div onclick="generateReport('shipping-customer')" class="report-card bg-gradient-to-br from-green-900/50 to-green-800/30 border border-green-700/50 rounded-xl p-4 cursor-pointer hover:border-green-500 hover:shadow-lg hover:shadow-green-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-green-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-users text-green-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">依客戶</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">統計各客戶出貨量</div>
-                        </div>
-                        <div onclick="generateReport('shipping-product')" class="report-card bg-gradient-to-br from-yellow-900/50 to-yellow-800/30 border border-yellow-700/50 rounded-xl p-4 cursor-pointer hover:border-yellow-500 hover:shadow-lg hover:shadow-yellow-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-yellow-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-box text-yellow-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">依產品</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">統計各產品出貨量</div>
-                        </div>
-                        <div onclick="generateTodayReport()" class="report-card bg-gradient-to-br from-cyan-900/50 to-cyan-800/30 border border-cyan-700/50 rounded-xl p-4 cursor-pointer hover:border-cyan-500 hover:shadow-lg hover:shadow-cyan-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-cyan-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-sun text-cyan-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">今日總覽</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">今日出貨統計摘要</div>
-                        </div>
-                    </div>
-
-                    <!-- 庫存報表卡片 -->
-                    <div id="report-cards-inventory" class="report-card-group grid grid-cols-4 gap-3 hidden">
-                        <div onclick="generateReport('inventory-summary')" class="report-card bg-gradient-to-br from-cyan-900/50 to-cyan-800/30 border border-cyan-700/50 rounded-xl p-4 cursor-pointer hover:border-cyan-500 hover:shadow-lg hover:shadow-cyan-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-cyan-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-chart-pie text-cyan-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">庫存彙總</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">各品項庫存數量統計</div>
-                        </div>
-                        <div onclick="generateReport('inventory-expiry')" class="report-card bg-gradient-to-br from-red-900/50 to-red-800/30 border border-red-700/50 rounded-xl p-4 cursor-pointer hover:border-red-500 hover:shadow-lg hover:shadow-red-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-red-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-calendar-xmark text-red-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">效期預警</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">即將到期品項清單</div>
-                        </div>
-                        <div onclick="generateLowStockReport()" class="report-card bg-gradient-to-br from-orange-900/50 to-orange-800/30 border border-orange-700/50 rounded-xl p-4 cursor-pointer hover:border-orange-500 hover:shadow-lg hover:shadow-orange-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-orange-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-triangle-exclamation text-orange-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">低庫存</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">庫存不足品項預警</div>
-                        </div>
-                        <div onclick="generateReport('inventory-location')" class="report-card bg-gradient-to-br from-purple-900/50 to-purple-800/30 border border-purple-700/50 rounded-xl p-4 cursor-pointer hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-purple-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-location-dot text-purple-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">儲位分布</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">各儲位使用狀況</div>
-                        </div>
-                    </div>
-
-                    <!-- 波次報表卡片 -->
-                    <div id="report-cards-wave" class="report-card-group grid grid-cols-4 gap-3 hidden">
-                        <div onclick="generateReport('wave-summary')" class="report-card bg-gradient-to-br from-purple-900/50 to-purple-800/30 border border-purple-700/50 rounded-xl p-4 cursor-pointer hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-purple-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-chart-bar text-purple-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">波次統計</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">波次數量與完成率</div>
-                        </div>
-                        <div onclick="generateReport('wave-efficiency')" class="report-card bg-gradient-to-br from-green-900/50 to-green-800/30 border border-green-700/50 rounded-xl p-4 cursor-pointer hover:border-green-500 hover:shadow-lg hover:shadow-green-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-green-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-gauge-high text-green-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">揀貨效率</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">揀貨時間與效率分析</div>
-                        </div>
-                    </div>
-
-                    <!-- 訂單報表卡片 -->
-                    <div id="report-cards-order" class="report-card-group grid grid-cols-4 gap-3 hidden">
-                        <div onclick="generateReport('order-status')" class="report-card bg-gradient-to-br from-blue-900/50 to-blue-800/30 border border-blue-700/50 rounded-xl p-4 cursor-pointer hover:border-blue-500 hover:shadow-lg hover:shadow-blue-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-blue-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-list-check text-blue-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">訂單狀態</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">各狀態訂單數量統計</div>
-                        </div>
-                        <div onclick="generateReport('pending-orders')" class="report-card bg-gradient-to-br from-yellow-900/50 to-yellow-800/30 border border-yellow-700/50 rounded-xl p-4 cursor-pointer hover:border-yellow-500 hover:shadow-lg hover:shadow-yellow-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-yellow-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-clock text-yellow-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">待處理訂單</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">尚未排入波次的訂單</div>
-                        </div>
-                    </div>
-
-                    <!-- 領料報表卡片 -->
-                    <div id="report-cards-picking" class="report-card-group grid grid-cols-4 gap-3 hidden">
-                        <div onclick="generateReport('picking-summary')" class="report-card bg-gradient-to-br from-cyan-900/50 to-cyan-800/30 border border-cyan-700/50 rounded-xl p-4 cursor-pointer hover:border-cyan-500 hover:shadow-lg hover:shadow-cyan-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-cyan-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-chart-bar text-cyan-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">領料統計</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">按日期統計領用數量</div>
-                        </div>
-                        <div onclick="generateReport('picking-detail')" class="report-card bg-gradient-to-br from-green-900/50 to-green-800/30 border border-green-700/50 rounded-xl p-4 cursor-pointer hover:border-green-500 hover:shadow-lg hover:shadow-green-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-green-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-list text-green-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">領料明細</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">詳細領用記錄清單</div>
-                        </div>
-                        <div onclick="generateReport('picking-by-user')" class="report-card bg-gradient-to-br from-purple-900/50 to-purple-800/30 border border-purple-700/50 rounded-xl p-4 cursor-pointer hover:border-purple-500 hover:shadow-lg hover:shadow-purple-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-purple-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-user text-purple-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">依領用人</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">各領用人統計分析</div>
-                        </div>
-                        <div onclick="generateReport('picking-by-product')" class="report-card bg-gradient-to-br from-yellow-900/50 to-yellow-800/30 border border-yellow-700/50 rounded-xl p-4 cursor-pointer hover:border-yellow-500 hover:shadow-lg hover:shadow-yellow-500/20 transition-all">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-lg bg-yellow-600/30 flex items-center justify-center">
-                                    <i class="fa-solid fa-box text-yellow-400 text-lg"></i>
-                                </div>
-                                <div class="text-white font-bold">依品項</div>
-                            </div>
-                            <div class="text-slate-400 text-xs">各品項領用統計</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 報表預覽區 -->
+                <!-- 報表結果區（最大化空間） -->
                 <div class="flex-1 bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden flex flex-col min-h-0">
-                    <!-- 預覽區標題列 -->
+                    <!-- 結果區標題列 -->
                     <div class="bg-slate-900 px-4 py-2 border-b border-slate-700 flex justify-between items-center flex-shrink-0">
-                        <h3 class="text-white font-bold flex items-center text-sm">
-                            <i class="fa-solid fa-table mr-2 text-slate-400"></i>
-                            <span id="report-preview-title">報表預覽</span>
-                        </h3>
+                        <div class="flex items-center gap-3 text-sm">
+                            <span class="text-white font-bold flex items-center" id="report-preview-title">
+                                <i class="fa-solid fa-table mr-2 text-slate-400"></i>報表結果
+                            </span>
+                            <span class="text-slate-500 hidden" id="report-date-info"></span>
+                            <span class="text-slate-500 hidden" id="report-count-info"></span>
+                        </div>
                         <div class="flex gap-2">
-                            <button onclick="exportReportExcel()" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1">
-                                <i class="fa-solid fa-file-excel"></i>Excel
+                            <button onclick="exportReportExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5">
+                                <i class="fa-solid fa-file-excel"></i>匯出
                             </button>
-                            <button onclick="printReport()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                            <button onclick="printReport()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5">
                                 <i class="fa-solid fa-print"></i>列印
                             </button>
                         </div>
                     </div>
-                    <!-- 預覽內容區 -->
-                    <div class="flex-1 overflow-auto p-4" id="report-preview-area">
+                    <!-- 結果內容區 -->
+                    <div class="flex-1 overflow-auto" id="report-preview-area">
                         <div class="h-full flex flex-col items-center justify-center text-slate-500">
                             <i class="fa-solid fa-chart-simple text-6xl mb-4 opacity-30"></i>
-                            <div class="text-lg mb-1">選擇報表類型開始查詢</div>
+                            <div class="text-lg mb-1">選擇報表類型並點擊「產生報表」</div>
                             <div class="text-xs text-slate-600">支援 Excel 匯出及列印功能</div>
                         </div>
                     </div>
                 </div>
             </div>
+
 
             <div id="view-external-warehouse" class="view-panel h-full hidden flex flex-col p-4">
                 <!-- 頂部控制區 -->
@@ -2422,85 +2291,65 @@
                 </div>
 
                 <div class="flex gap-3 flex-1 min-h-0">
-                    <!-- 左側：調撥設定 -->
+                    <!-- 左側：調撥設定（簡化版） -->
                     <div class="w-80 glass-panel p-3 flex flex-col">
-                        <h3 class="text-white font-bold mb-2 border-b border-slate-700 pb-2 text-sm" id="transfer-form-title">
+                        <h3 class="text-white font-bold mb-3 border-b border-slate-700 pb-2 text-sm" id="transfer-form-title">
                             <i class="fa-solid fa-truck-arrow-right mr-2 text-emerald-400"></i>調撥入庫（外倉→本倉）
                         </h3>
 
-                        <div class="space-y-2 flex-1 overflow-auto">
-                            <!-- 來源/目標倉庫 -->
-                            <div class="grid grid-cols-2 gap-2" id="transfer-warehouse-row">
-                                <div id="transfer-source-div">
-                                    <label class="text-xs text-slate-400" id="transfer-source-label">來源外倉 *</label>
-                                    <select id="transfer-source" class="scan-input text-sm" onchange="onTransferSourceChange()">
-                                        <option value="">選擇外倉</option>
-                                    </select>
+                        <div class="space-y-3 flex-1">
+                            <!-- Step 1: 選擇倉庫 -->
+                            <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-3 border border-slate-600">
+                                <div class="flex items-center mb-2">
+                                    <span class="text-xs text-slate-400 font-bold">
+                                        <i class="fa-solid fa-1 w-4 h-4 rounded-full bg-blue-600 text-white text-center mr-1 inline-flex items-center justify-center text-[10px]"></i>
+                                        <span id="transfer-wh-step-label">選擇倉庫</span>
+                                    </span>
                                 </div>
-                                <div id="transfer-target-div" style="display:none;">
-                                    <label class="text-xs text-slate-400">目標外倉 *</label>
-                                    <select id="transfer-target" class="scan-input text-sm">
-                                        <option value="">選擇外倉</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <!-- 品名搜尋 -->
-                            <div>
-                                <label class="text-xs text-slate-400">品名 *</label>
-                                <input type="text" id="transfer-product" class="scan-input text-sm" placeholder="搜尋品名..." oninput="searchTransferProduct()">
-                                <div id="transfer-product-list" class="max-h-28 overflow-y-auto bg-slate-800 rounded mt-1"></div>
-                            </div>
-
-                            <!-- 規格/批號 -->
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label class="text-xs text-slate-400">規格</label>
-                                    <input type="text" id="transfer-spec" class="scan-input text-sm" readonly>
-                                </div>
-                                <div>
-                                    <label class="text-xs text-slate-400">批號</label>
-                                    <input type="text" id="transfer-batch" class="scan-input text-sm" readonly>
+                                <div class="space-y-2" id="transfer-warehouse-row">
+                                    <div id="transfer-source-div">
+                                        <label class="text-xs text-slate-400" id="transfer-source-label">來源外倉 *</label>
+                                        <select id="transfer-source" class="scan-input text-sm" onchange="onTransferSourceChange()">
+                                            <option value="">選擇外倉</option>
+                                        </select>
+                                    </div>
+                                    <div id="transfer-target-div" style="display:none;">
+                                        <label class="text-xs text-slate-400">目標外倉 *</label>
+                                        <select id="transfer-target" class="scan-input text-sm">
+                                            <option value="">選擇外倉</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- 效期 -->
-                            <div>
-                                <label class="text-xs text-slate-400">效期</label>
-                                <input type="text" id="transfer-exp" class="scan-input text-sm" readonly>
-                            </div>
-
-                            <!-- 來源儲位（調撥出庫專用） -->
-                            <div id="transfer-location-div" style="display:none;">
-                                <label class="text-xs text-slate-400">來源儲位 *</label>
-                                <select id="transfer-location" class="scan-input text-sm" onchange="onTransferLocationChange()">
-                                    <option value="">選擇儲位</option>
-                                </select>
-                            </div>
-
-                            <!-- 可調數量 -->
-                            <div class="flex items-center gap-4">
-                                <div>
-                                    <label class="text-xs text-slate-400">可調數量</label>
-                                    <div class="text-lg font-bold text-yellow-400" id="transfer-available">0</div>
+                            <!-- Step 2: 選擇品項按鈕 -->
+                            <div class="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-3 border border-slate-600">
+                                <div class="flex items-center mb-2">
+                                    <span class="text-xs text-slate-400 font-bold">
+                                        <i class="fa-solid fa-2 w-4 h-4 rounded-full bg-purple-600 text-white text-center mr-1 inline-flex items-center justify-center text-[10px]"></i>
+                                        選擇品項與數量
+                                    </span>
                                 </div>
-                            </div>
-
-                            <!-- 調撥數量 -->
-                            <div>
-                                <label class="text-xs text-slate-400">調撥數量 *</label>
-                                <input type="number" id="transfer-qty" class="scan-input text-center text-lg font-bold" placeholder="0" min="1">
+                                <button onclick="openTransferProductModal()" class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-3 rounded-lg font-bold text-sm transition">
+                                    <i class="fa-solid fa-boxes-stacked mr-2"></i>選擇品項（可複選）
+                                </button>
+                                <p class="text-xs text-slate-500 mt-2 text-center">
+                                    <i class="fa-solid fa-info-circle mr-1"></i>彈窗內可連續選擇多筆品項
+                                </p>
                             </div>
 
                             <!-- 調撥入庫處理方式（僅調撥入庫模式顯示） -->
-                            <div id="transfer-in-options" class="bg-slate-800 rounded-lg p-2 border border-slate-600">
-                                <label class="text-xs text-slate-400 mb-1.5 block">入庫後處理方式</label>
+                            <div id="transfer-in-options" class="bg-slate-800 rounded-lg p-2.5 border border-slate-600">
+                                <label class="text-xs text-slate-400 mb-1.5 block font-bold">
+                                    <i class="fa-solid fa-3 w-4 h-4 rounded-full bg-emerald-600 text-white text-center mr-1 inline-flex items-center justify-center text-[10px]"></i>
+                                    入庫後處理方式
+                                </label>
                                 <div class="space-y-1.5">
                                     <label class="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-slate-700">
                                         <input type="radio" name="transfer-in-method" value="pending" class="text-emerald-500" checked>
                                         <div class="flex-1">
                                             <span class="text-white text-sm font-bold">產生待執行工單</span>
-                                            <div class="text-slate-400 text-xs">推送到智能入庫中心，由現場人員掃描選位入庫</div>
+                                            <div class="text-slate-400 text-xs">推送到智能入庫中心</div>
                                         </div>
                                         <span class="text-emerald-400 text-xs px-1.5 py-0.5 bg-emerald-900/50 rounded">建議</span>
                                     </label>
@@ -2508,17 +2357,22 @@
                                         <input type="radio" name="transfer-in-method" value="temp" class="text-yellow-500">
                                         <div class="flex-1">
                                             <span class="text-white text-sm">入暫存區</span>
-                                            <div class="text-slate-400 text-xs">直接入進貨暫存區（TEMP-IN），之後手動移位</div>
+                                            <div class="text-slate-400 text-xs">直接入進貨暫存區（TEMP-IN）</div>
                                         </div>
                                     </label>
                                 </div>
                             </div>
-
-                            <!-- 加入按鈕 -->
-                            <button onclick="addTransferItem()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold text-sm">
-                                <i class="fa-solid fa-plus mr-1"></i>加入調撥清單
-                            </button>
                         </div>
+                        
+                        <!-- 隱藏欄位（保留相容性） -->
+                        <input type="hidden" id="transfer-product">
+                        <input type="hidden" id="transfer-spec">
+                        <input type="hidden" id="transfer-batch">
+                        <input type="hidden" id="transfer-exp">
+                        <input type="hidden" id="transfer-location">
+                        <input type="hidden" id="transfer-qty">
+                        <div id="transfer-selected-product" class="hidden"></div>
+                        <span id="transfer-available" class="hidden">0</span>
                     </div>
 
                     <!-- 右側：調撥清單 -->
@@ -4531,6 +4385,83 @@
                 </div>
             </div>
 
+            <!-- 調撥品項選擇 Modal（精簡版）-->
+            <div id="modal-transfer-product" class="fixed inset-0 z-50 bg-black/80 hidden flex items-center justify-center backdrop-blur-sm">
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl w-[850px] max-h-[85vh] shadow-2xl flex flex-col">
+                    <!-- 標題列（精簡） -->
+                    <div class="bg-gradient-to-r from-purple-900 to-indigo-900 px-4 py-3 rounded-t-2xl border-b border-slate-700 flex justify-between items-center flex-shrink-0">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-boxes-stacked text-white"></i>
+                            <span class="text-white font-bold">選擇調撥品項</span>
+                            <!-- 步驟指示（整合到標題列） -->
+                            <div class="flex items-center gap-1 ml-4 text-xs" id="transfer-steps-inline">
+                                <span class="bg-blue-600 text-white px-2 py-0.5 rounded font-bold" id="step-tag-1">1.品名</span>
+                                <i class="fa-solid fa-chevron-right text-slate-500"></i>
+                                <span class="text-slate-500" id="step-tag-2">2.規格</span>
+                                <i class="fa-solid fa-chevron-right text-slate-500"></i>
+                                <span class="text-slate-500" id="step-tag-3">3.批號</span>
+                                <i class="fa-solid fa-chevron-right text-slate-500 step-loc-arrow" style="display:none;"></i>
+                                <span class="text-slate-500 step-loc-tag" id="step-tag-4" style="display:none;">4.儲位</span>
+                                <i class="fa-solid fa-chevron-right text-slate-500"></i>
+                                <span class="text-slate-500" id="step-tag-5">數量</span>
+                            </div>
+                        </div>
+                        <button onclick="closeTransferProductModal()" class="text-slate-400 hover:text-white">
+                            <i class="fa-solid fa-xmark text-lg"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- 主體區域 -->
+                    <div class="flex flex-1 min-h-0">
+                        <!-- 左側：品項選擇區 -->
+                        <div class="flex-1 flex flex-col border-r border-slate-700">
+                            <!-- 麵包屑 + 搜尋（合併） -->
+                            <div class="px-3 py-2 border-b border-slate-700 flex items-center gap-2">
+                                <button onclick="transferModalGoBack()" id="transfer-modal-back-btn" class="w-7 h-7 bg-slate-700 hover:bg-slate-600 text-white rounded flex items-center justify-center hidden">
+                                    <i class="fa-solid fa-arrow-left text-xs"></i>
+                                </button>
+                                <div class="flex items-center gap-1 text-xs flex-1 min-w-0" id="transfer-bc-product">
+                                    <span class="text-slate-400">尚未選擇</span>
+                                </div>
+                                <div class="relative w-48">
+                                    <i class="fa-solid fa-search absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                    <input type="text" id="transfer-modal-search" class="scan-input pl-7 w-full h-7 text-xs" placeholder="搜尋..." oninput="filterTransferModalList()">
+                                </div>
+                            </div>
+                            
+                            <!-- 列表區域 -->
+                            <div class="flex-1 overflow-auto p-2" id="transfer-modal-list-area">
+                                <div class="text-center text-slate-500 py-10">
+                                    <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+                                    <div class="text-sm">載入中...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 右側：已選清單（精簡） -->
+                        <div class="w-56 flex flex-col bg-slate-800/30">
+                            <div class="px-3 py-2 border-b border-slate-700 flex items-center justify-between">
+                                <span class="text-white font-bold text-xs">
+                                    <i class="fa-solid fa-cart-shopping mr-1 text-yellow-400"></i>已選
+                                </span>
+                                <span class="bg-yellow-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center" id="transfer-cart-count">0</span>
+                            </div>
+                            <div class="flex-1 overflow-auto p-2" id="transfer-cart-list">
+                                <div class="text-center text-slate-500 py-6 text-xs">
+                                    <i class="fa-solid fa-inbox text-xl mb-1 opacity-50"></i>
+                                    <div>尚未選擇</div>
+                                </div>
+                            </div>
+                            <div class="p-2 border-t border-slate-700">
+                                <button onclick="confirmTransferCart()" id="transfer-cart-confirm-btn" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                    <i class="fa-solid fa-check mr-1"></i>確認加入
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- 領料確認 Modal -->
             <div id="modal-rm-confirm" class="fixed inset-0 z-50 bg-black/80 hidden flex items-center justify-center backdrop-blur-sm">
                 <div class="bg-slate-900 border border-slate-700 rounded-2xl w-[600px] max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
@@ -5639,7 +5570,13 @@ console.log('✅ WMS 工具函數庫已載入');
                     if (typeof window.loadRentalReport === 'function') window.loadRentalReport();
                 }, 500);
             }
-            if(viewId === 'work-board') { refreshWorkBoard(); setBoardRefreshInterval(); }
+            if(viewId === 'work-board') { 
+                // 🔧 修正：切換到工單看板時先載入資料
+                loadWorkBoardData().then(function() {
+                    refreshWorkBoard(); 
+                    setBoardRefreshInterval(); 
+                });
+            }
         }
         function renderAllMaps() {
             renderMapUI('grid-I-A'); renderMapUI('grid-I-B');
@@ -16457,6 +16394,76 @@ window.clearLocalStorage = function() {
         
         var boardRefreshTimer = null;
         
+        // 🔧 修正：載入工單看板所需資料（領料工單取代待入庫工單）
+        window.loadWorkBoardData = async function() {
+            console.log('📋 載入工單看板資料...');
+            
+            try {
+                if (window.db && window.collection && window.query && window.getDocs && window.where) {
+                    // 1. 載入領料工單（待處理的領料申請）
+                    try {
+                        var pickingQ = window.query(
+                            window.collection(window.db, 'pickingOrders'), 
+                            window.where('status', '==', 'pending')
+                        );
+                        var pickingSnapshot = await window.getDocs(pickingQ);
+                        window.pendingPickingOrders = [];
+                        pickingSnapshot.forEach(function(doc) {
+                            window.pendingPickingOrders.push({ id: doc.id, ...doc.data() });
+                        });
+                        window.pendingPickingOrders.sort(function(a, b) {
+                            return new Date(b.createdAt) - new Date(a.createdAt);
+                        });
+                        console.log('📋 領料工單載入完成:', window.pendingPickingOrders.length, '筆');
+                    } catch(e) {
+                        console.warn('載入領料工單失敗:', e);
+                        window.pendingPickingOrders = window.pendingPickingOrders || [];
+                    }
+                    
+                    // 2. 載入揀貨波次
+                    try {
+                        var waveQ = window.query(
+                            window.collection(window.db, 'waves'),
+                            window.where('status', 'in', ['pending', 'picking'])
+                        );
+                        var waveSnapshot = await window.getDocs(waveQ);
+                        if (!window._waveData) window._waveData = { waves: [] };
+                        window._waveData.waves = [];
+                        waveSnapshot.forEach(function(doc) {
+                            window._waveData.waves.push({ id: doc.id, ...doc.data() });
+                        });
+                        console.log('📋 揀貨波次載入完成:', window._waveData.waves.length, '筆');
+                    } catch(e) {
+                        console.warn('載入揀貨波次失敗:', e);
+                        if (!window._waveData) window._waveData = { waves: [] };
+                    }
+                    
+                    // 3. 載入調撥工單
+                    try {
+                        var transferQ = window.query(
+                            window.collection(window.db, 'transfers'),
+                            window.where('status', '!=', 'completed')
+                        );
+                        var transferSnapshot = await window.getDocs(transferQ);
+                        window.transferList = [];
+                        transferSnapshot.forEach(function(doc) {
+                            window.transferList.push({ id: doc.id, ...doc.data() });
+                        });
+                        console.log('📋 調撥工單載入完成:', window.transferList.length, '筆');
+                    } catch(e) {
+                        console.warn('載入調撥工單失敗:', e);
+                        window.transferList = window.transferList || [];
+                    }
+                } else {
+                    console.warn('Firebase 尚未初始化，使用現有資料');
+                }
+            } catch(e) {
+                console.error('載入工單看板資料失敗:', e);
+            }
+            
+            console.log('📋 工單看板資料載入完成');
+        };
+        
         // 刷新工單看板
         window.refreshWorkBoard = function() {
             // 更新時間
@@ -16471,12 +16478,12 @@ window.clearLocalStorage = function() {
             var moveCount = 0;
             var urgentCount = 0;
             
-            // 1. 待入庫工單
+            // 1. 領料工單（取代原本的待入庫工單）
             var pendingHtml = '';
-            var pendingInbounds = window.pendingInbounds || [];
-            pendingCount = pendingInbounds.length;
+            var pendingPickingOrders = window.pendingPickingOrders || [];
+            pendingCount = pendingPickingOrders.length;
             
-            pendingInbounds.forEach(function(order, idx) {
+            pendingPickingOrders.forEach(function(order, idx) {
                 if (idx >= 10) return; // 最多顯示 10 筆
                 var isUrgent = order.priority === 'urgent';
                 if (isUrgent) urgentCount++;
@@ -16484,14 +16491,14 @@ window.clearLocalStorage = function() {
                 var timeStr = order.createdAt ? new Date(order.createdAt).toLocaleTimeString('zh-TW', {hour: '2-digit', minute: '2-digit'}) : '';
                 
                 pendingHtml += '<div class="bg-slate-800 rounded-lg p-3 border-l-4 ' + 
-                    (isUrgent ? 'border-red-500 animate-pulse' : 'border-yellow-500') + '">';
+                    (isUrgent ? 'border-red-500 animate-pulse' : 'border-green-500') + '">';
                 pendingHtml += '<div class="flex justify-between items-start">';
                 pendingHtml += '<div class="text-lg font-bold text-white truncate flex-1">' + (order.productName || '-') + '</div>';
-                pendingHtml += '<div class="text-2xl font-bold ' + (isUrgent ? 'text-red-400' : 'text-yellow-400') + '">' + (order.quantity || 0) + ' 件</div>';
+                pendingHtml += '<div class="text-2xl font-bold ' + (isUrgent ? 'text-red-400' : 'text-green-400') + '">' + (order.quantity || 0) + ' 件</div>';
                 pendingHtml += '</div>';
                 pendingHtml += '<div class="flex justify-between items-center mt-2 text-sm">';
-                pendingHtml += '<span class="text-slate-400">' + (order.spec || '-') + '</span>';
-                pendingHtml += '<span class="text-emerald-400 font-bold text-lg">' + (order.locationId || '待指定') + '</span>';
+                pendingHtml += '<span class="text-slate-400">' + (order.applicant || order.requester || '-') + '</span>';
+                pendingHtml += '<span class="text-cyan-400 font-bold">' + (order.purpose || '生產領用') + '</span>';
                 pendingHtml += '</div>';
                 if (timeStr) {
                     pendingHtml += '<div class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-clock mr-1"></i>' + timeStr + '</div>';
@@ -16500,7 +16507,7 @@ window.clearLocalStorage = function() {
             });
             
             if (pendingCount === 0) {
-                pendingHtml = '<div class="text-center text-slate-500 py-8"><i class="fa-solid fa-check-circle text-4xl mb-2 block text-emerald-500"></i>無待入庫工單</div>';
+                pendingHtml = '<div class="text-center text-slate-500 py-8"><i class="fa-solid fa-check-circle text-4xl mb-2 block text-emerald-500"></i>無待領料工單</div>';
             }
             document.getElementById('board-pending-list').innerHTML = pendingHtml;
             
@@ -16619,9 +16626,13 @@ window.clearLocalStorage = function() {
                 boardRefreshTimer = null;
             }
             
-            // 設定新計時器
+            // 🔧 修正：設定新計時器，每次刷新時重新載入資料
             if (interval > 0) {
-                boardRefreshTimer = setInterval(refreshWorkBoard, interval);
+                boardRefreshTimer = setInterval(function() {
+                    loadWorkBoardData().then(function() {
+                        refreshWorkBoard();
+                    });
+                }, interval);
             }
         };
         
@@ -16645,7 +16656,7 @@ window.clearLocalStorage = function() {
         
         // 開啟電視投放視窗
         window.openTVBoard = function() {
-            var pendingInbounds = window.pendingInbounds || [];
+            var pendingPickingOrders = window.pendingPickingOrders || [];
             var waves = (window._waveData && window._waveData.waves) ? window._waveData.waves : [];
             var activeWaves = waves.filter(function(w) { return w.status === 'picking' || w.status === 'pending'; });
             var transferList = window.transferList || [];
@@ -16668,9 +16679,9 @@ window.clearLocalStorage = function() {
             
             // 統計卡片
             html += '<div class="grid grid-cols-4 gap-6 mb-6">';
-            html += '<div class="bg-gradient-to-br from-yellow-600 to-yellow-700 rounded-2xl p-6 text-center">';
-            html += '<div class="text-6xl font-bold text-white">' + pendingInbounds.length + '</div>';
-            html += '<div class="text-yellow-200 text-2xl mt-2">待入庫</div></div>';
+            html += '<div class="bg-gradient-to-br from-green-600 to-green-700 rounded-2xl p-6 text-center">';
+            html += '<div class="text-6xl font-bold text-white">' + pendingPickingOrders.length + '</div>';
+            html += '<div class="text-green-200 text-2xl mt-2">待領料</div></div>';
             html += '<div class="bg-gradient-to-br from-orange-600 to-orange-700 rounded-2xl p-6 text-center">';
             html += '<div class="text-6xl font-bold text-white">' + activeWaves.length + '</div>';
             html += '<div class="text-orange-200 text-2xl mt-2">揀貨中</div></div>';
@@ -16678,29 +16689,29 @@ window.clearLocalStorage = function() {
             html += '<div class="text-6xl font-bold text-white">' + pendingTransfers.length + '</div>';
             html += '<div class="text-purple-200 text-2xl mt-2">待調撥</div></div>';
             html += '<div class="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-6 text-center">';
-            html += '<div class="text-6xl font-bold text-white">' + (pendingInbounds.length + activeWaves.length + pendingTransfers.length) + '</div>';
+            html += '<div class="text-6xl font-bold text-white">' + (pendingPickingOrders.length + activeWaves.length + pendingTransfers.length) + '</div>';
             html += '<div class="text-emerald-200 text-2xl mt-2">總工單</div></div>';
             html += '</div>';
             
             // 工單列表
             html += '<div class="grid grid-cols-3 gap-6" style="height:calc(100vh - 280px)">';
             
-            // 入庫工單
-            html += '<div class="bg-slate-900 rounded-2xl border-4 border-yellow-500 flex flex-col overflow-hidden">';
-            html += '<div class="bg-yellow-600 px-6 py-4"><span class="text-2xl font-bold text-white"><i class="fa-solid fa-arrow-down mr-3"></i>待入庫</span></div>';
+            // 領料工單
+            html += '<div class="bg-slate-900 rounded-2xl border-4 border-green-500 flex flex-col overflow-hidden">';
+            html += '<div class="bg-green-600 px-6 py-4"><span class="text-2xl font-bold text-white"><i class="fa-solid fa-hand mr-3"></i>待領料</span></div>';
             html += '<div class="flex-1 overflow-y-auto p-4 space-y-3">';
-            if (pendingInbounds.length === 0) {
-                html += '<div class="text-center text-slate-500 py-12"><i class="fa-solid fa-check-circle text-6xl mb-4 block text-emerald-500"></i><span class="text-2xl">無待入庫工單</span></div>';
+            if (pendingPickingOrders.length === 0) {
+                html += '<div class="text-center text-slate-500 py-12"><i class="fa-solid fa-check-circle text-6xl mb-4 block text-emerald-500"></i><span class="text-2xl">無待領料工單</span></div>';
             } else {
-                pendingInbounds.slice(0, 8).forEach(function(order) {
-                    html += '<div class="bg-slate-800 rounded-xl p-4 border-l-4 border-yellow-500">';
+                pendingPickingOrders.slice(0, 8).forEach(function(order) {
+                    html += '<div class="bg-slate-800 rounded-xl p-4 border-l-4 border-green-500">';
                     html += '<div class="flex justify-between items-start">';
                     html += '<div class="text-xl font-bold text-white truncate flex-1">' + (order.productName || '-') + '</div>';
-                    html += '<div class="text-3xl font-bold text-yellow-400">' + (order.quantity || 0) + ' 件</div>';
+                    html += '<div class="text-3xl font-bold text-green-400">' + (order.quantity || 0) + ' 件</div>';
                     html += '</div>';
                     html += '<div class="flex justify-between items-center mt-3">';
-                    html += '<span class="text-lg text-slate-400">' + (order.spec || '-') + '</span>';
-                    html += '<span class="text-xl text-emerald-400 font-bold bg-emerald-900/50 px-3 py-1 rounded">' + (order.locationId || '待指定') + '</span>';
+                    html += '<span class="text-lg text-slate-400">' + (order.applicant || order.requester || '-') + '</span>';
+                    html += '<span class="text-xl text-cyan-400 font-bold bg-cyan-900/50 px-3 py-1 rounded">' + (order.purpose || '生產領用') + '</span>';
                     html += '</div></div>';
                 });
             }
@@ -18137,6 +18148,11 @@ window.clearLocalStorage = function() {
         };
 
         window.loadExternalStock = async function() {
+            // 檢查 Firebase 是否已初始化
+            if (!window.db || !window.collection || !window.getDocs) {
+                console.warn('Firebase 尚未初始化，稍後重試載入外倉庫存');
+                return;
+            }
             try {
                 var snapshot = await window.getDocs(window.collection(window.db, 'externalStock'));
                 window.externalStock = [];
@@ -19522,10 +19538,14 @@ window.clearLocalStorage = function() {
             document.getElementById('transfer-spec').value = '';
             document.getElementById('transfer-batch').value = '';
             document.getElementById('transfer-exp').value = '';
-            document.getElementById('transfer-available').innerText = '0';
+            document.getElementById('transfer-available').textContent = '0';
             document.getElementById('transfer-qty').value = '';
-            document.getElementById('transfer-product-list').innerHTML = '';
-            document.getElementById('transfer-location').innerHTML = '<option value="">選擇儲位</option>';
+            document.getElementById('transfer-location').value = '';
+            
+            // 隱藏已選品項顯示區
+            var selectedDiv = document.getElementById('transfer-selected-product');
+            if (selectedDiv) selectedDiv.classList.add('hidden');
+            
             window.transferState.selectedItem = null;
             window.transferState.locationItems = [];
         }
@@ -19645,10 +19665,10 @@ window.clearLocalStorage = function() {
                 if (source === target) { alert('來源和目標不能相同'); return; }
             }
 
-            if (!product) { alert('請選擇產品'); return; }
-            if (qty <= 0) { alert('請輸入有效數量'); return; }
+            if (!product) { alert('請先選擇品項'); return; }
+            if (qty <= 0) { alert('請輸入有效的調撥數量'); return; }
 
-            var available = parseInt(document.getElementById('transfer-available').innerText) || 0;
+            var available = parseInt(document.getElementById('transfer-available').innerText || document.getElementById('transfer-available').textContent) || 0;
             if (qty > available) { alert('調撥數量不能超過可用數量 (' + available + ')'); return; }
 
             var getWhName = function(code) {
@@ -19688,14 +19708,9 @@ window.clearLocalStorage = function() {
             window.transferList.push(transferItem);
             renderTransferList();
 
-            document.getElementById('transfer-product').value = '';
-            document.getElementById('transfer-spec').value = '';
-            document.getElementById('transfer-batch').value = '';
-            document.getElementById('transfer-exp').value = '';
-            document.getElementById('transfer-available').innerText = '0';
+            // 清除選擇
+            clearTransferSelection();
             document.getElementById('transfer-qty').value = '';
-            document.getElementById('transfer-location').innerHTML = '<option value="">選擇儲位</option>';
-            window.transferState.selectedItem = null;
         };
 
         function renderTransferList() {
@@ -20005,6 +20020,568 @@ window.clearLocalStorage = function() {
             setTransferCompany('崇文');
             setTransferMode('in');
         };
+
+        // ========== 調撥品項選擇彈窗功能（精簡版）==========
+        
+        window.transferModalState = {
+            step: 1,
+            allItems: [],
+            filteredItems: [],
+            selectedProduct: null,
+            selectedSpec: null,
+            selectedBatch: null,
+            selectedLocation: null,
+            selectedItem: null
+        };
+        
+        window.transferCart = [];
+
+        window.openTransferProductModal = function() {
+            var mode = window.transferState.mode;
+            var company = window.transferState.company;
+            var source = [];
+            
+            if (mode === 'out') {
+                source = (window.inventory || []).filter(function(p) {
+                    return p.company === company && p.quantity > 0;
+                });
+            } else {
+                var warehouseId = document.getElementById('transfer-source').value;
+                if (!warehouseId) { alert('請先選擇來源外倉'); return; }
+                source = (window.externalStock || []).filter(function(s) {
+                    return s.warehouseId === warehouseId && s.company === company && s.quantity > 0;
+                });
+            }
+            
+            if (source.length === 0) { alert('目前無可調撥的品項'); return; }
+            
+            window.transferModalState = {
+                step: 1, allItems: source, filteredItems: [],
+                selectedProduct: null, selectedSpec: null, selectedBatch: null,
+                selectedLocation: null, selectedItem: null
+            };
+            
+            window.transferCart = [];
+            renderTransferCart();
+            
+            // 顯示/隱藏儲位步驟
+            var showLoc = (mode === 'out');
+            document.querySelectorAll('.step-loc-tag, .step-loc-arrow').forEach(function(el) {
+                el.style.display = showLoc ? 'inline' : 'none';
+            });
+            
+            document.getElementById('modal-transfer-product').classList.remove('hidden');
+            document.getElementById('transfer-modal-search').value = '';
+            document.getElementById('transfer-modal-search').placeholder = '搜尋品名...';
+            
+            updateTransferModalSteps(1);
+            renderTransferModalStep1();
+        };
+
+        window.closeTransferProductModal = function() {
+            document.getElementById('modal-transfer-product').classList.add('hidden');
+        };
+
+        function updateTransferModalSteps(currentStep) {
+            var mode = window.transferState.mode;
+            var steps = ['1', '2', '3', '4', '5'];
+            var stepNames = ['1.品名', '2.規格', '3.批號', '4.儲位', '數量'];
+            
+            // 調整步驟編號（入庫時無儲位）
+            if (mode !== 'out') {
+                stepNames = ['1.品名', '2.規格', '3.批號', '4.儲位', '數量'];
+            }
+            
+            steps.forEach(function(s, idx) {
+                var tag = document.getElementById('step-tag-' + s);
+                if (!tag) return;
+                
+                var stepNum = idx + 1;
+                if (stepNum < currentStep) {
+                    tag.className = 'bg-emerald-600 text-white px-2 py-0.5 rounded font-bold';
+                } else if (stepNum === currentStep) {
+                    tag.className = 'bg-blue-600 text-white px-2 py-0.5 rounded font-bold';
+                } else {
+                    tag.className = 'text-slate-500';
+                }
+            });
+            
+            updateTransferBreadcrumb();
+            
+            var backBtn = document.getElementById('transfer-modal-back-btn');
+            backBtn.classList.toggle('hidden', currentStep <= 1);
+            
+            window.transferModalState.step = currentStep;
+        }
+
+        function updateTransferBreadcrumb() {
+            var state = window.transferModalState;
+            var parts = [];
+            
+            if (state.selectedProduct) {
+                parts.push('<span class="bg-blue-900/80 text-blue-300 px-1.5 py-0.5 rounded text-xs cursor-pointer hover:bg-blue-800" onclick="transferModalGoToStep(1)">' + escapeHtml(state.selectedProduct).substring(0, 10) + '</span>');
+            }
+            if (state.selectedSpec !== null) {
+                parts.push('<i class="fa-solid fa-angle-right text-slate-600 text-[10px]"></i>');
+                parts.push('<span class="bg-purple-900/80 text-purple-300 px-1.5 py-0.5 rounded text-xs cursor-pointer hover:bg-purple-800" onclick="transferModalGoToStep(2)">' + escapeHtml(state.selectedSpec || '無規格').substring(0, 8) + '</span>');
+            }
+            if (state.selectedBatch !== null) {
+                parts.push('<i class="fa-solid fa-angle-right text-slate-600 text-[10px]"></i>');
+                parts.push('<span class="bg-cyan-900/80 text-cyan-300 px-1.5 py-0.5 rounded text-xs">' + escapeHtml(state.selectedBatch || '無批號').substring(0, 8) + '</span>');
+            }
+            if (state.selectedLocation) {
+                parts.push('<i class="fa-solid fa-angle-right text-slate-600 text-[10px]"></i>');
+                parts.push('<span class="bg-emerald-900/80 text-emerald-300 px-1.5 py-0.5 rounded text-xs">' + escapeHtml(state.selectedLocation) + '</span>');
+            }
+            
+            var bcEl = document.getElementById('transfer-bc-product');
+            bcEl.innerHTML = parts.length > 0 ? parts.join('') : '<span class="text-slate-500 text-xs">選擇品項...</span>';
+        }
+
+        window.transferModalGoBack = function() {
+            var step = window.transferModalState.step;
+            var mode = window.transferState.mode;
+            if (step > 1) {
+                if (step === 5 && mode !== 'out') {
+                    transferModalGoToStep(3);
+                } else {
+                    transferModalGoToStep(step - 1);
+                }
+            }
+        };
+
+        window.transferModalGoToStep = function(step) {
+            var state = window.transferModalState;
+            document.getElementById('transfer-modal-search').value = '';
+            
+            if (step === 1) {
+                state.selectedProduct = null; state.selectedSpec = null;
+                state.selectedBatch = null; state.selectedLocation = null; state.selectedItem = null;
+                document.getElementById('transfer-modal-search').placeholder = '搜尋品名...';
+                updateTransferModalSteps(1);
+                renderTransferModalStep1();
+            } else if (step === 2 && state.selectedProduct) {
+                state.selectedSpec = null; state.selectedBatch = null;
+                state.selectedLocation = null; state.selectedItem = null;
+                document.getElementById('transfer-modal-search').placeholder = '搜尋規格...';
+                updateTransferModalSteps(2);
+                renderTransferModalStep2();
+            } else if (step === 3 && state.selectedSpec !== null) {
+                state.selectedBatch = null; state.selectedLocation = null; state.selectedItem = null;
+                document.getElementById('transfer-modal-search').placeholder = '搜尋批號...';
+                updateTransferModalSteps(3);
+                renderTransferModalStep3();
+            }
+        };
+
+        window.filterTransferModalList = function() {
+            var step = window.transferModalState.step;
+            if (step === 1) renderTransferModalStep1();
+            else if (step === 2) renderTransferModalStep2();
+            else if (step === 3) renderTransferModalStep3();
+            else if (step === 4) renderTransferModalStep4();
+        };
+
+        function renderTransferModalStep1() {
+            var keyword = (document.getElementById('transfer-modal-search').value || '').trim().toLowerCase();
+            var items = window.transferModalState.allItems;
+            var productMap = {};
+            
+            items.forEach(function(item) {
+                var name = item.productName || '';
+                if (keyword && !name.toLowerCase().includes(keyword)) return;
+                if (!productMap[name]) productMap[name] = { name: name, count: 0, totalQty: 0 };
+                productMap[name].count++;
+                productMap[name].totalQty += item.quantity || 0;
+            });
+            
+            var products = Object.values(productMap).sort(function(a, b) {
+                return a.name.localeCompare(b.name, 'zh-TW');
+            });
+            
+            var listArea = document.getElementById('transfer-modal-list-area');
+            if (products.length === 0) {
+                listArea.innerHTML = '<div class="text-center text-slate-500 py-8"><i class="fa-solid fa-inbox text-3xl mb-2"></i><div class="text-sm">無符合項目</div></div>';
+                return;
+            }
+            
+            var html = '<div class="space-y-1">';
+            products.forEach(function(p) {
+                html += '<div class="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded px-3 py-2 cursor-pointer flex justify-between items-center" onclick="selectTransferModalProduct(\'' + escapeHtml(p.name) + '\')">';
+                html += '<span class="text-white text-sm font-medium truncate flex-1">' + escapeHtml(p.name) + '</span>';
+                html += '<div class="flex items-center gap-2 ml-2"><span class="text-yellow-400 font-bold text-sm">' + p.totalQty + '</span><i class="fa-solid fa-chevron-right text-slate-500 text-xs"></i></div>';
+                html += '</div>';
+            });
+            html += '</div>';
+            listArea.innerHTML = html;
+        }
+
+        window.selectTransferModalProduct = function(productName) {
+            window.transferModalState.selectedProduct = productName;
+            document.getElementById('transfer-modal-search').value = '';
+            document.getElementById('transfer-modal-search').placeholder = '搜尋規格...';
+            updateTransferModalSteps(2);
+            renderTransferModalStep2();
+        };
+
+        function renderTransferModalStep2() {
+            var keyword = (document.getElementById('transfer-modal-search').value || '').trim().toLowerCase();
+            var items = window.transferModalState.allItems;
+            var selectedProduct = window.transferModalState.selectedProduct;
+            var specMap = {};
+            
+            items.forEach(function(item) {
+                if (item.productName !== selectedProduct) return;
+                var spec = item.spec || '';
+                if (keyword && !spec.toLowerCase().includes(keyword)) return;
+                var key = spec || '__empty__';
+                if (!specMap[key]) specMap[key] = { spec: spec, count: 0, totalQty: 0 };
+                specMap[key].count++;
+                specMap[key].totalQty += item.quantity || 0;
+            });
+            
+            var specs = Object.values(specMap).sort(function(a, b) {
+                if (a.spec === '') return -1;
+                if (b.spec === '') return 1;
+                return a.spec.localeCompare(b.spec, 'zh-TW');
+            });
+            
+            var listArea = document.getElementById('transfer-modal-list-area');
+            if (specs.length === 0) {
+                listArea.innerHTML = '<div class="text-center text-slate-500 py-8"><i class="fa-solid fa-inbox text-3xl mb-2"></i><div class="text-sm">無符合項目</div></div>';
+                return;
+            }
+            
+            var html = '<div class="space-y-1">';
+            specs.forEach(function(s) {
+                var displaySpec = s.spec || '(無規格)';
+                html += '<div class="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded px-3 py-2 cursor-pointer flex justify-between items-center" onclick="selectTransferModalSpec(\'' + escapeHtml(s.spec) + '\')">';
+                html += '<span class="text-white text-sm font-medium truncate flex-1">' + escapeHtml(displaySpec) + '</span>';
+                html += '<div class="flex items-center gap-2 ml-2"><span class="text-yellow-400 font-bold text-sm">' + s.totalQty + '</span><i class="fa-solid fa-chevron-right text-slate-500 text-xs"></i></div>';
+                html += '</div>';
+            });
+            html += '</div>';
+            listArea.innerHTML = html;
+        }
+
+        window.selectTransferModalSpec = function(spec) {
+            window.transferModalState.selectedSpec = spec;
+            document.getElementById('transfer-modal-search').value = '';
+            document.getElementById('transfer-modal-search').placeholder = '搜尋批號...';
+            updateTransferModalSteps(3);
+            renderTransferModalStep3();
+        };
+
+        function renderTransferModalStep3() {
+            var keyword = (document.getElementById('transfer-modal-search').value || '').trim().toLowerCase();
+            var items = window.transferModalState.allItems;
+            var state = window.transferModalState;
+            var mode = window.transferState.mode;
+            var batchMap = {};
+            
+            items.forEach(function(item) {
+                if (item.productName !== state.selectedProduct) return;
+                if ((item.spec || '') !== state.selectedSpec) return;
+                var batch = item.batchNo || '';
+                if (keyword && !batch.toLowerCase().includes(keyword)) return;
+                var key = batch || '__empty__';
+                if (!batchMap[key]) {
+                    batchMap[key] = { batch: batch, expDate: item.expiryDate || item.expDate || '', count: 0, totalQty: 0, items: [] };
+                }
+                batchMap[key].count++;
+                batchMap[key].totalQty += item.quantity || 0;
+                batchMap[key].items.push(item);
+            });
+            
+            var batches = Object.values(batchMap).sort(function(a, b) {
+                if (a.expDate && b.expDate) return a.expDate.localeCompare(b.expDate);
+                return a.batch.localeCompare(b.batch, 'zh-TW');
+            });
+            
+            var listArea = document.getElementById('transfer-modal-list-area');
+            if (batches.length === 0) {
+                listArea.innerHTML = '<div class="text-center text-slate-500 py-8"><i class="fa-solid fa-inbox text-3xl mb-2"></i><div class="text-sm">無符合項目</div></div>';
+                return;
+            }
+            
+            var html = '<div class="space-y-1">';
+            batches.forEach(function(b) {
+                var displayBatch = b.batch || '(無批號)';
+                var expClass = 'text-slate-400';
+                if (b.expDate) {
+                    var days = Math.floor((new Date(b.expDate) - new Date()) / 86400000);
+                    if (days < 0) expClass = 'text-red-400';
+                    else if (days < 30) expClass = 'text-orange-400';
+                    else if (days < 90) expClass = 'text-yellow-400';
+                }
+                
+                html += '<div class="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded px-3 py-2 cursor-pointer" onclick="selectTransferModalBatch(\'' + escapeHtml(b.batch) + '\')">';
+                html += '<div class="flex justify-between items-center">';
+                html += '<div class="flex-1 min-w-0"><span class="text-white text-sm font-medium">' + escapeHtml(displayBatch) + '</span>';
+                if (b.expDate) html += '<span class="text-xs ' + expClass + ' ml-2">' + b.expDate + '</span>';
+                html += '</div>';
+                html += '<div class="flex items-center gap-2 ml-2"><span class="text-yellow-400 font-bold text-sm">' + b.totalQty + '</span><i class="fa-solid fa-chevron-right text-slate-500 text-xs"></i></div>';
+                html += '</div></div>';
+            });
+            html += '</div>';
+            listArea.innerHTML = html;
+        }
+
+        window.selectTransferModalBatch = function(batch) {
+            var state = window.transferModalState;
+            state.selectedBatch = batch;
+            var mode = window.transferState.mode;
+            
+            if (mode === 'out') {
+                document.getElementById('transfer-modal-search').value = '';
+                document.getElementById('transfer-modal-search').placeholder = '搜尋儲位...';
+                updateTransferModalSteps(4);
+                renderTransferModalStep4();
+            } else {
+                var items = state.allItems.filter(function(item) {
+                    return item.productName === state.selectedProduct &&
+                           (item.spec || '') === state.selectedSpec &&
+                           (item.batchNo || '') === batch;
+                });
+                if (items.length > 0) {
+                    state.selectedItem = Object.assign({}, items[0]);
+                    state.selectedItem.quantity = items.reduce(function(sum, i) { return sum + (i.quantity || 0); }, 0);
+                    updateTransferModalSteps(5);
+                    renderTransferModalStep5();
+                }
+            }
+        };
+
+        function renderTransferModalStep4() {
+            var keyword = (document.getElementById('transfer-modal-search').value || '').trim().toLowerCase();
+            var state = window.transferModalState;
+            
+            var locations = state.allItems.filter(function(item) {
+                if (item.productName !== state.selectedProduct) return false;
+                if ((item.spec || '') !== state.selectedSpec) return false;
+                if ((item.batchNo || '') !== state.selectedBatch) return false;
+                if (keyword && !(item.locationId || '').toLowerCase().includes(keyword)) return false;
+                return true;
+            });
+            
+            var listArea = document.getElementById('transfer-modal-list-area');
+            if (locations.length === 0) {
+                listArea.innerHTML = '<div class="text-center text-slate-500 py-8"><i class="fa-solid fa-inbox text-3xl mb-2"></i><div class="text-sm">無符合項目</div></div>';
+                return;
+            }
+            
+            var html = '<div class="grid grid-cols-3 gap-2">';
+            locations.forEach(function(loc) {
+                html += '<div class="bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded p-2 cursor-pointer text-center" onclick="selectTransferModalLocation(\'' + escapeHtml(loc.id || loc.palletId || '') + '\')">';
+                html += '<div class="text-emerald-400 font-bold text-sm">' + escapeHtml(loc.locationId || '-') + '</div>';
+                html += '<div class="text-yellow-400 font-bold">' + (loc.quantity || 0) + '</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+            listArea.innerHTML = html;
+        }
+
+        window.selectTransferModalLocation = function(itemId) {
+            var state = window.transferModalState;
+            var selectedItem = state.allItems.find(function(i) {
+                return (i.id || i.palletId) === itemId &&
+                       i.productName === state.selectedProduct &&
+                       (i.spec || '') === state.selectedSpec &&
+                       (i.batchNo || '') === state.selectedBatch;
+            });
+            if (selectedItem) {
+                state.selectedLocation = selectedItem.locationId;
+                state.selectedItem = selectedItem;
+                updateTransferModalSteps(5);
+                renderTransferModalStep5();
+            }
+        };
+
+        function renderTransferModalStep5() {
+            var state = window.transferModalState;
+            var item = state.selectedItem;
+            var mode = window.transferState.mode;
+            if (!item) return;
+            
+            var maxQty = item.quantity || 0;
+            var html = '<div class="max-w-sm mx-auto space-y-3">';
+            
+            // 品項摘要
+            html += '<div class="bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm">';
+            html += '<div class="text-white font-bold truncate">' + escapeHtml(state.selectedProduct) + '</div>';
+            html += '<div class="text-slate-400 text-xs mt-1">' + escapeHtml(state.selectedSpec || '無規格') + ' | ' + escapeHtml(state.selectedBatch || '無批號') + '</div>';
+            if (mode === 'out') html += '<div class="text-emerald-400 text-xs mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>' + escapeHtml(state.selectedLocation) + '</div>';
+            html += '<div class="flex justify-between items-center mt-2 pt-2 border-t border-slate-700">';
+            html += '<span class="text-slate-400 text-xs">可調數量</span><span class="text-yellow-400 font-bold text-lg">' + maxQty + '</span>';
+            html += '</div></div>';
+            
+            // 數量輸入
+            html += '<div class="bg-blue-900/30 border border-blue-600/50 rounded-lg p-3">';
+            html += '<div class="flex items-center gap-2">';
+            html += '<button onclick="adjustTransferQty(-10)" class="w-9 h-9 bg-slate-700 hover:bg-slate-600 text-white rounded font-bold text-sm">-10</button>';
+            html += '<button onclick="adjustTransferQty(-1)" class="w-9 h-9 bg-slate-700 hover:bg-slate-600 text-white rounded font-bold">-1</button>';
+            html += '<input type="number" id="transfer-modal-qty" class="flex-1 scan-input text-center text-xl font-bold h-10" value="' + maxQty + '" min="1" max="' + maxQty + '">';
+            html += '<button onclick="adjustTransferQty(1)" class="w-9 h-9 bg-slate-700 hover:bg-slate-600 text-white rounded font-bold">+1</button>';
+            html += '<button onclick="adjustTransferQty(10)" class="w-9 h-9 bg-slate-700 hover:bg-slate-600 text-white rounded font-bold text-sm">+10</button>';
+            html += '</div>';
+            html += '<div class="flex gap-2 mt-2">';
+            html += '<button onclick="setTransferQtyMax()" class="flex-1 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs font-bold">全部</button>';
+            html += '<button onclick="setTransferQtyHalf()" class="flex-1 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs font-bold">一半</button>';
+            html += '</div></div>';
+            
+            // 按鈕
+            html += '<button onclick="addToTransferCart()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-sm"><i class="fa-solid fa-cart-plus mr-1"></i>加入已選</button>';
+            html += '<button onclick="transferModalGoToStep(1)" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs"><i class="fa-solid fa-plus mr-1"></i>繼續選擇其他品項</button>';
+            html += '</div>';
+            
+            document.getElementById('transfer-modal-list-area').innerHTML = html;
+        }
+
+        window.adjustTransferQty = function(delta) {
+            var input = document.getElementById('transfer-modal-qty');
+            var max = parseInt(input.max) || 9999;
+            var newVal = Math.max(1, Math.min(max, (parseInt(input.value) || 0) + delta));
+            input.value = newVal;
+        };
+
+        window.setTransferQtyMax = function() {
+            var input = document.getElementById('transfer-modal-qty');
+            input.value = input.max;
+        };
+
+        window.setTransferQtyHalf = function() {
+            var input = document.getElementById('transfer-modal-qty');
+            input.value = Math.ceil((parseInt(input.max) || 0) / 2);
+        };
+
+        window.addToTransferCart = function() {
+            var state = window.transferModalState;
+            var item = state.selectedItem;
+            var qtyInput = document.getElementById('transfer-modal-qty');
+            var qty = parseInt(qtyInput.value) || 0;
+            var maxQty = parseInt(qtyInput.max) || 0;
+            
+            if (qty <= 0) { alert('請輸入有效數量'); return; }
+            if (qty > maxQty) { alert('數量不能超過 ' + maxQty); return; }
+            
+            window.transferCart.push({
+                productName: state.selectedProduct,
+                spec: state.selectedSpec || '',
+                batchNo: state.selectedBatch || '',
+                expDate: item.expiryDate || item.expDate || '',
+                locationId: state.selectedLocation || '',
+                quantity: qty,
+                maxQty: maxQty,
+                sourceItem: item
+            });
+            
+            renderTransferCart();
+            showNotification('✅ 已加入 ' + qty + ' 件', 'success');
+            
+            state.selectedProduct = null; state.selectedSpec = null;
+            state.selectedBatch = null; state.selectedLocation = null; state.selectedItem = null;
+            
+            document.getElementById('transfer-modal-search').value = '';
+            document.getElementById('transfer-modal-search').placeholder = '搜尋品名...';
+            updateTransferModalSteps(1);
+            renderTransferModalStep1();
+        };
+
+        function renderTransferCart() {
+            var cartList = document.getElementById('transfer-cart-list');
+            var cartCount = document.getElementById('transfer-cart-count');
+            var confirmBtn = document.getElementById('transfer-cart-confirm-btn');
+            
+            cartCount.textContent = window.transferCart.length;
+            
+            if (window.transferCart.length === 0) {
+                cartList.innerHTML = '<div class="text-center text-slate-500 py-6 text-xs"><i class="fa-solid fa-inbox text-xl mb-1 opacity-50"></i><div>尚未選擇</div></div>';
+                confirmBtn.disabled = true;
+                return;
+            }
+            
+            confirmBtn.disabled = false;
+            var totalQty = 0;
+            
+            var html = '<div class="space-y-1">';
+            window.transferCart.forEach(function(item, idx) {
+                totalQty += item.quantity;
+                html += '<div class="bg-slate-800 border border-slate-700 rounded p-1.5 relative text-xs">';
+                html += '<button onclick="removeFromTransferCart(' + idx + ')" class="absolute -top-1 -right-1 w-4 h-4 bg-red-600 hover:bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center"><i class="fa-solid fa-times"></i></button>';
+                html += '<div class="text-white font-bold truncate pr-3">' + escapeHtml(item.productName).substring(0, 12) + '</div>';
+                html += '<div class="flex justify-between items-center mt-0.5">';
+                html += '<span class="text-slate-400 truncate">' + escapeHtml(item.spec || '無規格').substring(0, 8) + '</span>';
+                html += '<span class="text-yellow-400 font-bold">' + item.quantity + '</span>';
+                html += '</div></div>';
+            });
+            html += '</div>';
+            html += '<div class="mt-2 pt-2 border-t border-slate-600 flex justify-between items-center text-xs">';
+            html += '<span class="text-slate-400 font-bold">合計</span>';
+            html += '<span class="text-yellow-400 font-bold">' + totalQty + ' 件</span>';
+            html += '</div>';
+            
+            cartList.innerHTML = html;
+        }
+
+        window.removeFromTransferCart = function(idx) {
+            window.transferCart.splice(idx, 1);
+            renderTransferCart();
+        };
+
+        window.confirmTransferCart = function() {
+            if (window.transferCart.length === 0) { alert('請先選擇品項'); return; }
+            
+            var mode = window.transferState.mode;
+            var company = window.transferState.company;
+            var source = document.getElementById('transfer-source').value;
+            var target = document.getElementById('transfer-target').value;
+            
+            var getWhName = function(code) {
+                var wh = window.warehousesData.find(function(w) { return w.code === code; });
+                return wh ? wh.name : code;
+            };
+            
+            window.transferCart.forEach(function(cartItem) {
+                var transferItem = {
+                    mode: mode, company: company,
+                    productName: cartItem.productName, spec: cartItem.spec,
+                    batchNo: cartItem.batchNo, expDate: cartItem.expDate,
+                    quantity: cartItem.quantity, sourceItem: cartItem.sourceItem
+                };
+                
+                if (mode === 'in') {
+                    transferItem.fromWh = source; transferItem.fromName = getWhName(source);
+                    transferItem.toWh = 'TEMP-IN'; transferItem.toName = '進貨暫存區';
+                } else if (mode === 'out') {
+                    transferItem.fromWh = cartItem.locationId; transferItem.fromName = cartItem.locationId;
+                    transferItem.toWh = source; transferItem.toName = getWhName(source);
+                    transferItem.tempLocation = 'TEMP-OUT';
+                } else {
+                    transferItem.fromWh = source; transferItem.fromName = getWhName(source);
+                    transferItem.toWh = target; transferItem.toName = getWhName(target);
+                }
+                
+                window.transferList.push(transferItem);
+            });
+            
+            renderTransferList();
+            showNotification('✅ 已加入 ' + window.transferCart.length + ' 筆到調撥清單', 'success');
+            
+            window.transferCart = [];
+            closeTransferProductModal();
+        };
+
+        window.clearTransferSelection = function() {
+            var el = document.getElementById('transfer-selected-product');
+            if (el) el.classList.add('hidden');
+            window.transferState.selectedItem = null;
+            window.transferState.locationItems = [];
+        };
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
 
         // ========== 權限管理系統（Firebase 版）==========
 
@@ -24333,6 +24910,7 @@ window.switchReportTab = function(tab) {
         if (btn.dataset.tab === tab) {
             btn.className = 'report-tab flex-1 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 text-white';
             if (tab === 'shipping') btn.classList.add('bg-blue-600');
+            else if (tab === 'inbound') btn.classList.add('bg-emerald-600');
             else if (tab === 'inventory') btn.classList.add('bg-orange-600');
             else if (tab === 'wave') btn.classList.add('bg-purple-600');
             else if (tab === 'order') btn.classList.add('bg-yellow-600');
@@ -24413,6 +24991,30 @@ window.setQuickDateRange = function() {
     document.getElementById('report-date-to').value = to.toISOString().split('T')[0];
 };
 
+// 從下拉選單產生報表
+window.generateReportFromSelect = function() {
+    var select = document.getElementById('report-type-select');
+    var reportType = select.value;
+    
+    if (!reportType) {
+        alert('請先選擇報表類型');
+        return;
+    }
+    
+    // 特殊報表處理
+    if (reportType === 'today-report') {
+        generateTodayReport();
+        return;
+    }
+    if (reportType === 'low-stock') {
+        generateLowStockReport();
+        return;
+    }
+    
+    // 一般報表
+    generateReport(reportType);
+};
+
 window.generateReport = function(reportType) {
     var dateFrom = document.getElementById('report-date-from').value;
     var dateTo = document.getElementById('report-date-to').value;
@@ -24427,12 +25029,16 @@ window.generateReport = function(reportType) {
     window._reportData.dateTo = dateTo;
 
     var preview = document.getElementById('report-preview-area');
-    preview.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-4xl text-blue-400"></i><div class="mt-4 text-slate-400">產生報表中...</div></div>';
+    preview.innerHTML = '<div class="text-center py-10"><i class="fa-solid fa-spinner fa-spin text-4xl text-emerald-400"></i><div class="mt-4 text-slate-400">產生報表中...</div></div>';
 
     setTimeout(function() {
         if (reportType === 'shipping-logistics') generateShippingByLogistics(dateFrom, dateTo);
         else if (reportType === 'shipping-customer') generateShippingByCustomer(dateFrom, dateTo);
         else if (reportType === 'shipping-product') generateShippingByProduct(dateFrom, dateTo);
+        else if (reportType === 'inbound-summary') generateInboundSummary(dateFrom, dateTo);
+        else if (reportType === 'inbound-detail') generateInboundDetail(dateFrom, dateTo);
+        else if (reportType === 'inbound-by-product') generateInboundByProduct(dateFrom, dateTo);
+        else if (reportType === 'inbound-by-vendor') generateInboundByVendor(dateFrom, dateTo);
         else if (reportType === 'inventory-summary') generateInventorySummary();
         else if (reportType === 'inventory-expiry') generateExpiryReport();
         else if (reportType === 'inventory-location') generateInventoryLocation();
@@ -24531,6 +25137,173 @@ function generateShippingByProduct(dateFrom, dateTo) {
 
     window._reportData.currentData = data;
     renderReportTable('出貨統計 - 依產品', ['品名', '規格', '出貨次數', '總件數'], data);
+}
+
+// ========== 入庫報表函數 ==========
+
+function generateInboundSummary(dateFrom, dateTo) {
+    var pallets = window.currentPallets ? window.currentPallets() : [];
+    
+    // 按日期過濾入庫記錄
+    var filtered = pallets.filter(function(p) {
+        var date = p.inboundDate || p.createdAt;
+        if (!date) return false;
+        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
+            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+        return dateStr >= dateFrom && dateStr <= dateTo;
+    });
+    
+    // 按日期統計
+    var stats = {};
+    filtered.forEach(function(p) {
+        var date = p.inboundDate || p.createdAt;
+        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
+            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+        if (!stats[dateStr]) stats[dateStr] = { date: dateStr, palletCount: 0, totalQty: 0, totalWeight: 0 };
+        stats[dateStr].palletCount++;
+        stats[dateStr].totalQty += parseInt(p.quantity) || 0;
+        stats[dateStr].totalWeight += parseFloat(p.totalWeight) || 0;
+    });
+    
+    var data = Object.values(stats).sort(function(a, b) {
+        return b.date.localeCompare(a.date);
+    }).map(function(s) {
+        return { 
+            '日期': s.date, 
+            '板數': s.palletCount, 
+            '總件數': s.totalQty, 
+            '總重量(kg)': Math.round(s.totalWeight * 10) / 10 
+        };
+    });
+    
+    window._reportData.currentData = data;
+    renderReportTable('入庫統計 - 按日期', ['日期', '板數', '總件數', '總重量(kg)'], data);
+}
+
+function generateInboundDetail(dateFrom, dateTo) {
+    var pallets = window.currentPallets ? window.currentPallets() : [];
+    
+    // 按日期過濾入庫記錄
+    var filtered = pallets.filter(function(p) {
+        var date = p.inboundDate || p.createdAt;
+        if (!date) return false;
+        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
+            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+        return dateStr >= dateFrom && dateStr <= dateTo;
+    });
+    
+    var data = filtered.sort(function(a, b) {
+        var dateA = a.inboundDate || a.createdAt || '';
+        var dateB = b.inboundDate || b.createdAt || '';
+        return dateB.toString().localeCompare(dateA.toString());
+    }).map(function(p) {
+        var date = p.inboundDate || p.createdAt;
+        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
+            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+        return {
+            '入庫日期': dateStr,
+            '品名': p.productName || '',
+            '規格': p.spec || '',
+            '批號': p.batchNo || '',
+            '數量': p.quantity || 0,
+            '儲位': p.locationId || '',
+            '廠商': p.vendor || ''
+        };
+    });
+    
+    window._reportData.currentData = data;
+    renderReportTable('入庫明細', ['入庫日期', '品名', '規格', '批號', '數量', '儲位', '廠商'], data);
+}
+
+function generateInboundByProduct(dateFrom, dateTo) {
+    var pallets = window.currentPallets ? window.currentPallets() : [];
+    
+    // 按日期過濾入庫記錄
+    var filtered = pallets.filter(function(p) {
+        var date = p.inboundDate || p.createdAt;
+        if (!date) return false;
+        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
+            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+        return dateStr >= dateFrom && dateStr <= dateTo;
+    });
+    
+    // 按品項統計
+    var stats = {};
+    filtered.forEach(function(p) {
+        var key = (p.productName || '') + '|||' + (p.spec || '');
+        if (!stats[key]) stats[key] = { 
+            productName: p.productName || '', 
+            spec: p.spec || '', 
+            palletCount: 0, 
+            totalQty: 0,
+            totalWeight: 0
+        };
+        stats[key].palletCount++;
+        stats[key].totalQty += parseInt(p.quantity) || 0;
+        stats[key].totalWeight += parseFloat(p.totalWeight) || 0;
+    });
+    
+    var data = Object.values(stats).sort(function(a, b) {
+        var nameCompare = a.productName.localeCompare(b.productName, 'zh-TW');
+        if (nameCompare !== 0) return nameCompare;
+        return a.spec.localeCompare(b.spec, 'zh-TW');
+    }).map(function(s) {
+        return {
+            '品名': s.productName,
+            '規格': s.spec,
+            '板數': s.palletCount,
+            '總件數': s.totalQty,
+            '總重量(kg)': Math.round(s.totalWeight * 10) / 10
+        };
+    });
+    
+    window._reportData.currentData = data;
+    renderReportTable('入庫統計 - 依品項', ['品名', '規格', '板數', '總件數', '總重量(kg)'], data);
+}
+
+function generateInboundByVendor(dateFrom, dateTo) {
+    var pallets = window.currentPallets ? window.currentPallets() : [];
+    
+    // 按日期過濾入庫記錄
+    var filtered = pallets.filter(function(p) {
+        var date = p.inboundDate || p.createdAt;
+        if (!date) return false;
+        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
+            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+        return dateStr >= dateFrom && dateStr <= dateTo;
+    });
+    
+    // 按廠商統計
+    var stats = {};
+    filtered.forEach(function(p) {
+        var vendor = p.vendor || '未指定';
+        if (!stats[vendor]) stats[vendor] = { 
+            vendor: vendor, 
+            palletCount: 0, 
+            totalQty: 0,
+            totalWeight: 0,
+            productCount: {}
+        };
+        stats[vendor].palletCount++;
+        stats[vendor].totalQty += parseInt(p.quantity) || 0;
+        stats[vendor].totalWeight += parseFloat(p.totalWeight) || 0;
+        stats[vendor].productCount[p.productName] = true;
+    });
+    
+    var data = Object.values(stats).sort(function(a, b) {
+        return b.totalQty - a.totalQty;
+    }).map(function(s) {
+        return {
+            '廠商': s.vendor,
+            '品項種類': Object.keys(s.productCount).length,
+            '板數': s.palletCount,
+            '總件數': s.totalQty,
+            '總重量(kg)': Math.round(s.totalWeight * 10) / 10
+        };
+    });
+    
+    window._reportData.currentData = data;
+    renderReportTable('入庫統計 - 依廠商', ['廠商', '品項種類', '板數', '總件數', '總重量(kg)'], data);
 }
 
 function generateInventorySummary() {
@@ -24664,19 +25437,48 @@ function generateWaveEfficiency(dateFrom, dateTo) {
 
 function renderReportTable(title, columns, data) {
     var preview = document.getElementById('report-preview-area');
-    var titleHint = document.getElementById('report-title-hint');
-    if (titleHint) titleHint.innerText = '- ' + title;
-
+    var titleEl = document.getElementById('report-preview-title');
+    var dateInfoEl = document.getElementById('report-date-info');
+    var countInfoEl = document.getElementById('report-count-info');
+    
+    // 更新頂部標題列
+    if (titleEl) {
+        titleEl.innerHTML = '<i class="fa-solid fa-chart-pie mr-2 text-emerald-400"></i>' + title;
+    }
+    
     if (data.length === 0) {
+        if (dateInfoEl) { dateInfoEl.classList.add('hidden'); }
+        if (countInfoEl) { countInfoEl.classList.add('hidden'); }
         preview.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-500"><i class="fa-solid fa-inbox text-6xl mb-4 opacity-50"></i><div class="text-lg">查無資料</div><div class="text-sm text-slate-600 mt-2">請調整查詢條件後重試</div></div>';
         return;
     }
+    
+    // 更新日期區間和筆數
+    if (dateInfoEl) {
+        dateInfoEl.innerHTML = '<i class="fa-solid fa-calendar mr-1"></i>' + window._reportData.dateFrom + ' ~ ' + window._reportData.dateTo;
+        dateInfoEl.classList.remove('hidden');
+    }
+    if (countInfoEl) {
+        countInfoEl.innerHTML = '<i class="fa-solid fa-database mr-1"></i>' + data.length + ' 筆';
+        countInfoEl.classList.remove('hidden');
+    }
 
-    var html = '<div class="mb-4 pb-3 border-b border-slate-700"><h3 class="text-white text-xl font-bold">' + title + '</h3>' +
-        '<p class="text-slate-400 text-sm mt-1"><i class="fa-solid fa-calendar mr-1"></i>' + window._reportData.dateFrom + ' ~ ' + window._reportData.dateTo + ' <span class="mx-2">|</span> <i class="fa-solid fa-database mr-1"></i>共 ' + data.length + ' 筆資料</p></div>' +
-        '<table class="w-full text-sm"><thead class="bg-slate-700/80 sticky top-0"><tr>';
+    // 預先檢查每個欄位是否為數字欄位（根據第一筆資料判斷）
+    var numericColumns = {};
+    if (data.length > 0) {
+        columns.forEach(function(col) {
+            numericColumns[col] = typeof data[0][col] === 'number';
+        });
+    }
 
-    columns.forEach(function(col) { html += '<th class="p-2 text-left text-slate-300">' + col + '</th>'; });
+    // 直接輸出表格，不再有內部標題區塊
+    var html = '<table class="w-full text-sm"><thead class="bg-slate-700/80 sticky top-0 z-10"><tr>';
+
+    // 標題列：數字欄位靠右對齊，文字欄位靠左對齊
+    columns.forEach(function(col) {
+        var alignClass = numericColumns[col] ? 'text-right' : 'text-left';
+        html += '<th class="px-4 py-3 ' + alignClass + ' text-slate-300 font-semibold">' + col + '</th>';
+    });
     html += '</tr></thead><tbody>';
 
     data.forEach(function(row, idx) {
@@ -24684,9 +25486,9 @@ function renderReportTable(title, columns, data) {
         html += '<tr class="' + bgClass + ' hover:bg-slate-700/50 border-b border-slate-700/50">';
         columns.forEach(function(col) {
             var value = row[col] !== undefined ? row[col] : '';
-            var cellClass = typeof value === 'number' ? 'text-right text-yellow-400' : 'text-slate-300';
+            var cellClass = typeof value === 'number' ? 'text-right text-yellow-400 font-mono' : 'text-slate-300';
             if (col === '狀態' && value === '已過期') cellClass = 'text-red-400 font-bold';
-            html += '<td class="p-2 ' + cellClass + '">' + value + '</td>';
+            html += '<td class="px-4 py-2.5 ' + cellClass + '">' + value + '</td>';
         });
         html += '</tr>';
     });
