@@ -5472,6 +5472,9 @@ WMS.copyToClipboard = function(text) {
     if (navigator.clipboard) {
         navigator.clipboard.writeText(text).then(function() {
             WMS.toast('已複製到剪貼簿', 'success');
+        }).catch(function(err) {
+            console.error('複製失敗:', err);
+            WMS.toast('複製失敗', 'error');
         });
     } else {
         var textarea = document.createElement('textarea');
@@ -6134,7 +6137,7 @@ console.log('✅ WMS 工具函數庫已載入');
         function exportShippingResult() {
             if(!window.currentOrders || window.currentOrders().length === 0) { alert("無出貨資料可匯出"); return; }
             var data = window.currentOrders().map(function(o) {
-                return { '單號': o.orderId, '客戶': o.customer, '物流': o.carrier, '狀態': o.status, '品項數': o.items.length };
+                return { '單號': o.orderId, '客戶': o.customer, '物流': o.carrier, '狀態': o.status, '品項數': (o.items || []).length };
             });
             var ws = XLSX.utils.json_to_sheet(data);
             var wb = XLSX.utils.book_new();
@@ -7322,19 +7325,26 @@ console.log('✅ WMS 工具函數庫已載入');
 
             if (productType === 'fixed') {
                 qty = parseInt(document.getElementById('pre-qty').value) || 0;
-                perPallet = parseInt(document.getElementById('pre-per-pallet').value) || 40;
+                var perPalletRaw = document.getElementById('pre-per-pallet').value;
+                perPallet = parseInt(perPalletRaw) || 40;
                 unitWeight = parseFloat(document.getElementById('pre-unit-weight').value) || 0;
                 totalWeight = qty * unitWeight;
+                console.log('📦 addContainerItem [定重] - pre-per-pallet 原始值: "' + perPalletRaw + '" → 解析為: ' + perPallet);
             } else {
                 qty = parseInt(document.getElementById('pre-qty-var').value) || 0;
                 totalWeight = parseFloat(document.getElementById('pre-total-weight').value) || 0;
-                perPallet = parseInt(document.getElementById('pre-per-pallet-var').value) || 40;
+                var perPalletVarRaw = document.getElementById('pre-per-pallet-var').value;
+                perPallet = parseInt(perPalletVarRaw) || 40;
                 unitWeight = qty > 0 ? Math.round(totalWeight / qty * 100) / 100 : 0;
+                console.log('📦 addContainerItem [不定重] - pre-per-pallet-var 原始值: "' + perPalletVarRaw + '" → 解析為: ' + perPallet);
             }
 
             if (!name) { alert('請輸入品名'); return false; }
             if (qty <= 0) { alert('請輸入數量'); return false; }
             if (productType === 'variable' && totalWeight <= 0) { alert('不定重品請輸入總重量'); return false; }
+
+            var palletCount = Math.ceil(qty / perPallet);
+            console.log('📦 addContainerItem 建立品項 - 品名: ' + name + ', 數量: ' + qty + ', 每板件數: ' + perPallet + ', 板數: ' + palletCount);
 
             var item = {
                 id: 'CI-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
@@ -7346,7 +7356,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 expiryDate: exp,
                 quantity: qty,
                 perPallet: perPallet,
-                palletCount: Math.ceil(qty / perPallet),
+                palletCount: palletCount,
                 productType: productType,
                 unitWeight: unitWeight,
                 totalWeight: totalWeight
@@ -7362,6 +7372,9 @@ console.log('✅ WMS 工具函數庫已載入');
             document.getElementById('pre-unit-weight').value = '';
             document.getElementById('pre-qty-var').value = '';
             document.getElementById('pre-total-weight').value = '';
+            // 🔧 重置每板件數為預設值
+            document.getElementById('pre-per-pallet').value = '40';
+            document.getElementById('pre-per-pallet-var').value = '40';
 
             return true;
         };
@@ -8243,10 +8256,118 @@ console.log('✅ WMS 工具函數庫已載入');
                         assignedLane: null
                     };
                 }
-                var productMaster = window.productMasterData ? window.productMasterData.find(function(p) {
-                    return p.name === item.productName;
-                }) : null;
-                var perPallet = (productMaster && productMaster.palletCapacity) ? productMaster.palletCapacity : (item.perPallet || 40);
+                // 🔧 修正：使用 trim() 處理空格問題，並增加模糊匹配
+                var itemName = (item.productName || '').trim();
+                var itemSpec = (item.spec || '').trim();
+                
+                var productMaster = null;
+                if (window.productMasterData && window.productMasterData.length > 0) {
+                    // 第一優先：完全匹配（品名+規格）
+                    productMaster = window.productMasterData.find(function(p) {
+                        var pName = (p.name || '').trim();
+                        var pSpec = (p.spec || '').trim();
+                        if (itemSpec && pSpec) {
+                            return pName === itemName && pSpec === itemSpec;
+                        }
+                        return pName === itemName;
+                    });
+                    
+                    // 第二優先：品項主檔名稱包含輸入名稱，或反過來
+                    if (!productMaster && itemName.length >= 2) {
+                        productMaster = window.productMasterData.find(function(p) {
+                            var pName = (p.name || '').trim();
+                            return pName.indexOf(itemName) >= 0 || itemName.indexOf(pName) >= 0;
+                        });
+                        if (productMaster) {
+                            console.log('📦 [' + itemName + '] 包含匹配到品項主檔: ' + productMaster.name);
+                        }
+                    }
+                    
+                    // 第三優先：開頭+結尾匹配（處理中間少字的情況，如「熟鳳泰蝦」vs「熟鳳尾泰蝦」）
+                    if (!productMaster && itemName.length >= 3) {
+                        var itemStart = itemName.substring(0, 2);  // 取前2字
+                        var itemEnd = itemName.substring(itemName.length - 2);  // 取後2字
+                        productMaster = window.productMasterData.find(function(p) {
+                            var pName = (p.name || '').trim();
+                            if (pName.length < 3) return false;
+                            var pStart = pName.substring(0, 2);
+                            var pEnd = pName.substring(pName.length - 2);
+                            // 開頭和結尾都相同，且長度差異不超過2
+                            return pStart === itemStart && pEnd === itemEnd && Math.abs(pName.length - itemName.length) <= 2;
+                        });
+                        if (productMaster) {
+                            console.log('📦 [' + itemName + '] 首尾匹配到品項主檔: ' + productMaster.name);
+                        }
+                    }
+                    
+                    // 第四優先：移除常見字符後比對
+                    if (!productMaster && itemName.length >= 2) {
+                        var normalizedItemName = itemName.replace(/[\s\-\_\(\)（）]/g, '');
+                        productMaster = window.productMasterData.find(function(p) {
+                            var pName = (p.name || '').trim().replace(/[\s\-\_\(\)（）]/g, '');
+                            return pName === normalizedItemName || 
+                                   pName.indexOf(normalizedItemName) >= 0 || 
+                                   normalizedItemName.indexOf(pName) >= 0;
+                        });
+                        if (productMaster) {
+                            console.log('📦 [' + itemName + '] 正規化後匹配到品項主檔: ' + productMaster.name);
+                        }
+                    }
+                    
+                    // 第五優先：相似度匹配（至少80%字符相同）
+                    if (!productMaster && itemName.length >= 3) {
+                        var bestMatch = null;
+                        var bestScore = 0;
+                        window.productMasterData.forEach(function(p) {
+                            var pName = (p.name || '').trim();
+                            if (pName.length < 2) return;
+                            
+                            // 計算共同字符數
+                            var commonChars = 0;
+                            var itemChars = itemName.split('');
+                            var pChars = pName.split('');
+                            itemChars.forEach(function(c) {
+                                var idx = pChars.indexOf(c);
+                                if (idx >= 0) {
+                                    commonChars++;
+                                    pChars.splice(idx, 1);  // 移除已匹配的字符
+                                }
+                            });
+                            
+                            // 計算相似度分數
+                            var score = commonChars / Math.max(itemName.length, pName.length);
+                            if (score >= 0.8 && score > bestScore) {
+                                bestScore = score;
+                                bestMatch = p;
+                            }
+                        });
+                        if (bestMatch) {
+                            productMaster = bestMatch;
+                            console.log('📦 [' + itemName + '] 相似度匹配到品項主檔: ' + productMaster.name + ' (相似度: ' + Math.round(bestScore * 100) + '%)');
+                        }
+                    }
+                }
+                
+                // 🔧 修正：確保 palletCapacity 是數字，並添加調試日誌
+                var masterPalletCapacity = productMaster ? parseInt(productMaster.palletCapacity) || 0 : 0;
+                var itemPerPallet = parseInt(item.perPallet) || 0;
+                
+                var perPallet;
+                if (masterPalletCapacity > 0) {
+                    perPallet = masterPalletCapacity;
+                    console.log('📦 [' + itemName + '] 使用品項主檔板容量: ' + perPallet);
+                } else if (itemPerPallet > 0) {
+                    perPallet = itemPerPallet;
+                    console.log('📦 [' + itemName + '] 使用用戶設定板容量: ' + perPallet);
+                } else {
+                    perPallet = 40;
+                    console.log('📦 [' + itemName + '] 使用預設板容量: ' + perPallet);
+                }
+                
+                if (!productMaster) {
+                    console.warn('⚠️ [' + itemName + '] 未找到品項主檔，品項主檔數量: ' + (window.productMasterData || []).length);
+                }
+                
                 var palletCount = item.palletCount || Math.ceil(item.quantity / perPallet);
                 productSummary[key].totalQty += item.quantity;
                 productSummary[key].totalPallets += palletCount;
@@ -8560,6 +8681,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 product.items.forEach(function(item) {
                     var remaining = item.quantity;
                     var perPallet = product.perPallet || item.perPallet || 40;
+                    console.log('🏷️ 生成標籤 - 品項: ' + item.productName + ', 數量: ' + remaining + ', 每板件數: ' + perPallet + ' (product.perPallet=' + product.perPallet + ', item.perPallet=' + item.perPallet + ')');
                     
                     while (remaining > 0) {
                         var palletQty = Math.min(remaining, perPallet);
@@ -9069,7 +9191,7 @@ console.log('✅ WMS 工具函數庫已載入');
             }
         };
 
-                function handlePreInboundImport(e) { const file = e.target.files[0]; const reader = new FileReader(); reader.onload = function(evt) { const wb = XLSX.read(evt.target.result, {type:'array'}); const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); if(confirm(`匯入 ${json.length} 筆？`)) { const batch = window.writeBatch(window.db); json.forEach((r,i) => { const pid = `PRE-${Date.now()}-${i}`; batch.set(window.doc(window.collection(window.db, "pallets"), pid), { palletId:pid, vendor:r['廠商']||'', productName:r['品名'], spec:r['規格']||'', batchNo:r['批號']||'', quantity:r['數量'], locationId:"VIRTUAL-DOCK", status:"Planned", inboundDate:new Date() }); }); batch.commit().then(() => alert("匯入成功")); } }; reader.readAsArrayBuffer(file); }
+                function handlePreInboundImport(e) { const file = e.target.files[0]; const reader = new FileReader(); reader.onload = function(evt) { const wb = XLSX.read(evt.target.result, {type:'array'}); const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); if(confirm(`匯入 ${json.length} 筆？`)) { const batch = window.writeBatch(window.db); json.forEach((r,i) => { const pid = `PRE-${Date.now()}-${i}`; batch.set(window.doc(window.collection(window.db, "pallets"), pid), { palletId:pid, vendor:r['廠商']||'', productName:r['品名'], spec:r['規格']||'', batchNo:r['批號']||'', quantity:r['數量'], locationId:"VIRTUAL-DOCK", status:"Planned", inboundDate:new Date() }); }); batch.commit().then(() => alert("匯入成功")).catch(err => { console.error('匯入失敗:', err); alert("匯入失敗: " + err.message); }); } }; reader.readAsArrayBuffer(file); }
         function generatePlan() {
             const count = document.getElementById('pre-count').value; const name = document.getElementById('pre-name').value; const spec = document.getElementById('pre-spec').value; const batch = document.getElementById('pre-batch').value; const vendor = document.getElementById('pre-vendor').value;
             const area = document.getElementById('preview-area'); area.innerHTML = '';
@@ -29447,6 +29569,8 @@ console.log('💰 倉租管理模組已載入');
     // 覆寫品項選擇後填入函數（貨櫃入庫用）
     var originalFillContainerProduct = window.fillContainerProductFromMaster;
     window.fillContainerProductFromMaster = function(product) {
+        console.log('📦 fillContainerProductFromMaster 被呼叫, product:', product);
+        
         var nameEl = document.getElementById('pre-name');
         var specEl = document.getElementById('pre-spec');
         var codeEl = document.getElementById('pre-product-code');
@@ -29465,12 +29589,20 @@ console.log('💰 倉租管理模組已載入');
             if (unitWeightEl) unitWeightEl.value = product.unitWeight;
         }
         
-        // 自動填入每板數（從品項主檔的板容量）
-        if (product.palletCapacity) {
-            var perPalletEl = document.getElementById('pre-per-pallet');
-            var perPalletVarEl = document.getElementById('pre-per-pallet-var');
-            if (perPalletEl) perPalletEl.value = product.palletCapacity;
-            if (perPalletVarEl) perPalletVarEl.value = product.palletCapacity;
+        // 🔧 修正：自動填入每板數（從品項主檔的板容量），確保一定會設定值
+        var perPalletEl = document.getElementById('pre-per-pallet');
+        var perPalletVarEl = document.getElementById('pre-per-pallet-var');
+        var palletCapacityValue = parseInt(product.palletCapacity) || 40;
+        
+        console.log('📦 設定每板件數: ' + palletCapacityValue + ' (原始值: ' + product.palletCapacity + ')');
+        
+        if (perPalletEl) {
+            perPalletEl.value = palletCapacityValue;
+            console.log('📦 pre-per-pallet 設定為: ' + perPalletEl.value);
+        }
+        if (perPalletVarEl) {
+            perPalletVarEl.value = palletCapacityValue;
+            console.log('📦 pre-per-pallet-var 設定為: ' + perPalletVarEl.value);
         }
         
         // 更新 checklist 和智能建議
@@ -29497,19 +29629,29 @@ console.log('💰 倉租管理模組已載入');
     // 擴展品項選擇確認函數 - 修正參數格式匹配
     var originalSelectProductFromModal = window.selectProductFromModal;
     window.selectProductFromModal = function(code, name, spec, palletCapacity, shelfLife) {
+        console.log('📦 selectProductFromModal 被呼叫 - code:', code, 'name:', name, 'palletCapacity:', palletCapacity);
+        
         var source = window.productSelectSource || 'inbound';
+        console.log('📦 source:', source);
         
         // 從品項主檔取得完整資料
         var productData = (window.productMasterData || []).find(function(p) {
             return p.code === code || p.name === name;
         }) || {};
         
+        console.log('📦 productData:', productData);
+        console.log('📦 productData.palletCapacity:', productData.palletCapacity);
+        
+        // 🔧 修正：確保 palletCapacity 是數字
+        var finalPalletCapacity = parseInt(palletCapacity) || parseInt(productData.palletCapacity) || 40;
+        console.log('📦 finalPalletCapacity:', finalPalletCapacity);
+        
         // 建立完整的 product 物件
         var product = {
             code: code,
             name: name,
             spec: spec,
-            palletCapacity: palletCapacity || productData.palletCapacity || 40,
+            palletCapacity: finalPalletCapacity,
             shelfLife: shelfLife || productData.shelfLife || 24,
             weightType: productData.weightType || 'fixed',
             inboundType: productData.inboundType || 'Raw',
@@ -29522,12 +29664,21 @@ console.log('💰 倉租管理模組已載入');
                 window.fillContainerProductFromMaster(product);
             } else {
                 // 降級處理：直接填入基本欄位
+                console.log('📦 降級處理被執行, product:', product);
                 var nameEl = document.getElementById('pre-name');
                 var specEl = document.getElementById('pre-spec');
                 var codeEl = document.getElementById('pre-product-code');
                 if (nameEl) nameEl.value = name || '';
                 if (specEl) specEl.value = spec || '';
                 if (codeEl) codeEl.value = code || '';
+                
+                // 🔧 修正：降級處理也要設定每板件數
+                var perPalletEl = document.getElementById('pre-per-pallet');
+                var perPalletVarEl = document.getElementById('pre-per-pallet-var');
+                var palletCapacityValue = parseInt(product.palletCapacity) || 40;
+                if (perPalletEl) perPalletEl.value = palletCapacityValue;
+                if (perPalletVarEl) perPalletVarEl.value = palletCapacityValue;
+                console.log('📦 降級處理設定每板件數: ' + palletCapacityValue);
                 
                 // 觸發 checklist 和智能建議更新
                 if (typeof updateContainerChecklist === 'function') {
