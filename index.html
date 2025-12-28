@@ -3360,134 +3360,166 @@
 
             <!-- 開發者工具頁面 -->
             <div id="view-dev-tools" class="view-panel h-full hidden flex flex-col p-4 overflow-auto">
-                <div class="bg-gradient-to-r from-slate-800 to-slate-700 border border-slate-600 p-3 rounded-lg mb-3">
-                    <h2 class="text-white font-bold text-lg"><i class="fa-solid fa-wrench mr-2 text-slate-400"></i>系統維護</h2>
-                    <p class="text-slate-300 text-sm mt-1">備份還原與測試資料清除</p>
+                <div class="bg-gradient-to-r from-slate-800 to-slate-700 border border-slate-600 p-3 rounded-lg mb-4">
+                    <h2 class="text-white font-bold text-lg"><i class="fa-solid fa-wrench mr-2 text-orange-400"></i>系統維護</h2>
+                    <p class="text-slate-300 text-sm mt-1">備份還原與資料清除</p>
                 </div>
 
-                <!-- 備份與還原 -->
-                <div class="glass-panel p-4 mb-4">
-                    <h3 class="text-white font-bold mb-3 text-sm border-b border-slate-700 pb-2">
-                        <i class="fa-solid fa-database mr-1 text-orange-400"></i>備份與還原
-                    </h3>
-                    <p class="text-slate-400 text-xs mb-4">將 Firebase 資料庫備份為 JSON 檔案，或從備份檔還原資料。</p>
+                <!-- 左右兩欄主區塊 -->
+                <div class="grid grid-cols-2 gap-4 flex-1">
                     
-                    <div class="grid grid-cols-2 gap-4 mb-4">
-                        <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-3">
-                            <div class="text-slate-400 text-xs mb-1">上次備份時間</div>
-                            <div class="text-white font-bold" id="dev-last-backup">從未備份</div>
-                        </div>
-                        <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-3">
-                            <div class="text-slate-400 text-xs mb-1">備份狀態</div>
-                            <div class="text-emerald-400 font-bold" id="dev-backup-status">就緒</div>
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-3">
-                        <button onclick="performBackup()" class="py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold">
-                            <i class="fa-solid fa-download mr-2"></i>備份資料
-                        </button>
-                        <div class="relative">
-                            <input type="file" id="restore-file-input" accept=".json" class="hidden" onchange="handleRestoreFile(event)">
-                            <button onclick="document.getElementById('restore-file-input').click()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
-                                <i class="fa-solid fa-upload mr-2"></i>還原資料
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-gradient-to-r from-red-900 to-red-800 border border-red-600 p-3 rounded-lg mb-3">
-                    <h3 class="text-white font-bold"><i class="fa-solid fa-triangle-exclamation mr-2 text-red-400"></i>資料清除（危險操作）</h3>
-                    <p class="text-red-200 text-sm mt-1">清除測試資料，請謹慎操作！</p>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <!-- 本地資料清除 -->
-                    <div class="glass-panel p-4">
-                        <h3 class="text-white font-bold mb-3 text-sm border-b border-slate-700 pb-2">
-                            <i class="fa-solid fa-database mr-1 text-blue-400"></i>本地資料 (localStorage)
+                    <!-- 左欄：備份與還原 -->
+                    <div class="glass-panel p-4 flex flex-col">
+                        <h3 class="text-white font-bold mb-4 text-base border-b border-orange-500/50 pb-2">
+                            <i class="fa-solid fa-database mr-2 text-orange-400"></i>備份與還原
                         </h3>
-                        <p class="text-slate-400 text-xs mb-4">清除瀏覽器本地儲存的測試資料，包括任務清單、暫存資料等。</p>
                         
-                        <div class="space-y-2">
-                            <button onclick="clearLocalStorageItem('wms_dispatch_orders')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
-                                <i class="fa-solid fa-clipboard-list mr-1"></i>清除任務清單
-                            </button>
-                            <button onclick="clearLocalStorageItem('wms_waves')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
-                                <i class="fa-solid fa-layer-group mr-1"></i>清除波次資料
-                            </button>
-                            <button onclick="clearLocalStorageItem('wms_shipping_orders')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
-                                <i class="fa-solid fa-truck mr-1"></i>清除出貨訂單
-                            </button>
-                            <button onclick="clearLocalStorageItem('wms_pending_inbound')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
-                                <i class="fa-solid fa-inbox mr-1"></i>清除待入庫工單
-                            </button>
-                            <div class="border-t border-slate-700 pt-2 mt-2">
-                                <button onclick="clearAllLocalStorage()" class="w-full py-2 bg-red-600 hover:bg-red-500 text-white rounded text-sm font-bold">
+                        <!-- 狀態資訊 -->
+                        <div class="grid grid-cols-2 gap-3 mb-4">
+                            <div class="bg-slate-800/70 border border-slate-600 rounded-lg p-3">
+                                <div class="text-slate-400 text-xs mb-1">上次備份時間</div>
+                                <div class="text-white font-bold text-sm" id="dev-last-backup">從未備份</div>
+                            </div>
+                            <div class="bg-slate-800/70 border border-slate-600 rounded-lg p-3">
+                                <div class="text-slate-400 text-xs mb-1">備份狀態</div>
+                                <div class="text-emerald-400 font-bold text-sm" id="dev-backup-status">就緒</div>
+                            </div>
+                        </div>
+
+                        <!-- 本地備份 -->
+                        <div class="bg-slate-800/50 rounded-lg p-3 mb-3">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i class="fa-solid fa-hard-drive text-blue-400"></i>
+                                <span class="text-white font-bold text-sm">本地備份 (JSON)</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="performBackup()" class="py-2.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold text-sm">
+                                    <i class="fa-solid fa-download mr-1"></i>備份
+                                </button>
+                                <div class="relative">
+                                    <input type="file" id="restore-file-input" accept=".json" class="hidden" onchange="handleRestoreFile(event)">
+                                    <button onclick="document.getElementById('restore-file-input').click()" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-sm">
+                                        <i class="fa-solid fa-upload mr-1"></i>還原
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Excel 備份 -->
+                        <div class="bg-slate-800/50 rounded-lg p-3 mb-3">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i class="fa-solid fa-file-excel text-emerald-400"></i>
+                                <span class="text-white font-bold text-sm">Excel 備份</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="exportBackupExcel()" class="py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-sm">
+                                    <i class="fa-solid fa-download mr-1"></i>匯出
+                                </button>
+                                <div class="relative">
+                                    <input type="file" id="restore-excel-input" accept=".xlsx" class="hidden" onchange="restoreFromExcel(event)">
+                                    <button onclick="document.getElementById('restore-excel-input').click()" class="w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-bold text-sm">
+                                        <i class="fa-solid fa-upload mr-1"></i>匯入
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 雲端備份 -->
+                        <div class="bg-slate-800/50 rounded-lg p-3">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i class="fa-solid fa-cloud text-cyan-400"></i>
+                                <span class="text-white font-bold text-sm">雲端備份 (Firebase)</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 mb-2">
+                                <button onclick="exportBackupToFirebase()" class="py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-bold text-sm">
+                                    <i class="fa-solid fa-cloud-arrow-up mr-1"></i>上傳
+                                </button>
+                                <button onclick="showCloudBackupList()" class="py-2.5 bg-slate-600 hover:bg-slate-500 text-white rounded-lg font-bold text-sm">
+                                    <i class="fa-solid fa-list mr-1"></i>列表
+                                </button>
+                            </div>
+                            <div id="cloud-backup-list" class="hidden"></div>
+                        </div>
+
+                        <!-- 彈性填充 -->
+                        <div class="flex-1"></div>
+
+                        <!-- 系統資訊 -->
+                        <div class="bg-slate-800/30 rounded-lg p-3 mt-3 border border-slate-700">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-slate-400 text-xs"><i class="fa-solid fa-info-circle mr-1"></i>系統資訊</span>
+                                <button onclick="refreshDevToolsStats()" class="text-cyan-400 hover:text-cyan-300 text-xs">
+                                    <i class="fa-solid fa-refresh mr-1"></i>重整
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div class="flex justify-between"><span class="text-slate-500">雲端庫存</span><span class="text-white font-bold" id="dev-cloud-inv-count">-</span></div>
+                                <div class="flex justify-between"><span class="text-slate-500">雲端任務</span><span class="text-white font-bold" id="dev-cloud-task-count">-</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右欄：資料清除 -->
+                    <div class="glass-panel p-4 flex flex-col border border-red-900/50">
+                        <h3 class="text-white font-bold mb-4 text-base border-b border-red-500/50 pb-2">
+                            <i class="fa-solid fa-triangle-exclamation mr-2 text-red-400"></i>資料清除
+                        </h3>
+                        <p class="text-red-300/70 text-xs mb-4">⚠️ 以下操作將永久刪除資料，無法復原！</p>
+
+                        <!-- 雲端資料清除 -->
+                        <div class="bg-red-900/20 rounded-lg p-3 mb-3 border border-red-800/50">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i class="fa-solid fa-cloud text-red-400"></i>
+                                <span class="text-white font-bold text-sm">雲端資料 (Firebase)</span>
+                            </div>
+                            <div class="space-y-2">
+                                <button onclick="clearFirebaseCollection('inboundTasks')" class="w-full py-2 bg-slate-700 hover:bg-red-600 text-white rounded text-sm transition-colors">
+                                    <i class="fa-solid fa-arrow-down mr-1"></i>清除入庫任務
+                                </button>
+                                <button onclick="clearFirebaseCollection('dispatchOrders')" class="w-full py-2 bg-slate-700 hover:bg-red-600 text-white rounded text-sm transition-colors">
+                                    <i class="fa-solid fa-clipboard-list mr-1"></i>清除調度工單
+                                </button>
+                                <button onclick="clearFirebaseCollection('waves')" class="w-full py-2 bg-slate-700 hover:bg-red-600 text-white rounded text-sm transition-colors">
+                                    <i class="fa-solid fa-layer-group mr-1"></i>清除波次資料
+                                </button>
+                                <button onclick="clearFirebaseCollection('pendingInbound')" class="w-full py-2 bg-slate-700 hover:bg-red-600 text-white rounded text-sm transition-colors">
+                                    <i class="fa-solid fa-inbox mr-1"></i>清除待入庫工單
+                                </button>
+                                <button onclick="clearFirebaseCollection('inventoryLogs')" class="w-full py-2 bg-slate-700 hover:bg-red-600 text-white rounded text-sm transition-colors">
+                                    <i class="fa-solid fa-clock-rotate-left mr-1"></i>清除庫存異動紀錄
+                                </button>
+                            </div>
+                            <div class="border-t border-red-700/50 pt-3 mt-3">
+                                <button onclick="clearFirebaseCollection('pallets')" class="w-full py-2.5 bg-red-700 hover:bg-red-600 text-white rounded font-bold text-sm">
+                                    <i class="fa-solid fa-pallet mr-1"></i>清除所有庫存資料
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 本地資料清除 -->
+                        <div class="bg-slate-800/50 rounded-lg p-3">
+                            <div class="flex items-center gap-2 mb-3">
+                                <i class="fa-solid fa-hard-drive text-slate-400"></i>
+                                <span class="text-white font-bold text-sm">本地資料 (localStorage)</span>
+                            </div>
+                            <div class="space-y-2">
+                                <button onclick="clearLocalStorageItem('wms_dispatch_orders')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
+                                    <i class="fa-solid fa-clipboard-list mr-1"></i>清除任務清單
+                                </button>
+                                <button onclick="clearLocalStorageItem('wms_waves')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
+                                    <i class="fa-solid fa-layer-group mr-1"></i>清除波次資料
+                                </button>
+                                <button onclick="clearLocalStorageItem('wms_shipping_orders')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
+                                    <i class="fa-solid fa-truck mr-1"></i>清除出貨訂單
+                                </button>
+                            </div>
+                            <div class="border-t border-slate-600 pt-3 mt-3">
+                                <button onclick="clearAllLocalStorage()" class="w-full py-2.5 bg-slate-600 hover:bg-red-600 text-white rounded font-bold text-sm transition-colors">
                                     <i class="fa-solid fa-trash mr-1"></i>清除所有本地資料
                                 </button>
                             </div>
                         </div>
                     </div>
-
-                    <!-- Firebase 資料清除 -->
-                    <div class="glass-panel p-4">
-                        <h3 class="text-white font-bold mb-3 text-sm border-b border-slate-700 pb-2">
-                            <i class="fa-solid fa-cloud mr-1 text-orange-400"></i>雲端資料 (Firebase)
-                        </h3>
-                        <p class="text-slate-400 text-xs mb-4">清除 Firebase 雲端資料庫的測試資料。請謹慎操作！</p>
-                        
-                        <div class="space-y-2">
-                            <button onclick="clearFirebaseCollection('inboundTasks')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
-                                <i class="fa-solid fa-arrow-down mr-1"></i>清除入庫任務
-                            </button>
-                            <button onclick="clearFirebaseCollection('dispatchOrders')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
-                                <i class="fa-solid fa-clipboard-list mr-1"></i>清除調度工單
-                            </button>
-                            <button onclick="clearFirebaseCollection('waves')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
-                                <i class="fa-solid fa-layer-group mr-1"></i>清除波次資料
-                            </button>
-                            <button onclick="clearFirebaseCollection('pendingInbound')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
-                                <i class="fa-solid fa-inbox mr-1"></i>清除待入庫工單
-                            </button>
-                            <button onclick="clearFirebaseCollection('inventoryLogs')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
-                                <i class="fa-solid fa-clock-rotate-left mr-1"></i>清除庫存異動紀錄
-                            </button>
-                            <div class="border-t border-slate-700 pt-2 mt-2">
-                                <button onclick="clearFirebaseCollection('pallets')" class="w-full py-2 bg-orange-600 hover:bg-orange-500 text-white rounded text-sm font-bold">
-                                    <i class="fa-solid fa-pallet mr-1"></i>清除所有庫存資料
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 系統資訊 -->
-                <div class="glass-panel p-4 mt-4">
-                    <h3 class="text-white font-bold mb-3 text-sm border-b border-slate-700 pb-2">
-                        <i class="fa-solid fa-info-circle mr-1 text-cyan-400"></i>系統資訊
-                    </h3>
-                    <div class="grid grid-cols-4 gap-4 text-sm">
-                        <div class="bg-slate-800 rounded p-3">
-                            <div class="text-slate-400 text-xs">本地庫存數</div>
-                            <div class="text-white font-bold mt-1" id="dev-local-inv-count">-</div>
-                        </div>
-                        <div class="bg-slate-800 rounded p-3">
-                            <div class="text-slate-400 text-xs">雲端庫存數</div>
-                            <div class="text-white font-bold mt-1" id="dev-cloud-inv-count">-</div>
-                        </div>
-                        <div class="bg-slate-800 rounded p-3">
-                            <div class="text-slate-400 text-xs">本地任務數</div>
-                            <div class="text-white font-bold mt-1" id="dev-local-task-count">-</div>
-                        </div>
-                        <div class="bg-slate-800 rounded p-3">
-                            <div class="text-slate-400 text-xs">雲端任務數</div>
-                            <div class="text-white font-bold mt-1" id="dev-cloud-task-count">-</div>
-                        </div>
-                    </div>
-                    <button onclick="refreshDevToolsStats()" class="mt-3 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-sm">
-                        <i class="fa-solid fa-refresh mr-1"></i>重新整理統計
-                    </button>
                 </div>
             </div>
 
@@ -14943,6 +14975,53 @@ window.exportBackupToFirebase = async function() {
 window.showCloudBackupList = async function() {
     var listEl = document.getElementById('cloud-backup-list');
     listEl.classList.remove('hidden');
+    listEl.innerHTML = '<div class="text-center py-4"><i class="fa-solid fa-spinner fa-spin mr-1"></i>載入中...</div>';
+
+    try {
+        var backupsSnap = await window.getDocs(window.collection(window.db, 'backups'));
+        var backups = [];
+        backupsSnap.forEach(function(doc) {
+            var d = doc.data();
+            backups.push({
+                id: doc.id,
+                timestamp: d.timestamp,
+                palletsCount: d.palletsCount || 0,
+                ordersCount: d.ordersCount || 0,
+                wavesCount: d.wavesCount || 0
+            });
+        });
+
+        backups.sort(function(a, b) {
+            return new Date(b.timestamp) - new Date(a.timestamp);
+        });
+
+        if (backups.length === 0) {
+            listEl.innerHTML = '<div class="text-center py-4 text-slate-400">尚無雲端備份</div>';
+            return;
+        }
+
+        var html = '<div class="max-h-48 overflow-y-auto space-y-2 mt-3">';
+        backups.forEach(function(b) {
+            var date = new Date(b.timestamp).toLocaleString('zh-TW');
+            html += '<div class="bg-slate-800 p-3 rounded flex justify-between items-center">' +
+                '<div>' +
+                '<div class="text-white text-sm">' + date + '</div>' +
+                '<div class="text-slate-400 text-xs">庫存 ' + b.palletsCount + ' / 訂單 ' + b.ordersCount + ' / 波次 ' + b.wavesCount + '</div>' +
+                '</div>' +
+                '<div class="flex gap-2">' +
+                '<button onclick="restoreFromFirebase(\'' + b.id + '\')" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded text-xs">還原</button>' +
+                '<button onclick="deleteCloudBackup(\'' + b.id + '\')" class="bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded text-xs">刪除</button>' +
+                '</div></div>';
+        });
+        html += '</div>';
+
+        listEl.innerHTML = html;
+
+    } catch (err) {
+        console.error('載入備份列表失敗:', err);
+        listEl.innerHTML = '<div class="text-center py-4 text-red-400">載入失敗</div>';
+    }
+};
 
 // ========== 開發者工具頁面的備份功能 ==========
 
@@ -14958,8 +15037,10 @@ window.initDevToolsBackup = function() {
 // 執行備份（開發者工具頁面用）
 window.performBackup = async function() {
     var statusEl = document.getElementById('dev-backup-status');
-    if (statusEl) statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>備份中...';
-    statusEl.className = 'text-yellow-400 font-bold';
+    if (statusEl) {
+        statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>備份中...';
+        statusEl.className = 'text-yellow-400 font-bold';
+    }
 
     try {
         var timestamp = new Date().toISOString();
@@ -15122,53 +15203,6 @@ window.handleRestoreFile = async function(event) {
     }
 
     event.target.value = '';
-};
-    listEl.innerHTML = '<div class="text-center py-4"><i class="fa-solid fa-spinner fa-spin mr-1"></i>載入中...</div>';
-
-    try {
-        var backupsSnap = await window.getDocs(window.collection(window.db, 'backups'));
-        var backups = [];
-        backupsSnap.forEach(function(doc) {
-            var d = doc.data();
-            backups.push({
-                id: doc.id,
-                timestamp: d.timestamp,
-                palletsCount: d.palletsCount || 0,
-                ordersCount: d.ordersCount || 0,
-                wavesCount: d.wavesCount || 0
-            });
-        });
-
-        backups.sort(function(a, b) {
-            return new Date(b.timestamp) - new Date(a.timestamp);
-        });
-
-        if (backups.length === 0) {
-            listEl.innerHTML = '<div class="text-center py-4 text-slate-400">尚無雲端備份</div>';
-            return;
-        }
-
-        var html = '<div class="max-h-48 overflow-y-auto space-y-2 mt-3">';
-        backups.forEach(function(b) {
-            var date = new Date(b.timestamp).toLocaleString('zh-TW');
-            html += '<div class="bg-slate-800 p-3 rounded flex justify-between items-center">' +
-                '<div>' +
-                '<div class="text-white text-sm">' + date + '</div>' +
-                '<div class="text-slate-400 text-xs">庫存 ' + b.palletsCount + ' / 訂單 ' + b.ordersCount + ' / 波次 ' + b.wavesCount + '</div>' +
-                '</div>' +
-                '<div class="flex gap-2">' +
-                '<button onclick="restoreFromFirebase(\'' + b.id + '\')" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded text-xs">還原</button>' +
-                '<button onclick="deleteCloudBackup(\'' + b.id + '\')" class="bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded text-xs">刪除</button>' +
-                '</div></div>';
-        });
-        html += '</div>';
-
-        listEl.innerHTML = html;
-
-    } catch (err) {
-        console.error('載入備份列表失敗:', err);
-        listEl.innerHTML = '<div class="text-center py-4 text-red-400">載入失敗</div>';
-    }
 };
 
 window.restoreFromFirebase = async function(backupId) {
