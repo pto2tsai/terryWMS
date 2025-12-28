@@ -21,31 +21,31 @@
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
     <style>
-        body { font-family: 'Inter', 'Microsoft JhengHei', sans-serif; background-color: #0f172a; color: #cbd5e1; font-size: 13px; user-select: none; }
+        body { font-family: 'Inter', 'Microsoft JhengHei', sans-serif; background-color: #0f172a; color: #cbd5e1; font-size: 14px; user-select: none; }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: #1e293b; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 2px; }
 
         /* 導航 */
-        .nav-item { display: flex; align-items: center; padding: 10px 16px; color: #94a3b8; cursor: pointer; transition: 0.2s; border-left: 3px solid transparent; font-size: 13px; }
+        .nav-item { display: flex; align-items: center; padding: 10px 16px; color: #94a3b8; cursor: pointer; transition: 0.2s; border-left: 3px solid transparent; font-size: 14px; }
         .nav-item:hover { background-color: #1e293b; color: white; }
         .nav-item.active { background-color: #1e293b; color: #38bdf8; border-left-color: #38bdf8; background: linear-gradient(90deg, rgba(56,189,248,0.1) 0%, rgba(30,41,59,0) 100%); font-weight: bold; }
-        .nav-group { font-size: 11px; font-weight: bold; color: #64748b; padding: 14px 16px 4px; text-transform: uppercase; letter-spacing: 0.05em; }
-        .nav-group-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; color: #94a3b8; cursor: pointer; font-size: 13px; font-weight: 600; border-left: 3px solid transparent; transition: 0.2s; }
+        .nav-group { font-size: 12px; font-weight: bold; color: #64748b; padding: 14px 16px 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .nav-group-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; color: #94a3b8; cursor: pointer; font-size: 14px; font-weight: 600; border-left: 3px solid transparent; transition: 0.2s; }
         .nav-group-header:hover { background-color: #1e293b; color: white; }
-        .nav-group-header .nav-chevron { font-size: 10px; transition: transform 0.2s; }
+        .nav-group-header .nav-chevron { font-size: 11px; transition: transform 0.2s; }
         .nav-group-items { overflow: hidden; transition: max-height 0.3s ease; max-height: 500px; }
         .nav-group-items.collapsed { max-height: 0; }
         .nav-group-items.collapsed + .nav-group-header .nav-chevron { transform: rotate(-90deg); }
-        .nav-group-items .nav-item { padding-left: 28px; font-size: 12px; }
+        .nav-group-items .nav-item { padding-left: 28px; font-size: 13px; }
 
         .glass-panel { background: #1e293b; border: 1px solid #334155; border-radius: 8px; }
-        .scan-input { background: #0f172a; border: 1px solid #475569; color: white; border-radius: 6px; padding: 0 12px; font-family: monospace; width: 100%; transition: 0.3s; height: 36px; font-size: 14px; }
+        .scan-input { background: #0f172a; border: 1px solid #475569; color: white; border-radius: 6px; padding: 0 12px; font-family: monospace; width: 100%; transition: 0.3s; height: 38px; font-size: 15px; }
         .scan-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6; outline: none; }
         .scan-input[readonly] { background: #1e293b; color: #64748b; cursor: not-allowed; }
 
         /* Badge */
-        .badge { padding: 1px 5px; border-radius: 3px; font-size: 10px; font-weight: bold; display: inline-block; white-space: nowrap; }
+        .badge { padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; display: inline-block; white-space: nowrap; }
         .badge-green { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
         .badge-purple { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
         .badge-yellow { background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
@@ -53,10 +53,10 @@
         .badge-blue { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
         .badge-red { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
 
-        .dense-table th { position: sticky; top: 0; background: #0f172a; z-index: 10; padding: 8px 12px; border-bottom: 1px solid #334155; font-size: 12px; color: #94a3b8; }
+        .dense-table th { position: sticky; top: 0; background: #0f172a; z-index: 10; padding: 10px 12px; border-bottom: 1px solid #334155; font-size: 13px; color: #94a3b8; }
         .dense-table th.text-left { text-align: left; }
         .dense-table th.text-right { text-align: right; }
-        .dense-table td { padding: 6px 12px; border-bottom: 1px solid #1e293b; white-space: nowrap; font-size: 12px; }
+        .dense-table td { padding: 8px 12px; border-bottom: 1px solid #1e293b; white-space: nowrap; font-size: 13px; }
         .dense-table tr:hover { background-color: #334155; cursor: pointer; }
 
         /* 地圖樣式 */
@@ -179,7 +179,7 @@
         .pallet-empty { background: transparent; border: 2px dashed #334155; color: #475569; display: flex; align-items: center; justify-content: center; font-size: 11px; height: 60px; }
 
         /* UI Components */
-        .tab-btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; color: #64748b; background: #1e293b; border: 1px solid #334155; transition: 0.2s; font-size: 13px; }
+        .tab-btn { padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; color: #64748b; background: #1e293b; border: 1px solid #334155; transition: 0.2s; font-size: 14px; }
         .tab-btn.active { background: #2563eb; color: white; border-color: #3b82f6; }
         .virtual-card { background: #334155; padding: 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; text-align: center; }
         .virtual-card:hover { border-color: #38bdf8; background: #475569; }
@@ -243,6 +243,40 @@
         #report-type-select option { background: #334155; color: white; padding: 8px; }
         #report-type-select optgroup { background: #1e293b; color: #94a3b8; font-weight: bold; padding: 4px 0; }
 
+        /* ========== 全域字體大小優化 ========== */
+        /* 表單標籤 - 提升可讀性 */
+        .text-\[10px\] { font-size: 11px !important; }
+        .text-\[9px\] { font-size: 10px !important; }
+        .text-xs { font-size: 13px !important; }
+        
+        /* 按鈕文字 */
+        button, .btn { font-size: 14px; }
+        
+        /* 表格內容 */
+        table td, table th { font-size: 13px; }
+        
+        /* 下拉選單 */
+        select { font-size: 14px; }
+        
+        /* 標題區塊 */
+        h2, .text-xl { font-size: 1.25rem; }
+        h3, .text-lg { font-size: 1.125rem; }
+        
+        /* 提示文字 - 維持較小但仍可讀 */
+        .text-slate-400, .text-slate-500 { font-size: inherit; }
+        
+        /* 側邊欄特殊調整 */
+        aside .text-xs { font-size: 12px !important; }
+        aside .text-\[10px\] { font-size: 11px !important; }
+        
+        /* 彈窗內容 */
+        .modal-content, [class*="modal"] .text-sm { font-size: 14px; }
+        
+        /* 統計數字保持大字 */
+        .text-2xl { font-size: 1.5rem !important; }
+        .text-3xl { font-size: 1.875rem !important; }
+        .text-4xl { font-size: 2.25rem !important; }
+
         @media print { body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; } #print-area { position: absolute; left: 0; top: 0; width: 100%; } .print-page { page-break-after: always; width: 100mm; height: 148mm; border: 3px solid black; padding: 15px; margin: 0 auto; color: black !important; background: white !important; display: flex; flex-direction: column; } .print-header { text-align: center; font-size: 24px; font-weight: 900; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; } .print-row { display: flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 5px; } .print-label { font-size: 14px; color: #333; font-weight: bold; } .print-val { font-size: 18px; font-weight: bold; text-align: right; } .print-big { font-size: 32px; font-weight: 900; } .print-footer { margin-top: auto; text-align: center; } }
     </style>
 </head>
@@ -295,6 +329,45 @@
 
     <div id="modal-analytics" class="fixed inset-0 z-40 bg-black/90 hidden flex flex-col p-6 backdrop-blur-sm"><div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold text-white" id="analytics-title">詳細分析</h2><button onclick="closeAnalytics()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-2xl"></i></button></div><div class="flex gap-4 mb-4 bg-slate-800 p-4 rounded border border-slate-700"><input type="text" class="scan-input w-48" placeholder="🔍 產品/批號"><input type="text" class="scan-input w-48" placeholder="🏢 客戶名稱"><input type="text" class="scan-input w-48" placeholder="🚛 物流商"><div class="flex items-center gap-2 text-slate-400 text-sm"><span>出貨日:</span><input type="date" class="scan-input w-32"><span>至</span><input type="date" class="scan-input w-32"></div><button class="bg-blue-600 hover:bg-blue-500 text-white px-4 rounded font-bold ml-auto">搜尋</button></div><div class="flex-1 glass-panel overflow-auto"><table class="w-full dense-table text-left"><thead><tr><th>單號</th><th>品名規格</th><th>批號</th><th>數量</th><th>客戶</th><th>物流</th><th>狀態</th><th>備貨日</th></tr></thead><tbody id="analytics-tbody"></tbody></table></div></div>
 
+    <!-- 常用功能設定彈窗 -->
+    <div id="modal-favorites-settings" class="fixed inset-0 z-50 bg-black/80 hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-slate-800 rounded-xl w-[700px] max-h-[85vh] flex flex-col border border-slate-600 shadow-2xl">
+            <div class="flex items-center justify-between p-4 border-b border-slate-700">
+                <h3 class="text-white font-bold text-lg"><i class="fa-solid fa-star text-yellow-400 mr-2"></i>設定常用功能</h3>
+                <button onclick="closeFavoritesSettings()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="flex-1 overflow-hidden flex">
+                <!-- 左側：可選功能 -->
+                <div class="w-1/2 border-r border-slate-700 flex flex-col">
+                    <div class="p-3 border-b border-slate-700 bg-slate-700/30">
+                        <div class="text-white font-bold text-sm mb-2"><i class="fa-solid fa-list mr-1"></i>可選功能</div>
+                        <input type="text" id="fav-search" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white text-sm" placeholder="搜尋功能..." oninput="filterAvailableFunctions()">
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-2" id="available-functions-list">
+                        <!-- 動態產生 -->
+                    </div>
+                </div>
+                <!-- 右側：已選功能（可拖曳排序）-->
+                <div class="w-1/2 flex flex-col">
+                    <div class="p-3 border-b border-slate-700 bg-slate-700/30">
+                        <div class="text-white font-bold text-sm"><i class="fa-solid fa-star text-yellow-400 mr-1"></i>已選功能 <span id="selected-count" class="text-slate-400 font-normal">(0)</span></div>
+                        <div class="text-slate-400 text-xs mt-1">拖曳可調整順序</div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-2" id="selected-functions-list">
+                        <!-- 動態產生 -->
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 border-t border-slate-700 flex justify-between items-center">
+                <button onclick="clearAllFavorites()" class="text-red-400 hover:text-red-300 text-sm"><i class="fa-solid fa-trash mr-1"></i>清除全部</button>
+                <div class="flex gap-2">
+                    <button onclick="closeFavoritesSettings()" class="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg">取消</button>
+                    <button onclick="saveFavoritesSettings()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold"><i class="fa-solid fa-check mr-1"></i>儲存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <aside class="w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-20">
         <div class="h-14 flex items-center px-4 border-b border-slate-800">
             <i class="fa-solid fa-cube text-blue-500 text-xl mr-2"></i>
@@ -304,6 +377,23 @@
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-1" id="main-nav">
+            <!-- 常用功能區塊 -->
+            <div id="favorites-section" class="border-b border-slate-700 mb-2 pb-2">
+                <div class="flex items-center justify-between px-3 py-1.5 text-slate-400 text-sm">
+                    <span class="font-bold"><i class="fa-solid fa-star text-yellow-400 mr-1"></i>常用功能</span>
+                    <button onclick="openFavoritesSettings()" class="hover:text-white" title="設定常用功能">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+                <div id="favorites-list" class="space-y-0.5 px-1">
+                    <!-- 動態產生的常用功能項目 -->
+                </div>
+                <div id="favorites-empty" class="text-center py-3 text-slate-500 text-sm hidden">
+                    <i class="fa-solid fa-star mb-1"></i>
+                    <div>點擊 <i class="fa-solid fa-gear"></i> 新增常用功能</div>
+                </div>
+            </div>
+
             <!-- 數位倉庫 -->
             <div class="nav-group-header" onclick="toggleNavGroup('grp-warehouse-view')">
                 <span><i class="fa-solid fa-map-location-dot w-4 text-center mr-1 text-cyan-400"></i>數位倉庫</span>
@@ -14119,6 +14209,278 @@ window.printWaveLabels = function(waveNo) {
     window._waveData.currentWave = wave;
     printAllLabels();
 };
+
+// ========== 常用功能模組 ==========
+
+// 所有可選的功能定義
+window._allFunctions = [
+    { id: 'visual-map', name: '倉庫地圖', icon: 'fa-map', color: 'text-cyan-400', group: '數位倉庫' },
+    { id: 'inventory-query', name: '庫存查詢', icon: 'fa-magnifying-glass', color: 'text-cyan-400', group: '數位倉庫' },
+    { id: 'dashboard', name: '戰情分析', icon: 'fa-chart-pie', color: 'text-white', group: '數位倉庫' },
+    { id: 'work-board', name: '工單看板', icon: 'fa-tv', color: 'text-yellow-400', group: '數位倉庫' },
+    { id: 'unified-inbound', name: '智能入庫中心', icon: 'fa-bolt', color: 'text-emerald-400', group: '入庫管理' },
+    { id: 'pre-inbound', name: '貨櫃入庫作業', icon: 'fa-ship', color: 'text-cyan-400', group: '入庫管理' },
+    { id: 'approval', name: '待財務核准', icon: 'fa-clipboard-check', color: 'text-yellow-400', group: '入庫管理' },
+    { id: 'wave-picking', name: '波次揀貨', icon: 'fa-layer-group', color: 'text-orange-400', group: '出庫管理' },
+    { id: 'picking-rm', name: '原料領用', icon: 'fa-fish', color: 'text-red-400', group: '出庫管理' },
+    { id: 'move', name: '智能調度', icon: 'fa-layer-group', color: 'text-blue-400', group: '庫存異動' },
+    { id: 'merge', name: '板號異動', icon: 'fa-arrows-turn-to-dots', color: 'text-blue-400', group: '庫存異動' },
+    { id: 'transfer', name: '倉庫調撥', icon: 'fa-right-left', color: 'text-blue-400', group: '庫存異動' },
+    { id: 'stocktake', name: '庫存盤點', icon: 'fa-clipboard-check', color: 'text-blue-400', group: '庫存異動' },
+    { id: 'external-warehouse', name: '外倉管理', icon: 'fa-building', color: 'text-purple-400', group: '外部倉庫' },
+    { id: 'picking-reports', name: '報表中心', icon: 'fa-chart-pie', color: 'text-green-400', group: '理貨報表' },
+    { id: 'expiry-management', name: '效期管理', icon: 'fa-calendar-xmark', color: 'text-red-400', group: '理貨報表' },
+    { id: 'inventory-log', name: '異動查詢', icon: 'fa-clock-rotate-left', color: 'text-orange-400', group: '理貨報表' },
+    { id: 'product-analysis', name: '出貨分析', icon: 'fa-chart-bar', color: 'text-orange-400', group: '理貨報表' },
+    { id: 'warehouse-heatmap', name: '熱力圖', icon: 'fa-fire', color: 'text-orange-400', group: '理貨報表' },
+    { id: 'consignment', name: '寄倉管理', icon: 'fa-box-archive', color: 'text-amber-400', group: '倉租管理' },
+    { id: 'rental-report', name: '倉租報表', icon: 'fa-file-invoice-dollar', color: 'text-emerald-400', group: '倉租管理' },
+    { id: 'rental-settings', name: '費率設定', icon: 'fa-sliders', color: 'text-blue-400', group: '倉租管理' },
+    { id: 'user-management', name: '使用者管理', icon: 'fa-users-gear', color: 'text-blue-400', group: '系統設定' },
+    { id: 'product-master', name: '品項主檔', icon: 'fa-box', color: 'text-slate-400', group: '系統設定' },
+    { id: 'label-print', name: '標籤列印', icon: 'fa-print', color: 'text-purple-400', group: '系統設定' },
+    { id: 'data-import', name: '資料匯入', icon: 'fa-file-import', color: 'text-amber-400', group: '系統設定' },
+    { id: 'dev-tools', name: '備份與維護', icon: 'fa-wrench', color: 'text-orange-400', group: '系統設定' }
+];
+
+// 暫存選取的功能（編輯中）
+window._tempFavorites = [];
+
+// 從 localStorage 載入常用功能
+window.loadFavorites = function() {
+    var saved = localStorage.getItem('wms_favorites');
+    if (saved) {
+        try {
+            return JSON.parse(saved);
+        } catch (e) {
+            return [];
+        }
+    }
+    return [];
+};
+
+// 儲存常用功能到 localStorage
+window.saveFavorites = function(favorites) {
+    localStorage.setItem('wms_favorites', JSON.stringify(favorites));
+};
+
+// 渲染側邊欄的常用功能列表
+window.renderFavoritesList = function() {
+    var favorites = loadFavorites();
+    var listEl = document.getElementById('favorites-list');
+    var emptyEl = document.getElementById('favorites-empty');
+    
+    if (!listEl) return;
+    
+    if (favorites.length === 0) {
+        listEl.innerHTML = '';
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        return;
+    }
+    
+    if (emptyEl) emptyEl.classList.add('hidden');
+    
+    var html = '';
+    favorites.forEach(function(favId) {
+        var func = window._allFunctions.find(function(f) { return f.id === favId; });
+        if (func) {
+            html += '<div class="nav-item py-2 px-3 mx-1 rounded cursor-pointer hover:bg-slate-700/50" onclick="switchTab(\'' + func.id + '\', event)">';
+            html += '<i class="fa-solid ' + func.icon + ' w-4 text-center mr-2 ' + func.color + '"></i>';
+            html += '<span class="truncate">' + func.name + '</span>';
+            html += '</div>';
+        }
+    });
+    
+    listEl.innerHTML = html;
+};
+
+// 開啟常用功能設定彈窗
+window.openFavoritesSettings = function() {
+    window._tempFavorites = loadFavorites().slice(); // 複製一份
+    renderAvailableFunctions();
+    renderSelectedFunctions();
+    document.getElementById('modal-favorites-settings').classList.remove('hidden');
+};
+
+// 關閉常用功能設定彈窗
+window.closeFavoritesSettings = function() {
+    document.getElementById('modal-favorites-settings').classList.add('hidden');
+};
+
+// 渲染可選功能列表
+window.renderAvailableFunctions = function() {
+    var listEl = document.getElementById('available-functions-list');
+    var searchText = (document.getElementById('fav-search')?.value || '').toLowerCase();
+    
+    // 按群組分類
+    var groups = {};
+    window._allFunctions.forEach(function(func) {
+        // 搜尋過濾
+        if (searchText && func.name.toLowerCase().indexOf(searchText) === -1 && func.group.toLowerCase().indexOf(searchText) === -1) {
+            return;
+        }
+        if (!groups[func.group]) groups[func.group] = [];
+        groups[func.group].push(func);
+    });
+    
+    var html = '';
+    Object.keys(groups).forEach(function(groupName) {
+        html += '<div class="mb-3">';
+        html += '<div class="text-slate-400 text-xs font-bold px-2 py-1">' + groupName + '</div>';
+        groups[groupName].forEach(function(func) {
+            var isSelected = window._tempFavorites.indexOf(func.id) !== -1;
+            var bgClass = isSelected ? 'bg-blue-600/30 border-blue-500' : 'bg-slate-700/30 border-slate-600 hover:bg-slate-700';
+            var checkIcon = isSelected ? '<i class="fa-solid fa-check text-blue-400"></i>' : '<i class="fa-solid fa-plus text-slate-500"></i>';
+            
+            html += '<div class="flex items-center justify-between p-2 rounded border mb-1 cursor-pointer ' + bgClass + '" onclick="toggleFavorite(\'' + func.id + '\')">';
+            html += '<div class="flex items-center">';
+            html += '<i class="fa-solid ' + func.icon + ' w-5 text-center mr-2 ' + func.color + '"></i>';
+            html += '<span class="text-white text-sm">' + func.name + '</span>';
+            html += '</div>';
+            html += checkIcon;
+            html += '</div>';
+        });
+        html += '</div>';
+    });
+    
+    listEl.innerHTML = html || '<div class="text-center text-slate-500 py-4">找不到符合的功能</div>';
+};
+
+// 渲染已選功能列表（可拖曳）
+window.renderSelectedFunctions = function() {
+    var listEl = document.getElementById('selected-functions-list');
+    var countEl = document.getElementById('selected-count');
+    
+    if (countEl) countEl.textContent = '(' + window._tempFavorites.length + ')';
+    
+    if (window._tempFavorites.length === 0) {
+        listEl.innerHTML = '<div class="text-center text-slate-500 py-8"><i class="fa-solid fa-arrow-left text-2xl mb-2"></i><div class="text-sm">從左側選擇常用功能</div></div>';
+        return;
+    }
+    
+    var html = '';
+    window._tempFavorites.forEach(function(favId, index) {
+        var func = window._allFunctions.find(function(f) { return f.id === favId; });
+        if (func) {
+            html += '<div class="flex items-center justify-between p-2 rounded border border-slate-600 bg-slate-700/50 mb-1 cursor-move" draggable="true" data-index="' + index + '" ondragstart="handleDragStart(event)" ondragover="handleDragOver(event)" ondrop="handleDrop(event)" ondragend="handleDragEnd(event)">';
+            html += '<div class="flex items-center">';
+            html += '<i class="fa-solid fa-grip-vertical text-slate-500 mr-2"></i>';
+            html += '<i class="fa-solid ' + func.icon + ' w-5 text-center mr-2 ' + func.color + '"></i>';
+            html += '<span class="text-white text-sm">' + func.name + '</span>';
+            html += '</div>';
+            html += '<button class="text-red-400 hover:text-red-300 px-2" onclick="event.stopPropagation(); removeFavorite(\'' + func.id + '\')"><i class="fa-solid fa-xmark"></i></button>';
+            html += '</div>';
+        }
+    });
+    
+    listEl.innerHTML = html;
+};
+
+// 切換功能選取狀態
+window.toggleFavorite = function(funcId) {
+    var index = window._tempFavorites.indexOf(funcId);
+    if (index === -1) {
+        window._tempFavorites.push(funcId);
+    } else {
+        window._tempFavorites.splice(index, 1);
+    }
+    renderAvailableFunctions();
+    renderSelectedFunctions();
+};
+
+// 從已選中移除
+window.removeFavorite = function(funcId) {
+    var index = window._tempFavorites.indexOf(funcId);
+    if (index !== -1) {
+        window._tempFavorites.splice(index, 1);
+    }
+    renderAvailableFunctions();
+    renderSelectedFunctions();
+};
+
+// 清除全部
+window.clearAllFavorites = function() {
+    if (confirm('確定要清除所有常用功能？')) {
+        window._tempFavorites = [];
+        renderAvailableFunctions();
+        renderSelectedFunctions();
+    }
+};
+
+// 搜尋過濾
+window.filterAvailableFunctions = function() {
+    renderAvailableFunctions();
+};
+
+// 拖曳排序相關變數
+window._draggedIndex = null;
+
+// 拖曳開始
+window.handleDragStart = function(e) {
+    window._draggedIndex = parseInt(e.target.dataset.index);
+    e.target.style.opacity = '0.5';
+    e.dataTransfer.effectAllowed = 'move';
+};
+
+// 拖曳經過
+window.handleDragOver = function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    var target = e.target.closest('[draggable]');
+    if (target) {
+        target.style.borderColor = '#3b82f6';
+    }
+};
+
+// 放下
+window.handleDrop = function(e) {
+    e.preventDefault();
+    
+    var target = e.target.closest('[draggable]');
+    if (!target) return;
+    
+    var targetIndex = parseInt(target.dataset.index);
+    if (window._draggedIndex === null || window._draggedIndex === targetIndex) return;
+    
+    // 重新排列陣列
+    var item = window._tempFavorites.splice(window._draggedIndex, 1)[0];
+    window._tempFavorites.splice(targetIndex, 0, item);
+    
+    renderSelectedFunctions();
+};
+
+// 拖曳結束
+window.handleDragEnd = function(e) {
+    e.target.style.opacity = '1';
+    window._draggedIndex = null;
+    
+    // 重置所有邊框
+    document.querySelectorAll('#selected-functions-list [draggable]').forEach(function(el) {
+        el.style.borderColor = '';
+    });
+};
+
+// 儲存設定
+window.saveFavoritesSettings = function() {
+    saveFavorites(window._tempFavorites);
+    renderFavoritesList();
+    closeFavoritesSettings();
+    
+    // 顯示成功提示
+    if (window._tempFavorites.length > 0) {
+        alert('✅ 已儲存 ' + window._tempFavorites.length + ' 個常用功能');
+    } else {
+        alert('✅ 已清除常用功能');
+    }
+};
+
+// 頁面載入時初始化常用功能
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+        renderFavoritesList();
+    }, 100);
+});
 
 // ========== 備份與還原功能 ==========
 
