@@ -3438,6 +3438,9 @@
                         <p class="text-slate-400 text-xs mb-4">清除 Firebase 雲端資料庫的測試資料。請謹慎操作！</p>
                         
                         <div class="space-y-2">
+                            <button onclick="clearFirebaseCollection('inboundTasks')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
+                                <i class="fa-solid fa-arrow-down mr-1"></i>清除入庫任務
+                            </button>
                             <button onclick="clearFirebaseCollection('dispatchOrders')" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">
                                 <i class="fa-solid fa-clipboard-list mr-1"></i>清除調度工單
                             </button>
