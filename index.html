@@ -32537,27 +32537,35 @@ console.log('💰 倉租管理模組已載入');
     window.refreshDevToolsStats = async function() {
         // 本地庫存
         var localInv = JSON.parse(localStorage.getItem('wms_inventory') || '[]');
-        document.getElementById('dev-local-inv-count').textContent = localInv.length;
+        var localInvEl = document.getElementById('dev-local-inv-count');
+        if (localInvEl) localInvEl.textContent = localInv.length;
         
         // 本地任務
         var localTasks = JSON.parse(localStorage.getItem('wms_dispatch_orders') || '[]');
-        document.getElementById('dev-local-task-count').textContent = localTasks.length;
+        var localTaskEl = document.getElementById('dev-local-task-count');
+        if (localTaskEl) localTaskEl.textContent = localTasks.length;
         
         // 雲端統計
         if (window.db && window.collection && window.getDocs) {
             try {
                 var palletSnap = await window.getDocs(window.collection(window.db, 'pallets'));
-                document.getElementById('dev-cloud-inv-count').textContent = palletSnap.size;
+                var cloudInvEl = document.getElementById('dev-cloud-inv-count');
+                if (cloudInvEl) cloudInvEl.textContent = palletSnap.size;
                 
                 var taskSnap = await window.getDocs(window.collection(window.db, 'dispatchOrders'));
-                document.getElementById('dev-cloud-task-count').textContent = taskSnap.size;
+                var cloudTaskEl = document.getElementById('dev-cloud-task-count');
+                if (cloudTaskEl) cloudTaskEl.textContent = taskSnap.size;
             } catch (e) {
-                document.getElementById('dev-cloud-inv-count').textContent = '錯誤';
-                document.getElementById('dev-cloud-task-count').textContent = '錯誤';
+                var cloudInvEl = document.getElementById('dev-cloud-inv-count');
+                var cloudTaskEl = document.getElementById('dev-cloud-task-count');
+                if (cloudInvEl) cloudInvEl.textContent = '錯誤';
+                if (cloudTaskEl) cloudTaskEl.textContent = '錯誤';
             }
         } else {
-            document.getElementById('dev-cloud-inv-count').textContent = 'N/A';
-            document.getElementById('dev-cloud-task-count').textContent = 'N/A';
+            var cloudInvEl = document.getElementById('dev-cloud-inv-count');
+            var cloudTaskEl = document.getElementById('dev-cloud-task-count');
+            if (cloudInvEl) cloudInvEl.textContent = 'N/A';
+            if (cloudTaskEl) cloudTaskEl.textContent = 'N/A';
         }
     };
 
