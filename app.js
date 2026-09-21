@@ -2115,9 +2115,28 @@ console.log('✅ WMS 工具函數庫已載入');
                 var rows = XLSX.utils.sheet_to_json(sheet, { raw: false, dateNF: 'yyyy-mm-dd' });
 
                 var importCount = 0;
-                rows.forEach(function(row) {
+                var validationErrors = [];
+                rows.forEach(function(row, rowIdx) {
                     var qty = parseInt(row['數量']) || 0;
                     var productName = row['品名'] || '';
+
+                    var rowErrors = [];
+                    if (!productName) rowErrors.push('品名不可空白');
+                    if (qty <= 0) rowErrors.push('數量須為正整數');
+                    if (!(row['批號'] || '')) rowErrors.push('批號不可空白');
+                    if (!(row['效期'] || '')) rowErrors.push('效期不可空白');
+                    var companyRaw = row['進口公司'] || row['公司'] || '';
+                    if (companyRaw && companyRaw !== '崇文' && companyRaw !== '八方') rowErrors.push('進口公司只能是「崇文」或「八方」');
+                    if (rowErrors.length > 0) {
+                        validationErrors.push({ row: rowIdx + 2, errors: rowErrors, name: productName || '(空白)' });
+                        return;
+                    }
+
+                    var productCode = row['品號'] || row['產品編號'] || '';
+                    var pmItem = null;
+                    if (productCode && window.productMasterData) pmItem = window.productMasterData.find(function(p) { return p.code === productCode; });
+                    if (!pmItem && productName && window.productMasterData) pmItem = window.productMasterData.find(function(p) { return p.name === productName; });
+                    if (pmItem && !productCode) productCode = pmItem.code || '';
                     
                     // 優先從 Excel 讀取每板數，否則從品項主檔讀取，最後才用預設值
                     var perPallet = parseInt(row['每板數']) || 0;
@@ -2208,7 +2227,15 @@ console.log('✅ WMS 工具函數庫已載入');
                     autoGenerateLabels();
                 }
 
-                alert('匯入成功：' + importCount + ' 筆品項');
+                var msg = '✅ 匯入成功：' + importCount + ' 筆品項';
+                if (validationErrors.length > 0) {
+                    msg += '\n\n⚠️ 有 ' + validationErrors.length + ' 筆資料有誤已跳過：';
+                    validationErrors.slice(0, 10).forEach(function(ve) {
+                        msg += '\n  第 ' + ve.row + ' 行 [' + ve.name + ']：' + ve.errors.join('、');
+                    });
+                    if (validationErrors.length > 10) msg += '\n  ... 還有 ' + (validationErrors.length - 10) + ' 筆';
+                }
+                alert(msg);
             };
             reader.readAsArrayBuffer(file);
             event.target.value = '';
@@ -2263,7 +2290,15 @@ console.log('✅ WMS 工具函數庫已載入');
 
             if (!name) { alert('請輸入品名'); return false; }
             if (qty <= 0) { alert('請輸入數量'); return false; }
+            if (!batch) { alert('請輸入批號'); return false; }
+            if (!exp) { alert('請選擇效期'); return false; }
             if (productType === 'variable' && totalWeight <= 0) { alert('不定重品請輸入總重量'); return false; }
+
+            var productCode = '';
+            if (window.productMasterData) {
+                var pmItem = window.productMasterData.find(function(p) { return p.name === name; });
+                if (pmItem) productCode = pmItem.code || '';
+            }
 
             var palletCount = Math.ceil(qty / perPallet);
             console.log('📦 addContainerItem 建立品項 - 品名: ' + name + ', 數量: ' + qty + ', 每板件數: ' + perPallet + ', 板數: ' + palletCount);
@@ -4059,8 +4094,14 @@ console.log('✅ WMS 工具函數庫已載入');
                     // 使用正確的 Firebase 語法
                     var docRef = window.doc(window.db, 'pallets', palletId);
 
+                    var productCode = label.productCode || '';
+                    if (!productCode && window.productMasterData) {
+                        var _pm = window.productMasterData.find(function(p) { return p.name === label.productName; });
+                        if (_pm) productCode = _pm.code || '';
+                    }
                     var palletData = {
                         palletId: palletId,
+                        productCode: productCode,
                         company: label.company || '崇文',
                         vendor: label.vendor || '',
                         productName: label.productName || '',
@@ -4150,6 +4191,7 @@ console.log('✅ WMS 工具函數庫已載入');
                     palletId: pallet.palletId || '',
                     note: '手動刪除庫存'
                 });
+                logAudit('DELETE', 'pallets', pallet.palletId || id, '刪除棧板：' + (pallet.productName || '') + ' ' + (pallet.locationId || ''), '數量:' + (pallet.quantity || 0));
             }
         }
 
@@ -10608,6 +10650,34 @@ window.clearLocalStorage = function() {
             }
         };
 
+        // ========== 操作審計日誌 ==========
+        window.logAudit = async function(action, module, targetId, detail, changes) {
+            try {
+                if (!window.db || !window.collection || !window.addDoc) return null;
+                var operator = window.getOperatorName ? window.getOperatorName() : (window.currentUser ? window.currentUser.email : 'system');
+                var logEntry = {
+                    timestamp: new Date().toISOString(),
+                    type: 'audit',
+                    action: action,
+                    module: module,
+                    targetId: targetId || '',
+                    productName: detail || '',
+                    spec: '', quantity: 0, quantityChange: 0,
+                    locationId: '', batchNo: '', palletId: '',
+                    note: changes || '',
+                    operator: operator,
+                    company: '',
+                    createdAt: new Date()
+                };
+                await window.addDoc(window.collection(window.db, 'inventoryLogs'), logEntry);
+                console.log('📝 審計:', action, module, detail);
+                return true;
+            } catch(e) {
+                console.error('審計日誌失敗:', e);
+                return null;
+            }
+        };
+
         window.logInventoryChange = async function(data) {
             try {
                 if (!window.db || !window.collection || !window.addDoc) {
@@ -10778,7 +10848,16 @@ window.clearLocalStorage = function() {
                 var companyClass = log.company === '八方' ? 'bg-purple-900/50 text-purple-300' : 'bg-blue-900/50 text-blue-300';
                 var companyLabel = log.company ? '<span class="px-1.5 py-0.5 rounded text-xs ' + companyClass + '">' + log.company + '</span>' : '-';
 
-                html += '<tr class="border-t border-slate-700 hover:bg-slate-700/30">';
+                // 審計日誌特殊顯示
+                var isAudit = log.type === 'audit';
+                if (isAudit) {
+                    var actionMap = { 'CREATE': '新增', 'UPDATE': '修改', 'DELETE': '刪除', 'IMPORT': '匯入', 'BATCH_UPDATE': '批次更新' };
+                    var moduleMap = { 'productMaster': '品項主檔', 'pallets': '庫存', 'system': '系統' };
+                    typeLabel = '📝 ' + (actionMap[log.action] || log.action || '操作');
+                    companyLabel = '<span class="px-1.5 py-0.5 rounded text-xs bg-slate-700 text-slate-300">' + (moduleMap[log.module] || log.module || '-') + '</span>';
+                }
+
+                html += '<tr class="border-t border-slate-700 hover:bg-slate-700/30' + (isAudit ? ' bg-slate-800/30' : '') + '">';
                 html += '<td class="p-3 text-slate-300 font-mono text-xs">' + formatTimestamp(log.timestamp) + '</td>';
                 html += '<td class="p-3">' + companyLabel + '</td>';
                 html += '<td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold ' + typeClass + '">' + typeLabel + '</span></td>';
@@ -10803,7 +10882,8 @@ window.clearLocalStorage = function() {
                 'merge': '合併',
                 'adjust': '調整',
                 'picking': '領用',
-                'transfer': '調撥'
+                'transfer': '調撥',
+                'audit': '📝 操作'
             };
             return labels[type] || type || '未知';
         }
@@ -10816,7 +10896,8 @@ window.clearLocalStorage = function() {
                 'merge': 'bg-purple-600 text-white',
                 'adjust': 'bg-yellow-600 text-black',
                 'picking': 'bg-orange-600 text-white',
-                'transfer': 'bg-pink-600 text-white'
+                'transfer': 'bg-pink-600 text-white',
+                'audit': 'bg-slate-500 text-white'
             };
             return classes[type] || 'bg-slate-600 text-white';
         }
@@ -19011,6 +19092,24 @@ window.clearLocalStorage = function() {
                 return;
             }
 
+            if (!code) {
+                alert('請輸入品號（ERP 產品編號）');
+                return;
+            }
+
+            // 新增時檢查品號重複
+            if (!editId) {
+                var codeExists = window.productMasterData.find(function(p) {
+                    return p.code === code;
+                });
+                if (codeExists) {
+                    if (!confirm('品號「' + code + '」已存在（' + codeExists.name + '），是否覆蓋？')) {
+                        return;
+                    }
+                    editId = codeExists.id;
+                }
+            }
+
             var item = {
                 code: code,
                 name: name,
@@ -19036,6 +19135,7 @@ window.clearLocalStorage = function() {
                         window.productMasterData[idx] = { id: editId, ...item };
                     }
                     alert('✅ 品項已更新');
+                    logAudit('UPDATE', 'productMaster', editId, '更新品項：' + name + ' ' + spec, '品號:' + code);
                 } else {
                     var exists = window.productMasterData.find(function(p) {
                         return p.name === name && p.spec === spec;
@@ -19061,6 +19161,7 @@ window.clearLocalStorage = function() {
                         }
                     }
                     alert('✅ 品項已儲存');
+                    logAudit('CREATE', 'productMaster', code || name, '新增品項：' + name + ' ' + spec, '品號:' + code + ' 板容量:' + palletCapacity);
                 }
 
                 localStorage.setItem('wms_product_master', JSON.stringify(window.productMasterData));
@@ -19127,6 +19228,7 @@ window.clearLocalStorage = function() {
 
                 loadProductMasterList();
                 alert('✅ 品項已刪除');
+                logAudit('DELETE', 'productMaster', item.code || item.id, '刪除品項：' + item.name + ' ' + (item.spec || ''));
             } catch(e) {
                 console.error('刪除品項失敗:', e);
                 alert('❌ 刪除失敗：' + e.message);
@@ -19339,22 +19441,15 @@ window.clearLocalStorage = function() {
 
         window.downloadProductMasterTemplate = function() {
             var template = [
-                ['品號', '品名', '規格', '板容量', '保存期(月)', '類別', '備註'],
-                ['A001', '冷凍蝦仁', '300/400', '40', '24', '成品', '範例資料'],
-                ['A002', '冷凍魚片', '500g', '40', '18', '成品', ''],
-                ['B001', '白蝦原料', '10kg', '40', '24', '原料', '']
+                ['品號', '品名', '規格', '板容量', '箱容(kg)', '計重方式', '入庫類型', '保存期(月)', '類別', '備註'],
+                ['A001', '冷凍蝦仁', '300/400', '40', '10', '定重', '採購', '24', '成品', '範例資料'],
+                ['A002', '冷凍魚片', '500g', '40', '5', '定重', '成品', '18', '成品', ''],
+                ['B001', '白蝦原料', '10kg', '50', '10', '不定重', '原料', '24', '原料', '']
             ];
-
             var ws = XLSX.utils.aoa_to_sheet(template);
-
             ws['!cols'] = [
-                { wch: 15 },  // 品號
-                { wch: 20 },  // 品名
-                { wch: 15 },  // 規格
-                { wch: 10 },  // 板容量
-                { wch: 12 },  // 保存期
-                { wch: 10 },  // 類別
-                { wch: 20 }   // 備註
+                { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 10 },
+                { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 20 }
             ];
 
             var wb = XLSX.utils.book_new();
@@ -19370,24 +19465,21 @@ window.clearLocalStorage = function() {
                 return;
             }
 
-            var data = [['品號', '品名', '規格', '板容量', '保存期(月)', '類別', '備註']];
-
+            var data = [['品號', '品名', '規格', '板容量', '箱容(kg)', '計重方式', '入庫類型', '保存期(月)', '類別', '備註']];
+            var wtMap = { 'fixed': '定重', 'variable': '不定重' };
+            var itMap = { 'Raw': '採購', 'FG': '成品', 'WIP': '半成品', 'RM': '原料' };
             window.productMasterData.forEach(function(p) {
                 data.push([
-                    p.code || '',
-                    p.name || '',
-                    p.spec || '',
-                    p.palletCapacity || '',
-                    p.shelfLife || '',
-                    p.category || '成品',
-                    p.note || ''
+                    p.code || '', p.name || '', p.spec || '',
+                    p.palletCapacity || '', p.unitWeight || '',
+                    wtMap[p.weightType] || '定重', itMap[p.inboundType] || '採購',
+                    p.shelfLife || '', p.category || '成品', p.note || ''
                 ]);
             });
-
             var ws = XLSX.utils.aoa_to_sheet(data);
             ws['!cols'] = [
-                { wch: 15 }, { wch: 20 }, { wch: 15 },
-                { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 20 }
+                { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 10 },
+                { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 20 }
             ];
 
             var wb = XLSX.utils.book_new();
@@ -19721,11 +19813,41 @@ window.clearLocalStorage = function() {
                 document.getElementById('pm-import-btn').disabled = true;
 
                 loadProductMasterList();
+                logAudit('IMPORT', 'productMaster', '-', '品項主檔匯入：成功 ' + successCount + ' 筆，略過 ' + skipCount + ' 筆，失敗 ' + errorItems.length + ' 筆');
 
             } catch(e) {
                 console.error('匯入失敗:', e);
                 alert('匯入失敗：' + e.message);
             }
+        };
+
+        // ========== 批次補填庫存品號 ==========
+        window.batchFillProductCode = async function() {
+            if (!window.db || !window.collection || !window.getDocs) { alert('Firebase 尚未連線'); return; }
+            if (!window.productMasterData || window.productMasterData.length === 0) { alert('品項主檔是空的，請先建立品項主檔'); return; }
+            var withCode = window.productMasterData.filter(function(p) { return p.code; });
+            if (withCode.length === 0) { alert('品項主檔中沒有品號，請先為品項設定 ERP 品號'); return; }
+            if (!confirm('將根據品項主檔為現有庫存棧板補填品號（productCode）\n有品號的品項：' + withCode.length + ' 筆\n是否繼續？')) return;
+            try {
+                var snapshot = await window.getDocs(window.collection(window.db, 'pallets'));
+                var updateCount = 0, skipCount = 0, notFoundCount = 0;
+                var batch = window.writeBatch(window.db);
+                var batchSize = 0;
+                snapshot.forEach(function(docSnap) {
+                    var data = docSnap.data();
+                    if (data.productCode) { skipCount++; return; }
+                    var pm = window.productMasterData.find(function(p) { return p.name === data.productName; });
+                    if (pm && pm.code) {
+                        batch.update(docSnap.ref, { productCode: pm.code });
+                        updateCount++; batchSize++;
+                    } else { notFoundCount++; }
+                });
+                if (batchSize > 0) await batch.commit();
+                var msg = '✅ 補填完成！\n已補填：' + updateCount + ' 筆\n已有品號（跳過）：' + skipCount + ' 筆\n找不到對應：' + notFoundCount + ' 筆';
+                if (notFoundCount > 0) msg += '\n\n💡 找不到的棧板可能品名不一致，請核對品項主檔。';
+                alert(msg);
+                logAudit('BATCH_UPDATE', 'pallets', '-', '批次補填品號：更新 ' + updateCount + '，跳過 ' + skipCount + '，未對應 ' + notFoundCount);
+            } catch(e) { alert('❌ 補填失敗：' + e.message); }
         };
 
         setTimeout(function() { loadExternalStock(); }, 2000);

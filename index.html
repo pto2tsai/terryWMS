@@ -2658,6 +2658,9 @@
                         <button onclick="clearAllProductMaster()" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-bold">
                             <i class="fa-solid fa-trash mr-1"></i>清空全部
                         </button>
+                        <button onclick="batchFillProductCode()" class="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-bold" title="為現有庫存棧板補填品號">
+                            <i class="fa-solid fa-link mr-1"></i>補填庫存品號
+                        </button>
                     </div>
                 </div>
 
@@ -2670,8 +2673,8 @@
                         <div class="space-y-2 text-sm">
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="text-xs text-slate-400">品號</label>
-                                    <input type="text" id="pm-code" class="scan-input py-1" placeholder="A001">
+                                    <label class="text-xs text-cyan-400 font-bold">品號(ERP) *</label>
+                                    <input type="text" id="pm-code" class="scan-input py-1 border-cyan-500/50" placeholder="ERP產品編號">
                                 </div>
                                 <div>
                                     <label class="text-xs text-slate-400">類別</label>
@@ -3779,6 +3782,7 @@
                                 <option value="merge">合併</option>
                                 <option value="transfer">調撥</option>
                                 <option value="adjust">盤點調整</option>
+                                <option value="audit">📝 操作日誌</option>
                             </select>
                         </div>
 
