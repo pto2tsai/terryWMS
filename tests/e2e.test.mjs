@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc, getDocs, collection, setLogLevel } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, setLogLevel, Timestamp } from 'firebase/firestore';
 import fs from 'fs'; import http from 'http'; import path from 'path';
 setLogLevel('error');
 const REPO=path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -21,6 +21,11 @@ await env.withSecurityRulesDisabled(async c => { const d=c.firestore();
   await P('PC',{locationId:'I-A-03-3F',quantity:7,batchNo:'B2'}); await P('PD',{locationId:'I-A-04-3F',quantity:3});
   await P('PE',{locationId:'I-B-01-2F',quantity:4}); await P('PF',{locationId:'I-A-05-1F',quantity:4});
   await P('PG',{locationId:'J-C-01-3F',quantity:6}); await P('PH',{locationId:'J-C-02-3F',quantity:3}); await P('PI',{locationId:'J-C-03-3F',quantity:2,batchNo:'B9'});
+  await setDoc(doc(d,'pallets','PX'),{palletId:'PX',productName:'花枝',spec:'M',company:'崇文',batchNo:'Z',expDate:'2027/3/4',quantity:'8',locationId:'K-E-01-1F'});
+  await setDoc(doc(d,'pallets','PY'),{palletId:'PY',productName:'花枝',spec:'M',company:'崇文',batchNo:'Z',expiryDate:Timestamp.fromDate(new Date(2027,2,4)),quantity:5,locationId:'K-E-02-1F'});
+  await setDoc(doc(d,'inventoryLogs','OLD1'),{type:'move',timestamp:Timestamp.fromDate(new Date(2026,0,2,7,30)),palletId:'PX'});
+  await setDoc(doc(d,'waves','WP'),{waveNo:'WP1',status:'pending',orders:[{id:'SO2',orderNo:'SO2'}]});
+  await setDoc(doc(d,'salesOrders','SO2'),{orderNo:'SO2',status:'inWave',waveNo:'WP1'});
   await setDoc(doc(d,'externalStock','E1'),{warehouseId:'W1',productName:'透抽',spec:'L',batchNo:'X',company:'崇文',quantity:20});
   await setDoc(doc(d,'waves','WV'),{waveNo:'WV1',status:'picking'});
   await setDoc(doc(d,'salesOrders','SO1'),{orderNo:'SO1',status:'inWave'});
@@ -186,6 +191,36 @@ ok('pallet change: moved the scanned pallet (not stale cache)', pg.locationId===
 ok('pallet change: merge with different batch blocked', pc[1].includes('批號不同') && await qty('PI')===2, pc[1]);
 ok('pallet change: merge 6+3=9', await qty('PG')===9 && await qty('PH')===null, pc[2]);
 
+
+// ===== 第 3 步：資料格式、容量、重複函數 =====
+const nrm = await A.page.evaluate(()=>{ const px=currentPallets().find(p=>p.id==='PX'), py=currentPallets().find(p=>p.id==='PY'); return [px.expiryDate,px.expDate,px.quantity,py.expiryDate,py.expDate]; });
+ok('read-time normalization: both fields YYYY-MM-DD, qty number', JSON.stringify(nrm)===JSON.stringify(['2027-03-04','2027-03-04',8,'2027-03-04','2027-03-04']), JSON.stringify(nrm));
+const cap = await A.page.evaluate(()=>[levelRemaining({full:4},'2F','scattered'), levelRemaining({full:2},'2F','scattered'), levelRemaining({scattered:4},'1F','full'), levelRemaining({},'3F','partial'), canLevelFit({partial:3},'2F','full')]);
+ok('mixed-type capacity (2F full4→0 scattered; full2→3; 1F 4 scattered→6 full; 3F no partial; 2F partial3→1 full)', JSON.stringify(cap)===JSON.stringify([0,3,6,0,true]), JSON.stringify(cap));
+const dw = await A.page.evaluate(async()=>{ window.refreshWaveList=function(){}; window.saveWaves=function(){};
+  window._orderData = window._orderData || {orders:[]}; window._waveData.waves=[{id:'WP',waveNo:'WP1',status:'pending',orders:[{id:'SO2',orderNo:'SO2'}]},{id:'WV',waveNo:'WV1',status:'done',orders:[]}];
+  await deleteWave('WV1'); const a1=window.__alerts.slice(-1)[0]; await deleteWave('WP1'); return [a1, window._waveData.waves.map(w=>w.waveNo)]; });
+const so2 = await admin(async d=>(await getDoc(doc(d,'salesOrders','SO2'))).data().status);
+const wpGone = await admin(async d=>!(await getDoc(doc(d,'waves','WP'))).exists());
+ok('deleteWave: done wave refused; pending wave deleted and order back to pending', dw[0].includes('待揀貨') && wpGone && so2==='pending', JSON.stringify(dw)+' '+so2);
+const AD = await openAs('admin@t.com');
+const opMig = await A.page.evaluate(async()=>{ try{ await migrateDataFormats(true); return 'ran'; }catch(e){ return e.message; } });
+ok('migration refused for non-admin', opMig.includes('管理員'), opMig);
+const dry = await AD.page.evaluate(async()=>migrateDataFormats(true));
+const px0 = await admin(async d=>(await getDoc(doc(d,'pallets','PX'))).data());
+ok('migration dry-run reports but does not write', dry.pallets.changed>=2 && dry.inventoryLogs.changed>=1 && px0.expDate==='2027/3/4', JSON.stringify(dry));
+await AD.page.evaluate(async()=>migrateDataFormats(false));
+const px1 = await admin(async d=>(await getDoc(doc(d,'pallets','PX'))).data());
+const py1 = await admin(async d=>(await getDoc(doc(d,'pallets','PY'))).data());
+const old1 = await admin(async d=>(await getDoc(doc(d,'inventoryLogs','OLD1'))).data());
+ok('migration writes unified fields', px1.expiryDate==='2027-03-04' && px1.expDate==='2027-03-04' && px1.quantity===8 && py1.expiryDate==='2027-03-04' && typeof old1.timestamp==='string', JSON.stringify([px1.expiryDate,px1.quantity,py1.expiryDate,old1.timestamp]));
+const dry2 = await AD.page.evaluate(async()=>migrateDataFormats(true));
+ok('migration is idempotent (nothing left to change)', dry2.totalChanged===0, JSON.stringify(dry2));
+
+
+const alloc = await A.page.evaluate(()=>{ try { const labels = smartAllocateLocations([{id:'t1',productName:'測試品',spec:'S1',company:'崇文',batchNo:'Q',expiryDate:'2027-05-01',quantity:100,perPallet:40,palletCount:3}], {strategy:'smart', zones:['A','B']}); return labels.map(l=>[l.quantity,l.locationId,l.palletType, l.id||l.palletNo]); } catch(e){ return 'ERR '+e.message; } });
+ok('smart allocation runs with shared capacity (40+40+20, real locations, unique numbers)', Array.isArray(alloc) && alloc.length===3 && alloc.every(a=>a[1] && a[1]!=='OVERFLOW' && /^[IJK]-[A-H]-\d{2}-[123]F$/.test(a[1])) && new Set(alloc.map(a=>a[3])).size===3, JSON.stringify(alloc));
+
 // T8 readonly & stranger
 const R = await openAs('ro@t.com');
 const rr = await tx(R.page,-1);
@@ -194,6 +229,6 @@ const X = await openAs('stranger@t.com');
 const xmsg = await X.page.evaluate(()=>document.getElementById('login-error').innerText);
 ok('stranger denied at login', xmsg.includes('尚未開通') && !(await X.page.evaluate(()=>!!window.currentUser)), xmsg);
 
-for (const [n,o] of [['A',A],['B',B],['R',R],['X',X]]) { const e=o.errs.filter(m=>!/tailwind|Chart is not defined|Cannot redefine property: inventory|XLSX|JsBarcode/.test(m)); if(e.length) console.log('page errors',n,e.slice(0,5)); }
+for (const [n,o] of [['A',A],['B',B],['R',R],['X',X],['AD',AD]]) { const e=o.errs.filter(m=>!/tailwind|Chart is not defined|Cannot redefine property: inventory|XLSX|JsBarcode/.test(m)); if(e.length) console.log('page errors',n,e.slice(0,5)); }
 console.log(`pass ${pass} fail ${fail}`);
 await browser.close(); await env.cleanup(); srv.close(); process.exit(fail?1:0);

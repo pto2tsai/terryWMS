@@ -647,6 +647,49 @@ console.log('✅ WMS 工具函數庫已載入');
             return capacity[palletType] || 0;
         };
         
+        // ========== 混合板型的層使用率（所有容量計算共用）==========
+        // 每種板型的容量不同（例如 2F：整板 4、不足板 4、散板 6），
+        // 一層放了不同板型時，使用率 = Σ(各板型數量 ÷ 該板型容量)，1 代表滿。
+        // counts: { full: n, partial: n, scattered: n }
+        window.levelUsageRatio = function(counts, level, factor) {
+            var cap = window.RACK_CONFIG.LEVEL_CAPACITY[level];
+            if (!cap || !counts) return 0;
+            var f = factor || 1;
+            var ratio = 0;
+            ['full', 'partial', 'scattered'].forEach(function(t) {
+                var n = counts[t] || 0;
+                if (n <= 0) return;
+                var c = Math.floor((cap[t] || 0) * f);
+                // 這層不允許此板型卻已經放了，視為滿
+                ratio += c > 0 ? n / c : 1;
+            });
+            return ratio;
+        };
+
+        // 這層還能再放幾板 palletType
+        window.levelRemaining = function(counts, level, palletType, factor) {
+            var cap = window.RACK_CONFIG.LEVEL_CAPACITY[level];
+            if (!cap) return 0;
+            var c = Math.floor((cap[palletType] || 0) * (factor || 1));
+            if (c <= 0) return 0;
+            var free = 1 - window.levelUsageRatio(counts, level, factor);
+            return Math.max(0, Math.floor(free * c + 1e-9));
+        };
+
+        window.canLevelFit = function(counts, level, palletType, factor) {
+            return window.levelRemaining(counts, level, palletType, factor) >= 1;
+        };
+
+        // 依棧板本身的數量與每板容量判斷板型
+        window.palletTypeOf = function(p) {
+            return window.getPalletType(parseFloat(p.quantity) || 0, parseFloat(p.palletCapacity) || 40);
+        };
+
+        window.addPalletToCounts = function(counts, p) {
+            var t = window.palletTypeOf(p);
+            counts[t] = (counts[t] || 0) + 1;
+        };
+
         // ========== 檢查某層是否可放特定板型 ==========
         window.canLevelAccept = function(level, palletType) {
             return window.getLevelCapacity(level, palletType) > 0;
@@ -738,7 +781,14 @@ console.log('✅ WMS 工具函數庫已載入');
             return sortedData;
         };
         
-        const LANE_CAPACITY = window.RACK_CONFIG.LANE_TOTAL_VOLUME || 29; // 使用容積點數
+        // 巷道使用率：三層各自依混合板型使用率計算後取平均（容量來自 RACK_CONFIG）
+        window.laneFillPercent = function(levelCounts) {
+            var sum = 0;
+            ['3F', '2F', '1F'].forEach(function(lv) {
+                sum += Math.min(1, window.levelUsageRatio(levelCounts[lv] || {}, lv));
+            });
+            return Math.round(sum / 3 * 100);
+        };
 
         function renderMapUI(gridId) {
             const container = document.getElementById(gridId); if(!container) return; container.innerHTML = '';
@@ -753,9 +803,11 @@ console.log('✅ WMS 工具函數庫已載入');
                 if(!parsed) return;
                 if(parsed.zone === zoneKey) {
                     var lane = parsed.row;
-                    if(!laneStatus[lane]) laneStatus[lane] = { count: 0, products: new Set() };
+                    if(!laneStatus[lane]) laneStatus[lane] = { count: 0, products: new Set(), levels: {} };
                     laneStatus[lane].count++;
                     laneStatus[lane].products.add(item.productName);
+                    if (!laneStatus[lane].levels[parsed.level]) laneStatus[lane].levels[parsed.level] = {};
+                    window.addPalletToCounts(laneStatus[lane].levels[parsed.level], item);
                 }
             });
 
@@ -763,12 +815,12 @@ console.log('✅ WMS 工具函數庫已載入');
             const laneCount = isKZone ? 22 : 8;
 
             for(let i=1; i<=laneCount; i++) {
-                const status = laneStatus[i] || { count: 0 };
-                const fillPercent = Math.min((status.count / LANE_CAPACITY) * 100, 100);
+                const status = laneStatus[i] || { count: 0, levels: {} };
+                const fillPercent = window.laneFillPercent(status.levels);
 
                 let fillColor = '#10b981'; if(fillPercent>=50) fillColor='#3b82f6'; if(fillPercent>=100) fillColor='#ef4444';
                 let cls = '';
-                if (status.count >= LANE_CAPACITY) cls += ' lane-full-locked';
+                if (fillPercent >= 100) cls += ' lane-full-locked';
                 if (lockedLane && lockedLane.zone === zoneKey && lockedLane.row === i) cls += ' border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)] z-20';
                 const targetName = document.getElementById('in-name') ? document.getElementById('in-name').value : '';
                 if(targetName && status.products && status.products.has(targetName) && fillPercent < 100) cls += ' lane-suggest-gold';
@@ -812,9 +864,16 @@ console.log('✅ WMS 工具函數庫已載入');
             });
 
             const totalItems = levels['3F'].length + levels['2F'].length + levels['1F'].length;
-            const totalCapacity = 8 + 5 + 16;  // 3F:8 + 2F:5 + 1F:16 = 29 板
-            const emptySlots = Math.max(0, totalCapacity - totalItems);
-            const fillPercent = Math.round((totalItems / totalCapacity) * 100);
+            // 依 RACK_CONFIG 與混合板型使用率計算：空位以「還能放幾個整板（2F/3F）/ 散板（1F）」估算
+            let usageSum = 0;
+            let emptySlots = 0;
+            ['3F', '2F', '1F'].forEach(function(lv) {
+                const counts = {};
+                levels[lv].forEach(function(p) { window.addPalletToCounts(counts, p); });
+                usageSum += Math.min(1, window.levelUsageRatio(counts, lv));
+                emptySlots += window.levelRemaining(counts, lv, lv === '1F' ? 'scattered' : 'full');
+            });
+            const fillPercent = Math.round(usageSum / 3 * 100);
 
             title.textContent = lanePrefix + ' 巷';
             badge.textContent = fillPercent + '% 使用中';
@@ -1009,7 +1068,7 @@ console.log('✅ WMS 工具函數庫已載入');
             var ws = XLSX.utils.json_to_sheet(data);
             var wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Shipping_Result");
-            XLSX.writeFile(wb, "WMS_Shipping_Result_" + new Date().toISOString().slice(0,10) + ".xlsx");
+            XLSX.writeFile(wb, "WMS_Shipping_Result_" + new Date().toLocalYMD() + ".xlsx");
         }
 
         function openAnalytics(type) { document.getElementById('analytics-title').innerText = type==='Total'?'庫存總覽':type; document.getElementById('modal-analytics').classList.remove('hidden'); }
@@ -1501,7 +1560,7 @@ console.log('✅ WMS 工具函數庫已載入');
                             document.getElementById('in-qty').value = data.quantity;
                             if (window.setInExpFromString) { window.setInExpFromString(data.expiryDate); } else { document.getElementById('in-exp').value = data.expiryDate; }
                             alert("📦 掃描到舊貨！");
-                        } else { document.getElementById('in-name').focus(); if(!document.getElementById('in-batch').value) document.getElementById('in-batch').value = "B"+new Date().toISOString().slice(0,10).replace(/-/g,""); }
+                        } else { document.getElementById('in-name').focus(); if(!document.getElementById('in-batch').value) document.getElementById('in-batch').value = "B"+new Date().toLocalYMD().replace(/-/g,""); }
                         renderMapUI('grid-I-A-map');
                     } catch(err) { console.error(err); }
                 }
@@ -1954,7 +2013,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 var expDate = '';
                 if (p.expiryDate) {
                     if (p.expiryDate.toDate) {
-                        expDate = p.expiryDate.toDate().toISOString().split('T')[0];
+                        expDate = p.expiryDate.toDate().toLocalYMD();
                     } else if (typeof p.expiryDate === 'string') {
                         expDate = p.expiryDate;
                     }
@@ -1963,7 +2022,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 var inboundDate = '';
                 if (p.inboundDate) {
                     if (p.inboundDate.toDate) {
-                        inboundDate = p.inboundDate.toDate().toISOString().split('T')[0];
+                        inboundDate = p.inboundDate.toDate().toLocalYMD();
                     } else if (typeof p.inboundDate === 'string') {
                         inboundDate = p.inboundDate.split('T')[0];
                     }
@@ -2007,7 +2066,7 @@ console.log('✅ WMS 工具函數庫已載入');
             var wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, '庫存清單');
 
-            var filename = '庫存清單_' + new Date().toISOString().split('T')[0] + '.xlsx';
+            var filename = '庫存清單_' + new Date().toLocalYMD() + '.xlsx';
             XLSX.writeFile(wb, filename);
 
             alert('✅ 匯出成功！\n\n共 ' + (data.length - 1) + ' 筆庫存');
@@ -2235,11 +2294,11 @@ console.log('✅ WMS 工具函數庫已載入');
                     if (expiryDate) {
                         // 如果是 Date 物件，轉換為 YYYY-MM-DD
                         if (expiryDate instanceof Date) {
-                            expiryDate = expiryDate.toISOString().split('T')[0];
+                            expiryDate = expiryDate.toLocalYMD();
                         } else if (typeof expiryDate === 'number') {
                             // Excel 序列號轉日期
                             var date = new Date((expiryDate - 25569) * 86400 * 1000);
-                            expiryDate = date.toISOString().split('T')[0];
+                            expiryDate = date.toLocalYMD();
                         } else if (typeof expiryDate === 'string') {
                             // 嘗試解析各種格式
                             // 格式：2025/12/31 或 2025-12-31 或 12/31/2025
@@ -2870,6 +2929,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 // 更新層級計數
                 if (lanes[laneKey].levelData[level]) {
                     lanes[laneKey].levelData[level].count++;
+                    window.addPalletToCounts(lanes[laneKey].levelData[level], item);
                 }
                 
                 var itemSpecKey = (item.productName || '') + '|' + (item.spec || '');
@@ -2903,8 +2963,9 @@ console.log('✅ WMS 工具函數庫已載入');
                 
                 LEVEL_PRIORITY.forEach(function(level) {
                     var levelCap = calcLevelCapacity(level);
+                    // 依混合板型使用率計算剩餘可放板數（不是只數同板型）
+                    var levelAvail = window.levelRemaining(lane.levelData[level], level, palletType);
                     var levelUsed = lane.levelData[level].count;
-                    var levelAvail = levelCap - levelUsed;
                     
                     if (levelCap === 0 || levelAvail <= 0) return;
                     
@@ -3080,7 +3141,11 @@ console.log('✅ WMS 工具函數庫已載入');
             };
 
             var levels = ['3F', '2F', '1F'];
-            var levelCapacity = { '3F': 8, '2F': 5, '1F': 16 };
+            var levelCapacity = {};
+            levels.forEach(function(lv) {
+                var cap = window.RACK_CONFIG.LEVEL_CAPACITY[lv] || {};
+                levelCapacity[lv] = Math.max(cap.full || 0, cap.partial || 0, cap.scattered || 0);
+            });
 
             var available = [];
 
@@ -3154,11 +3219,7 @@ console.log('✅ WMS 工具函數庫已載入');
             var allocations = [];
             
             // 取得配置
-            var LEVEL_CAPACITY = window.RACK_CONFIG ? window.RACK_CONFIG.LEVEL_CAPACITY : {
-                '3F': { full: 8, partial: 0, scattered: 0 },
-                '2F': { full: 4, partial: 5, scattered: 6 },
-                '1F': { full: 8, partial: 16, scattered: 20 }
-            };
+            var LEVEL_CAPACITY = window.RACK_CONFIG.LEVEL_CAPACITY;
             var LEVEL_PRIORITY = window.RACK_CONFIG ? window.RACK_CONFIG.LEVEL_PRIORITY : ['2F', '3F', '1F'];
             var FILL_THRESHOLDS = window.RACK_CONFIG ? window.RACK_CONFIG.PALLET_FILL_THRESHOLDS : { full: 0.75, partial: 0.50 };
             
@@ -3229,8 +3290,8 @@ console.log('✅ WMS 工具函數庫已載入');
                 var laneKey = parts[0] + '-' + parts[1] + '-' + parts[2];
                 var levelStr = parts[3];
                 var locationKey = laneKey + '-' + levelStr;  // 完整儲位 key
-                if (!lanes[laneKey]) return;
-                var palletType = pallet.palletType || 'full';
+                if (!lanes[laneKey] || !lanes[laneKey].levels[levelStr]) return;
+                var palletType = pallet.palletType || window.palletTypeOf(pallet);
                 lanes[laneKey].levels[levelStr][palletType]++;
                 lanes[laneKey].totalUsed++;
                 
@@ -3584,9 +3645,7 @@ console.log('✅ WMS 工具函數庫已載入');
                         var levelStr = allowedLevels[i];
                         var levelData = laneData.locationProducts[levelStr];
                         if (levelData && levelData.productSpecs && levelData.productSpecs.indexOf(productSpecKey) >= 0) {
-                            var maxCapacity = Math.floor(LEVEL_CAPACITY[levelStr][palletType] * factor);
-                            var currentUsed = laneUsage[laneKey].levels[levelStr][palletType] || 0;
-                            if (currentUsed < maxCapacity) {
+                            if (window.canLevelFit(laneUsage[laneKey].levels[levelStr], levelStr, palletType, factor)) {
                                 return laneKey + '-' + levelStr;
                             }
                         }
@@ -3599,9 +3658,7 @@ console.log('✅ WMS 工具函數庫已載入');
                         var levelStr = allowedLevels[i];
                         var levelData = laneData.locationProducts[levelStr];
                         if (levelData && levelData.products && levelData.products.indexOf(preferredProduct) >= 0) {
-                            var maxCapacity = Math.floor(LEVEL_CAPACITY[levelStr][palletType] * factor);
-                            var currentUsed = laneUsage[laneKey].levels[levelStr][palletType] || 0;
-                            if (currentUsed < maxCapacity) {
+                            if (window.canLevelFit(laneUsage[laneKey].levels[levelStr], levelStr, palletType, factor)) {
                                 return laneKey + '-' + levelStr;
                             }
                         }
@@ -3611,9 +3668,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 // 第三優先：該巷道任何可用層
                 for (var i = 0; i < allowedLevels.length; i++) {
                     var levelStr = allowedLevels[i];
-                    var maxCapacity = Math.floor(LEVEL_CAPACITY[levelStr][palletType] * factor);
-                    var currentUsed = laneUsage[laneKey].levels[levelStr][palletType] || 0;
-                    if (currentUsed < maxCapacity) {
+                    if (window.canLevelFit(laneUsage[laneKey].levels[levelStr], levelStr, palletType, factor)) {
                         return laneKey + '-' + levelStr;
                     }
                 }
@@ -3641,9 +3696,7 @@ console.log('✅ WMS 工具函數庫已載入');
                             var levelStr = allowedLevels[i];
                             var levelData = laneData.locationProducts[levelStr];
                             if (levelData && levelData.productSpecs && levelData.productSpecs.indexOf(productSpecKey) >= 0) {
-                                var maxCapacity = Math.floor(LEVEL_CAPACITY[levelStr][palletType] * factor);
-                                var currentUsed = laneUsage[laneKey].levels[levelStr][palletType] || 0;
-                                if (currentUsed < maxCapacity) {
+                                if (window.canLevelFit(laneUsage[laneKey].levels[levelStr], levelStr, palletType, factor)) {
                                     return laneKey + '-' + levelStr;
                                 }
                             }
@@ -3671,9 +3724,7 @@ console.log('✅ WMS 工具函數庫已載入');
                             var levelStr = allowedLevels[i];
                             var levelData = laneData.locationProducts[levelStr];
                             if (levelData && levelData.products && levelData.products.indexOf(preferredProduct) >= 0) {
-                                var maxCapacity = Math.floor(LEVEL_CAPACITY[levelStr][palletType] * factor);
-                                var currentUsed = laneUsage[laneKey].levels[levelStr][palletType] || 0;
-                                if (currentUsed < maxCapacity) {
+                                if (window.canLevelFit(laneUsage[laneKey].levels[levelStr], levelStr, palletType, factor)) {
                                     return laneKey + '-' + levelStr;
                                 }
                             }
@@ -3701,9 +3752,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 for (var laneKey in laneUsage) {
                     for (var i = 0; i < allowedLevels.length; i++) {
                         var levelStr = allowedLevels[i];
-                        var maxCapacity = Math.floor(LEVEL_CAPACITY[levelStr][palletType] * factor);
-                        var currentUsed = laneUsage[laneKey].levels[levelStr][palletType] || 0;
-                        if (currentUsed < maxCapacity) {
+                        if (window.canLevelFit(laneUsage[laneKey].levels[levelStr], levelStr, palletType, factor)) {
                             return laneKey + '-' + levelStr;
                         }
                     }
@@ -4358,14 +4407,6 @@ console.log('✅ WMS 工具函數庫已載入');
                 row.style.display = (matchesTerm && matchesCompany) ? '' : 'none';
             });
         }
-        function downloadTemplate(type) {
-            let data = [];
-            if(type==='stock') data = [{品名:'魷魚', 數量:50, 規格:'300/400', 批號:'B123', 有效日期:'2025-12-01'}];
-            if(type==='pre') data = [{廠商:'海神', 品名:'鮭魚', 數量:20, 規格:'切片', 批號:'B456', 有效日期:'2025-11-01', 預計板數:5, 每板數量:50}];
-            if(type==='order') data = [{單號:'DO-001', 客戶:'海霸王', 品名:'魷魚', 規格:'300/400', 數量:10, 批號:'B20241209-001', 備註:'急件', 物流:'黑貓'}];
-            const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Template"); XLSX.writeFile(wb, `${type}_template.xlsx`);
-        }
-
         // ========== 倉庫管理系統 ==========
 
         window.DEFAULT_WAREHOUSES = [
@@ -5038,16 +5079,19 @@ console.log('✅ WMS 工具函數庫已載入');
                 var laneItems = inventory.filter(function(item) {
                     return item.locationId && item.locationId.startsWith(lanePrefix);
                 });
-                var usedSlots = { '3F': 0, '2F': 0, '1F': 0 };
+                // 各層依 RACK_CONFIG 的混合板型使用率估算還能放幾板（以散板計，3F 只放整板）
+                var levelCounts = { '3F': {}, '2F': {}, '1F': {} };
                 laneItems.forEach(function(item) {
                     var parsed = parseLocationId(item.locationId);
                     var level = parsed ? parsed.level : '';
-                    if (usedSlots[level] !== undefined) usedSlots[level]++;
+                    if (levelCounts[level]) window.addPalletToCounts(levelCounts[level], item);
                 });
                 var emptySlots = [];
-                for (var j = usedSlots['3F']; j < 8; j++) emptySlots.push(lanePrefix + '-3F');
-                for (var j = usedSlots['2F']; j < 5; j++) emptySlots.push(lanePrefix + '-2F');
-                for (var j = usedSlots['1F']; j < 16; j++) emptySlots.push(lanePrefix + '-1F');
+                ['3F', '2F', '1F'].forEach(function(level) {
+                    var type = level === '3F' ? 'full' : 'scattered';
+                    var n = window.levelRemaining(levelCounts[level], level, type);
+                    for (var j = 0; j < n; j++) emptySlots.push(lanePrefix + '-' + level);
+                });
                 return emptySlots;
             }
 
@@ -5898,24 +5942,35 @@ console.log('✅ WMS 工具函數庫已載入');
                     var mainRow = mainLaneParts[1];
                     var mainCol = mainLaneParts[2];
 
-                    var levelPriority = ['2F', '3F', '1F'];
-                    var availableSlots = [];
+                    // 依 RACK_CONFIG 計算主巷道各層剩餘容量（混合板型），而不是「空的才算一個位置」
+                    var levelPriority = window.RACK_CONFIG.LEVEL_PRIORITY || ['2F', '3F', '1F'];
+                    var slotCounts = {};
                     levelPriority.forEach(function(level) {
                         var slotId = mainZone + '-' + mainRow + '-' + mainCol + '-' + level;
-                        if (!mainLaneOccupied.has(slotId)) {
-                            var isOccupiedByOthers = pallets.some(function(p) {
-                                return p.locationId === slotId;
-                            });
-                            if (!isOccupiedByOthers) {
-                                availableSlots.push(slotId);
+                        slotCounts[slotId] = { level: level, counts: {} };
+                        pallets.forEach(function(p) {
+                            if (p.locationId === slotId) window.addPalletToCounts(slotCounts[slotId].counts, p);
+                        });
+                    });
+                    function pickSlotFor(p) {
+                        var type = window.palletTypeOf(p);
+                        for (var k = 0; k < levelPriority.length; k++) {
+                            var id = mainZone + '-' + mainRow + '-' + mainCol + '-' + levelPriority[k];
+                            var sc = slotCounts[id];
+                            if (window.canLevelFit(sc.counts, sc.level, type)) {
+                                sc.counts[type] = (sc.counts[type] || 0) + 1;
+                                return id;
                             }
                         }
+                        return null;
+                    }
+                    var hasRoom = Object.keys(slotCounts).some(function(id) {
+                        var sc = slotCounts[id];
+                        return window.canLevelFit(sc.counts, sc.level, 'scattered') || window.canLevelFit(sc.counts, sc.level, 'full');
                     });
 
-                    if (availableSlots.length === 0) {
+                    if (!hasRoom) {
                     } else {
-                        var slotIndex = 0;
-
                         laneList.forEach(function(lane) {
                             if (lane === mainLane) return;
 
@@ -5926,12 +5981,10 @@ console.log('✅ WMS 工具函數庫已載入');
                             var isDifferentWarehouse = laneWarehouse !== mainWarehouse;
 
                             if (isReallyIsolated || (isDifferentWarehouse && laneData.palletCount <= 2)) {
-                                if (slotIndex < availableSlots.length) {
+                                {
                                     laneData.items.forEach(function(p) {
-                                        if (slotIndex >= availableSlots.length) return;
-
-                                        var targetSlot = availableSlots[slotIndex];
-                                        slotIndex++;
+                                        var targetSlot = pickSlotFor(p);
+                                        if (!targetSlot) return;
 
                                         var reason = isReallyIsolated ?
                                             '孤立板(僅1板)' :
@@ -7248,7 +7301,7 @@ console.log('✅ WMS 工具函數庫已載入');
                 var key = batch || '__empty__';
                 var expDate = item.expiryDate;
                 if (expDate && expDate.toDate) expDate = expDate.toDate();
-                if (expDate && typeof expDate === 'object') expDate = expDate.toISOString().split('T')[0];
+                if (expDate && typeof expDate === 'object') expDate = expDate.toLocalYMD();
                 
                 if (!batchMap[key]) {
                     batchMap[key] = { batch: batch, expDate: expDate || '', count: 0, totalQty: 0, items: [] };
@@ -7355,7 +7408,7 @@ console.log('✅ WMS 工具函數庫已載入');
             var maxQty = item.quantity || 0;
             var expDate = item.expiryDate;
             if (expDate && expDate.toDate) expDate = expDate.toDate();
-            if (expDate && typeof expDate === 'object') expDate = expDate.toISOString().split('T')[0];
+            if (expDate && typeof expDate === 'object') expDate = expDate.toLocalYMD();
             
             var html = '<div class="max-w-sm mx-auto space-y-3">';
             
@@ -7421,7 +7474,7 @@ console.log('✅ WMS 工具函數庫已載入');
             
             var expDate = item.expiryDate;
             if (expDate && expDate.toDate) expDate = expDate.toDate();
-            if (expDate && typeof expDate === 'object') expDate = expDate.toISOString().split('T')[0];
+            if (expDate && typeof expDate === 'object') expDate = expDate.toLocalYMD();
             
             window.rmModalCart.push({
                 id: item.id,
@@ -8152,7 +8205,7 @@ console.log('✅ WMS 工具函數庫已載入');
 
             var waves = window._waveData.waves;
 
-            var today = new Date().toISOString().split('T')[0];
+            var today = new Date().toLocalYMD();
             var todayWaves = waves.filter(function(w) { return w.createdAt && w.createdAt.indexOf(today) === 0; });
             var pending = waves.filter(function(w) { return w.status === 'pending'; });
             var picking = waves.filter(function(w) { return w.status === 'picking'; });
@@ -9264,7 +9317,7 @@ window.exportBackupExcel = async function() {
 
     try {
         var wb = XLSX.utils.book_new();
-        var timestamp = new Date().toISOString().slice(0, 10);
+        var timestamp = new Date().toLocalYMD();
         var collections = window._backupConfig.collections;
         var summary = { timestamp: new Date().toISOString(), version: 'WMS v3.0', collections: {} };
 
@@ -10027,7 +10080,7 @@ window.clearLocalStorage = function() {
                 logisticsSelect.innerHTML += '<option value="' + l + '">' + l + '</option>';
             });
 
-            document.getElementById('wave-filter-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('wave-filter-date').value = new Date().toLocalYMD();
 
             window._waveCreateOrders = orders;
             renderWaveOrders(orders);
@@ -10101,359 +10154,6 @@ window.clearLocalStorage = function() {
             var count = document.querySelectorAll('.wave-order-check:checked').length;
             document.getElementById('wave-selected-count').innerText = count;
         }
-
-        window.createWave = async function() {
-            var selectedIds = [];
-            document.querySelectorAll('.wave-order-check:checked').forEach(function(cb) {
-                selectedIds.push(cb.dataset.id);
-            });
-
-            if (selectedIds.length === 0) {
-                alert('請選擇至少一筆訂單');
-                return;
-            }
-
-            var orders = (window._waveCreateOrders || []).filter(function(o) {
-                return selectedIds.indexOf(o.id) >= 0;
-            });
-
-            var logistics = {};
-            var totalQty = 0;
-            var itemCount = 0;
-            orders.forEach(function(o) {
-                var l = o.logistics || '未指定';
-                logistics[l] = true;
-                totalQty += parseInt(o.quantity) || 0;
-                itemCount++;
-            });
-
-            var logisticsStr = Object.keys(logistics).join(', ');
-
-            var wave = {
-                waveNo: generateWaveNo(),
-                logistics: logisticsStr,
-                status: 'pending',
-                orders: orders.map(function(o) { return { id: o.id, orderNo: o.orderNo, customer: o.customer, productName: o.productName, quantity: o.quantity }; }),
-                itemCount: itemCount,
-                totalQty: totalQty,
-                createdAt: new Date().toISOString(),
-                createdBy: window.getOperatorName ? window.getOperatorName() : 'system'
-            };
-
-            try {
-                await window.addDoc(window.collection(window.db, 'waves'), wave);
-            } catch (err) {
-                console.error('存到 Firebase 失敗:', err);
-            }
-
-            window._waveData.waves.push(wave);
-            saveWaves();
-
-            closeCreateWaveModal();
-            refreshWaveList();
-
-            alert('✅ 波次 ' + wave.waveNo + ' 建立成功！\n\n包含 ' + itemCount + ' 筆訂單，共 ' + totalQty + ' 件\n\n📱 手機版已同步');
-        };
-
-        window.deleteWave = async function(waveNo) {
-            if (!confirm('確定要刪除波次 ' + waveNo + '？')) return;
-
-            try {
-                var q = window.query(window.collection(window.db, 'waves'), window.where('waveNo', '==', waveNo));
-                var snap = await window.getDocs(q);
-                snap.forEach(async function(doc) {
-                    await window.deleteDoc(doc.ref);
-                });
-            } catch (err) {
-                console.error('Firebase 刪除失敗:', err);
-            }
-
-            window._waveData.waves = window._waveData.waves.filter(function(w) { return w.waveNo !== waveNo; });
-            saveWaves();
-            refreshWaveList();
-            alert('✅ 已刪除波次 ' + waveNo);
-        };
-
-        window.openWaveExecute = function(waveNo) {
-            var wave = window._waveData.waves.find(function(w) { return w.waveNo === waveNo; });
-            if (!wave) {
-                alert('找不到波次 ' + waveNo);
-                return;
-            }
-
-            if (wave.status === 'pending') {
-                wave.status = 'picking';
-                wave.startedAt = new Date().toISOString();
-                saveWaves();
-            }
-
-            window._waveData.currentWave = wave;
-            window._waveData.completedItems = wave.completedItems || [];
-
-            document.getElementById('wave-exec-no').innerText = wave.waveNo;
-            document.getElementById('wave-exec-logistics').innerText = '物流商：' + wave.logistics;
-
-            generatePickingList(wave);
-
-            document.getElementById('modal-wave-execute').classList.remove('hidden');
-
-            setTimeout(function() {
-                document.getElementById('wave-scan-input').focus();
-            }, 100);
-        };
-
-        window.closeWaveExecuteModal = function() {
-            document.getElementById('modal-wave-execute').classList.add('hidden');
-            refreshWaveList();
-        };
-
-        function generatePickingList(wave) {
-            var pickingList = [];
-            var pallets = window.currentPallets ? window.currentPallets() : [];
-
-            (wave.orders || []).forEach(function(order) {
-                var needed = parseInt(order.quantity) || 0;
-                var productName = order.productName;
-
-                var matchingPallets = pallets.filter(function(p) {
-                    return p.productName === productName;
-                }).sort(function(a, b) {
-                    var dateA = a.expDate || '9999-12-31';
-                    var dateB = b.expDate || '9999-12-31';
-                    return dateA.localeCompare(dateB);
-                });
-
-                matchingPallets.forEach(function(pallet) {
-                    if (needed <= 0) return;
-
-                    var available = parseInt(pallet.quantity) || 0;
-                    var pick = Math.min(available, needed);
-
-                    if (pick > 0) {
-                        pickingList.push({
-                            id: pallet.palletId + '-' + order.id,
-                            palletId: pallet.palletId,
-                            locationId: pallet.locationId,
-                            productName: pallet.productName,
-                            spec: pallet.spec || '',
-                            pickQty: pick,
-                            orderNo: order.orderNo,
-                            orderId: order.id,
-                            customer: order.customer,
-                            completed: false
-                        });
-                        needed -= pick;
-                    }
-                });
-
-                if (needed > 0) {
-                    pickingList.push({
-                        id: 'shortage-' + order.id,
-                        palletId: '-',
-                        locationId: '庫存不足',
-                        productName: order.productName,
-                        spec: '',
-                        pickQty: needed,
-                        orderNo: order.orderNo,
-                        orderId: order.id,
-                        customer: order.customer,
-                        completed: false,
-                        shortage: true
-                    });
-                }
-            });
-
-            var completedIds = window._waveData.completedItems || [];
-            pickingList.forEach(function(item) {
-                if (completedIds.indexOf(item.id) >= 0) {
-                    item.completed = true;
-                }
-            });
-
-            window._waveData.pickingList = pickingList;
-            renderPickingList();
-            updateWaveProgress();
-        }
-
-        function renderPickingList() {
-            var tbody = document.getElementById('wave-picking-list');
-            var list = window._waveData.pickingList;
-
-            if (list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-500 py-8">無揀貨項目</td></tr>';
-                return;
-            }
-
-            list.sort(function(a, b) {
-                return (a.locationId || '').localeCompare(b.locationId || '');
-            });
-
-            var html = '';
-            list.forEach(function(item) {
-                var statusBadge = item.completed
-                    ? '<span class="badge badge-green"><i class="fa-solid fa-check"></i></span>'
-                    : item.shortage
-                        ? '<span class="badge badge-red"><i class="fa-solid fa-exclamation"></i></span>'
-                        : '<span class="badge badge-yellow"><i class="fa-solid fa-clock"></i></span>';
-                var rowClass = item.completed ? 'bg-emerald-900/20' : item.shortage ? 'bg-red-900/20' : '';
-
-                var qtyDisplay = item.pickQty;
-                if (item.totalWeight && item.totalWeight > 0 && item.availableQty > 0) {
-                    var pickWeight = Math.round(item.pickQty / item.availableQty * item.totalWeight * 10) / 10;
-                    if (pickWeight > 0) {
-                        qtyDisplay += '<span class="text-amber-400 text-xs ml-1">/' + pickWeight + 'kg</span>';
-                    }
-                }
-
-                html += '<tr class="' + rowClass + ' border-b border-slate-700/50 hover:bg-slate-800/50">';
-                html += '<td class="p-2">' + statusBadge + '</td>';
-                html += '<td class="p-2 font-mono text-cyan-400 font-bold">' + item.locationId + '</td>';
-                html += '<td class="p-2 font-mono text-slate-300">' + item.palletId + '</td>';
-                html += '<td class="p-2 text-white">' + item.productName + '</td>';
-                html += '<td class="p-2 text-slate-400">' + item.spec + '</td>';
-                html += '<td class="p-2 text-right text-yellow-400 font-bold">' + qtyDisplay + '</td>';
-                html += '<td class="p-2 font-mono text-purple-400">' + item.orderNo + '</td>';
-                html += '<td class="p-2 text-slate-300">' + item.customer + '</td>';
-                html += '</tr>';
-            });
-
-            tbody.innerHTML = html;
-        }
-
-        function updateWaveProgress() {
-            var list = window._waveData.pickingList;
-            var completed = list.filter(function(item) { return item.completed; }).length;
-            var total = list.filter(function(item) { return !item.shortage; }).length;
-            document.getElementById('wave-exec-progress').innerText = completed + '/' + total;
-        }
-
-        window.confirmWaveScan = function() {
-            var input = document.getElementById('wave-scan-input');
-            var scanned = input.value.trim();
-            var resultEl = document.getElementById('wave-scan-result');
-
-            if (!scanned) {
-                resultEl.innerHTML = '<span class="text-yellow-400"><i class="fa-solid fa-exclamation-triangle mr-1"></i>請輸入板號或儲位</span>';
-                resultEl.classList.remove('hidden');
-                return;
-            }
-
-            var list = window._waveData.pickingList;
-            var found = null;
-
-            for (var i = 0; i < list.length; i++) {
-                if (!list[i].completed && !list[i].shortage) {
-                    if (list[i].palletId === scanned || list[i].locationId === scanned) {
-                        found = list[i];
-                        break;
-                    }
-                }
-            }
-
-            if (!found) {
-                resultEl.innerHTML = '<span class="text-red-400"><i class="fa-solid fa-times-circle mr-1"></i>找不到待揀項目：' + scanned + '</span>';
-                resultEl.classList.remove('hidden');
-                input.select();
-                return;
-            }
-
-            executePickingItem(found);
-
-            resultEl.innerHTML = '<span class="text-emerald-400"><i class="fa-solid fa-check-circle mr-1"></i>已揀：' + found.locationId + ' → ' + found.productName + ' x ' + found.pickQty + '</span>';
-            resultEl.classList.remove('hidden');
-
-            input.value = '';
-            input.focus();
-        };
-
-        async function executePickingItem(item) {
-            try {
-                var q = window.query(window.collection(window.db, 'pallets'), window.where('palletId', '==', item.palletId));
-                var snap = await window.getDocs(q);
-
-                if (!snap.empty) {
-                    var palletDoc = snap.docs[0];
-                    var palletData = palletDoc.data();
-                    var newQty = (parseInt(palletData.quantity) || 0) - item.pickQty;
-
-                    var pickWeight = 0;
-                    var newWeight = palletData.totalWeight || 0;
-                    if (palletData.totalWeight > 0 && palletData.quantity > 0) {
-                        pickWeight = Math.round((item.pickQty / palletData.quantity) * palletData.totalWeight * 10) / 10;
-                        newWeight = Math.round((palletData.totalWeight - pickWeight) * 10) / 10;
-                    }
-
-                    await window.logInventoryChange({
-                        type: 'outbound',
-                        productName: palletData.productName,
-                        spec: palletData.spec || '',
-                        quantity: newQty,
-                        weight: pickWeight,
-                        quantityChange: -item.pickQty,
-                        weightChange: -pickWeight,
-                        locationId: item.locationId,
-                        palletId: item.palletId,
-                        batchNo: palletData.batchNo || '',
-                        orderId: item.orderNo,
-                        note: '波次揀貨 ' + window._waveData.currentWave.waveNo + (pickWeight > 0 ? ' (' + pickWeight + 'kg)' : '')
-                    });
-
-                    if (newQty <= 0) {
-                        await window.deleteDoc(palletDoc.ref);
-                    } else {
-                        var updateData = { quantity: newQty };
-                        if (palletData.totalWeight > 0) {
-                            updateData.totalWeight = newWeight;
-                        }
-                        await window.updateDoc(palletDoc.ref, updateData);
-                    }
-                }
-
-                item.completed = true;
-                window._waveData.completedItems.push(item.id);
-
-                var wave = window._waveData.currentWave;
-                wave.completedItems = window._waveData.completedItems;
-                saveWaves();
-
-                renderPickingList();
-                updateWaveProgress();
-
-            } catch (err) {
-                console.error('揀貨失敗:', err);
-                alert('揀貨失敗: ' + err.message);
-            }
-        }
-
-        window.completeWave = async function() {
-            var list = window._waveData.pickingList;
-            var completed = list.filter(function(item) { return item.completed; }).length;
-            var total = list.filter(function(item) { return !item.shortage; }).length;
-            var shortage = list.filter(function(item) { return item.shortage; }).length;
-
-            if (completed === 0) {
-                alert('尚未揀貨任何項目');
-                return;
-            }
-
-            var msg = '波次完成摘要：\n\n';
-            msg += '✅ 已揀貨：' + completed + ' / ' + total + ' 項\n';
-            if (shortage > 0) {
-                msg += '⚠️ 庫存不足：' + shortage + ' 項\n';
-            }
-            msg += '\n確定要完成此波次嗎？';
-
-            if (!confirm(msg)) return;
-
-            var wave = window._waveData.currentWave;
-            wave.status = 'done';
-            wave.completedAt = new Date().toISOString();
-            wave.completedBy = window.getOperatorName ? window.getOperatorName() : 'system';
-            saveWaves();
-
-            closeWaveExecuteModal();
-            alert('✅ 波次 ' + wave.waveNo + ' 已完成！');
-        };
 
         window.printPickingList = function() {
             var wave = window._waveData.currentWave;
@@ -10545,40 +10245,24 @@ window.clearLocalStorage = function() {
             openPrintPreview(html, '揀貨單 - ' + wave.waveNo, 900, 700);
         };
 
-        window.viewWaveDetail = function(waveNo) {
-            var wave = window._waveData.waves.find(function(w) { return w.waveNo === waveNo; });
-            if (!wave) return;
-
-            var msg = '波次：' + wave.waveNo + '\n';
-            msg += '物流商：' + wave.logistics + '\n';
-            msg += '狀態：' + (wave.status === 'done' ? '已完成' : wave.status === 'picking' ? '揀貨中' : '待揀貨') + '\n';
-            msg += '訂單數：' + (wave.orders ? wave.orders.length : 0) + '\n';
-            msg += '總件數：' + wave.totalQty + '\n';
-            msg += '建立時間：' + new Date(wave.createdAt).toLocaleString('zh-TW') + '\n';
-            if (wave.completedAt) {
-                msg += '完成時間：' + new Date(wave.completedAt).toLocaleString('zh-TW') + '\n';
-            }
-
-            alert(msg);
-        };
-
-        window.openAddToWaveModal = function(waveNo) {
+        window.openAddToWaveModal = async function(waveNo) {
             var wave = window._waveData.waves.find(function(w) { return w.waveNo === waveNo; });
             if (!wave) {
                 alert('找不到波次');
                 return;
             }
+            if (wave.status === 'done') {
+                alert('波次已完成，不能追加訂單');
+                return;
+            }
 
-            var existingOrderIds = [];
+            // 與建立波次相同：可追加的是「待處理 / 已確認」且尚未在任何波次中的銷貨訂單
+            var inWaveNos = {};
             window._waveData.waves.forEach(function(w) {
-                if (w.orders) {
-                    w.orders.forEach(function(o) { existingOrderIds.push(o.id); });
-                }
+                (w.orders || []).forEach(function(o) { inWaveNos[o.orderNo] = true; });
             });
-
-            var availableOrders = (window.currentOrders ? window.currentOrders() : []).filter(function(o) {
-                return (o.status === 'pending' || o.status === 'confirmed') &&
-                       existingOrderIds.indexOf(o.id) < 0;
+            var availableOrders = ((window._orderData && window._orderData.orders) || []).filter(function(o) {
+                return (o.status === 'pending' || o.status === 'confirmed') && !inWaveNos[o.orderNo];
             });
 
             if (availableOrders.length === 0) {
@@ -10588,30 +10272,16 @@ window.clearLocalStorage = function() {
 
             var msg = '可追加到波次 ' + waveNo + ' 的訂單：\n\n';
             availableOrders.forEach(function(o, idx) {
-                msg += (idx + 1) + '. ' + (o.orderNo || o.id) + ' - ' + o.customer + ' (' + o.quantity + '件)\n';
+                msg += (idx + 1) + '. ' + o.orderNo + ' - ' + (o.customer || '') + ' (' + (o.items || []).length + ' 項)\n';
             });
-            msg += '\n請輸入要追加的訂單編號（多筆用逗號分隔）：';
+            msg += '\n請輸入要追加的序號或訂單編號（多筆用逗號分隔）：';
 
             var input = prompt(msg);
             if (!input) return;
 
-            var selectedNos = input.split(',').map(function(s) { return s.trim(); });
-            var addedOrders = [];
-            var addedQty = 0;
-
-            availableOrders.forEach(function(o) {
-                var orderNo = o.orderNo || o.id;
-                var idx = availableOrders.indexOf(o);
-                if (selectedNos.indexOf(String(idx + 1)) >= 0 || selectedNos.indexOf(orderNo) >= 0) {
-                    addedOrders.push({
-                        id: o.id,
-                        orderNo: o.orderNo,
-                        customer: o.customer,
-                        productName: o.productName,
-                        quantity: o.quantity
-                    });
-                    addedQty += parseInt(o.quantity) || 0;
-                }
+            var selected = input.split(',').map(function(x) { return x.trim(); });
+            var addedOrders = availableOrders.filter(function(o, idx) {
+                return selected.indexOf(String(idx + 1)) >= 0 || selected.indexOf(o.orderNo) >= 0;
             });
 
             if (addedOrders.length === 0) {
@@ -10619,20 +10289,46 @@ window.clearLocalStorage = function() {
                 return;
             }
 
-            wave.orders = wave.orders.concat(addedOrders);
-            wave.itemCount = wave.orders.length;
-            wave.totalQty = (wave.totalQty || 0) + addedQty;
+            wave.orders = (wave.orders || []).concat(addedOrders.map(function(o) {
+                return { id: o.id, orderNo: o.orderNo, customer: o.customer, logistics: o.logistics, address: o.address, items: o.items };
+            }));
+            var totals = buildWaveSummary(wave.orders);
+            wave.summary = totals.summaryList;
+            wave.orderCount = wave.orders.length;
+            wave.itemCount = totals.summaryList.length;
+            wave.totalQty = totals.totalQty;
+            wave.totalSmallQty = totals.totalSmallQty;
             wave.updatedAt = new Date().toISOString();
+
+            try {
+                if (wave.id) {
+                    await window.updateDoc(window.doc(window.db, 'waves', wave.id), {
+                        orders: wave.orders, summary: wave.summary, orderCount: wave.orderCount,
+                        itemCount: wave.itemCount, totalQty: wave.totalQty, totalSmallQty: wave.totalSmallQty,
+                        updatedAt: wave.updatedAt
+                    });
+                }
+                for (var k = 0; k < addedOrders.length; k++) {
+                    if (addedOrders[k].id) {
+                        await window.updateDoc(window.doc(window.db, 'salesOrders', addedOrders[k].id), { status: 'inWave', waveNo: wave.waveNo });
+                    }
+                    addedOrders[k].status = 'inWave';
+                }
+            } catch (err) {
+                console.error('追加訂單失敗:', err);
+                alert('❌ 追加訂單失敗：' + err.message);
+                return;
+            }
 
             if (wave.status === 'picking' && window._waveData.currentWave &&
                 window._waveData.currentWave.waveNo === waveNo) {
-                generatePickingList(wave);
+                generatePickingListV2(wave);
             }
 
             saveWaves();
             refreshWaveList();
 
-            alert('✅ 已追加 ' + addedOrders.length + ' 筆訂單到波次 ' + waveNo + '\n\n新增件數：' + addedQty);
+            alert('✅ 已追加 ' + addedOrders.length + ' 筆訂單到波次 ' + waveNo);
         };
 
         // ========== 庫存異動記錄系統 ==========
@@ -10808,7 +10504,7 @@ window.clearLocalStorage = function() {
                     }
                 });
 
-                (opts.creates || []).forEach(function(cr) { tx.set(cr.ref, cr.data); });
+                (opts.creates || []).forEach(function(cr) { tx.set(cr.ref, normalizeForWrite(cr.ref, cr.data)); });
 
                 var updates = typeof opts.updates === 'function' ? opts.updates(results, readSnaps) : (opts.updates || []);
                 updates.forEach(function(u) { tx.update(u.ref, u.data); });
@@ -10975,8 +10671,8 @@ window.clearLocalStorage = function() {
                     break;
             }
 
-            document.getElementById('log-date-from').value = fromDate.toISOString().split('T')[0];
-            document.getElementById('log-date-to').value = toDate.toISOString().split('T')[0];
+            document.getElementById('log-date-from').value = fromDate.toLocalYMD();
+            document.getElementById('log-date-to').value = toDate.toLocalYMD();
         };
 
         window.initInventoryLogPage = function() {
@@ -11003,10 +10699,10 @@ window.clearLocalStorage = function() {
                 var constraints = [];
 
                 if (dateFrom) {
-                    constraints.push(window.where('timestamp', '>=', dateFrom + 'T00:00:00'));
+                    constraints.push(window.where('timestamp', '>=', window.localDayStartISO(dateFrom)));
                 }
                 if (dateTo) {
-                    constraints.push(window.where('timestamp', '<=', dateTo + 'T23:59:59'));
+                    constraints.push(window.where('timestamp', '<=', window.localDayEndISO(dateTo)));
                 }
 
                 // type + timestamp 組合查詢需要 Firestore 複合索引，
@@ -11017,8 +10713,8 @@ window.clearLocalStorage = function() {
 
                 var snapshot = await window.getDocs(q);
                 var logs = [];
-                var tsFrom = dateFrom ? dateFrom + 'T00:00:00' : '';
-                var tsTo = dateTo ? dateTo + 'T23:59:59' : '';
+                var tsFrom = dateFrom ? window.localDayStartISO(dateFrom) : '';
+                var tsTo = dateTo ? window.localDayEndISO(dateTo) : '';
 
                 snapshot.forEach(function(doc) {
                     var data = doc.data();
@@ -11243,7 +10939,7 @@ window.clearLocalStorage = function() {
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            a.download = '庫存異動記錄_' + new Date().toISOString().split('T')[0] + '.csv';
+            a.download = '庫存異動記錄_' + new Date().toLocalYMD() + '.csv';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -11268,8 +10964,8 @@ window.clearLocalStorage = function() {
                     break;
             }
 
-            document.getElementById('analysis-date-from').value = fromDate.toISOString().split('T')[0];
-            document.getElementById('analysis-date-to').value = today.toISOString().split('T')[0];
+            document.getElementById('analysis-date-from').value = fromDate.toLocalYMD();
+            document.getElementById('analysis-date-to').value = today.toLocalYMD();
             refreshProductAnalysis();
         };
 
@@ -11304,8 +11000,8 @@ window.clearLocalStorage = function() {
                         ts = ts.toDate().toISOString();
                     }
 
-                    if (dateFrom && ts < dateFrom + 'T00:00:00') return;
-                    if (dateTo && ts > dateTo + 'T23:59:59') return;
+                    if (dateFrom && ts < window.localDayStartISO(dateFrom)) return;
+                    if (dateTo && ts > window.localDayEndISO(dateTo)) return;
 
                     filteredDocs.push({ id: doc.id, data: function() { return data; } });
                 });
@@ -11440,8 +11136,8 @@ window.clearLocalStorage = function() {
                     break;
             }
 
-            document.getElementById('heatmap-date-from').value = fromDate.toISOString().split('T')[0];
-            document.getElementById('heatmap-date-to').value = today.toISOString().split('T')[0];
+            document.getElementById('heatmap-date-from').value = fromDate.toLocalYMD();
+            document.getElementById('heatmap-date-to').value = today.toLocalYMD();
             refreshWarehouseHeatmap();
         };
 
@@ -11462,10 +11158,10 @@ window.clearLocalStorage = function() {
                     var constraints = [];
 
                     if (dateFrom) {
-                        constraints.push(window.where('timestamp', '>=', dateFrom + 'T00:00:00'));
+                        constraints.push(window.where('timestamp', '>=', window.localDayStartISO(dateFrom)));
                     }
                     if (dateTo) {
-                        constraints.push(window.where('timestamp', '<=', dateTo + 'T23:59:59'));
+                        constraints.push(window.where('timestamp', '<=', window.localDayEndISO(dateTo)));
                     }
 
                     var q = constraints.length > 0 ? query(logsRef, ...constraints) : logsRef;
@@ -13447,6 +13143,7 @@ window.clearLocalStorage = function() {
                     // 更新層級計數
                     if (lanes[laneKey].levelData[level]) {
                         lanes[laneKey].levelData[level].count++;
+                        window.addPalletToCounts(lanes[laneKey].levelData[level], item);
                     }
 
                     var itemSpecKey = (item.productName || '') + '|' + (item.spec || '');
@@ -13490,8 +13187,9 @@ window.clearLocalStorage = function() {
                     // 遍歷每個層級（按入庫優先順序）
                     LEVEL_PRIORITY.forEach(function(level) {
                         var levelCap = calcLevelCapacity(level);
+                        // 依混合板型使用率計算剩餘可放板數（不是只數同板型）
+                        var levelAvail = window.levelRemaining(lane.levelData[level], level, palletType);
                         var levelUsed = lane.levelData[level].count;
-                        var levelAvail = levelCap - levelUsed;
                         
                         if (levelCap === 0 || levelAvail <= 0) return; // 此層不可放或已滿
                         
@@ -14589,7 +14287,7 @@ window.clearLocalStorage = function() {
                 var snapshot = await window.getDocs(window.collection(window.db, 'externalStock'));
                 window.externalStock = [];
                 snapshot.forEach(function(doc) {
-                    window.externalStock.push({ id: doc.id, ...doc.data() });
+                    window.externalStock.push(window.normalizeStockRecord({ id: doc.id, ...doc.data() }));
                 });
                 updateExternalSummary();
                 renderExternalStock();
@@ -14792,18 +14490,6 @@ window.clearLocalStorage = function() {
             }
         };
 
-        window.deleteExternalStock = async function(id) {
-            if (!confirm('確定刪除此筆庫存？')) return;
-
-            try {
-                await window.deleteDoc(window.doc(window.db, 'externalStock', id));
-                alert('✅ 已刪除');
-                loadExternalStock();
-            } catch(e) {
-                alert('❌ 刪除失敗：' + e.message);
-            }
-        };
-
         window.exportExternalStock = function() {
             if (window.externalStock.length === 0) {
                 alert('無資料可匯出');
@@ -14829,7 +14515,7 @@ window.clearLocalStorage = function() {
             var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
             var a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = '外倉庫存_' + new Date().toISOString().split('T')[0] + '.csv';
+            a.download = '外倉庫存_' + new Date().toLocalYMD() + '.csv';
             a.click();
         };
 
@@ -18247,7 +17933,7 @@ window.clearLocalStorage = function() {
             var ws = XLSX.utils.json_to_sheet(data);
             var wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, '使用者清單');
-            XLSX.writeFile(wb, '使用者清單_' + new Date().toISOString().slice(0,10) + '.xlsx');
+            XLSX.writeFile(wb, '使用者清單_' + new Date().toLocalYMD() + '.xlsx');
 
             showToast('✅ 匯出成功');
         };
@@ -18344,14 +18030,15 @@ window.clearLocalStorage = function() {
                     if (newQty <= 0) tx.delete(stockRef);
                     else tx.update(stockRef, { quantity: newQty, updatedAt: now.toISOString() });
 
-                    var exp = stock.expiryDate || stock.expDate || '';
+                    var exp = window.normalizeDateValue(stock.expiryDate || stock.expDate);
                     tx.set(palletRef, {
                         palletId: palletId,
                         company: stock.company || '',
                         productName: stock.productName,
                         spec: stock.spec || '',
                         batchNo: stock.batchNo || '',
-                        expiryDate: exp ? new Date(exp) : null,
+                        expiryDate: exp || null,
+                        expDate: exp || '',
                         quantity: transferQty,
                         locationId: targetLocation,
                         vendor: stock.vendor || '',
@@ -19379,46 +19066,6 @@ window.clearLocalStorage = function() {
             }
         };
 
-        window.clearAllProductMaster = async function() {
-            var count = window.productMasterData.length;
-            if (count === 0) {
-                alert('品項主檔已經是空的');
-                return;
-            }
-
-            if (!confirm('⚠️ 確定要清空全部 ' + count + ' 筆品項主檔？\n\n此操作無法復原！')) {
-                return;
-            }
-
-            if (!confirm('🚨 再次確認：刪除全部 ' + count + ' 筆資料？')) {
-                return;
-            }
-
-            try {
-                if (window.db && window.deleteDoc) {
-                    for (var i = 0; i < window.productMasterData.length; i++) {
-                        var item = window.productMasterData[i];
-                        if (item.id) {
-                            try {
-                                await window.deleteDoc(window.doc(window.db, 'productMaster', item.id));
-                            } catch(e) {
-                                console.error('刪除失敗:', item.name, e);
-                            }
-                        }
-                    }
-                }
-
-                window.productMasterData = [];
-                localStorage.setItem('wms_product_master', '[]');
-
-                loadProductMasterList();
-                alert('✅ 已清空 ' + count + ' 筆品項主檔');
-            } catch(e) {
-                console.error('清空品項主檔失敗:', e);
-                alert('❌ 清空失敗：' + e.message);
-            }
-        };
-
         window.clearProductMasterForm = function() {
             document.getElementById('pm-code').value = '';
             document.getElementById('pm-name').value = '';
@@ -19456,25 +19103,29 @@ window.clearLocalStorage = function() {
             }
 
             try {
-                if (window.db && window.deleteDoc) {
-                    for (var i = 0; i < window.productMasterData.length; i++) {
-                        var item = window.productMasterData[i];
-                        if (item.id) {
-                            try {
-                                await window.deleteDoc(window.doc(window.db, 'productMaster', item.id));
-                            } catch(e) {
-                                console.error('刪除品項失敗:', item.name, e);
-                            }
-                        }
+                // 只移除真的刪除成功的項目；失敗的留在清單上，不會讓畫面與資料庫不一致
+                var remaining = [];
+                for (var i = 0; i < window.productMasterData.length; i++) {
+                    var item = window.productMasterData[i];
+                    if (!item.id) continue;
+                    try {
+                        await window.deleteDoc(window.doc(window.db, 'productMaster', item.id));
+                    } catch(e) {
+                        console.error('刪除品項失敗:', item.name, e);
+                        remaining.push(item);
                     }
                 }
 
-                window.productMasterData = [];
-                localStorage.setItem('wms_product_master', '[]');
+                window.productMasterData = remaining;
+                localStorage.setItem('wms_product_master', JSON.stringify(remaining));
 
                 loadProductMasterList();
 
-                alert('✅ 已清空全部品項主檔（共 ' + count + ' 筆）');
+                if (remaining.length > 0) {
+                    alert('⚠️ 已刪除 ' + (count - remaining.length) + ' 筆，' + remaining.length + ' 筆刪除失敗（可能沒有權限）');
+                } else {
+                    alert('✅ 已清空全部品項主檔（共 ' + count + ' 筆）');
+                }
             } catch(e) {
                 console.error('清空品項主檔失敗:', e);
                 alert('❌ 清空失敗：' + e.message);
@@ -19628,7 +19279,7 @@ window.clearLocalStorage = function() {
 
             var wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, '品項主檔');
-            XLSX.writeFile(wb, '品項主檔_' + new Date().toISOString().slice(0,10) + '.xlsx');
+            XLSX.writeFile(wb, '品項主檔_' + new Date().toLocalYMD() + '.xlsx');
 
             alert('✅ 已匯出 ' + window.productMasterData.length + ' 筆');
         };
@@ -21016,27 +20667,13 @@ window.autoCreateWavesByLogistics = async function() {
     alert(resultText);
 };
 
-window.createWave = async function() {
-    const checked = document.querySelectorAll('.wave-order-check:checked');
-    if (checked.length === 0) {
-        alert('請選擇至少一筆訂單');
-        return;
-    }
-
-    const selectedOrderNos = new Set();
-    checked.forEach(cb => selectedOrderNos.add(cb.dataset.orderNo));
-
-    const selectedOrders = window._orderData.orders.filter(o => selectedOrderNos.has(o.orderNo));
-
-    const logisticsSet = new Set();
-    selectedOrders.forEach(o => logisticsSet.add(o.logistics || '未指定'));
-    const logisticsStr = Array.from(logisticsSet).join(', ');
-
+// 依訂單彙總揀貨清單（建立波次、追加訂單共用）
+function buildWaveSummary(orders) {
     const summary = {};
     let totalQty = 0;
     let totalSmallQty = 0;
 
-    selectedOrders.forEach(order => {
+    orders.forEach(order => {
         (order.items || []).forEach(item => {
             const key = `${item.productName}|||${item.spec || ''}`;
             if (!summary[key]) {
@@ -21055,7 +20692,7 @@ window.createWave = async function() {
             summary[key].totalSmallQty += item.quantity || 0;
             summary[key].orders.push({
                 orderNo: order.orderNo,
-                orderId: order.id,
+                orderId: order.id || order.orderId,
                 customer: order.customer,
                 quantity: pkgQty  // 使用包裝數量
             });
@@ -21064,7 +20701,26 @@ window.createWave = async function() {
         });
     });
 
-    const summaryList = Object.values(summary);
+    return { summaryList: Object.values(summary), totalQty: totalQty, totalSmallQty: totalSmallQty };
+}
+
+window.createWave = async function() {
+    const checked = document.querySelectorAll('.wave-order-check:checked');
+    if (checked.length === 0) {
+        alert('請選擇至少一筆訂單');
+        return;
+    }
+
+    const selectedOrderNos = new Set();
+    checked.forEach(cb => selectedOrderNos.add(cb.dataset.orderNo));
+
+    const selectedOrders = window._orderData.orders.filter(o => selectedOrderNos.has(o.orderNo));
+
+    const logisticsSet = new Set();
+    selectedOrders.forEach(o => logisticsSet.add(o.logistics || '未指定'));
+    const logisticsStr = Array.from(logisticsSet).join(', ');
+
+    const { summaryList, totalQty, totalSmallQty } = buildWaveSummary(selectedOrders);
 
     const wave = {
         waveNo: generateWaveNo(),
@@ -21592,7 +21248,7 @@ console.log('✅ 波次理貨升級版載入完成');
 window._reportData = { currentType: null, currentData: [], dateFrom: null, dateTo: null };
 
 function initReportDates() {
-    var today = new Date().toISOString().split('T')[0];
+    var today = new Date().toLocalYMD();
     var fromEl = document.getElementById('report-date-from');
     var toEl = document.getElementById('report-date-to');
     if (fromEl) fromEl.value = today;
@@ -21647,8 +21303,8 @@ window.setReportQuickDate = function(range) {
         return;
     }
 
-    document.getElementById('report-date-from').value = from.toISOString().split('T')[0];
-    document.getElementById('report-date-to').value = to.toISOString().split('T')[0];
+    document.getElementById('report-date-from').value = from.toLocalYMD();
+    document.getElementById('report-date-to').value = to.toLocalYMD();
     
     // 更新按鈕樣式
     document.querySelectorAll('.report-date-btn').forEach(function(btn) {
@@ -21683,8 +21339,8 @@ window.setQuickDateRange = function() {
         return;
     }
 
-    document.getElementById('report-date-from').value = from.toISOString().split('T')[0];
-    document.getElementById('report-date-to').value = to.toISOString().split('T')[0];
+    document.getElementById('report-date-from').value = from.toLocalYMD();
+    document.getElementById('report-date-to').value = to.toLocalYMD();
 };
 
 // 從下拉選單產生報表
@@ -21845,7 +21501,7 @@ function generateInboundSummary(dateFrom, dateTo) {
         var date = p.inboundDate || p.createdAt;
         if (!date) return false;
         var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
         return dateStr >= dateFrom && dateStr <= dateTo;
     });
     
@@ -21854,7 +21510,7 @@ function generateInboundSummary(dateFrom, dateTo) {
     filtered.forEach(function(p) {
         var date = p.inboundDate || p.createdAt;
         var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
         if (!stats[dateStr]) stats[dateStr] = { date: dateStr, palletCount: 0, totalQty: 0, totalWeight: 0 };
         stats[dateStr].palletCount++;
         stats[dateStr].totalQty += parseInt(p.quantity) || 0;
@@ -21884,7 +21540,7 @@ function generateInboundDetail(dateFrom, dateTo) {
         var date = p.inboundDate || p.createdAt;
         if (!date) return false;
         var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
         return dateStr >= dateFrom && dateStr <= dateTo;
     });
     
@@ -21895,7 +21551,7 @@ function generateInboundDetail(dateFrom, dateTo) {
     }).map(function(p) {
         var date = p.inboundDate || p.createdAt;
         var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
         return {
             '入庫日期': dateStr,
             '品名': p.productName || '',
@@ -21919,7 +21575,7 @@ function generateInboundByProduct(dateFrom, dateTo) {
         var date = p.inboundDate || p.createdAt;
         if (!date) return false;
         var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
         return dateStr >= dateFrom && dateStr <= dateTo;
     });
     
@@ -21965,7 +21621,7 @@ function generateInboundByVendor(dateFrom, dateTo) {
         var date = p.inboundDate || p.createdAt;
         if (!date) return false;
         var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toISOString().split('T')[0] : new Date(date).toISOString().split('T')[0]);
+            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
         return dateStr >= dateFrom && dateStr <= dateTo;
     });
     
@@ -22230,7 +21886,7 @@ window.printReport = function() {
 };
 
 window.generateTodayReport = function() {
-    var today = new Date().toISOString().split('T')[0];
+    var today = new Date().toLocalYMD();
     document.getElementById('report-date-from').value = today;
     document.getElementById('report-date-to').value = today;
     generateReport('shipping-logistics');
@@ -22309,7 +21965,7 @@ async function generatePickingSummary(dateFrom, dateTo) {
             if (typeof log.createdAt === 'string') {
                 date = log.createdAt.split('T')[0];
             } else if (log.createdAt.toDate) {
-                date = log.createdAt.toDate().toISOString().split('T')[0];
+                date = log.createdAt.toDate().toLocalYMD();
             }
         }
         if (!date) return;
@@ -22468,9 +22124,9 @@ function getPickingLogs(dateFrom, dateTo) {
             if (typeof log.createdAt === 'string') {
                 date = log.createdAt.split('T')[0];
             } else if (log.createdAt.toDate) {
-                date = log.createdAt.toDate().toISOString().split('T')[0];
+                date = log.createdAt.toDate().toLocalYMD();
             } else if (log.createdAt instanceof Date) {
-                date = log.createdAt.toISOString().split('T')[0];
+                date = log.createdAt.toLocalYMD();
             }
         }
         return date >= dateFrom && date <= dateTo;
@@ -23319,8 +22975,8 @@ window.openNewConsignmentModal = async function() {
         if (today.getDate() > freeUntilDay) {
             freeUntil = new Date(today.getFullYear(), today.getMonth() + 1, freeUntilDay);
         }
-        const freeUntilStr = freeUntil.toISOString().split('T')[0];
-        const todayStr = today.toISOString().split('T')[0];
+        const freeUntilStr = freeUntil.toLocalYMD();
+        const todayStr = today.toLocalYMD();
 
     const content = `
         <div class="flex flex-col" style="height: 580px;">
@@ -23748,7 +23404,7 @@ window.saveNewConsignment = async function() {
     const freeUntilDate = new Date(freeUntil);
     const chargeStartDate = new Date(freeUntilDate);
     chargeStartDate.setDate(chargeStartDate.getDate() + 1);
-    const chargeStartStr = chargeStartDate.toISOString().split('T')[0];
+    const chargeStartStr = chargeStartDate.toLocalYMD();
     
     try {
         let count = 0, totalQty = 0;
@@ -24200,8 +23856,8 @@ window.openConsignOpConfirm = function() {
     if (today.getDate() > freeUntilDay) {
         freeUntil = new Date(today.getFullYear(), today.getMonth() + 1, freeUntilDay);
     }
-    const freeUntilStr = freeUntil.toISOString().split('T')[0];
-    const todayStr = today.toISOString().split('T')[0];
+    const freeUntilStr = freeUntil.toLocalYMD();
+    const todayStr = today.toLocalYMD();
     
     // 建立已選清單
     let itemsHtml = '';
@@ -24305,7 +23961,7 @@ window.saveConsignOp = async function() {
     const freeUntilDate = new Date(freeUntil);
     const chargeStartDate = new Date(freeUntilDate);
     chargeStartDate.setDate(chargeStartDate.getDate() + 1);
-    const chargeStartStr = chargeStartDate.toISOString().split('T')[0];
+    const chargeStartStr = chargeStartDate.toLocalYMD();
     
     try {
         let savedCount = 0;
@@ -24377,1106 +24033,6 @@ window.saveConsignOp = async function() {
     };
 })();
 
-// ========== 快速寄倉（從庫存查詢直接操作）==========
-window.openQuickConsign = function(itemId, stockType) {
-    let item = null;
-    let warehouseName = '';
-    
-    if (stockType === 'internal') {
-        // 內倉庫存
-        const inventory = window.currentInventory ? window.currentInventory() : [];
-        item = inventory.find(i => i.id === itemId);
-        if (item) {
-            warehouseName = item.warehouse || item.company || '內倉';
-        }
-    } else {
-        // 外倉庫存
-        item = (window.externalStock || []).find(i => i.id === itemId);
-        if (item) {
-            const wh = (window.warehousesData || []).find(w => w.code === item.warehouseId || w.id === item.warehouseId);
-            warehouseName = wh ? wh.company + '_' + wh.name : (item.company + '_' + (item.warehouseId || '外倉'));
-        }
-    }
-    
-    if (!item) {
-        alert('找不到此庫存資料');
-        return;
-    }
-    
-    // 計算可寄數量
-    const consignedMap = {};
-    if (window.consignmentData && Array.isArray(window.consignmentData)) {
-        window.consignmentData.forEach(c => {
-            if (c.status !== 'active') return;
-            const key = `${c.productName || ''}|${c.spec || ''}|${c.batchNo || ''}|${c.sourceWarehouse || ''}`;
-            consignedMap[key] = (consignedMap[key] || 0) + (c.remainingQty || 0);
-        });
-    }
-    const key = `${item.productName || ''}|${item.spec || ''}|${item.batchNo || ''}|${warehouseName}`;
-    const consigned = consignedMap[key] || 0;
-    const available = Math.max(0, (item.quantity || 0) - consigned);
-    
-    if (available <= 0) {
-        alert('此庫存已全部寄倉，無可寄數量');
-        return;
-    }
-    
-    // 取得預設日期
-    const today = new Date();
-    const freeUntilDay = (window.rentalSettings && window.rentalSettings.settlement) ? window.rentalSettings.settlement.freeUntilDay : 25;
-    let freeUntil = new Date(today.getFullYear(), today.getMonth(), freeUntilDay);
-    if (today.getDate() > freeUntilDay) {
-        freeUntil = new Date(today.getFullYear(), today.getMonth() + 1, freeUntilDay);
-    }
-    const freeUntilStr = freeUntil.toISOString().split('T')[0];
-    const todayStr = today.toISOString().split('T')[0];
-    
-    // 取得效期顯示
-    let expDisplay = '-';
-    if (item.expiryDate) {
-        const expDate = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
-        expDisplay = expDate.toLocaleDateString('zh-TW');
-    } else if (item.expDate) {
-        expDisplay = item.expDate;
-    }
-    
-    const isInternal = stockType === 'internal';
-    const typeLabel = isInternal ? '內倉' : '外倉';
-    const typeColor = isInternal ? 'blue' : 'purple';
-    
-    const content = `
-        <div class="space-y-4">
-            <!-- 品項資訊 -->
-            <div class="bg-slate-700/50 rounded-lg p-3">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <div class="text-white font-bold text-lg">${item.productName || '-'}</div>
-                        <div class="text-yellow-400">${item.spec || '-'}</div>
-                    </div>
-                    <span class="px-2 py-1 bg-${typeColor}-600 rounded text-xs">${typeLabel}</span>
-                </div>
-                <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
-                    <div><span class="text-slate-500">批號：</span><span class="text-slate-300 font-mono">${item.batchNo || '-'}</span></div>
-                    <div><span class="text-slate-500">效期：</span><span class="text-slate-300">${expDisplay}</span></div>
-                    <div><span class="text-slate-500">倉庫：</span><span class="text-${typeColor}-400">${warehouseName}</span></div>
-                    ${isInternal && item.locationId ? `<div><span class="text-slate-500">儲位：</span><span class="text-cyan-400 font-mono">${item.locationId}</span></div>` : ''}
-                </div>
-                <div class="flex items-center gap-4 mt-2 pt-2 border-t border-slate-600">
-                    <div><span class="text-slate-500">庫存：</span><span class="text-white font-bold">${item.quantity || 0}</span> 件</div>
-                    ${consigned > 0 ? `<div><span class="text-slate-500">已寄：</span><span class="text-amber-400">${consigned}</span> 件</div>` : ''}
-                    <div><span class="text-slate-500">可寄：</span><span class="text-emerald-400 font-bold">${available}</span> 件</div>
-                </div>
-            </div>
-            
-            <!-- 寄倉資訊 -->
-            <div class="space-y-3">
-                <div>
-                    <label class="text-slate-400 text-sm">客戶名稱 *</label>
-                    <input type="text" id="quick-consign-customer" class="scan-input w-full mt-1" placeholder="輸入客戶名稱...">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-slate-400 text-sm">寄倉數量 *</label>
-                        <input type="number" id="quick-consign-qty" class="scan-input w-full mt-1" value="${available}" min="1" max="${available}">
-                    </div>
-                    <div>
-                        <label class="text-slate-400 text-sm">費率 (元/件/天)</label>
-                        <input type="number" id="quick-consign-rate" class="scan-input w-full mt-1" value="0.37" step="0.01">
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-slate-400 text-sm">寄倉日</label>
-                        <input type="date" id="quick-consign-date" class="scan-input w-full mt-1" value="${todayStr}">
-                    </div>
-                    <div>
-                        <label class="text-slate-400 text-sm">免費至</label>
-                        <input type="date" id="quick-consign-free-until" class="scan-input w-full mt-1" value="${freeUntilStr}">
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 按鈕 -->
-            <div class="flex justify-end gap-2 pt-2">
-                <button onclick="WMS.closeModal('quick-consign-modal')" class="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded">取消</button>
-                <button onclick="saveQuickConsign('${itemId}', '${stockType}', '${warehouseName.replace(/'/g, "\\'")}')" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded font-bold">
-                    <i class="fa-solid fa-check mr-1"></i>確認寄倉
-                </button>
-            </div>
-        </div>
-    `;
-    
-    WMS.createModal('quick-consign-modal', {
-        title: '快速寄倉',
-        icon: 'fa-solid fa-box-archive text-amber-400',
-        content: content,
-        width: '480px'
-    });
-    
-    // 自動聚焦到客戶輸入框
-    setTimeout(() => {
-        document.getElementById('quick-consign-customer')?.focus();
-    }, 100);
-};
-
-// 儲存快速寄倉
-window.saveQuickConsign = async function(itemId, stockType, warehouseName) {
-    const customer = document.getElementById('quick-consign-customer')?.value.trim();
-    const qty = parseInt(document.getElementById('quick-consign-qty')?.value) || 0;
-    const rate = parseFloat(document.getElementById('quick-consign-rate')?.value) || 0.37;
-    const consignDate = document.getElementById('quick-consign-date')?.value;
-    const freeUntil = document.getElementById('quick-consign-free-until')?.value;
-    
-    if (!customer) {
-        alert('請輸入客戶名稱');
-        document.getElementById('quick-consign-customer')?.focus();
-        return;
-    }
-    
-    if (qty <= 0) {
-        alert('請輸入有效的寄倉數量');
-        return;
-    }
-    
-    // 取得品項資料
-    let item = null;
-    if (stockType === 'internal') {
-        const inventory = window.currentInventory ? window.currentInventory() : [];
-        item = inventory.find(i => i.id === itemId);
-    } else {
-        item = (window.externalStock || []).find(i => i.id === itemId);
-    }
-    
-    if (!item) {
-        alert('找不到庫存資料');
-        return;
-    }
-    
-    // 計算計費開始日
-    const freeUntilDate = new Date(freeUntil);
-    const chargeStartDate = new Date(freeUntilDate);
-    chargeStartDate.setDate(chargeStartDate.getDate() + 1);
-    const chargeStartStr = chargeStartDate.toISOString().split('T')[0];
-    
-    // 取得效期
-    let expDate = '';
-    if (item.expiryDate) {
-        const exp = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
-        expDate = exp.toISOString().split('T')[0];
-    } else if (item.expDate) {
-        expDate = item.expDate;
-    }
-    
-    const consignment = {
-        source: stockType,
-        sourceWarehouse: warehouseName,
-        locationId: stockType === 'internal' ? (item.locationId || '') : '',
-        productName: item.productName || '',
-        spec: item.spec || '',
-        batchNo: item.batchNo || '',
-        expDate: expDate,
-        customer: customer,
-        originalQty: qty,
-        remainingQty: qty,
-        consignmentDate: consignDate,
-        freeUntil: freeUntil,
-        chargeStartDate: chargeStartStr,
-        ratePerUnit: rate,
-        note: '',
-        pickups: [],
-        status: 'active',
-        createdAt: new Date().toISOString()
-    };
-    
-    try {
-        await window.saveConsignmentToFirebase(consignment);
-        
-        WMS.closeModal('quick-consign-modal');
-        showNotification(`✅ 已寄倉：${item.productName} ${qty} 件 → ${customer}`, 'success');
-        
-        // 刷新寄倉清單
-        if (typeof loadConsignmentList === 'function') {
-            setTimeout(() => loadConsignmentList(), 100);
-        }
-    } catch (e) {
-        console.error('寄倉失敗:', e);
-        alert('❌ 寄倉失敗：' + e.message);
-    }
-};
-
-// 切換寄庫類型（內倉/外倉）
-window.switchConsignType = function(type) {
-    window.consignType = type;
-    window.consignSelectedItems = []; // 清空已選項目
-    
-    const internalLabel = document.getElementById('consign-type-internal-label');
-    const externalLabel = document.getElementById('consign-type-external-label');
-    const internalFields = document.getElementById('internal-warehouse-fields');
-    const externalFields = document.getElementById('external-warehouse-fields');
-    
-    if (type === 'internal') {
-        // 內倉寄庫
-        internalLabel.className = 'flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer border-2 border-blue-500 bg-blue-900/30';
-        externalLabel.className = 'flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer border-2 border-slate-600';
-        internalFields.classList.remove('hidden');
-        externalFields.classList.add('hidden');
-    } else {
-        // 外倉寄庫
-        internalLabel.className = 'flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer border-2 border-slate-600';
-        externalLabel.className = 'flex-1 flex items-center gap-2 p-2 rounded-lg cursor-pointer border-2 border-purple-500 bg-purple-900/30';
-        internalFields.classList.add('hidden');
-        externalFields.classList.remove('hidden');
-    }
-    
-    // 重新載入對應的庫存清單
-    window.loadConsignInventoryList();
-    
-    // 更新已選清單顯示
-    window.updateConsignSelectedList();
-};
-
-window.getConsignWarehouseOptions = function() {
-    const config = window.warehouseConfig;
-    let html = '';
-    config.consign.forEach(w => {
-        html += `<option value="${w}">${w}</option>`;
-    });
-    return html;
-}
-
-window.consignSelectedItems = [];
-
-window.consignInventoryData = [];
-
-window.onConsignCustomerInput = function() {
-    const customer = document.getElementById('consign-customer')?.value.trim();
-    const targetSelect = document.getElementById('consign-target-warehouse');
-
-    if (!customer || !targetSelect) return;
-
-    const config = window.warehouseConfig;
-    const matching = config.consign.find(w => w.includes(customer));
-
-    if (matching) {
-        targetSelect.value = matching;
-    }
-};
-
-window.addNewConsignWarehouse = function() {
-    const customer = document.getElementById('consign-customer')?.value.trim();
-    const name = prompt('請輸入新寄庫倉名稱：', customer ? `(${customer})客戶寄庫倉` : '');
-
-    if (!name) return;
-
-    window.warehouseConfig.consign.push(name);
-
-    const targetSelect = document.getElementById('consign-target-warehouse');
-    if (targetSelect) {
-        const option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        targetSelect.appendChild(option);
-        targetSelect.value = name;
-    }
-
-    showNotification(`✅ 已新增寄庫倉：${name}`, 'success');
-};
-
-// 搜尋品項（從品項主檔和現有庫存）
-window.searchConsignProducts = function() {
-    const searchText = (document.getElementById('consign-product-search')?.value || '').toLowerCase().trim();
-    const listDiv = document.getElementById('consign-product-list');
-    
-    if (!searchText || searchText.length < 1) {
-        listDiv.innerHTML = '<div class="text-slate-500 text-sm text-center py-4">輸入關鍵字搜尋</div>';
-        return;
-    }
-    
-    // 從內倉和外倉庫存中收集品項
-    const internalInventory = window.currentInventory ? window.currentInventory() : [];
-    const externalInventory = window.externalStock || [];
-    
-    // 建立品項清單（品名+規格為 key）
-    const productMap = new Map();
-    
-    // 內倉品項
-    internalInventory.forEach(item => {
-        if (!item.productName || (item.quantity || 0) <= 0) return;
-        const status = (item.status || '').toLowerCase();
-        if (status === 'shipped' || status === 'outbound' || status === 'deleted') return;
-        
-        const key = `${item.productName}|${item.spec || ''}`;
-        if (!productMap.has(key)) {
-            productMap.set(key, {
-                productName: item.productName,
-                spec: item.spec || '',
-                hasInternal: true,
-                hasExternal: false
-            });
-        } else {
-            productMap.get(key).hasInternal = true;
-        }
-    });
-    
-    // 外倉品項
-    externalInventory.forEach(item => {
-        if (!item.productName || (item.quantity || 0) <= 0) return;
-        
-        const key = `${item.productName}|${item.spec || ''}`;
-        if (!productMap.has(key)) {
-            productMap.set(key, {
-                productName: item.productName,
-                spec: item.spec || '',
-                hasInternal: false,
-                hasExternal: true
-            });
-        } else {
-            productMap.get(key).hasExternal = true;
-        }
-    });
-    
-    // 過濾符合搜尋條件的品項
-    const filtered = Array.from(productMap.values()).filter(p => 
-        p.productName.toLowerCase().includes(searchText) ||
-        (p.spec || '').toLowerCase().includes(searchText)
-    );
-    
-    if (filtered.length === 0) {
-        listDiv.innerHTML = '<div class="text-slate-500 text-sm text-center py-4">無符合的品項</div>';
-        return;
-    }
-    
-    // 渲染品項清單
-    let html = '';
-    filtered.slice(0, 20).forEach((p, idx) => {
-        const badges = [];
-        if (p.hasInternal) badges.push('<span class="px-1 py-0.5 bg-blue-600 rounded text-[9px]">內</span>');
-        if (p.hasExternal) badges.push('<span class="px-1 py-0.5 bg-purple-600 rounded text-[9px]">外</span>');
-        
-        html += `
-            <div class="p-2 bg-slate-700/50 rounded hover:bg-slate-700 cursor-pointer" onclick="selectConsignProduct('${p.productName.replace(/'/g, "\\'")}', '${(p.spec || '').replace(/'/g, "\\'")}')">
-                <div class="text-white text-sm truncate">${p.productName}</div>
-                <div class="flex items-center justify-between mt-1">
-                    <span class="text-slate-400 text-xs">${p.spec || '-'}</span>
-                    <div class="flex gap-1">${badges.join('')}</div>
-                </div>
-            </div>
-        `;
-    });
-    
-    if (filtered.length > 20) {
-        html += `<div class="text-slate-500 text-xs text-center py-2">還有 ${filtered.length - 20} 項，請縮小搜尋範圍</div>`;
-    }
-    
-    listDiv.innerHTML = html;
-};
-
-// 選擇品項，顯示庫存分布
-window.selectConsignProduct = function(productName, spec) {
-    window.consignCurrentProduct = { productName, spec };
-    
-    // 標示搜尋框中的品項
-    document.getElementById('consign-product-search').value = productName + (spec ? ' ' + spec : '');
-    
-    // 載入該品項的庫存分布
-    loadProductStockDistribution(productName, spec);
-};
-
-// 載入品項的庫存分布
-window.loadProductStockDistribution = function(productName, spec) {
-    const tableDiv = document.getElementById('consign-stock-table');
-    const summaryDiv = document.getElementById('consign-stock-summary');
-    
-    const internalInventory = window.currentInventory ? window.currentInventory() : [];
-    const externalInventory = window.externalStock || [];
-    
-    // 建立已寄倉數量對照表
-    const consignedMap = {};
-    if (window.consignmentData && Array.isArray(window.consignmentData)) {
-        window.consignmentData.forEach(c => {
-            if (c.status !== 'active') return;
-            const key = `${c.productName || ''}|${c.spec || ''}|${c.batchNo || ''}|${c.sourceWarehouse || ''}`;
-            consignedMap[key] = (consignedMap[key] || 0) + (c.remainingQty || 0);
-        });
-    }
-    
-    // 收集該品項的所有庫存
-    const stocks = [];
-    
-    // 內倉庫存
-    internalInventory.forEach(item => {
-        if (item.productName !== productName) return;
-        if ((spec && item.spec !== spec) || (!spec && item.spec)) return;
-        if ((item.quantity || 0) <= 0) return;
-        const status = (item.status || '').toLowerCase();
-        if (status === 'shipped' || status === 'outbound' || status === 'deleted') return;
-        
-        const warehouseName = item.warehouse || item.company || '內倉';
-        const key = `${item.productName}|${item.spec || ''}|${item.batchNo || ''}|${warehouseName}`;
-        const consigned = consignedMap[key] || 0;
-        const available = Math.max(0, (item.quantity || 0) - consigned);
-        
-        stocks.push({
-            ...item,
-            stockType: 'internal',
-            warehouseName: warehouseName,
-            locationId: item.locationId || '',
-            consigned: consigned,
-            available: available,
-            stockKey: key
-        });
-    });
-    
-    // 外倉庫存
-    externalInventory.forEach(item => {
-        if (item.productName !== productName) return;
-        if ((spec && item.spec !== spec) || (!spec && item.spec)) return;
-        if ((item.quantity || 0) <= 0) return;
-        
-        let warehouseName = item.warehouseId || '';
-        const wh = window.warehousesData?.find(w => w.id === item.warehouseId);
-        if (wh) {
-            warehouseName = wh.name;
-        } else if (item.company) {
-            warehouseName = item.company + '_' + (item.warehouseId || '外倉');
-        }
-        
-        const key = `${item.productName}|${item.spec || ''}|${item.batchNo || ''}|${warehouseName}`;
-        const consigned = consignedMap[key] || 0;
-        const available = Math.max(0, (item.quantity || 0) - consigned);
-        
-        stocks.push({
-            ...item,
-            stockType: 'external',
-            warehouseName: warehouseName,
-            locationId: '',
-            consigned: consigned,
-            available: available,
-            stockKey: key
-        });
-    });
-    
-    // 儲存到全域
-    window._consignStockList = stocks;
-    
-    // 統計
-    const internalCount = stocks.filter(s => s.stockType === 'internal').length;
-    const externalCount = stocks.filter(s => s.stockType === 'external').length;
-    const totalQty = stocks.reduce((sum, s) => sum + (s.quantity || 0), 0);
-    const totalAvailable = stocks.reduce((sum, s) => sum + s.available, 0);
-    
-    summaryDiv.innerHTML = `內倉 ${internalCount} 筆 / 外倉 ${externalCount} 筆 · 可寄 <span class="text-emerald-400">${totalAvailable}</span> 件`;
-    
-    if (stocks.length === 0) {
-        tableDiv.innerHTML = '<div class="text-slate-500 text-sm text-center py-10">該品項無庫存</div>';
-        return;
-    }
-    
-    // 渲染庫存分布表
-    let html = '<div class="space-y-1">';
-    
-    // 先顯示內倉
-    const internalStocks = stocks.filter(s => s.stockType === 'internal');
-    if (internalStocks.length > 0) {
-        html += `<div class="text-blue-400 text-xs font-bold mb-1 mt-2"><i class="fa-solid fa-warehouse mr-1"></i>內倉庫存</div>`;
-        internalStocks.forEach((s, idx) => {
-            html += renderStockRow(s, 'internal', idx);
-        });
-    }
-    
-    // 再顯示外倉
-    const externalStocks = stocks.filter(s => s.stockType === 'external');
-    if (externalStocks.length > 0) {
-        html += `<div class="text-purple-400 text-xs font-bold mb-1 mt-3"><i class="fa-solid fa-building mr-1"></i>外倉庫存</div>`;
-        externalStocks.forEach((s, idx) => {
-            html += renderStockRow(s, 'external', idx);
-        });
-    }
-    
-    html += '</div>';
-    tableDiv.innerHTML = html;
-};
-
-// 渲染單筆庫存列
-function renderStockRow(stock, type, idx) {
-    const isInternal = type === 'internal';
-    const bgClass = isInternal ? 'border-blue-600/30' : 'border-purple-600/30';
-    const disabled = stock.available <= 0;
-    const rowId = `stock-${type}-${idx}`;
-    
-    // 檢查是否已選
-    const isSelected = window.consignSelectedItems.some(s => s.stockKey === stock.stockKey);
-    const selectedClass = isSelected ? 'bg-emerald-900/30 border-emerald-500' : 'bg-slate-700/30';
-    
-    return `
-        <div class="flex items-center gap-2 p-2 rounded border ${bgClass} ${selectedClass} ${disabled ? 'opacity-50' : ''}" id="row-${rowId}">
-            <input type="checkbox" 
-                id="chk-${rowId}" 
-                class="w-4 h-4 rounded" 
-                ${disabled ? 'disabled' : ''} 
-                ${isSelected ? 'checked' : ''}
-                onchange="toggleConsignStock('${rowId}', this.checked)"
-            >
-            <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
-                    <span class="text-white text-sm">${stock.warehouseName}</span>
-                    ${isInternal && stock.locationId ? `<span class="text-blue-400 text-xs">${stock.locationId}</span>` : ''}
-                </div>
-                <div class="flex items-center gap-2 text-[10px] text-slate-500">
-                    <span>批號: ${stock.batchNo || '-'}</span>
-                    ${stock.expDate || stock.expiryDate ? `<span>效期: ${stock.expDate || stock.expiryDate}</span>` : ''}
-                </div>
-            </div>
-            <div class="text-right text-sm">
-                <div class="text-white">${stock.quantity}<span class="text-slate-500 text-xs ml-0.5">件</span></div>
-                ${stock.consigned > 0 ? `<div class="text-amber-400 text-[10px]">已寄${stock.consigned}</div>` : ''}
-            </div>
-            <div class="text-right w-16">
-                <div class="text-emerald-400 font-bold">${stock.available}</div>
-                <div class="text-[10px] text-slate-500">可寄</div>
-            </div>
-            <div class="w-20">
-                <input type="number" 
-                    id="qty-${rowId}" 
-                    class="scan-input w-full py-1 text-center text-sm ${disabled ? 'opacity-50' : ''}" 
-                    min="1" 
-                    max="${stock.available}"
-                    placeholder="數量"
-                    ${disabled ? 'disabled' : ''}
-                    value="${isSelected ? (window.consignSelectedItems.find(s => s.stockKey === stock.stockKey)?.qty || '') : ''}"
-                    onchange="updateConsignStockQty('${rowId}')"
-                >
-            </div>
-        </div>
-    `;
-}
-
-// 勾選/取消勾選庫存項目
-window.toggleConsignStock = function(rowId, checked) {
-    const parts = rowId.split('-');
-    const type = parts[1];
-    const idx = parseInt(parts[2]);
-    
-    const stockList = type === 'internal' 
-        ? window._consignStockList.filter(s => s.stockType === 'internal')
-        : window._consignStockList.filter(s => s.stockType === 'external');
-    
-    const stock = stockList[idx];
-    if (!stock) return;
-    
-    if (checked) {
-        // 加入已選清單
-        const qtyInput = document.getElementById(`qty-${rowId}`);
-        const qty = parseInt(qtyInput?.value) || stock.available;
-        
-        if (!window.consignSelectedItems.some(s => s.stockKey === stock.stockKey)) {
-            window.consignSelectedItems.push({
-                ...stock,
-                qty: Math.min(qty, stock.available)
-            });
-        }
-        
-        // 更新數量欄位
-        if (qtyInput && !qtyInput.value) {
-            qtyInput.value = stock.available;
-        }
-    } else {
-        // 從已選清單移除
-        window.consignSelectedItems = window.consignSelectedItems.filter(s => s.stockKey !== stock.stockKey);
-    }
-    
-    updateConsignSelectedDisplay();
-};
-
-// 更新數量
-window.updateConsignStockQty = function(rowId) {
-    const qtyInput = document.getElementById(`qty-${rowId}`);
-    const checkbox = document.getElementById(`chk-${rowId}`);
-    const qty = parseInt(qtyInput?.value) || 0;
-    
-    const parts = rowId.split('-');
-    const type = parts[1];
-    const idx = parseInt(parts[2]);
-    
-    const stockList = type === 'internal' 
-        ? window._consignStockList.filter(s => s.stockType === 'internal')
-        : window._consignStockList.filter(s => s.stockType === 'external');
-    
-    const stock = stockList[idx];
-    if (!stock) return;
-    
-    if (qty > 0 && qty <= stock.available) {
-        // 自動勾選
-        if (checkbox && !checkbox.checked) {
-            checkbox.checked = true;
-        }
-        
-        // 更新或新增
-        const existIdx = window.consignSelectedItems.findIndex(s => s.stockKey === stock.stockKey);
-        if (existIdx >= 0) {
-            window.consignSelectedItems[existIdx].qty = qty;
-        } else {
-            window.consignSelectedItems.push({
-                ...stock,
-                qty: qty
-            });
-        }
-    } else if (qty <= 0) {
-        // 取消勾選
-        if (checkbox && checkbox.checked) {
-            checkbox.checked = false;
-        }
-        window.consignSelectedItems = window.consignSelectedItems.filter(s => s.stockKey !== stock.stockKey);
-    } else if (qty > stock.available) {
-        qtyInput.value = stock.available;
-        updateConsignStockQty(rowId);
-        return;
-    }
-    
-    updateConsignSelectedDisplay();
-};
-
-// 更新已選清單顯示
-window.updateConsignSelectedDisplay = function() {
-    const listDiv = document.getElementById('consign-selected-list');
-    const countDiv = document.getElementById('consign-selected-count');
-    const totalDiv = document.getElementById('consign-total-qty');
-    
-    const items = window.consignSelectedItems;
-    
-    if (items.length === 0) {
-        listDiv.innerHTML = '<div class="text-slate-500 text-sm text-center py-4">尚未選擇</div>';
-        countDiv.textContent = '0 筆';
-        totalDiv.textContent = '0 件';
-        return;
-    }
-    
-    let html = '';
-    let totalQty = 0;
-    
-    items.forEach((item, idx) => {
-        totalQty += item.qty;
-        const isInternal = item.stockType === 'internal';
-        const typeClass = isInternal ? 'text-blue-400' : 'text-purple-400';
-        const typeIcon = isInternal ? 'fa-warehouse' : 'fa-building';
-        
-        html += `
-            <div class="p-1.5 bg-slate-700/50 rounded text-xs group">
-                <div class="flex justify-between items-start">
-                    <div class="flex-1 min-w-0">
-                        <div class="text-white truncate">${item.productName}</div>
-                        <div class="text-slate-500">${item.spec || '-'}</div>
-                        <div class="${typeClass}"><i class="fa-solid ${typeIcon} mr-1"></i>${item.warehouseName}</div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-emerald-400 font-bold">${item.qty}</div>
-                        <button onclick="removeConsignSelected(${idx})" class="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100">
-                            <i class="fa-solid fa-times"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-    
-    listDiv.innerHTML = html;
-    countDiv.textContent = `${items.length} 筆`;
-    totalDiv.textContent = `${totalQty.toLocaleString()} 件`;
-};
-
-// 移除已選項目
-window.removeConsignSelected = function(idx) {
-    const item = window.consignSelectedItems[idx];
-    if (item) {
-        window.consignSelectedItems.splice(idx, 1);
-        
-        // 如果當前顯示的是該品項，更新勾選狀態
-        if (window.consignCurrentProduct && 
-            window.consignCurrentProduct.productName === item.productName &&
-            window.consignCurrentProduct.spec === item.spec) {
-            loadProductStockDistribution(item.productName, item.spec);
-        }
-    }
-    updateConsignSelectedDisplay();
-};
-
-window.renderConsignInventory = function(items) {
-    const container = document.getElementById('consign-inventory-container');
-
-    if (!items || items.length === 0) {
-        container.innerHTML = '<div class="text-slate-500 text-center py-10">無符合條件的庫存</div>';
-        return;
-    }
-    
-    // 建立資料索引（避免在 HTML 中嵌入 JSON）
-    window._consignItemsMap = {};
-
-    const groupedByWarehouse = {};
-    items.forEach((item, globalIdx) => {
-        const wh = item.warehouseName || '未分類';
-        if (!groupedByWarehouse[wh]) groupedByWarehouse[wh] = [];
-        
-        // 儲存到全域 map
-        const itemKey = 'item_' + globalIdx;
-        window._consignItemsMap[itemKey] = item;
-        item._itemKey = itemKey;
-        
-        groupedByWarehouse[wh].push(item);
-    });
-
-    let html = '';
-
-    Object.keys(groupedByWarehouse).sort().forEach(warehouse => {
-        const warehouseItems = groupedByWarehouse[warehouse];
-        const stockType = warehouseItems[0]?.stockType;
-        const isInternal = stockType === 'internal';
-        const whClass = isInternal ? 'bg-blue-600' : 'bg-purple-600';
-        const whIcon = isInternal ? 'fa-warehouse' : 'fa-building';
-        const typeLabel = isInternal ? '內倉' : '外倉';
-
-        html += `
-            <div class="mb-3">
-                <div class="flex items-center gap-2 mb-1 sticky top-0 bg-slate-800 py-1 z-10">
-                    <span class="px-2 py-0.5 ${whClass} rounded text-[10px]"><i class="fa-solid ${whIcon} mr-1"></i>${warehouse}</span>
-                    <span class="text-[10px] text-slate-500">${warehouseItems.length} 項 · ${typeLabel}</span>
-                </div>
-                <div class="space-y-1">
-        `;
-
-        warehouseItems.forEach((item, idx) => {
-            const itemKey = item._itemKey;
-            const itemId = `inv-${warehouse.replace(/[^a-zA-Z0-9]/g, '')}-${idx}`;
-            const isSelected = window.consignSelectedItems && window.consignSelectedItems.some(s => {
-                const sKey = `${s.productName}|${s.spec || ''}|${s.batchNo || ''}|${s.warehouseName || ''}`;
-                const iKey = `${item.productName}|${item.spec || ''}|${item.batchNo || ''}|${item.warehouseName || ''}`;
-                return sKey === iKey;
-            });
-            const availableClass = item.available > 0 ? 'text-emerald-400' : 'text-red-400';
-            const rowClass = isSelected ? 'bg-emerald-900/40 border-emerald-500' : 'bg-slate-700/50 border-slate-600';
-            const disabled = item.available <= 0;
-            
-            // 內倉顯示儲位，外倉不顯示
-            const locationDisplay = isInternal && item.locationId ? 
-                `<span><i class="fa-solid fa-location-dot mr-1"></i>${item.locationId}</span>` : '';
-
-            html += `
-                <div class="flex items-center gap-2 p-2 rounded border ${rowClass} ${disabled ? 'opacity-50' : 'hover:bg-slate-700'}" id="row-${itemId}">
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2">
-                            <span class="text-white font-medium truncate">${item.productName || ''}</span>
-                            <span class="text-slate-400 text-xs">${item.spec || ''}</span>
-                        </div>
-                        <div class="flex items-center gap-3 text-[10px] text-slate-500 mt-0.5">
-                            <span><i class="fa-solid fa-barcode mr-1"></i>${item.batchNo || '-'}</span>
-                            ${locationDisplay}
-                        </div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-white text-sm">${item.quantity || 0}<span class="text-slate-500 text-[10px] ml-0.5">件</span></div>
-                        ${item.consigned > 0 ? `<div class="text-amber-400 text-[10px]">已寄${item.consigned}</div>` : ''}
-                    </div>
-                    <div class="text-right w-14">
-                        <div class="${availableClass} font-bold">${item.available || 0}</div>
-                        <div class="text-[10px] text-slate-500">可寄</div>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <input type="number"
-                            id="qty-${itemId}"
-                            class="scan-input w-16 py-1 text-center text-sm ${disabled ? 'opacity-50' : ''}"
-                            min="1"
-                            max="${item.available || 0}"
-                            placeholder="數量"
-                            ${disabled ? 'disabled' : ''}
-                            onkeydown="if(event.key==='Enter'){window.addConsignItemByKey('${itemId}', '${itemKey}', this)}"
-                        >
-                        <button
-                            onclick="window.addConsignItemByKey('${itemId}', '${itemKey}', document.getElementById('qty-${itemId}'))"
-                            class="px-2 py-1 ${disabled ? 'bg-slate-700 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white'} rounded"
-                            ${disabled ? 'disabled' : ''}
-                        >
-                            <i class="fa-solid fa-plus"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
-        });
-
-        html += '</div></div>';
-    });
-
-    container.innerHTML = html;
-}
-
-// 新增：透過 key 查找資料並加入
-window.addConsignItemByKey = function(itemId, itemKey, qtyInput) {
-    const itemData = window._consignItemsMap ? window._consignItemsMap[itemKey] : null;
-    if (!itemData) {
-        console.error('找不到品項資料:', itemKey);
-        alert('資料讀取錯誤，請重新開啟視窗');
-        return;
-    }
-    window.addConsignItem(itemId, qtyInput, itemData);
-};
-
-window.filterConsignInventory = function() {
-    const searchText = (document.getElementById('consign-search-input')?.value || '').toLowerCase();
-    const typeFilter = document.getElementById('consign-warehouse-filter')?.value || '';
-
-    let filtered = window.consignInventoryData || [];
-
-    // 篩選內倉/外倉
-    if (typeFilter === 'internal') {
-        filtered = filtered.filter(item => item.stockType === 'internal');
-    } else if (typeFilter === 'external') {
-        filtered = filtered.filter(item => item.stockType === 'external');
-    }
-
-    // 文字搜尋
-    if (searchText) {
-        filtered = filtered.filter(item =>
-            (item.productName || '').toLowerCase().includes(searchText) ||
-            (item.spec || '').toLowerCase().includes(searchText) ||
-            (item.batchNo || '').toLowerCase().includes(searchText) ||
-            (item.locationId || '').toLowerCase().includes(searchText) ||
-            (item.warehouseName || '').toLowerCase().includes(searchText)
-        );
-    }
-
-    window.renderConsignInventory(filtered);
-};
-
-// 別名
-window.filterConsignList = window.filterConsignInventory;
-
-window.addConsignItem = function(itemId, qtyInput, itemData) {
-    const qty = parseInt(qtyInput?.value) || 0;
-
-    if (qty <= 0) {
-        qtyInput?.focus();
-        return;
-    }
-
-    if (qty > itemData.available) {
-        alert(`數量不能超過可寄數量 ${itemData.available}`);
-        return;
-    }
-
-    // 用品名+規格+批號+倉庫來識別唯一項目
-    const itemKey = `${itemData.productName}|${itemData.spec || ''}|${itemData.batchNo || ''}|${itemData.warehouseName || ''}`;
-    
-    const existingIdx = window.consignSelectedItems.findIndex(s => {
-        const sKey = `${s.productName}|${s.spec || ''}|${s.batchNo || ''}|${s.warehouseName || ''}`;
-        return sKey === itemKey;
-    });
-
-    if (existingIdx >= 0) {
-        window.consignSelectedItems[existingIdx].qty = qty;
-    } else {
-        window.consignSelectedItems.push({
-            palletId: itemData.palletId || itemData.id,
-            productName: itemData.productName,
-            spec: itemData.spec || '',
-            batchNo: itemData.batchNo || '',
-            expDate: itemData.expDate || itemData.expiryDate || '',
-            locationId: itemData.locationId || '',
-            warehouseName: itemData.warehouseName || '',
-            stockType: itemData.stockType || 'internal', // 內倉或外倉
-            company: itemData.company || '',
-            stock: itemData.quantity,
-            available: itemData.available,
-            qty: qty
-        });
-    }
-
-    if (qtyInput) qtyInput.value = '';
-
-    window.updateConsignSelectedList();
-
-    const row = document.getElementById(`row-${itemId}`);
-    if (row) {
-        row.classList.remove('bg-slate-700/50', 'border-slate-600');
-        row.classList.add('bg-emerald-900/40', 'border-emerald-500');
-    }
-};
-
-window.updateConsignSelectedList = function() {
-    const listDiv = document.getElementById('consign-selected-list');
-    const summaryDiv = document.getElementById('consign-selected-summary');
-    const totalDiv = document.getElementById('consign-total-qty');
-
-    const items = window.consignSelectedItems;
-
-    if (items.length === 0) {
-        listDiv.innerHTML = `
-            <div class="text-slate-500 text-sm text-center py-8">
-                <i class="fa-solid fa-arrow-right text-2xl mb-2 block opacity-30"></i>
-                從右側選擇品項
-            </div>
-        `;
-        summaryDiv.textContent = '0 品項';
-        totalDiv.textContent = '0 件';
-        return;
-    }
-
-    let html = '';
-    let totalQty = 0;
-
-    items.forEach((item, idx) => {
-        totalQty += item.qty;
-        const isInternal = item.stockType === 'internal';
-        const whClass = isInternal ? 'text-blue-400' : 'text-purple-400';
-        const typeIcon = isInternal ? 'fa-warehouse' : 'fa-building';
-
-        html += `
-            <div class="flex items-center gap-2 p-2 bg-slate-700/50 rounded group">
-                <div class="flex-1 min-w-0">
-                    <div class="text-white text-sm truncate">${item.productName}</div>
-                    <div class="text-[10px] text-slate-500">${item.spec || ''} | ${item.batchNo || '-'}</div>
-                    <div class="text-[10px] ${whClass}"><i class="fa-solid ${typeIcon} mr-1"></i>${item.warehouseName}${isInternal && item.locationId ? ' · ' + item.locationId : ''}</div>
-                </div>
-                <div class="text-right">
-                    <input type="number"
-                        class="scan-input w-14 py-0.5 text-center text-sm"
-                        value="${item.qty}"
-                        min="1"
-                        max="${item.available}"
-                        onchange="updateConsignItemQty(${idx}, this.value)"
-                    >
-                </div>
-                <button onclick="removeConsignItem(${idx})" class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 px-1">
-                    <i class="fa-solid fa-times"></i>
-                </button>
-            </div>
-        `;
-    });
-
-    listDiv.innerHTML = html;
-    summaryDiv.textContent = `${items.length} 品項`;
-    totalDiv.textContent = `${totalQty.toLocaleString()} 件`;
-}
-
-window.updateConsignItemQty = function(idx, value) {
-    const qty = parseInt(value) || 0;
-    const item = window.consignSelectedItems[idx];
-
-    if (!item) return;
-
-    if (qty <= 0) {
-        removeConsignItem(idx);
-        return;
-    }
-
-    if (qty > item.available) {
-        alert(`數量不能超過可寄數量 ${item.available}`);
-        return;
-    }
-
-    item.qty = qty;
-    window.updateConsignSelectedList();
-};
-
-window.removeConsignItem = function(idx) {
-    window.consignSelectedItems.splice(idx, 1);
-    window.updateConsignSelectedList();
-    filterConsignInventory(); // 重新渲染以更新標記
-};
-
-window.saveConsignmentFromSelection = async function() {
-    const customer = document.getElementById('consign-customer')?.value.trim();
-    const consignDate = document.getElementById('consign-date')?.value;
-    const freeUntil = document.getElementById('consign-free-until')?.value;
-    const customRate = parseFloat(document.getElementById('consign-rate')?.value) || 0.37;
-
-    if (!customer) { alert('請輸入客戶名稱'); return; }
-    if (window.consignSelectedItems.length === 0) { alert('請至少選擇一個品項'); return; }
-
-    const freeUntilDate = new Date(freeUntil);
-    const chargeStartDate = new Date(freeUntilDate);
-    chargeStartDate.setDate(chargeStartDate.getDate() + 1);
-    const chargeStartStr = chargeStartDate.toISOString().split('T')[0];
-
-    try {
-        for (let i = 0; i < window.consignSelectedItems.length; i++) {
-            const item = window.consignSelectedItems[i];
-            const isInternal = item.stockType === 'internal';
-            
-            // 內倉：智能建議儲位（使用原有儲位）
-            let locationId = '';
-            if (isInternal) {
-                locationId = item.locationId || '';
-                // 如果沒有儲位，嘗試智能建議
-                if (!locationId && typeof window.suggestLocation === 'function') {
-                    const suggested = window.suggestLocation(item.productName);
-                    locationId = suggested || '';
-                }
-            }
-
-            const consignment = {
-                source: item.stockType || 'internal',
-                sourceWarehouse: item.warehouseName || '',
-                locationId: locationId,
-                productName: item.productName || '',
-                spec: item.spec || '',
-                batchNo: item.batchNo || '',
-                expDate: item.expDate || item.expiryDate || '',
-                customer: customer,
-                originalQty: item.qty,
-                remainingQty: item.qty,
-                consignmentDate: consignDate,
-                freeUntil: freeUntil,
-                chargeStartDate: chargeStartStr,
-                ratePerUnit: customRate,
-                note: '',
-                pickups: [],
-                status: 'active',
-                createdAt: new Date().toISOString()
-            };
-            
-            console.log('📝 儲存寄倉:', consignment.productName, '來源:', consignment.source, '倉庫:', consignment.sourceWarehouse);
-
-            await window.saveConsignmentToFirebase(consignment);
-        }
-
-        WMS.closeModal('consignment-modal');
-
-        const totalQty = window.consignSelectedItems.reduce((sum, item) => sum + item.qty, 0);
-        showNotification(`✅ 已新增 ${window.consignSelectedItems.length} 筆寄倉：${customer}，共 ${totalQty} 件`, 'success');
-
-        setTimeout(() => loadConsignmentList(), 50);
-    } catch(e) {
-        console.error('儲存寄倉失敗:', e);
-        alert('❌ 儲存失敗：' + e.message);
-    }
-};
-
-window.getLocationConsignments = function(locationId) {
-    const consignments = [];
-    
-    if (!window.consignmentData || !Array.isArray(window.consignmentData)) {
-        return consignments;
-    }
-
-    window.consignmentData.forEach(c => {
-        if (c.status !== 'active') return;
-        
-        // 檢查 locationId 是否匹配（內倉寄庫才有 locationId）
-        if (c.locationId && c.locationId === locationId) {
-            consignments.push({
-                customer: c.customer,
-                productName: c.productName,
-                spec: c.spec || '',
-                qty: c.remainingQty || 0
-            });
-        }
-    });
-
-    if (consignments.length > 0) {
-        console.log('🏷️ 找到寄庫:', locationId, consignments);
-    }
-
-    return consignments;
-};
-
 window.loadConsignmentList = function() {
     const tbody = document.getElementById('consignment-list');
     if (!tbody) return;
@@ -25490,7 +24046,7 @@ window.loadConsignmentList = function() {
     data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = today.toLocalYMD();
 
     if (statusFilter === 'free') {
         data = data.filter(c => c.status === 'active' && c.freeUntil >= todayStr);
@@ -25611,7 +24167,7 @@ window.openPickupModal = function(consignmentId) {
     const c = window.consignmentData.find(item => item.id === consignmentId);
     if (!c) return;
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toLocalYMD();
 
     const content = `
         <div class="space-y-4">
@@ -26134,7 +24690,7 @@ window.exportConsignments = function() {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '寄倉清單');
-    XLSX.writeFile(wb, `寄倉清單_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, `寄倉清單_${new Date().toLocalYMD()}.xlsx`);
 
     showNotification('✅ 已匯出寄倉清單', 'success');
 };
@@ -26961,11 +25517,31 @@ console.log('💰 倉租管理模組已載入');
         if (newQty === null) return;
         var qty = parseInt(newQty);
         if (isNaN(qty) || qty < 0) { alert('請輸入有效的數量'); return; }
+        if (qty === 0 && !confirm('數量為 0，是否刪除此筆資料？')) return;
         try {
-            if (qty === 0) { if (!confirm('數量為 0，是否刪除此筆資料？')) return; await window.deleteDoc(window.doc(window.db, 'externalStock', id)); }
-            else { await window.updateDoc(window.doc(window.db, 'externalStock', id), { quantity: qty, updatedAt: new Date().toISOString() }); }
+            // 以交易讀最新數量，寫入差額並留下調整記錄
+            var ref = window.doc(window.db, 'externalStock', id);
+            await window.db.runTransaction(async function(tx) {
+                var snap = await tx.get(ref);
+                if (!snap.exists) throw new Error('資料已不存在（可能已被其他人處理）');
+                var cur = snap.data();
+                var before = parseFloat(cur.quantity) || 0;
+                if (qty === 0) tx.delete(ref);
+                else tx.update(ref, { quantity: qty, updatedAt: new Date().toISOString() });
+                tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
+                    type: 'adjust',
+                    company: cur.company || '',
+                    productName: cur.productName,
+                    spec: cur.spec || '',
+                    batchNo: cur.batchNo || '',
+                    quantity: qty,
+                    quantityChange: qty - before,
+                    locationId: cur.warehouseId || '',
+                    note: '外倉庫存手動調整：' + before + ' → ' + qty
+                }));
+            });
             alert('✅ 更新成功');
-            setTimeout(checkAndRenderExternal, 500);
+            await window.loadExternalStock();
         } catch (e) { alert('❌ 更新失敗：' + e.message); }
     };
     
@@ -26973,11 +25549,11 @@ console.log('💰 倉租管理模組已載入');
         var item = (window.externalStock || []).find(s => s.id === id);
         if (!item) { alert('找不到此筆資料'); return; }
         if (!confirm('確定刪除？\n\n倉庫：' + getWarehouseName(item.warehouseId) + '\n品名：' + item.productName + '\n數量：' + item.quantity)) return;
-        try { await window.deleteDoc(window.doc(window.db, 'externalStock', id)); alert('✅ 已刪除'); setTimeout(checkAndRenderExternal, 500); } catch (e) { alert('❌ 刪除失敗：' + e.message); }
+        try { await window.deleteDoc(window.doc(window.db, 'externalStock', id)); alert('✅ 已刪除'); await window.loadExternalStock(); } catch (e) { alert('❌ 刪除失敗：' + e.message); }
     };
     
     var originalLoadExternalStock = window.loadExternalStock;
-    if (typeof originalLoadExternalStock === 'function') { window.loadExternalStock = function() { originalLoadExternalStock(); setTimeout(checkAndRenderExternal, 500); }; }
+    if (typeof originalLoadExternalStock === 'function') { window.loadExternalStock = async function() { await originalLoadExternalStock(); checkAndRenderExternal(); }; }
     setInterval(function() { var tbody = document.getElementById('inventory-list-body'); if (tbody && window.externalStock && window.externalStock.length > 0 && !tbody.querySelector('tr[data-type="external"]')) checkAndRenderExternal(); }, 2000);
     
     // ========== 8. 貨櫃入庫作業優化 ==========
@@ -27343,3 +25919,82 @@ console.log('💰 倉租管理模組已載入');
     };
 
 })();
+
+
+// ========== 資料格式遷移（一次性，限管理員）==========
+// 把既有資料統一成目前的格式：
+//   pallets / externalStock / inboundOrders：效期統一為 'YYYY-MM-DD' 並同時寫入 expiryDate、expDate；數量字串轉數字
+//   inventoryLogs：timestamp 統一為 ISO 字串（現場掃描舊記錄是 Timestamp，日期查詢查不到）
+// dryRun = true 只統計不寫入
+window.migrateDataFormats = async function(dryRun) {
+    if (!window.currentUser || window.currentUser.role !== 'admin') {
+        throw new Error('只有管理員可以執行資料遷移');
+    }
+    var report = {};
+    var pending = [];
+
+    function sameValue(a, b) {
+        return JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+    }
+
+    for (var coll of ['pallets', 'externalStock', 'inboundOrders']) {
+        var snap = await window.db.collection(coll).get();
+        var changed = 0;
+        snap.forEach(function(d) {
+            var orig = d.data();
+            var norm = window.normalizeStockRecord(Object.assign({}, orig));
+            var update = {};
+            ['expiryDate', 'expDate', 'quantity'].forEach(function(f) {
+                if (norm[f] !== undefined && !sameValue(orig[f], norm[f])) update[f] = norm[f];
+            });
+            if (Object.keys(update).length > 0) {
+                changed++;
+                pending.push({ ref: d.ref, data: update });
+            }
+        });
+        report[coll] = { total: snap.size, changed: changed };
+    }
+
+    var logSnap = await window.db.collection('inventoryLogs').get();
+    var logChanged = 0;
+    logSnap.forEach(function(d) {
+        var ts = d.data().timestamp;
+        if (ts && typeof ts !== 'string') {
+            var date = typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+            if (!isNaN(date.getTime())) {
+                logChanged++;
+                pending.push({ ref: d.ref, data: { timestamp: date.toISOString() } });
+            }
+        }
+    });
+    report.inventoryLogs = { total: logSnap.size, changed: logChanged };
+
+    if (!dryRun) {
+        for (var i = 0; i < pending.length; i += 400) {
+            var batch = window.db.batch();
+            pending.slice(i, i + 400).forEach(function(p) { batch.update(p.ref, p.data); });
+            await batch.commit();
+        }
+    }
+    report.dryRun = !!dryRun;
+    report.totalChanged = pending.length;
+    return report;
+};
+
+window.runDataMigrationUI = async function(dryRun) {
+    var out = document.getElementById('dev-migrate-result');
+    if (!dryRun && !confirm('確定要把既有資料轉成統一格式？\n\n建議先按「預覽」確認筆數，並先做一次備份。')) return;
+    if (out) out.innerHTML = '<span class="text-yellow-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>處理中...</span>';
+    try {
+        var r = await window.migrateDataFormats(dryRun);
+        var names = { pallets: '庫存棧板', externalStock: '外倉庫存', inboundOrders: '入庫單', inventoryLogs: '異動記錄' };
+        var html = '<div class="text-white font-bold mb-1">' + (r.dryRun ? '預覽（尚未寫入）' : '✅ 已完成') + '</div>';
+        Object.keys(names).forEach(function(k) {
+            html += '<div>' + names[k] + '：' + r[k].changed + ' / ' + r[k].total + ' 筆需要轉換</div>';
+        });
+        if (out) out.innerHTML = html;
+    } catch (e) {
+        console.error('資料遷移失敗:', e);
+        if (out) out.innerHTML = '<span class="text-red-400">❌ ' + e.message + '</span>';
+    }
+};
