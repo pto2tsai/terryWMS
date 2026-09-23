@@ -847,6 +847,9 @@
         window.selectInboundType = function(type) {
             var typeSelect = document.getElementById('in-type-select');
             if (typeSelect) typeSelect.value = type;
+            // 入庫單與直接入庫都讀 in-category（之前按鈕沒寫入，所有入庫都被當成「採購」）
+            var cat = document.getElementById('in-category');
+            if (cat) cat.value = type;
 
             document.querySelectorAll('.inbound-type-btn').forEach(function(btn) {
                 btn.classList.remove('active', 'border-blue-500', 'bg-blue-900/50', 'text-white');

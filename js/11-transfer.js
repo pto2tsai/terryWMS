@@ -431,7 +431,16 @@
                         if (transferInMethod === 'pending') {
                             // ===== 方式A：產生待執行工單 =====
                             var orderNo = await window.nextDocNo('TR');
-                            creates.push({ ref: window.db.collection('inboundOrders').doc(), data: {
+                            var inRef = window.db.collection('inboundOrders').doc();
+                            // 同時發布入庫任務到手機：堆高機上架掃儲位即入帳
+                            creates.push({ ref: window.db.collection('inboundTasks').doc(), data: {
+                                orderId: inRef.id, orderNo: orderNo, palletId: orderNo,
+                                productName: t.productName, spec: t.spec || '', batchNo: t.batchNo || '',
+                                expDate: t.expDate || '', company: t.company, quantity: t.quantity,
+                                locationId: '待指定', status: 'pending', createdAt: new Date().toISOString(),
+                                createdBy: window.getOperatorName ? window.getOperatorName() : 'system'
+                            }});
+                            creates.push({ ref: inRef, data: {
                                 docNo: orderNo,          // 單據編號
                                 orderNo: orderNo,
                                 productName: t.productName,

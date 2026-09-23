@@ -126,3 +126,5 @@ Firebase 主控台 → Firestore Database → 規則 → 貼上 `firestore.rules
 ## 測試
 
 見 [`tests/README.md`](tests/README.md)。
+
+上線後人工驗收（入庫 → 波次出貨 → 調撥 → 盤點）：見 [`docs/上線驗收步驟.md`](docs/上線驗收步驟.md)。

@@ -38,6 +38,8 @@ await page.click('#btn-execute-transfer'); await page.waitForTimeout(3000);
 H.note('dialogs: ' + JSON.stringify(log.dialogs.map(d => d.msg.slice(0, 150))));
 const e1 = await H.one('externalStock', 'E1'); const io = await H.all('inboundOrders');
 H.check('A 調撥入庫：外倉 20→12，產生待執行入庫單 8 件', okA && e1 && e1.quantity === 12 && io.length === 1 && io[0].quantity === 8, JSON.stringify({ e1: e1 && e1.quantity, io: io.map(o => [o.docNo, o.quantity, o.status, o.locationId]) }));
+const tk = await H.all('inboundTasks');
+H.check('A 調撥入庫同時發布手機入庫任務（帶入庫單 ID）', tk.length === 1 && tk[0].orderId === io[0]._id && tk[0].status === 'pending' && tk[0].quantity === 8, JSON.stringify(tk));
 // ===== B. 在智能入庫中心執行這張調撥入庫單 =====
 await H.nav(page, 'unified-inbound');
 await page.click("button[onclick=\"showPendingInbounds()\"]", { force: true }); await page.waitForTimeout(2500);
@@ -49,6 +51,8 @@ if (single) { await page.click('#pending-inbound-modal [onclick="' + single + '"
 H.note('B dialogs: ' + JSON.stringify(log.dialogs.slice(nD).map(d => d.type + ':' + d.msg.slice(0, 150))));
 const pB = (await H.all('pallets')).filter(p => p.productName === '透抽');
 H.check('B 執行調撥入庫單後，透抽 8 件在一個真實儲位（不是「待指定」）', pB.length === 1 && pB[0].quantity === 8 && /^([IJK]-[A-H]-\d{2}-[123]F|TEMP-IN)$/.test(pB[0].locationId), JSON.stringify(pB.map(p => [p.quantity, p.locationId])));
+const tkB = await H.all('inboundTasks');
+H.check('B 電腦入帳後手機任務自動結案', tkB.length === 1 && tkB[0].status === 'done', JSON.stringify(tkB.map(t => t.status)));
 await page.evaluate(() => { const m = document.getElementById('pending-inbound-modal'); if (m) m.remove(); });
 
 // ===== C. 調撥出庫：本倉白蝦 10 件 → 台中外倉 =====
