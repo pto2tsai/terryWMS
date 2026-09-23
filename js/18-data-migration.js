@@ -18,16 +18,29 @@ window.migrateDataFormats = async function(dryRun) {
         return JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
     }
 
+    var palletIds = {};
+    var orderFixes = 0;
     for (var coll of ['pallets', 'externalStock', 'inboundOrders']) {
         var snap = await window.db.collection(coll).get();
         var changed = 0;
         snap.forEach(function(d) {
             var orig = d.data();
+            if (coll === 'pallets' && orig.palletId) palletIds[orig.palletId] = true;
             var norm = window.normalizeStockRecord(Object.assign({}, orig));
             var update = {};
             ['expiryDate', 'expDate', 'quantity'].forEach(function(f) {
                 if (norm[f] !== undefined && !sameValue(orig[f], norm[f])) update[f] = norm[f];
             });
+            if (coll === 'inboundOrders') {
+                // 舊版「重新送審」把狀態改成 pending_approval：單子從待核准、待入帳兩邊都消失
+                if (orig.status === 'pending_approval') {
+                    update.approvalStatus = 'pending';
+                    update.status = palletIds[orig.docNo] ? 'completed' : 'pending';
+                }
+                // 舊版外倉入庫單停在「待執行」：建立時已加到外倉庫存，不能再入帳到本倉
+                if (orig.isExternal && orig.status === 'pending') update.status = 'completed';
+                if (update.status || update.approvalStatus) orderFixes++;
+            }
             if (Object.keys(update).length > 0) {
                 changed++;
                 pending.push({ ref: d.ref, data: update });
@@ -49,6 +62,7 @@ window.migrateDataFormats = async function(dryRun) {
         }
     });
     report.inventoryLogs = { total: logSnap.size, changed: logChanged };
+    report.orderFixes = orderFixes;
 
     if (!dryRun) {
         for (var i = 0; i < pending.length; i += 400) {
@@ -73,6 +87,7 @@ window.runDataMigrationUI = async function(dryRun) {
         Object.keys(names).forEach(function(k) {
             html += '<div>' + names[k] + '：' + r[k].changed + ' / ' + r[k].total + ' 筆需要轉換</div>';
         });
+        html += '<div>其中入庫單狀態修正（卡住的重新送審單、外倉入庫單）：' + r.orderFixes + ' 筆</div>';
         if (out) out.innerHTML = html;
     } catch (e) {
         console.error('資料遷移失敗:', e);

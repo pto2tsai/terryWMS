@@ -1,22 +1,34 @@
 // ============================================================
 // js/shared/picking-list.js — 依波次彙總產生揀貨清單（桌機版與手機版共用）
 // 先進先出（效期早的先揀），同品項依效期排序；庫存不足的項目標記 shortage
+// 不揀：已過期的板、品管留置（V-QC）與業務保留（V-SALES）儲位的板
+// 崇文／八方的庫存可以互相調用，揀貨項目帶 company 讓現場看得出是哪家的貨
 // ============================================================
+
+// 這些儲位的貨不能拿去出貨
+window.isHoldLocation = function(loc) { return /^V-(QC|SALES)/.test(String(loc || '').toUpperCase()); };
 
 window.buildWavePickingList = function(wave, pallets) {
     const pickingList = [];
+    const today = new Date().toLocalYMD();
 
     (wave.summary || []).forEach(item => {
         let needed = item.totalQty;
         const productName = item.productName;
         const spec = item.spec || '';
 
+        let expiredQty = 0, heldQty = 0;
         const matchingPallets = pallets.filter(p => {
             const pName = p.productName || '';
             const pSpec = p.spec || '';
             // 規格：訂單沒填規格時不限；有填時棧板規格不能是空的，且需互相包含
-            return pName === productName &&
+            const same = pName === productName &&
                 (spec === '' || (pSpec !== '' && (pSpec.includes(spec) || spec.includes(pSpec))));
+            if (!same) return false;
+            const exp = window.normalizeDateValue(p.expiryDate || p.expDate);
+            if (exp && exp < today) { expiredQty += parseInt(p.quantity) || 0; return false; }
+            if (window.isHoldLocation(p.locationId)) { heldQty += parseInt(p.quantity) || 0; return false; }
+            return true;
         }).sort((a, b) => {
             const dateA = window.normalizeDateValue(a.expiryDate || a.expDate) || '9999-12-31';
             const dateB = window.normalizeDateValue(b.expiryDate || b.expDate) || '9999-12-31';
@@ -32,7 +44,10 @@ window.buildWavePickingList = function(wave, pallets) {
             if (pick > 0) {
                 pickingList.push({
                     id: pallet.palletId + '-' + item.productName,
+                    docId: pallet.id || '',
                     palletId: pallet.palletId,
+                    company: pallet.company || '',
+                    totalWeight: parseFloat(pallet.totalWeight) || 0,
                     locationId: pallet.locationId,
                     productName: pallet.productName,
                     spec: pallet.spec || '',
@@ -52,6 +67,7 @@ window.buildWavePickingList = function(wave, pallets) {
                 id: 'shortage-' + item.productName,
                 palletId: '-',
                 locationId: '⚠️ 庫存不足',
+                note: [expiredQty ? '過期 ' + expiredQty + ' 件未揀' : '', heldQty ? '留置／保留 ' + heldQty + ' 件未揀' : ''].filter(Boolean).join('、'),
                 productName: item.productName,
                 spec: item.spec || '',
                 batchNo: '',
@@ -111,7 +127,7 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
     const missing = [];
     const changes = [];
     pickedItems.forEach(item => {
-        const pallet = pallets.find(p => p.palletId === item.palletId);
+        const pallet = (item.docId && pallets.find(p => p.id === item.docId)) || pallets.find(p => p.palletId === item.palletId);
         if (!pallet || !pallet.id) { missing.push(item.palletId || item.productName); return; }
         changes.push({
             ref: db.collection('pallets').doc(pallet.id),
@@ -128,7 +144,7 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
         productName: i.productName || '',
         spec: i.spec || '',
         qty: parseInt(i.pickQty) || 0,
-        reason: i.shortage ? '庫存不足' : '未揀'
+        reason: i.shortage ? '庫存不足' + (i.note ? '（' + i.note + '）' : '') : '未揀'
     }));
 
     const waveRef = wave.id ? db.collection('waves').doc(wave.id) : null;
@@ -164,6 +180,7 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
         logs: function() {
             return pickedItems.map(item => ({
                 type: 'outbound',
+                company: item.company || '',
                 productName: item.productName,
                 spec: item.spec,
                 quantity: item.pickQty,

@@ -62,7 +62,7 @@ window.submitStocktakeItem = async function() {
                 const cur = parseFloat(snap.data().quantity) || 0;
                 if (cur !== book) throw new Error('盤點期間有異動（帳面 ' + book + ' → 現在 ' + cur + '），請重新掃描此板');
                 if (counted === 0) tx.delete(ref);
-                else tx.update(ref, { quantity: counted, lastStocktakeAt: new Date().toISOString() });
+                else tx.update(ref, Object.assign({ quantity: counted, lastStocktakeAt: new Date().toISOString() }, window.scaledWeight(snap.data(), cur, counted)));
                 tx.set(db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
                     type: 'adjust', company: p.company, productName: p.productName, spec: p.spec, batchNo: p.batchNo,
                     quantity: counted, quantityChange: diff, locationId: p.locationId, palletId: p.palletId, expDate: p.expDate,

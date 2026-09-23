@@ -149,7 +149,7 @@ window.submitStocktake = async function() {
                     throw e;
                 }
                 if (counted === 0) tx.delete(ref);
-                else tx.update(ref, { quantity: counted, lastStocktakeAt: new Date().toISOString() });
+                else tx.update(ref, Object.assign({ quantity: counted, lastStocktakeAt: new Date().toISOString() }, window.scaledWeight(snap.data(), cur, counted)));
                 tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
                     type: 'adjust',
                     company: r.company,

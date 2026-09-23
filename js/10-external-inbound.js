@@ -370,7 +370,8 @@
                 unitWeight: unitWeight,
                 totalWeight: totalWeight,
                 vendor: vendor,
-                status: 'pending', // 全部都是待執行
+                // 外倉入庫建立時就直接加到外倉庫存，所以入庫單直接完成；本倉入庫待執行（上架入帳）
+                status: isExternal ? 'completed' : 'pending',
                 needsApproval: needsApproval, // 標記是否需要審核
                 approvalStatus: needsApproval ? 'pending' : 'not_required', // pending=待審核, approved=已審核, not_required=不需審核
                 expiryWarning: expiryCheck.status !== 'ok' ? expiryCheck.status : null, // 效期警示狀態
@@ -852,7 +853,9 @@
 
                 window.pendingInbounds = [];
                 snapshot.forEach(function(doc) {
-                    window.pendingInbounds.push({ id: doc.id, ...doc.data() });
+                    var d = doc.data();
+                    if (d.isExternal) return;   // 舊資料：外倉入庫已直接進外倉庫存，不能再入帳到本倉
+                    window.pendingInbounds.push({ id: doc.id, ...d });
                 });
 
                 window.pendingInbounds.sort(function(a, b) {
@@ -909,7 +912,7 @@
                 }
                 var q = window.query(window.collection(window.db, 'inboundOrders'), window.where('status', '==', 'pending'));
                 var snapshot = await window.getDocs(q);
-                var count = snapshot.size;
+                var count = snapshot.docs.filter(function(d) { return !d.data().isExternal; }).length;
                 var el = document.getElementById('pending-inbound-count');
                 if (el) el.innerText = count;
             } catch(e) {
@@ -1098,14 +1101,18 @@
             }
 
             try {
-                await window.updateDoc(window.doc(window.db, 'inboundOrders', orderId), {
+                var ref = window.doc(window.db, 'inboundOrders', orderId);
+                var cur = (await window.getDoc(ref)).data() || {};
+                await window.updateDoc(ref, {
                     approvalStatus: 'rejected',
                     rejectReason: reason,
                     rejectedBy: window.currentUser ? window.currentUser.email : 'admin',
                     rejectedAt: new Date().toISOString()
                 });
 
-                alert('✅ 已駁回！倉管將收到通知進行修改');
+                // 財務核准只是對帳，不擋入帳：貨可能已經入庫了
+                alert('✅ 已駁回！倉管將收到通知進行修改' + (cur.status === 'completed'
+                    ? '\n\n⚠️ 此單的貨已經入帳（' + (cur.locationId || '') + '），若數量或品項有誤，庫存要另外調整。' : ''));
                 closeRejectModal();
                 loadApprovalList();
                 updateApprovalCount();
@@ -1146,19 +1153,33 @@
             if (!exp) { alert('請輸入效期'); return; }
 
             try {
-                await window.updateDoc(window.doc(window.db, 'inboundOrders', orderId), {
+                var ref = window.doc(window.db, 'inboundOrders', orderId);
+                var cur = (await window.getDoc(ref)).data() || {};
+                var fields = {
                     productName: name,
                     spec: document.getElementById('edit-spec').value.trim(),
                     quantity: qty,
                     batchNo: document.getElementById('edit-batch').value.trim(),
                     expDate: exp || '',
-                    locationId: document.getElementById('edit-loc').value.trim(),
-                    vendor: document.getElementById('edit-vendor').value.trim(),
-                    status: 'pending_approval',
+                    vendor: document.getElementById('edit-vendor').value.trim()
+                };
+                var posted = cur.status === 'completed';
+                if (!posted) fields.locationId = document.getElementById('edit-loc').value.trim();
+                // 重新送審：回到財務待核准清單（入帳狀態不變；之前改成 pending_approval 會讓單子從兩邊清單都消失）
+                await window.updateDoc(ref, Object.assign({}, fields, {
+                    approvalStatus: 'pending',
                     resubmittedAt: new Date().toISOString()
-                });
-
-                alert('✅ 已修改並重新送審！');
+                }));
+                // 還沒上架的：手機入庫任務一併更新顯示內容
+                if (!posted && cur.docNo) {
+                    var tasks = await window.db.collection('inboundTasks').where('orderNo', '==', cur.docNo).get();
+                    await Promise.all(tasks.docs.filter(function(d) { return d.data().status === 'pending'; }).map(function(d) {
+                        return d.ref.update({ productName: fields.productName, spec: fields.spec, quantity: qty, batchNo: fields.batchNo, expDate: fields.expDate, locationId: fields.locationId || d.data().locationId });
+                    }));
+                }
+                var changedStock = posted && (Number(cur.quantity) !== qty || cur.productName !== name || (cur.batchNo || '') !== fields.batchNo);
+                alert('✅ 已修改並重新送審！' + (changedStock
+                    ? '\n\n⚠️ 此單的貨已經入帳，修改入庫單不會改動庫存。\n請到「庫存查詢」找板號 ' + (cur.docNo || '') + ' 調整數量／品項。' : ''));
                 closeEditInboundModal();
                 loadApprovalList();
                 updateApprovalCount();
