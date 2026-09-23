@@ -10770,20 +10770,26 @@ window.clearLocalStorage = function() {
                     constraints.push(window.where('timestamp', '<=', dateTo + 'T23:59:59'));
                 }
 
-                if (logType) {
-                    constraints.push(window.where('type', '==', logType));
-                }
-
-                var q = constraints.length > 0 ?
-                    query(logsRef, ...constraints, orderBy('timestamp', 'desc'), limit(500)) :
-                    query(logsRef, orderBy('timestamp', 'desc'), limit(500));
+                // type + timestamp 組合查詢需要 Firestore 複合索引，
+                // 所以有選類型時只用 type 查詢，日期、排序、筆數在前端處理
+                var q = logType ?
+                    window.query(logsRef, window.where('type', '==', logType)) :
+                    window.query(logsRef, ...constraints, window.orderBy('timestamp', 'desc'), window.limit(500));
 
                 var snapshot = await window.getDocs(q);
                 var logs = [];
+                var tsFrom = dateFrom ? dateFrom + 'T00:00:00' : '';
+                var tsTo = dateTo ? dateTo + 'T23:59:59' : '';
 
                 snapshot.forEach(function(doc) {
                     var data = doc.data();
                     data.id = doc.id;
+
+                    if (logType) {
+                        var ts = typeof data.timestamp === 'string' ? data.timestamp : '';
+                        if (tsFrom && !(ts >= tsFrom)) return;
+                        if (tsTo && !(ts <= tsTo)) return;
+                    }
 
                     if (productName && !(data.productName || '').toLowerCase().includes(productName)) {
                         return;
@@ -10798,6 +10804,13 @@ window.clearLocalStorage = function() {
 
                     logs.push(data);
                 });
+
+                if (logType) {
+                    logs.sort(function(a, b) {
+                        return String(b.timestamp || '').localeCompare(String(a.timestamp || ''));
+                    });
+                    logs = logs.slice(0, 500);
+                }
 
                 updateLogStatistics(logs);
 
@@ -12679,13 +12692,11 @@ window.clearLocalStorage = function() {
                     
                     // 3. 載入調撥工單
                     try {
-                        var transferQ = window.query(
-                            window.collection(window.db, 'transfers'),
-                            window.where('status', '!=', 'completed')
-                        );
-                        var transferSnapshot = await window.getDocs(transferQ);
+                        // 不用 '!=' 查詢：Firestore 的 != 會排除沒有 status 欄位的文件
+                        var transferSnapshot = await window.getDocs(window.collection(window.db, 'transfers'));
                         window.transferList = [];
                         transferSnapshot.forEach(function(doc) {
+                            if (doc.data().status === 'completed') return;
                             window.transferList.push({ id: doc.id, ...doc.data() });
                         });
                         console.log('📋 調撥工單載入完成:', window.transferList.length, '筆');
@@ -17457,73 +17468,68 @@ window.clearLocalStorage = function() {
                 snapshot.forEach(function(doc) {
                     window.usersData.push({ id: doc.id, ...doc.data() });
                 });
-
-                if (window.usersData.length === 0) {
-                    await createDefaultAdmin();
-                }
-
+                window._usersLoaded = true;
                 return window.usersData;
             } catch (e) {
                 console.error('載入使用者失敗:', e);
+                window._usersLoaded = false;
                 window.usersData = JSON.parse(localStorage.getItem('wms_users') || '[]');
-                if (window.usersData.length === 0) {
-                    window.usersData = [
-                        { id: 'admin@bafang.com', email: 'admin@bafang.com', name: '系統管理員', role: 'admin', dept: '資訊部', active: true, createdAt: new Date().toISOString() }
-                    ];
-                    localStorage.setItem('wms_users', JSON.stringify(window.usersData));
-                }
                 return window.usersData;
             }
         };
 
-        async function createDefaultAdmin() {
-            var defaultAdmin = {
-                email: 'admin@bafang.com',
-                name: '系統管理員',
-                role: 'admin',
-                dept: '資訊部',
-                active: true,
-                createdAt: new Date().toISOString()
-            };
-
-            try {
-                await window.setDoc(window.doc(window.db, 'users', 'admin@bafang.com'), defaultAdmin);
-                window.usersData.push({ id: 'admin@bafang.com', ...defaultAdmin });
-                console.log('預設管理員已建立');
-            } catch (e) {
-                console.error('建立預設管理員失敗:', e);
-            }
-        }
-
         window.getUserByEmail = function(email) {
-            return window.usersData.find(function(u) { return u.email === email || u.id === email; });
+            var target = String(email || '').toLowerCase();
+            return window.usersData.find(function(u) {
+                return String(u.email || '').toLowerCase() === target || String(u.id || '').toLowerCase() === target;
+            });
         };
 
-        window.setCurrentUser = async function(email) {
-            if (window.usersData.length === 0) {
-                await loadUsersFromFirebase();
+        // 拒絕登入：顯示原因並登出（不再自動建立帳號）
+        function denyLogin(message) {
+            window.currentUser = null;
+            var errorEl = document.getElementById('login-error');
+            if (errorEl) {
+                errorEl.innerText = message;
+                errorEl.classList.remove('hidden');
             }
+            try { window.auth.signOut(); } catch (e) { console.error('登出失敗:', e); }
+            return null;
+        }
+
+        window.setCurrentUser = async function(email) {
+            await loadUsersFromFirebase();
 
             var user = getUserByEmail(email);
 
             if (!user) {
-                user = {
-                    id: email,
-                    email: email,
-                    name: email.split('@')[0],
-                    role: 'admin',
-                    dept: '',
-                    active: true,
-                    createdAt: new Date().toISOString()
-                };
-
-                try {
-                    await window.setDoc(window.doc(window.db, 'users', email), user);
-                    window.usersData.push(user);
-                } catch (e) {
-                    console.error('建立使用者失敗:', e);
-                    window.usersData.push(user);
+                if (window._usersLoaded && window.usersData.length === 0) {
+                    // 系統第一次使用（users 是空的）：第一位登入者成為管理員
+                    user = {
+                        id: email,
+                        email: email,
+                        name: email.split('@')[0],
+                        role: 'admin',
+                        dept: '',
+                        active: true,
+                        createdAt: new Date().toISOString()
+                    };
+                    try {
+                        await window.setDoc(window.doc(window.db, 'users', email), user);
+                        window.usersData.push(user);
+                    } catch (e) {
+                        console.error('建立首位管理員失敗:', e);
+                        return denyLogin('建立管理員帳號失敗，請稍後再試');
+                    }
+                } else if (!window._usersLoaded) {
+                    return denyLogin('無法載入使用者資料，請檢查網路後再登入');
+                } else {
+                    return denyLogin('此帳號尚未開通，請聯絡系統管理員');
                 }
+            }
+
+            if (user.active === false) {
+                return denyLogin('此帳號已停用，請聯絡系統管理員');
             }
 
             window.currentUser = user;
@@ -17539,7 +17545,7 @@ window.clearLocalStorage = function() {
             }
 
             try {
-                await window.updateDoc(window.doc(window.db, 'users', email), {
+                await window.updateDoc(window.doc(window.db, 'users', user.id || email), {
                     lastLogin: new Date().toISOString()
                 });
                 user.lastLogin = new Date().toISOString();
@@ -22317,11 +22323,8 @@ async function loadPickingLogsFromFirebase(dateFrom, dateTo) {
     
     try {
         var logsRef = window.collection(window.db, 'inventoryLogs');
-        var q = window.query(logsRef, 
-            window.where('type', '==', 'picking-rm'),
-            window.orderBy('createdAt', 'desc'),
-            window.limit(500)
-        );
+        // 只用 type 過濾（type + orderBy createdAt 需要複合索引）；日期由 getPickingLogs 在前端篩選
+        var q = window.query(logsRef, window.where('type', '==', 'picking-rm'));
         
         var snapshot = await window.getDocs(q);
         var logs = [];

@@ -43,7 +43,26 @@ window.getDocs = function(r) { return r.get(); };
 window.updateDoc = function(r, d) { return r.update(d); };
 window.deleteDoc = function(r) { return r.delete(); };
 window.writeBatch = function(d) { return d.batch(); };
-window.query = function(r) { return r; };
+// 將 where / orderBy / limit 條件真正套用到 compat 查詢上
+// （舊版直接回傳 r，所有條件都被忽略，會讀到整個 collection）
+window.query = function(r) {
+    var q = r;
+    for (var i = 1; i < arguments.length; i++) {
+        var c = arguments[i];
+        if (!c) continue;
+        if (c._t === 'w') {
+            if (c.v === undefined) throw new Error('查詢條件 ' + c.f + ' 的值是 undefined');
+            q = q.where(c.f, c.o, c.v);
+        } else if (c._t === 'o') {
+            q = q.orderBy(c.f, c.d || 'asc');
+        } else if (c._t === 'l') {
+            q = q.limit(c.n);
+        } else {
+            throw new Error('不支援的查詢條件');
+        }
+    }
+    return q;
+};
 window.where = function(f, o, v) { return { _t: 'w', f: f, o: o, v: v }; };
 window.orderBy = function(f, d) { return { _t: 'o', f: f, d: d }; };
 window.limit = function(n) { return { _t: 'l', n: n }; };
@@ -76,10 +95,15 @@ window.parseLocationId = function(locId) {
 };
 
 // 認證狀態監聽
-auth.onAuthStateChanged(function(user) {
+auth.onAuthStateChanged(async function(user) {
     if (user) {
+        // 先確認帳號已開通且未停用，才進入系統並開始監聽資料
+        if (window.setCurrentUser) {
+            var appUser = await window.setCurrentUser(user.email);
+            if (!appUser) return;
+        }
+        document.getElementById('login-error').classList.add('hidden');
         document.getElementById('view-login').classList.add('hidden');
-        if (window.setCurrentUser) window.setCurrentUser(user.email);
         initAllListeners();
     } else {
         document.getElementById('view-login').classList.remove('hidden');
