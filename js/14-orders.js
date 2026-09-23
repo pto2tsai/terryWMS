@@ -1399,72 +1399,9 @@ window.completeWave = async function() {
         return;
     }
 
-    // 扣庫存、更新訂單、標記波次完成都在同一個交易裡：
-    // 任何一板庫存不足或波次已被別人完成，就整筆取消，不會重複扣帳或只扣一半
-    const pallets = window.currentPallets ? window.currentPallets() : [];
-    const pickedItems = list.filter(i => i.completed);
-    const missing = [];
-    const changes = [];
-    pickedItems.forEach(item => {
-        const pallet = pallets.find(p => p.palletId === item.palletId);
-        if (!pallet || !pallet.id) { missing.push(item.palletId || item.productName); return; }
-        changes.push({
-            ref: window.doc(window.db, 'pallets', pallet.id),
-            delta: -(parseInt(item.pickQty) || 0),
-            deleteWhenEmpty: true,
-            label: item.palletId
-        });
-    });
-    if (missing.length > 0) {
-        alert('❌ 找不到以下棧板，無法完成波次（可能已被移動或出庫）：\n' + missing.slice(0, 10).join('\n'));
-        return;
-    }
-
-    const waveRef = wave.id ? window.doc(window.db, 'waves', wave.id) : null;
-    const orderIds = [];
-    (wave.orders || []).forEach(order => {
-        const oid = order.id || order.orderId;
-        if (oid && orderIds.indexOf(oid) === -1) orderIds.push(oid);
-    });
-    const orderRefs = orderIds.map(oid => window.doc(window.db, 'salesOrders', oid));
-    const completedAt = new Date().toISOString();
-
+    let completedAt;
     try {
-        await window.runStockTransaction({
-            changes: changes,
-            reads: (waveRef ? [waveRef] : []).concat(orderRefs),
-            validate: function(results, readSnaps) {
-                if (waveRef && readSnaps[0].exists && readSnaps[0].data().status === 'done') {
-                    throw new Error('此波次已經完成過，不能重複扣庫存');
-                }
-            },
-            updates: function(results, readSnaps) {
-                const ups = [];
-                const orderSnaps = waveRef ? readSnaps.slice(1) : readSnaps;
-                orderSnaps.forEach((snap, idx) => {
-                    if (snap.exists) {
-                        ups.push({ ref: orderRefs[idx], data: { status: 'shipped', shippedAt: completedAt, waveNo: wave.waveNo } });
-                    }
-                });
-                if (waveRef && readSnaps[0].exists) {
-                    ups.push({ ref: waveRef, data: { status: 'done', completedAt: completedAt } });
-                }
-                return ups;
-            },
-            logs: function() {
-                return pickedItems.map(item => ({
-                    type: 'outbound',
-                    productName: item.productName,
-                    spec: item.spec,
-                    quantity: item.pickQty,
-                    quantityChange: -item.pickQty,
-                    locationId: item.locationId,
-                    batchNo: item.batchNo,
-                    palletId: item.palletId,
-                    note: '波次揀貨 ' + wave.waveNo
-                }));
-            }
-        });
+        completedAt = await window.completeWaveTx(wave, list, window.currentPallets ? window.currentPallets() : []);
     } catch (err) {
         console.error('完成波次失敗:', err);
         alert('❌ 完成波次失敗：' + err.message + '\n\n庫存與訂單都沒有變動。');

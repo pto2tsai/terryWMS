@@ -122,19 +122,29 @@ window.resolvePalletRef = async function(docId, palletId, locationId) {
 };
 
 // 合併前檢查：品名、規格、公司、批號、效期必須相同，且不能是同一板
+// 合併前檢查：品名、規格、公司不同 → 不能合併（丟錯）
 window.checkMergeCompatible = function(source, target) {
     if (!source || !target) throw new Error('找不到要合併的棧板');
-    var fields = [['productName', '品名'], ['spec', '規格'], ['company', '公司'], ['batchNo', '批號']];
+    var fields = [['productName', '品名'], ['spec', '規格'], ['company', '公司']];
     fields.forEach(function(f) {
         if (String(source[f[0]] || '') !== String(target[f[0]] || '')) {
             throw new Error('無法合併：' + f[1] + '不同（' + (source[f[0]] || '-') + ' / ' + (target[f[0]] || '-') + '）');
         }
     });
+};
+
+// 批號、效期不同 → 可以合併，但要提醒（回傳提醒文字陣列）
+window.mergeWarnings = function(source, target) {
+    var warnings = [];
+    if (String(source.batchNo || '') !== String(target.batchNo || '')) {
+        warnings.push('批號不同（' + (source.batchNo || '-') + ' / ' + (target.batchNo || '-') + '）');
+    }
     var expA = normalizeDateKey(source.expiryDate || source.expDate);
     var expB = normalizeDateKey(target.expiryDate || target.expDate);
     if (expA !== expB) {
-        throw new Error('無法合併：效期不同（' + (expA || '-') + ' / ' + (expB || '-') + '）');
+        warnings.push('效期不同（' + (expA || '-') + ' / ' + (expB || '-') + '），合併後以較早的效期為準');
     }
+    return warnings;
 };
 
 function normalizeDateKey(v) {
@@ -145,7 +155,8 @@ function normalizeDateKey(v) {
 }
 
 // 把 source 整板併入 target（同一交易：target 加上 source 的實際數量、刪除 source、寫記錄）
-window.mergePalletsTx = async function(sourceRef, targetRef, logExtra) {
+// opts.allowMixed：批號/效期不同時仍合併（否則丟出 code = 'MERGE_MIXED' 的錯誤，讓畫面詢問使用者）
+window.mergePalletsTx = async function(sourceRef, targetRef, logExtra, opts) {
     if (sourceRef.path === targetRef.path) throw new Error('來源與目標是同一板，不能合併');
     return window.db.runTransaction(async function(tx) {
         var sSnap = await tx.get(sourceRef);
@@ -155,6 +166,13 @@ window.mergePalletsTx = async function(sourceRef, targetRef, logExtra) {
         var s = sSnap.data();
         var t = tSnap.data();
         window.checkMergeCompatible(s, t);
+        var warnings = window.mergeWarnings(s, t);
+        if (warnings.length > 0 && !(opts && opts.allowMixed)) {
+            var err = new Error('合併提醒：' + warnings.join('；'));
+            err.code = 'MERGE_MIXED';
+            err.warnings = warnings;
+            throw err;
+        }
         var sQty = parseFloat(s.quantity) || 0;
         var total = (parseFloat(t.quantity) || 0) + sQty;
         var sWeight = parseFloat(s.totalWeight) || 0;
@@ -164,6 +182,13 @@ window.mergePalletsTx = async function(sourceRef, targetRef, logExtra) {
             mergedAt: new Date().toISOString(),
             mergedBy: window.currentUser ? window.currentUser.email : ''
         };
+        var expS = normalizeDateKey(s.expiryDate || s.expDate);
+        var expT = normalizeDateKey(t.expiryDate || t.expDate);
+        if (expS && (!expT || expS < expT)) {
+            // 混效期：以較早的效期為準，確保先進先出
+            update.expiryDate = expS;
+            update.expDate = expS;
+        }
         if (totalWeight > 0) {
             update.totalWeight = totalWeight;
             update.unitWeight = total > 0 ? Math.round(totalWeight / total * 100) / 100 : (t.unitWeight || 0);
@@ -184,8 +209,9 @@ window.mergePalletsTx = async function(sourceRef, targetRef, logExtra) {
             toLocation: t.locationId || '',
             batchNo: t.batchNo || '',
             palletId: t.palletId || targetRef.id,
-            note: '合併: ' + (s.palletId || sourceRef.id) + '(' + sQty + '件)'
-        }, logExtra || {})));
+            note: '合併: ' + (s.palletId || sourceRef.id) + '(' + sQty + '件)' +
+                (warnings.length > 0 ? '【' + warnings.join('；') + '】' : '')
+        }, logExtra || {}, logExtra && logExtra.note && warnings.length > 0 ? { note: logExtra.note + '【' + warnings.join('；') + '】' } : {})));
         return { source: s, target: t, sourceQty: sQty, total: total, totalWeight: totalWeight };
     });
 };
@@ -218,4 +244,19 @@ window.movePalletTx = async function(palletRef, toLocation, logExtra) {
         }, logExtra || {})));
         return p;
     });
+};
+
+// 合併並在需要時詢問：批號/效期不同會跳 confirm，按確定才合併；按取消丟出「已取消」
+window.mergePalletsConfirm = async function(sourceRef, targetRef, logExtra) {
+    try {
+        return await window.mergePalletsTx(sourceRef, targetRef, logExtra);
+    } catch (e) {
+        if (e.code !== 'MERGE_MIXED') throw e;
+        if (!confirm('⚠️ ' + e.warnings.join('\n') + '\n\n確定仍要合併嗎？')) {
+            var cancel = new Error('已取消合併');
+            cancel.code = 'CANCELLED';
+            throw cancel;
+        }
+        return window.mergePalletsTx(sourceRef, targetRef, logExtra, { allowMixed: true });
+    }
 };

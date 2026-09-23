@@ -435,7 +435,7 @@
         
         <div class="bottom-actions" id="picking-actions" style="display:none">
             <button class="action-btn success" onclick="completePickingWave()">
-                <i class="fa-solid fa-flag-checkered"></i> 揀貨完成（待電腦出庫）
+                <i class="fa-solid fa-flag-checkered"></i> 完成波次（扣庫存出貨）
             </button>
         </div>
     </div>
@@ -546,7 +546,7 @@
         // ============================================================
         // 手機版：與桌機版共用同一個 Firestore
         // - 揀貨：讀取桌機建立的波次，掃描進度即時寫回（桌機看得到）；
-        //   揀完後標記「待出庫」，由桌機「完成波次」一次扣帳（交易）
+        //   可直接在手機「完成波次」，與桌機用同一個交易扣庫存出貨
         // - 調度：讀取桌機「發布到手機」的調度工單，掃描後直接以交易執行移板／併板
         // ============================================================
         firebase.initializeApp(window.FIREBASE_CONFIG);
@@ -745,18 +745,37 @@
             input.focus();
         };
 
-        // 手機只完成「揀貨」；扣庫存、訂單出貨由桌機「完成波次」以交易處理（避免重複扣帳）
+        // 完成波次：與桌機相同的交易（扣庫存、訂單標記出貨、缺貨留記錄），不用回電腦
         window.completePickingWave = async function() {
+            if (!currentWave) return;
+            try {
+                // 先取最新進度（電腦或其他手機掃過的也算）
+                const snap = await db.collection('waves').doc(currentWave.id).get();
+                if (!snap.exists) { alert('波次已不存在'); return; }
+                currentWave = Object.assign({ id: snap.id }, snap.data());
+                const done = currentWave.completedItems || [];
+                pickingItems.forEach(i => { if (done.indexOf(i.id) >= 0) i.completed = true; });
+            } catch (e) {
+                alert('❌ 讀取波次失敗：' + e.message);
+                return;
+            }
+            if (currentWave.status === 'done') { alert('此波次已經完成'); return goBack(); }
+
             const completed = pickingItems.filter(i => i.completed).length;
             const total = pickingItems.filter(i => !i.shortage).length;
+            const shortage = pickingItems.filter(i => i.shortage).length;
             if (completed === 0) { alert('尚未揀貨任何項目'); return; }
-            if (!confirm('揀貨完成？\n\n已揀：' + completed + '/' + total + '\n\n完成後請在電腦「完成波次」扣庫存出貨。')) return;
+            let msg = '完成波次並出貨？\n\n已揀：' + completed + '/' + total;
+            if (completed < total) msg += '\n未揀 ' + (total - completed) + ' 項會記為缺貨';
+            if (shortage > 0) msg += '\n庫存不足 ' + shortage + ' 項';
+            if (!confirm(msg)) return;
+
             try {
-                await db.collection('waves').doc(currentWave.id).update({ status: 'sorting', pickedAt: new Date().toISOString() });
-                alert('✅ 已標記揀貨完成，待電腦出庫');
+                await window.completeWaveTx(currentWave, pickingItems, window.pallets);
+                alert('✅ 波次 ' + currentWave.waveNo + ' 已完成，庫存已扣除');
                 goBack();
             } catch (e) {
-                alert('❌ 更新失敗：' + e.message);
+                alert('❌ 完成波次失敗：' + e.message + '\n\n庫存與訂單都沒有變動。');
             }
         };
 
@@ -875,7 +894,7 @@
                 const sourceRef = await window.resolvePalletRef(op.docId, op.palletId, op.from);
                 if (op.type === '合併' || op.type === 'merge') {
                     const targetRef = await resolveMergeTarget(op, sourceRef);
-                    await window.mergePalletsTx(sourceRef, targetRef, { note: '手機調度工單 ' + (currentDispatch.orderNo || '') });
+                    await window.mergePalletsConfirm(sourceRef, targetRef, { note: '手機調度工單 ' + (currentDispatch.orderNo || '') });
                 } else {
                     await window.movePalletTx(sourceRef, op.to, { note: '手機調度工單 ' + (currentDispatch.orderNo || '') + (op.reason ? '：' + op.reason : '') });
                 }

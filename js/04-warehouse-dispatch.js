@@ -382,7 +382,7 @@
             if (!confirm('確定合併？\n合併後總數: ' + totalQty + ' 件')) return;
 
             try {
-                var result = await window.mergePalletsTx(
+                var result = await window.mergePalletsConfirm(
                     window.doc(window.db, "pallets", source.id),
                     window.doc(window.db, "pallets", targetId)
                 );
@@ -2449,7 +2449,7 @@
                     var keep = op.keepPallet || {};
                     var sourceRef = await window.resolvePalletRef(op.docId, op.palletId, op.from);
                     var targetRef = await window.resolvePalletRef(keep.docId, keep.palletId, keep.location);
-                    await window.mergePalletsTx(sourceRef, targetRef, { note: op.note || ('合併至 ' + op.to) });
+                    await window.mergePalletsConfirm(sourceRef, targetRef, { note: op.note || ('合併至 ' + op.to) });
 
                 } else if (op.type === 'move') {
                     var palletRef = await window.resolvePalletRef(op.docId, op.palletId, op.from);

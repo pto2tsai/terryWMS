@@ -614,15 +614,26 @@
                 return;
             }
 
-            var hasError = window.orderPickingPlan.some(function(p) {
-                return p.plan.length === 0 || p.plannedQty < p.requiredQty;
+            // 庫存不足時可以部分出貨：照可揀數量扣帳，缺貨記在訂單上
+            var shortages = window.orderPickingPlan.filter(function(p) {
+                return p.plannedQty < p.requiredQty;
+            }).map(function(p) {
+                return { productName: p.item.productName, spec: p.item.spec || '', required: p.requiredQty, shipped: p.plannedQty, short: p.requiredQty - p.plannedQty };
             });
-            if (hasError) {
-                alert('部分品項庫存不足，無法完成出貨');
+            var totalPlanned = window.orderPickingPlan.reduce(function(sum, p) { return sum + (p.plannedQty || 0); }, 0);
+            if (totalPlanned === 0) {
+                alert('所有品項都沒有庫存，無法出貨');
                 return;
             }
 
-            if (!confirm('確認完成此訂單出貨？\n\n訂單: ' + order.orderId + '\n客戶: ' + order.customer)) {
+            var confirmMsg = '確認完成此訂單出貨？\n\n訂單: ' + order.orderId + '\n客戶: ' + order.customer;
+            if (shortages.length > 0) {
+                confirmMsg += '\n\n⚠️ 以下品項庫存不足，將部分出貨：';
+                shortages.forEach(function(sh) {
+                    confirmMsg += '\n・' + sh.productName + ' ' + sh.spec + '：需 ' + sh.required + '，出 ' + sh.shipped + '（缺 ' + sh.short + '）';
+                });
+            }
+            if (!confirm(confirmMsg)) {
                 return;
             }
 
@@ -651,7 +662,7 @@
                     },
                     updates: function(results, readSnaps) {
                         if (orderRef && readSnaps[0].exists) {
-                            return [{ ref: orderRef, data: { status: 'Completed', shippedAt: new Date().toISOString() } }];
+                            return [{ ref: orderRef, data: { status: 'Completed', shippedAt: new Date().toISOString(), shortages: shortages } }];
                         }
                         return [];
                     },
@@ -669,7 +680,7 @@
                                 batchNo: pallet.batchNo || '',
                                 palletId: pallet.palletId,
                                 expDate: pallet.expDate || pallet.expiryDate,
-                                note: '訂單出貨 - ' + order.customer,
+                                note: '訂單出貨 - ' + order.customer + (shortages.length > 0 ? '（部分出貨）' : ''),
                                 orderId: order.orderId
                             };
                         });
@@ -1237,7 +1248,7 @@
             }
 
             try {
-                var result = await window.mergePalletsTx(
+                var result = await window.mergePalletsConfirm(
                     window.doc(window.db, "pallets", less.id),
                     window.doc(window.db, "pallets", more.id),
                     {
@@ -1512,8 +1523,10 @@
                 return;
             }
 
+            var mergeWarns = [];
             try {
                 window.checkMergeCompatible(removePallet, keepPallet);
+                mergeWarns = window.mergeWarnings(removePallet, keepPallet);
             } catch (e) {
                 alert('⚠️ ' + e.message);
                 return;
@@ -1539,6 +1552,10 @@
                 confirmMsg += ' / ' + newWeight + ' kg';
             }
 
+            if (mergeWarns.length > 0) {
+                confirmMsg += '\n\n⚠️ ' + mergeWarns.join('\n⚠️ ');
+            }
+
             if (!confirm(confirmMsg)) {
                 return;
             }
@@ -1551,7 +1568,8 @@
                 var result = await window.mergePalletsTx(
                     window.doc(window.db, 'pallets', removePallet.id),
                     window.doc(window.db, 'pallets', keepPallet.id),
-                    { note: mergeNote }
+                    { note: mergeNote },
+                    { allowMixed: true }
                 );
                 newQty = result.total;
                 newWeight = result.totalWeight;

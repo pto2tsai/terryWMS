@@ -36,6 +36,7 @@ await env.withSecurityRulesDisabled(async c => { const d=c.firestore();
   await P('PT',{locationId:'J-D-07-2F',quantity:10,productName:'魷魚',batchNo:'T1'});
   await setDoc(doc(d,'pallets','TRO-OLD1'),{palletId:'TRO-OLD1',productName:'魷魚',spec:'S',company:'崇文',batchNo:'T0',quantity:6,locationId:'TEMP-OUT',source:'調撥出庫',targetWarehouse:'外倉1',targetWarehouseId:'W1'});
   await setDoc(doc(d,'pallets','TRO-OLD2'),{palletId:'TRO-OLD2',productName:'魷魚',spec:'S',company:'崇文',batchNo:'T0',quantity:2,locationId:'J-D-08-1F',source:'調撥出庫',targetWarehouse:'外倉1',targetWarehouseId:'W1'});
+  await setDoc(doc(d,'shippingOrders','O2'),{orderId:'O2',customer:'客戶乙',status:'Pending',items:[{productName:'白蝦',spec:'S',qty:500}]});
   await setDoc(doc(d,'externalStock','E1'),{warehouseId:'W1',productName:'透抽',spec:'L',batchNo:'X',company:'崇文',quantity:20});
   await setDoc(doc(d,'waves','WV'),{waveNo:'WV1',status:'picking'});
   await setDoc(doc(d,'salesOrders','SO1'),{orderNo:'SO1',status:'inWave'});
@@ -111,7 +112,7 @@ ok('logs written in same tx (2)', await logCount()-logs0===2, await logCount()-l
 
 // T3 merge
 const m1 = await A.page.evaluate(async()=>{ try{ await mergePalletsTx(db.collection('pallets').doc('PC'), db.collection('pallets').doc('PB')); return 'ok'; }catch(e){return 'ERR '+e.message;} });
-ok('merge different batch blocked', m1.includes('批號不同'), m1);
+ok('merge with different batch needs confirmation (not silently merged)', m1.includes('批號不同') && m1.startsWith('ERR'), m1);
 const m2 = await A.page.evaluate(async()=>{ try{ const r=await mergePalletsTx(db.collection('pallets').doc('PB'), db.collection('pallets').doc('PA')); return r.total; }catch(e){return 'ERR '+e.message;} });
 ok('merge adds actual qty (2+5=7)', m2===7 && await qty('PA')===7 && await qty('PB')===null, m2);
 const m3 = await A.page.evaluate(async()=>{ try{ await mergePalletsTx(db.collection('pallets').doc('PA'), db.collection('pallets').doc('PA')); return 'ok'; }catch(e){return 'ERR '+e.message;} });
@@ -209,15 +210,23 @@ const pc = await A.page.evaluate(async()=>{
   await new Promise(r=>setTimeout(r,500));
   document.getElementById('merge-keep-id').value='PG'; document.getElementById('merge-remove-id').value='PI';
   window._keepPalletData=null; window._removePalletData=null;
-  await executePalletMerge(); const a2 = window.__alerts.slice(-1)[0];
+  let askedMsg=''; window.confirm=(m)=>{ askedMsg=m; return false; };   // 批號不同 → 使用者按「取消」
+  await executePalletMerge(); const a2 = askedMsg;
+  window.confirm=()=>true;
   document.getElementById('merge-keep-id').value='PG'; document.getElementById('merge-remove-id').value='PH';
   window._keepPalletData=null; window._removePalletData=null;
   await executePalletMerge(); const a3 = window.__alerts.slice(-1)[0];
   return [a1,a2,a3]; });
 const pg = await admin(async d=>(await getDoc(doc(d,'pallets','PG'))).data());
 ok('pallet change: moved the scanned pallet (not stale cache)', pg.locationId==='J-D-09-1F' && (await admin(async d=>(await getDoc(doc(d,'pallets','PI'))).data().locationId))==='J-C-03-3F', pc[0]);
-ok('pallet change: merge with different batch blocked', pc[1].includes('批號不同') && await qty('PI')===2, pc[1]);
+ok('pallet change: different batch asks for confirmation; cancel keeps both pallets', pc[1].includes('批號不同') && await qty('PI')===2, pc[1]);
 ok('pallet change: merge 6+3=9', await qty('PG')===9 && await qty('PH')===null, pc[2]);
+
+const mixed = await A.page.evaluate(async()=>{ window.confirm=()=>true;
+  const r = await mergePalletsConfirm(db.collection('pallets').doc('PI'), db.collection('pallets').doc('PG')); return r.total; });
+const pgMix = await admin(async d=>(await getDoc(doc(d,'pallets','PG'))).data());
+const mixLog = await admin(async d=>(await getDocs(collection(d,'inventoryLogs'))).docs.map(x=>x.data()).find(l=>String(l.note).includes('批號不同')));
+ok('mixed-batch merge after confirm: 9+2=11, logged with warning', mixed===11 && pgMix.quantity===11 && await qty('PI')===null && !!mixLog, JSON.stringify(mixLog && mixLog.note));
 
 
 // ===== 第 3 步：資料格式、容量、重複函數 =====
@@ -284,8 +293,10 @@ const wm = await admin(async d=>(await getDoc(doc(d,'waves','WM'))).data());
 ok('mobile: loads desktop wave from Firestore and saves scan progress', mp.opts.includes('WM') && wm.completedItems.includes(mp.first) && wm.status==='picking', JSON.stringify(mp)+' '+JSON.stringify(wm.completedItems));
 const shared = await A.page.evaluate(async(first)=>{ const w=(await db.collection('waves').doc('WM').get()).data(); const list=buildWavePickingList(w, currentPallets()); return list.find(i=>i.id===first)?.completed; }, mp.first);
 ok('desktop sees the same picking item as completed (shared list builder)', shared===true);
-await M.page.evaluate(async()=>{ await completePickingWave(); });
-ok('mobile: finish picking marks wave for desktop shipment (no stock deducted)', (await admin(async d=>(await getDoc(doc(d,'waves','WM'))).data().status))==='sorting' && await qty('PX')===8 && await qty('PY')===5);
+const mw = await M.page.evaluate(async()=>{ await completePickingWave(); return window.__alerts.slice(-1)[0]; });
+const wmDone = await admin(async d=>(await getDoc(doc(d,'waves','WM'))).data());
+const pxpy = [await qty('PX'), await qty('PY')];
+ok('mobile completes wave directly: 3 picked deducted, wave done with shortage record', wmDone.status==='done' && Array.isArray(wmDone.shortages) && (pxpy[0]+pxpy[1])===10, mw+' '+JSON.stringify(pxpy));
 const md = await M.page.evaluate(async()=>{ openPage('dispatch'); await new Promise(r=>setTimeout(r,1200));
   const sel=document.getElementById('dispatch-order-select'); sel.value='DO1'; await loadDispatchOrder();
   document.getElementById('dispatch-scan').value='PY'; await confirmDispatchScan(); const r1=document.getElementById('dispatch-scan-result').innerText;
@@ -294,7 +305,7 @@ const md = await M.page.evaluate(async()=>{ openPage('dispatch'); await new Prom
   await completeDispatchOrder(); return [r1,r2]; });
 const pyAfter = await admin(async d=>(await getDoc(doc(d,'pallets','PY'))).data());
 const do1 = await admin(async d=>(await getDoc(doc(d,'dispatchOrders','DO1'))).data());
-ok('mobile dispatch: move then merge executed as transactions (PY at K-F-05-2F, 5+8=13, PX removed)', pyAfter.locationId==='K-F-05-2F' && pyAfter.quantity===13 && await qty('PX')===null, JSON.stringify(md)+' '+JSON.stringify([pyAfter.locationId,pyAfter.quantity]));
+ok('mobile dispatch: move then merge executed as transactions (PY at K-F-05-2F, total 10, PX removed)', pyAfter.locationId==='K-F-05-2F' && pyAfter.quantity===10 && await qty('PX')===null, JSON.stringify(md)+' '+JSON.stringify([pyAfter.locationId,pyAfter.quantity]));
 ok('mobile dispatch: order progress saved and completed', do1.completedOps.length===2 && do1.status==='completed', JSON.stringify(do1.completedOps)+do1.status);
 const mlogs = await admin(async d=>(await getDocs(collection(d,'inventoryLogs'))).docs.map(x=>x.data()).filter(l=>String(l.note).includes('手機調度工單')));
 ok('mobile dispatch wrote inventory logs with operator', mlogs.length===2 && mlogs.every(l=>l.operator && l.operator!=='system' && l.operatorEmail==='op2@t.com'), JSON.stringify(mlogs.map(l=>[l.type,l.operator])));
@@ -306,6 +317,16 @@ ok('readonly cannot change stock (rules)', rr.startsWith('ERR') && await qty('PA
 const X = await openAs('stranger@t.com');
 const xmsg = await X.page.evaluate(()=>document.getElementById('login-error').innerText);
 ok('stranger denied at login', xmsg.includes('尚未開通') && !(await X.page.evaluate(()=>!!window.currentUser)), xmsg);
+
+
+// 部分出貨：需求 500，庫存不夠 → 確認後照可揀數量出貨，缺貨記在訂單
+const before = await A.page.evaluate(()=>currentPallets().filter(p=>p.productName==='白蝦' && p.spec==='S').reduce((s,p)=>s+p.quantity,0));
+const ps = await A.page.evaluate(async()=>{ let asked=''; window.confirm=(m)=>{ asked=m; return true; };
+  const order = window.currentOrders().find(o=>o.orderId==='O2'); selectOrderForPicking(window.currentOrders().indexOf(order));
+  await confirmOrderPicking(); return [asked, window.__alerts.slice(-1)[0]]; });
+const o2 = await admin(async d=>(await getDoc(doc(d,'shippingOrders','O2'))).data());
+const after = await A.page.evaluate(async()=>{ await new Promise(r=>setTimeout(r,500)); return currentPallets().filter(p=>p.productName==='白蝦' && p.spec==='S').reduce((s,p)=>s+p.quantity,0); });
+ok('partial shipment: asks, ships all available, records shortage', ps[0].includes('部分出貨') && after===0 && before>0 && o2.status==='Completed' && o2.shortages.length===1 && o2.shortages[0].shipped===before && o2.shortages[0].short===500-before, JSON.stringify([ps[0].slice(0,80), before, after, o2.shortages]));
 
 for (const [n,o] of [['A',A],['B',B],['R',R],['X',X],['AD',AD],['M',M],['MX',MX]]) { const e=o.errs.filter(m=>!/tailwind|Chart is not defined|Cannot redefine property: inventory|XLSX|JsBarcode/.test(m)); if(e.length) console.log('page errors',n,e.slice(0,5)); }
 console.log(`pass ${pass} fail ${fail}`);

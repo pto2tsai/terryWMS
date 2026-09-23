@@ -96,3 +96,84 @@ window.buildWavePickingList = function(wave, pallets) {
 
     return pickingList;
 };
+
+// ============================================================
+// 完成波次（桌機與手機共用）：扣庫存、訂單標記出貨、波次標記完成、寫異動記錄，
+// 全部在同一筆交易裡。任何一板庫存不足或波次已被別人完成，就整筆取消。
+// 未揀的項目（含缺貨）記在 wave.shortages，留下缺貨記錄。
+// 回傳完成時間；失敗時丟出錯誤（庫存與訂單都不會變動）。
+// ============================================================
+window.completeWaveTx = async function(wave, pickingList, pallets) {
+    const db = window.db;
+    const pickedItems = pickingList.filter(i => i.completed && !i.shortage);
+    if (pickedItems.length === 0) throw new Error('尚未揀貨任何項目');
+
+    const missing = [];
+    const changes = [];
+    pickedItems.forEach(item => {
+        const pallet = pallets.find(p => p.palletId === item.palletId);
+        if (!pallet || !pallet.id) { missing.push(item.palletId || item.productName); return; }
+        changes.push({
+            ref: db.collection('pallets').doc(pallet.id),
+            delta: -(parseInt(item.pickQty) || 0),
+            deleteWhenEmpty: true,
+            label: item.palletId
+        });
+    });
+    if (missing.length > 0) {
+        throw new Error('找不到以下棧板（可能已被移動或出庫）：' + missing.slice(0, 10).join('、'));
+    }
+
+    const shortages = pickingList.filter(i => !i.completed || i.shortage).map(i => ({
+        productName: i.productName || '',
+        spec: i.spec || '',
+        qty: parseInt(i.pickQty) || 0,
+        reason: i.shortage ? '庫存不足' : '未揀'
+    }));
+
+    const waveRef = wave.id ? db.collection('waves').doc(wave.id) : null;
+    const orderIds = [];
+    (wave.orders || []).forEach(order => {
+        const oid = order.id || order.orderId;
+        if (oid && orderIds.indexOf(oid) === -1) orderIds.push(oid);
+    });
+    const orderRefs = orderIds.map(oid => db.collection('salesOrders').doc(oid));
+    const completedAt = new Date().toISOString();
+
+    await window.runStockTransaction({
+        changes: changes,
+        reads: (waveRef ? [waveRef] : []).concat(orderRefs),
+        validate: function(results, readSnaps) {
+            if (waveRef && readSnaps[0].exists && readSnaps[0].data().status === 'done') {
+                throw new Error('此波次已經完成過，不能重複扣庫存');
+            }
+        },
+        updates: function(results, readSnaps) {
+            const ups = [];
+            const orderSnaps = waveRef ? readSnaps.slice(1) : readSnaps;
+            orderSnaps.forEach((snap, idx) => {
+                if (snap.exists) {
+                    ups.push({ ref: orderRefs[idx], data: { status: 'shipped', shippedAt: completedAt, waveNo: wave.waveNo } });
+                }
+            });
+            if (waveRef && readSnaps[0].exists) {
+                ups.push({ ref: waveRef, data: { status: 'done', completedAt: completedAt, shortages: shortages } });
+            }
+            return ups;
+        },
+        logs: function() {
+            return pickedItems.map(item => ({
+                type: 'outbound',
+                productName: item.productName,
+                spec: item.spec,
+                quantity: item.pickQty,
+                quantityChange: -item.pickQty,
+                locationId: item.locationId,
+                batchNo: item.batchNo,
+                palletId: item.palletId,
+                note: '波次揀貨 ' + wave.waveNo
+            }));
+        }
+    });
+    return completedAt;
+};
