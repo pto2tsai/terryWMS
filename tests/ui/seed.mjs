@@ -7,5 +7,5 @@ export async function baseSeed(d) {
   await setDoc(doc(d, 'users', 'sup@t.com'), { email: 'sup@t.com', name: '主管', role: 'supervisor', active: true });
   await setDoc(doc(d, 'productMaster', 'PM1'), { code: 'P001', name: '白蝦', spec: '50/60', palletCapacity: 40, shelfLife: 24, company: '崇文' });
   await setDoc(doc(d, 'productMaster', 'PM2'), { code: 'P002', name: '透抽', spec: 'L', palletCapacity: 30, shelfLife: 24, company: '崇文' });
-  await setDoc(doc(d, 'warehouses', 'W1'), { code: 'EXT-TP', name: '台北外倉', company: '崇文', active: true });
+  await setDoc(doc(d, 'warehouses', 'W1'), { code: 'EXT-TP', name: '台北外倉', company: '崇文', type: 'external', active: true });
 }

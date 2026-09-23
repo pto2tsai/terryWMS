@@ -1524,6 +1524,12 @@
                 // ========== 第二步：孤立板移位建議 ==========
                 var isolatedMoves = [];
 
+                // 已經排進「合併」的來源板，合併後就不存在了，不能再排「移位」
+                var mergedSourceKeys = {};
+                partialMerges.forEach(function(g) {
+                    g.sources.forEach(function(src) { mergedSourceKeys[src.docId || src.palletId] = true; });
+                });
+
                 if (laneList.length >= 3 && mainLane) {
                     var mainLaneQty = laneGroups[mainLane].qty;
                     var totalQty = g.totalQty;
@@ -1581,6 +1587,7 @@
                             if (isReallyIsolated || (isDifferentWarehouse && laneData.palletCount <= 2)) {
                                 {
                                     laneData.items.forEach(function(p) {
+                                        if (mergedSourceKeys[p.id || p.palletId]) return;
                                         var targetSlot = pickSlotFor(p);
                                         if (!targetSlot) return;
 

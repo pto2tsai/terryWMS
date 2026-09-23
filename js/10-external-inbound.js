@@ -184,32 +184,38 @@
                 var existing = window.externalStock.find(function(s) {
                     return s.warehouseId === wh && s.productName === name && s.batchNo === batch && s.company === company;
                 });
+                var reasonText = (document.getElementById('ext-adj-reason').selectedOptions[0] || {}).text || reason || '';
+                var logData = {
+                    type: 'adjust', company: company, productName: name, spec: spec, batchNo: batch,
+                    quantity: Math.abs(qty), quantityChange: qty, locationId: wh,
+                    note: '外倉手動調整' + (reasonText ? '：' + reasonText : '')
+                };
 
                 if (existing) {
-                    var newQty = existing.quantity + qty;
-                    if (newQty < 0) newQty = 0;
-
-                    if (newQty === 0) {
-                        await window.deleteDoc(window.doc(window.db, 'externalStock', existing.id));
-                    } else {
-                        await window.updateDoc(window.doc(window.db, 'externalStock', existing.id), {
-                            quantity: newQty,
-                            updatedAt: new Date().toISOString()
-                        });
+                    var ref = window.doc(window.db, 'externalStock', existing.id);
+                    var delta = qty;
+                    // 扣超過目前庫存時先詢問（以最新數量為準），確定就扣到 0
+                    var cur = (await ref.get()).data();
+                    var curQty = cur ? (parseFloat(cur.quantity) || 0) : 0;
+                    if (curQty + qty < 0) {
+                        if (!confirm('⚠️ 目前只有 ' + curQty + ' 件，要扣 ' + (-qty) + ' 件\n\n確定要扣到 0 嗎？')) return;
+                        delta = -curQty;
+                        logData.quantityChange = delta;
+                        logData.quantity = curQty;
                     }
+                    await window.runStockTransaction({
+                        changes: [{ ref: ref, delta: delta, deleteWhenEmpty: true, extra: { updatedAt: new Date().toISOString() }, label: name }],
+                        logs: function() { return [logData]; }
+                    });
                 } else {
                     if (qty < 0) { alert('無此庫存，無法扣減'); return; }
-
-                    await window.addDoc(window.collection(window.db, 'externalStock'), {
-                        company: company,
-                        warehouseId: wh,
-                        productName: name,
-                        spec: spec,
-                        batchNo: batch,
-                        expDate: exp || '',
-                        quantity: qty,
-                        reason: reason,
-                        createdAt: new Date().toISOString()
+                    var newRef = window.db.collection('externalStock').doc();
+                    await window.runStockTransaction({
+                        creates: [{ ref: newRef, data: {
+                            company: company, warehouseId: wh, productName: name, spec: spec, batchNo: batch,
+                            expDate: exp || '', quantity: qty, reason: reason, createdAt: new Date().toISOString()
+                        } }],
+                        logs: function() { return [logData]; }
                     });
                 }
 

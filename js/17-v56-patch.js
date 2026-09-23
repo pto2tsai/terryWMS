@@ -712,10 +712,46 @@
             if (!updateData.locationId) { alert('儲位不能為空'); return; }
             
             var expiryStr = document.getElementById('edit-expiry-field').value;
-            if (expiryStr) updateData.expiryDate = new Date(expiryStr);
-            
+            if (expiryStr) {
+                updateData.expiryDate = window.normalizeDateValue(expiryStr);
+                updateData.expDate = updateData.expiryDate;
+            }
+            updateData.locationId = updateData.locationId.toUpperCase();
+
             try {
-                await window.updateDoc(window.doc(window.db, 'pallets', id), updateData);
+                // 以交易讀最新資料、更新，並把改了什麼寫進異動記錄（原本直接覆寫、沒有記錄）
+                var ref = window.doc(window.db, 'pallets', id);
+                await window.db.runTransaction(async function(tx) {
+                    var snap = await tx.get(ref);
+                    if (!snap.exists) throw new Error('此板已不存在（可能已被其他人處理）');
+                    var before = snap.data();
+                    var labels = { company: '公司', locationId: '儲位', productName: '品名', spec: '規格', batchNo: '批號', quantity: '數量', totalWeight: '重量', expiryDate: '效期' };
+                    var diffs = [];
+                    Object.keys(labels).forEach(function(k) {
+                        if (updateData[k] === undefined) return;
+                        var a = k === 'expiryDate' ? window.normalizeDateValue(before.expiryDate || before.expDate) : before[k];
+                        if (String(a === undefined || a === null ? '' : a) !== String(updateData[k])) {
+                            diffs.push(labels[k] + ' ' + (a === undefined || a === '' ? '-' : a) + ' → ' + updateData[k]);
+                        }
+                    });
+                    tx.update(ref, updateData);
+                    if (diffs.length > 0) {
+                        tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
+                            type: 'adjust',
+                            company: updateData.company,
+                            productName: updateData.productName,
+                            spec: updateData.spec,
+                            batchNo: updateData.batchNo,
+                            quantity: updateData.quantity,
+                            quantityChange: updateData.quantity - (parseFloat(before.quantity) || 0),
+                            locationId: updateData.locationId,
+                            fromLocation: before.locationId || '',
+                            toLocation: updateData.locationId,
+                            palletId: before.palletId || id,
+                            note: '庫存編輯：' + diffs.join('、')
+                        }));
+                    }
+                });
                 modal.remove();
                 if (window.showNotification) {
                     showNotification('✅ 更新成功', 'success');

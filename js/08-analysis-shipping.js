@@ -778,28 +778,8 @@
             }
         };
 
-        document.addEventListener('DOMContentLoaded', function() {
-            var movePalletInput = document.getElementById('move-pallet-id');
-            if (movePalletInput) {
-                movePalletInput.addEventListener('change', function() {
-                    showPalletInfo('move-pallet-id', 'move-pallet-info');
-                });
-            }
-
-            var mergeKeepInput = document.getElementById('merge-keep-id');
-            if (mergeKeepInput) {
-                mergeKeepInput.addEventListener('change', function() {
-                    showPalletInfo('merge-keep-id', 'merge-keep-info');
-                });
-            }
-
-            var mergeRemoveInput = document.getElementById('merge-remove-id');
-            if (mergeRemoveInput) {
-                mergeRemoveInput.addEventListener('change', function() {
-                    showPalletInfo('merge-remove-id', 'merge-remove-info');
-                });
-            }
-        });
+        // 板號輸入框已在 HTML 綁定 lookupPalletByDocNo（不分大小寫）；
+        // 這裡原本又綁了一次 showPalletInfo（區分大小寫、後執行），會把「找到」蓋成「找不到」，已移除
 
         window.showPalletInfo = function(inputId, infoId) {
             var palletId = document.getElementById(inputId).value;

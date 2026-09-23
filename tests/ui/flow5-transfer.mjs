@@ -1,7 +1,7 @@
 import * as H from './harness.mjs'; import { baseSeed, USERS } from './seed.mjs';
 const base = H.startServer(); await H.initEnv(); await H.ensureUsers(Object.values(USERS));
 await H.resetData(async d => { await baseSeed(d);
-  await H.setDoc(H.doc(d, 'warehouses', 'W2'), { code: 'EXT-TC', name: '台中外倉', company: '崇文', active: true });
+  await H.setDoc(H.doc(d, 'warehouses', 'W2'), { code: 'EXT-TC', name: '台中外倉', company: '崇文', type: 'external', active: true });
   await H.setDoc(H.doc(d, 'externalStock', 'E1'), { warehouseId: 'EXT-TP', productName: '透抽', spec: 'L', batchNo: 'X', company: '崇文', expiryDate: '2027-08-01', quantity: 20 });
   await H.setDoc(H.doc(d, 'pallets', 'M1'), { palletId: 'M1', productName: '白蝦', spec: '50/60', batchNo: 'B1', company: '崇文', expiryDate: '2027-05-01', quantity: 30, locationId: 'I-A-03-2F', palletCapacity: 40 });
 });
