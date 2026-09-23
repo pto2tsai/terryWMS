@@ -7,7 +7,8 @@
 | 檔案 | 說明 |
 |---|---|
 | `index.html` | 桌機版所有畫面 |
-| `mobile.html` | 手機版（揀貨、調度執行、入庫確認、庫存快查），與桌機共用同一個 Firestore |
+| `m/` | **手機版**（網址 `/m/`）：波次揀貨、入庫任務、調度工單、盤點、上架、出庫、移板、併板、庫存快查；相機掃碼；可加到主畫面（PWA） |
+| `mobile.html` | 舊網址，自動轉到 `m/` |
 | `firebase-init.js` | 桌機版 Firebase 初始化、登入、庫存即時監聽 |
 | `js/shared/*.js` | 桌機與手機共用：Firebase 設定、資料格式、庫存交易核心、揀貨清單 |
 | `js/01-core.js` … `js/18-data-migration.js` | 桌機應用程式模組，依編號順序載入 |
@@ -21,14 +22,36 @@
 | firebase-config.js | Firebase 專案設定（只此一份） |
 | data-format.js | 日期／效期／數量格式統一（`normalizeDateValue`、`normalizeStockRecord`、`Date#toLocalYMD`）；文字安全（讀寫 Firestore 時 `< > " ' ` \` 轉全形，防 XSS） |
 | stock-core.js | 庫存交易（`runStockTransaction`、`mergePalletsTx`、`movePalletTx`、`buildInventoryLogEntry`） |
+| inbound-core.js | 入庫單入帳（`postInboundOrderTx`：建立棧板、入庫單完成、入庫任務完成在同一筆交易） |
 | picking-list.js | 波次揀貨清單（`buildWavePickingList`，先進先出、依動線排序） |
 
-載入順序：`firebase-config` → `data-format` → `firebase-init`（桌機）→ `stock-core` → `picking-list` → 桌機模組。
+載入順序：`firebase-config` → `data-format` → `firebase-init`（桌機）→ `stock-core` → `inbound-core` → `picking-list` → 桌機模組。
+
+### 手機版（m/）
+
+原本獨立的 terryWMS-MOBILE 已搬進來（2026-09），兩邊共用 `js/shared` 的交易核心，不再各寫一套。
+
+| 檔案 | 內容 |
+|---|---|
+| m/index.html、app.css | 畫面 |
+| m/js/core.js | 登入、即時資料（pallets / waves / dispatchOrders / inboundTasks）、掃描比對、相機、回饋 |
+| m/js/picking.js | 波次揀貨：清單用 `buildWavePickingList`，完成用 `completeWaveTx`（與桌機相同） |
+| m/js/inbound.js | 入庫任務：掃儲位即入帳（`postInboundOrderTx`）；電腦已入帳的任務只更新儲位 |
+| m/js/dispatch.js | 調度工單：桌機「發布到手機」的移板／併板 |
+| m/js/scan-ops.js | 上架、出庫、移板、併板（`runStockTransaction`、`movePalletTx`、`mergePalletsTx`） |
+| m/js/stocktake.js | 盤點（盤點期間被異動的板不覆蓋） |
+| m/js/query.js | 庫存快查 |
+| m/sw.js | 網路優先的 Service Worker：有網路一律拿最新版，離線才用快取 |
+
+掃描比對：不分大小寫、忽略 `-` 等符號；可只打板號尾碼（≥3 碼且唯一）；掃棧板的地方也可以掃儲位標籤（只有一板時直接帶出，多板讓使用者選）。
+儲位可手打縮寫：`IA011` → `I-A-01-1F`。
 
 ### 手機與桌機的分工
 
 - **揀貨**：手機讀桌機建立的波次，掃描進度即時寫回 `waves.completedItems`（兩邊看到同一份進度）；
   手機或桌機都可以「完成波次」，兩邊呼叫同一個 `completeWaveTx`（扣庫存、訂單出貨、缺貨記錄在同一筆交易）。
+- **入庫**：桌機建立入庫單時發布 `inboundTasks`；堆高機上架後在手機掃儲位 → 直接入帳（放的儲位不同會先確認，以實際儲位入帳）。
+  桌機「待入帳」仍可入帳，入帳後手機上的任務自動結案。
 
 ### 作業原則：會讓帳變錯的才擋，其他只提醒
 
@@ -103,3 +126,5 @@ Firebase 主控台 → Firestore Database → 規則 → 貼上 `firestore.rules
 ## 測試
 
 見 [`tests/README.md`](tests/README.md)。
+
+上線後人工驗收（入庫 → 波次出貨 → 調撥 → 盤點）：見 [`docs/上線驗收步驟.md`](docs/上線驗收步驟.md)。

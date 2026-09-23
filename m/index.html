@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
+    <title>Terry WMS 手機版</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon.svg">
+    <link rel="apple-touch-icon" href="icon-180.png">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="app.css" rel="stylesheet">
+</head>
+<body>
+    <!-- 登入 -->
+    <div id="login-page" class="login-page">
+        <i class="fa-solid fa-warehouse login-logo"></i>
+        <h1 class="login-title">Terry WMS</h1>
+        <p class="login-subtitle">倉儲管理系統 - 手機版 <span id="app-version"></span></p>
+        <div class="login-box">
+            <input type="email" id="login-email" class="login-input" placeholder="Email" autocomplete="username">
+            <input type="password" id="login-pwd" class="login-input" placeholder="密碼" autocomplete="current-password">
+            <div id="login-error" class="login-error"></div>
+            <button onclick="doLogin()" class="login-btn"><i class="fa-solid fa-right-to-bracket"></i> 登入</button>
+        </div>
+    </div>
+
+    <!-- 主選單 -->
+    <div id="app-main" class="app-container">
+        <header class="app-header">
+            <div class="app-logo"><i class="fa-solid fa-warehouse"></i><span>Terry WMS</span></div>
+            <div class="user-info">
+                <span class="user-name" id="display-user">-</span>
+                <button onclick="doLogout()" class="logout-btn" aria-label="登出"><i class="fa-solid fa-power-off"></i></button>
+            </div>
+        </header>
+        <div class="main-menu">
+            <div class="menu-section">工作單</div>
+            <div class="menu-card" style="--c:#3b82f6" onclick="openPage('picking')"><span class="badge" id="badge-picking"></span>
+                <div class="menu-icon"><i class="fa-solid fa-barcode"></i></div>
+                <div><h3>波次揀貨</h3><p>訂單出貨</p></div>
+            </div>
+            <div class="menu-card" style="--c:#10b981" onclick="openPage('inbound')"><span class="badge" id="badge-inbound"></span>
+                <div class="menu-icon"><i class="fa-solid fa-truck-ramp-box"></i></div>
+                <div><h3>入庫任務</h3><p>上架即入帳</p></div>
+            </div>
+            <div class="menu-card" style="--c:#f59e0b" onclick="openPage('dispatch')"><span class="badge" id="badge-dispatch"></span>
+                <div class="menu-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
+                <div><h3>調度工單</h3><p>移板／併板工單</p></div>
+            </div>
+            <div class="menu-card" style="--c:#0ea5e9" onclick="openPage('stocktake')">
+                <div class="menu-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+                <div><h3>盤點</h3><p>掃描點數</p></div>
+            </div>
+            <div class="menu-section">現場作業</div>
+            <div class="menu-card" style="--c:#14b8a6" onclick="openPage('shelve')">
+                <div class="menu-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+                <div><h3>上架</h3><p>棧板放到儲位</p></div>
+            </div>
+            <div class="menu-card" style="--c:#ea580c" onclick="openPage('outbound')">
+                <div class="menu-icon"><i class="fa-solid fa-dolly"></i></div>
+                <div><h3>出庫</h3><p>直接扣一板</p></div>
+            </div>
+            <div class="menu-card" style="--c:#6366f1" onclick="openPage('move')">
+                <div class="menu-icon"><i class="fa-solid fa-right-left"></i></div>
+                <div><h3>移板</h3><p>換儲位</p></div>
+            </div>
+            <div class="menu-card" style="--c:#a855f7" onclick="openPage('merge')">
+                <div class="menu-icon"><i class="fa-solid fa-object-group"></i></div>
+                <div><h3>併板</h3><p>兩板併一板</p></div>
+            </div>
+            <div class="menu-card wide" style="--c:#8b5cf6" onclick="openPage('query')">
+                <div class="menu-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
+                <div><h3>庫存快查</h3><p>品名、板號、儲位都能查</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 波次揀貨 -->
+    <div id="page-picking" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">波次揀貨</span>
+        </header>
+        <div class="selector-section">
+            <div class="selector-label">選擇波次</div>
+            <select id="picking-wave-select" class="selector-input" onchange="loadPickingWave()"></select>
+        </div>
+        <div class="scan-section" id="picking-scan-area" style="display:none">
+            <div class="scan-input-wrap">
+                <input type="text" id="picking-scan" class="scan-input" placeholder="掃板號或儲位" data-enter="confirmPickingScan" data-cam-title="揀貨（可連續掃）" data-continuous="1" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('picking-scan')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="confirmPickingScan()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+            <p class="scan-hint">📷 可連續掃，一板一板打勾；手打只要板號最後幾碼</p>
+            <div id="picking-scan-result" class="scan-result"></div>
+        </div>
+        <div class="list-section">
+            <div class="list-header"><h4>揀貨清單（依動線）</h4><span class="list-progress" id="picking-progress">0/0</span></div>
+            <div id="picking-list"></div>
+        </div>
+        <div class="bottom-actions" id="picking-actions" style="display:none">
+            <button class="action-btn success" onclick="completePickingWave()"><i class="fa-solid fa-flag-checkered"></i> 完成波次（扣庫存出貨）</button>
+        </div>
+    </div>
+
+    <!-- 調度工單 -->
+    <div id="page-dispatch" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">調度工單</span>
+        </header>
+        <div class="selector-section">
+            <div class="selector-label">選擇工單（電腦「發布到手機」）</div>
+            <select id="dispatch-order-select" class="selector-input" onchange="loadDispatchOrder()"></select>
+        </div>
+        <div class="scan-section" id="dispatch-scan-area" style="display:none">
+            <div class="scan-input-wrap">
+                <input type="text" id="dispatch-scan" class="scan-input" placeholder="掃板號或原儲位" data-enter="confirmDispatchScan" data-cam-title="調度（可連續掃）" data-continuous="1" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('dispatch-scan')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="confirmDispatchScan()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+            <p class="scan-hint">掃到就直接執行移板／併板</p>
+            <div id="dispatch-scan-result" class="scan-result"></div>
+        </div>
+        <div class="list-section">
+            <div class="list-header"><h4>調度清單</h4><span class="list-progress" id="dispatch-progress">0/0</span></div>
+            <div id="dispatch-list"></div>
+        </div>
+        <div class="bottom-actions" id="dispatch-actions" style="display:none">
+            <button class="action-btn success" onclick="completeDispatchOrder()"><i class="fa-solid fa-flag-checkered"></i> 完成工單</button>
+        </div>
+    </div>
+
+    <!-- 入庫任務 -->
+    <div id="page-inbound" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">入庫任務</span>
+        </header>
+        <div id="inbound-step1" class="scan-section">
+            <div class="scan-input-wrap">
+                <input type="text" id="inbound-task-scan" class="scan-input" placeholder="掃棧板單或點下方任務" data-enter="scanInboundTask" data-cam-title="入庫：掃棧板單" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('inbound-task-scan')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="scanInboundTask()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+            <p class="scan-hint">放上儲位後掃儲位確認，就會直接入帳</p>
+        </div>
+        <div id="inbound-step2" style="display:none">
+            <div class="step-card">
+                <div id="inbound-task-info"></div>
+            </div>
+            <div class="scan-section">
+                <div class="scan-input-wrap">
+                <input type="text" id="inbound-loc-scan" class="scan-input" placeholder="掃描儲位標籤" data-enter="confirmInboundLocation" data-cam-title="入庫：掃儲位" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('inbound-loc-scan')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="confirmInboundLocation()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+                <div class="row-btns"><button class="action-btn secondary" onclick="resetInboundTask()">換一筆</button></div>
+            </div>
+        </div>
+        <div style="padding:0 16px"><div id="inbound-result" class="scan-result"></div></div>
+        <div class="list-section">
+            <div class="list-header"><h4>待入庫</h4><span class="list-progress" id="inbound-count">0 筆</span></div>
+            <div id="inbound-list"></div>
+        </div>
+    </div>
+
+    <!-- 上架 -->
+    <div id="page-shelve" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">上架</span>
+        </header>
+        <div id="shelve-step1" class="scan-section">
+            <div class="step-label"><b>1.</b> 掃儲位</div>
+            <div class="scan-input-wrap">
+                <input type="text" id="shelve-loc" class="scan-input" placeholder="掃描儲位標籤（或打 IA011）" data-enter="shelveScanLoc" data-cam-title="上架：掃儲位" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('shelve-loc')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="shelveScanLoc()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+        </div>
+        <div id="shelve-step2" style="display:none">
+            <div class="step-card"><div class="step-label">儲位</div><div class="item-location" id="shelve-loc-show"></div><div class="item-detail" id="shelve-loc-note"></div></div>
+            <div class="scan-section">
+                <div class="step-label"><b>2.</b> 掃要放上去的棧板</div>
+                <div class="scan-input-wrap">
+                <input type="text" id="shelve-pallet" class="scan-input" placeholder="掃板號（或打最後幾碼）" data-enter="shelveScanPallet" data-cam-title="上架：掃棧板" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('shelve-pallet')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="shelveScanPallet()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+                <div class="row-btns"><button class="action-btn secondary" onclick="resetShelve()">換儲位</button></div>
+            </div>
+        </div>
+        <div id="shelve-step3" style="display:none">
+            <div class="step-card">
+                <div id="shelve-pallet-info"></div>
+                <div class="step-label" style="margin-top:12px"><b>3.</b> 確認件數（點數不同可直接改）</div>
+                <input type="number" inputmode="decimal" id="shelve-qty" class="qty-input" data-enter="confirmShelve">
+                <div class="row-btns">
+                    <button class="action-btn secondary" onclick="resetShelve()">取消</button>
+                    <button class="action-btn success" onclick="confirmShelve()"><i class="fa-solid fa-check"></i> 確認上架</button>
+                </div>
+            </div>
+        </div>
+        <div style="padding:0 16px"><div id="shelve-result" class="scan-result"></div><div id="shelve-choices"></div></div>
+    </div>
+
+    <!-- 出庫 -->
+    <div id="page-outbound" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">出庫</span>
+        </header>
+        <div id="out-step1" class="scan-section">
+            <div class="scan-input-wrap">
+                <input type="text" id="out-pallet" class="scan-input" placeholder="掃板號或儲位" data-enter="outScanPallet" data-cam-title="出庫：掃棧板" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('out-pallet')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="outScanPallet()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+            <p class="scan-hint">直接從某一板扣數量（訂單出貨請用「波次揀貨」）</p>
+        </div>
+        <div id="out-step2" style="display:none">
+            <div class="step-card">
+                <div id="out-pallet-info"></div>
+                <div class="step-label" style="margin-top:12px">出庫數量</div>
+                <input type="number" inputmode="decimal" id="out-qty" class="qty-input" data-enter="confirmOutbound" placeholder="0">
+                <div class="quick-btns" id="out-quick"></div>
+                <input type="text" id="out-note" class="selector-input" style="margin-top:10px" placeholder="備註（選填，例如客戶、原因）">
+                <div class="row-btns">
+                    <button class="action-btn secondary" onclick="resetOutbound()">取消</button>
+                    <button class="action-btn success" style="background:#ea580c" onclick="confirmOutbound()"><i class="fa-solid fa-check"></i> 確認出庫</button>
+                </div>
+            </div>
+        </div>
+        <div style="padding:0 16px"><div id="out-result" class="scan-result"></div><div id="out-choices"></div></div>
+    </div>
+
+    <!-- 移板 -->
+    <div id="page-move" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">移板</span>
+        </header>
+        <div id="move-step1" class="scan-section">
+            <div class="step-label"><b>1.</b> 掃要移的棧板</div>
+            <div class="scan-input-wrap">
+                <input type="text" id="move-pallet" class="scan-input" placeholder="掃板號或原儲位" data-enter="moveScanPallet" data-cam-title="移板：掃棧板" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('move-pallet')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="moveScanPallet()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+        </div>
+        <div id="move-step2" style="display:none">
+            <div class="step-card"><div id="move-pallet-info"></div></div>
+            <div class="scan-section">
+                <div class="step-label"><b>2.</b> 掃新儲位</div>
+                <div class="scan-input-wrap">
+                <input type="text" id="move-loc" class="scan-input" placeholder="掃描新儲位（或打 IA011）" data-enter="moveScanLoc" data-cam-title="移板：掃新儲位" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('move-loc')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="moveScanLoc()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+                <div class="row-btns"><button class="action-btn secondary" onclick="resetMove()">取消</button></div>
+            </div>
+        </div>
+        <div style="padding:0 16px"><div id="move-result" class="scan-result"></div><div id="move-choices"></div></div>
+    </div>
+
+    <!-- 併板 -->
+    <div id="page-merge" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">併板</span>
+        </header>
+        <div id="merge-step1" class="scan-section">
+            <div class="step-label"><b>1.</b> 掃要併掉的板（通常是少的那板）</div>
+            <div class="scan-input-wrap">
+                <input type="text" id="merge-src" class="scan-input" placeholder="掃板號或儲位" data-enter="mergeScanSrc" data-cam-title="併板：掃要併掉的板" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('merge-src')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="mergeScanSrc()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+        </div>
+        <div id="merge-step2" style="display:none">
+            <div class="step-card"><div class="step-label">要併掉的板</div><div id="merge-src-info"></div></div>
+            <div class="scan-section">
+                <div class="step-label"><b>2.</b> 掃要併入的板</div>
+                <div class="scan-input-wrap">
+                <input type="text" id="merge-tgt" class="scan-input" placeholder="掃板號或儲位" data-enter="mergeScanTgt" data-cam-title="併板：掃要併入的板" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('merge-tgt')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="mergeScanTgt()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+                <div class="row-btns"><button class="action-btn secondary" onclick="resetMerge()">取消</button></div>
+            </div>
+        </div>
+        <div id="merge-step3" style="display:none">
+            <div class="step-card">
+                <div class="step-label">併入這板</div>
+                <div id="merge-preview"></div>
+                <div class="row-btns">
+                    <button class="action-btn secondary" onclick="resetMerge()">取消</button>
+                    <button class="action-btn success" style="background:#9333ea" onclick="confirmMerge()"><i class="fa-solid fa-object-group"></i> 確認合併</button>
+                </div>
+            </div>
+        </div>
+        <div style="padding:0 16px"><div id="merge-result" class="scan-result"></div><div id="merge-choices"></div></div>
+    </div>
+
+    <!-- 盤點 -->
+    <div id="page-stocktake" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">盤點</span>
+        </header>
+        <div id="st-step1" class="scan-section">
+            <div class="scan-input-wrap">
+                <input type="text" id="st-scan" class="scan-input" placeholder="掃板號或儲位" data-enter="stScan" data-cam-title="盤點：掃棧板" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('st-scan')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="stScan()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+            <p class="scan-hint">一板一板點：掃 → 輸入實際數量 → 送出（有差異才調整庫存）</p>
+        </div>
+        <div id="st-step2" style="display:none">
+            <div class="step-card">
+                <div id="st-pallet-info"></div>
+                <div class="step-label" style="margin-top:12px">實際數量</div>
+                <input type="number" inputmode="decimal" id="st-qty" class="qty-input" data-enter="submitStocktakeItem" placeholder="點數後輸入">
+                <div class="row-btns">
+                    <button class="action-btn secondary" onclick="stSameQty()">與帳面相同</button>
+                    <button class="action-btn success" style="background:#0284c7" onclick="submitStocktakeItem()"><i class="fa-solid fa-check"></i> 送出</button>
+                </div>
+                <div class="row-btns"><button class="action-btn secondary" onclick="resetStocktake()">取消</button></div>
+            </div>
+        </div>
+        <div style="padding:0 16px"><div id="st-result" class="scan-result"></div><div id="st-choices"></div></div>
+        <div class="list-section">
+            <div class="list-header"><h4>本次盤點</h4><span class="list-progress" id="st-today-count">0 板</span></div>
+            <div id="st-today"></div>
+        </div>
+    </div>
+
+    <!-- 庫存快查 -->
+    <div id="page-query" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">庫存快查</span>
+        </header>
+        <div class="scan-section">
+            <div class="scan-input-wrap">
+                <input type="text" id="query-input" class="scan-input" placeholder="品名、板號、批號或儲位" data-enter="doInventoryQuery" data-cam-title="庫存快查" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('query-input')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="doInventoryQuery()" aria-label="確認"><i class="fa-solid fa-magnifying-glass"></i></button>
+            </div>
+        </div>
+        <div class="query-result" id="query-result">
+            <div class="empty-state"><i class="fa-solid fa-box-open"></i><p>輸入關鍵字或掃描標籤</p></div>
+        </div>
+    </div>
+
+    <!-- 相機掃描畫面 -->
+    <div id="cam-overlay">
+        <div class="cam-top">
+            <span class="cam-title" id="cam-title">相機掃描</span>
+            <button class="cam-torch" id="cam-torch" onclick="toggleTorch()" style="display:none"><i class="fa-solid fa-lightbulb"></i> 補光</button>
+            <button class="cam-close" onclick="closeCameraScan()"><i class="fa-solid fa-xmark"></i> 關閉</button>
+        </div>
+        <div class="cam-view"><div id="cam-reader"></div></div>
+        <div class="cam-bottom" id="cam-bottom">
+            <span class="cam-result" id="cam-result">對準 QR code 或條碼</span>
+        </div>
+    </div>
+
+    <div class="update-bar" id="update-bar"><span>有新版本</span><button onclick="location.reload()">重新整理</button></div>
+
+    <!-- 相機掃碼（QR code、CODE128；需 https）-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <!-- Firebase（與桌機版相同的 compat SDK）-->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <!-- 與桌機共用：Firebase 設定、資料格式、庫存交易、入庫入帳、揀貨清單 -->
+    <script src="../js/shared/firebase-config.js"></script>
+    <script src="../js/shared/data-format.js"></script>
+    <script src="../js/shared/stock-core.js"></script>
+    <script src="../js/shared/inbound-core.js"></script>
+    <script src="../js/shared/picking-list.js"></script>
+    <!-- 手機版模組 -->
+    <script src="js/core.js"></script>
+    <script src="js/picking.js"></script>
+    <script src="js/dispatch.js"></script>
+    <script src="js/inbound.js"></script>
+    <script src="js/scan-ops.js"></script>
+    <script src="js/stocktake.js"></script>
+    <script src="js/query.js"></script>
+</body>
+</html>

@@ -278,6 +278,7 @@
             'Raw': '採購進貨',
             'FG': '產線成品',
             'WIP': '產線半成品',
+            'RM': '原料',
             'Return': '餘料退庫'
         };
 
@@ -1307,8 +1308,7 @@
         // （兩人同時按確認時，只會入帳一次）
         async function executeInbound(order, silent) {
             var loc = String(order.locationId || '').trim();
-            var validLoc = /^[IJK]-[A-H]-\d{2}-[123]F$/.test(loc) || /^(TEMP-IN|TEMP-OUT|[A-D]00|[A-D]99|OTHER)$/.test(loc);
-            if (!validLoc) {
+            if (!window.isValidStorageLocation(loc)) {
                 // 例如調撥入庫單的儲位是「待指定」：詢問要放哪裡（批次入帳時先放進貨暫存區）
                 if (silent) {
                     loc = 'TEMP-IN';
@@ -1319,54 +1319,10 @@
                 }
             }
 
-            var orderRef = window.db.collection('inboundOrders').doc(order.id);
-            var palletRef = window.db.collection('pallets').doc();
-            var palletId = order.docNo || order.orderNo || palletRef.id;
-            var exp = window.normalizeDateValue(order.expiryDate || order.expDate);
             try {
-                await window.db.runTransaction(async function(tx) {
-                    var snap = await tx.get(orderRef);
-                    if (!snap.exists) throw new Error('入庫單已不存在');
-                    if (snap.data().status === 'completed') throw new Error('此入庫單已經入帳過了');
-                    tx.set(palletRef, window.normalizeStockRecord({
-                        palletId: palletId,
-                        company: order.company || '崇文',
-                        productCode: order.productCode || '',
-                        productName: order.productName,
-                        spec: order.spec || '',
-                        batchNo: order.batchNo || '',
-                        expDate: exp,
-                        expiryDate: exp,
-                        quantity: parseFloat(order.quantity) || 0,
-                        locationId: loc,
-                        category: order.type || order.category || 'Raw',
-                        vendor: order.vendor || '',
-                        source: order.source || 'Inbound',
-                        inboundDate: new Date().toISOString(),
-                        createdAt: new Date().toISOString(),
-                        status: 'Available'
-                    }));
-                    tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
-                        type: 'inbound',
-                        company: order.company || '',
-                        productName: order.productName,
-                        spec: order.spec || '',
-                        quantity: order.quantity,
-                        quantityChange: order.quantity,
-                        locationId: loc,
-                        batchNo: order.batchNo || '',
-                        palletId: palletId,
-                        expDate: exp,
-                        note: '入庫 - ' + (order.vendor || order.source || ''),
-                        orderId: order.id
-                    }));
-                    tx.update(orderRef, {
-                        status: 'completed',
-                        locationId: loc,
-                        completedAt: new Date().toISOString(),
-                        completedBy: window.currentUser ? window.currentUser.email : ''
-                    });
-                });
+                // 與手機版共用：建立棧板、寫異動記錄、入庫單標記完成在同一筆交易
+                await window.postInboundOrderTx(order.id, loc, { note: '入庫 - ' + (order.vendor || order.source || '') });
+                closeInboundTasks(order);
 
                 if (!silent) {
                     alert('✅ 入帳成功！\n\n儲位：' + loc + '\n品名：' + order.productName);
@@ -1381,9 +1337,25 @@
             }
         }
 
+        // 電腦入帳後，手機上對應的入庫任務一併結案（失敗不影響入帳）
+        async function closeInboundTasks(order) {
+            try {
+                var snap = await window.db.collection('inboundTasks').where('orderNo', '==', order.docNo).get();
+                await Promise.all(snap.docs.filter(function(d) { return d.data().status !== 'done'; }).map(function(d) {
+                    return d.ref.update({ status: 'done', confirmedAt: new Date().toISOString(), confirmedBy: window.currentUser ? window.currentUser.email : '', note: '電腦入帳' });
+                }));
+            } catch (e) { console.warn('入庫任務結案失敗', e); }
+        }
+
+        // 發布入庫任務到手機（堆高機上架後掃儲位即入帳）；外倉入庫不需要
         window.publishInboundTask = async function(order) {
+            if (order.isExternal) return true;
             try {
                 await window.addDoc(window.collection(window.db, 'inboundTasks'), {
+                    orderId: order.id || '',
+                    company: order.company || '',
+                    expDate: order.expDate || '',
+                    approvalStatus: order.approvalStatus || '',
                     orderNo: order.docNo,
                     palletId: order.docNo,
                     productName: order.productName,

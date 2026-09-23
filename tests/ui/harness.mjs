@@ -11,18 +11,19 @@ const LIBS = {
   'cdn.jsdelivr.net/npm/chart.js': 'chart.js/dist/chart.umd.js',
   'xlsx.full.min.js': 'xlsx/dist/xlsx.full.min.js',
   'JsBarcode.all.min.js': 'jsbarcode/dist/JsBarcode.all.min.js',
+  'html5-qrcode.min.js': 'html5-qrcode/html5-qrcode.min.js',
 };
 const TAILWIND_STUB = "window.tailwind={};(function(){var s=document.createElement('style');s.textContent='.hidden{display:none!important}.flex{display:flex}.grid{display:grid}';document.head.appendChild(s);})();";
 
 let srv;
 export function startServer(port = 8766) {
   srv = http.createServer((req, res) => {
-    const p = path.join(REPO, decodeURIComponent(req.url.split('?')[0]).replace(/^\/$/, '/index.html'));
+    const p = path.join(REPO, decodeURIComponent(req.url.split('?')[0]).replace(/\/$/, '/index.html'));
     fs.readFile(p, (e, b) => {
       if (e) { res.writeHead(404); return res.end(); }
-      if (p.endsWith('mobile.html')) b = Buffer.from(String(b).replace("const auth = firebase.auth();", "const auth = firebase.auth(); db.useEmulator('127.0.0.1',8080); auth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true});"));
+      if (p.endsWith(path.join('m', 'js', 'core.js'))) b = Buffer.from(String(b).replace("const auth = firebase.auth();", "const auth = firebase.auth(); db.useEmulator('127.0.0.1',8080); auth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true});"));
       if (p.endsWith('firebase-init.js')) b = Buffer.from(String(b).replace("window.secondaryAuth = secondaryAuth;", "window.secondaryAuth = secondaryAuth; db.useEmulator('127.0.0.1',8080); auth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true}); secondaryAuth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true});"));
-      res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : 'text/html; charset=utf-8' }); res.end(b);
+      res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : p.endsWith('.json') ? 'application/json' : p.endsWith('.svg') ? 'image/svg+xml' : 'text/html; charset=utf-8' }); res.end(b);
     });
   }).listen(port);
   return `http://localhost:${port}`;
@@ -47,9 +48,11 @@ export async function ensureUsers(emails) {
 }
 
 let browser;
-export async function openApp(base, email, { mobile = false } = {}) {
-  browser = browser || await chromium.launch();
+// fakeVideo：y4m 影片檔，當作手機相機畫面（測試相機掃碼用）
+export async function openApp(base, email, { mobile = false, fakeVideo = null } = {}) {
+  browser = browser || await chromium.launch(fakeVideo ? { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--use-file-for-fake-video-capture=' + fakeVideo] } : {});
   const ctx = await browser.newContext(mobile ? { viewport: { width: 390, height: 844 } } : { viewport: { width: 1600, height: 1000 } });
+  if (fakeVideo) await ctx.grantPermissions(['camera']);
   const page = await ctx.newPage();
   const log = { dialogs: [], errors: [], console: [] };
   page.on('pageerror', e => log.errors.push(e.message));
@@ -70,7 +73,7 @@ export async function openApp(base, email, { mobile = false } = {}) {
     for (const k in LIBS) if (u.includes(k)) return r.fulfill({ body: fs.readFileSync(path.join(NM, LIBS[k])), contentType: 'text/javascript' });
     return r.fulfill({ body: '', contentType: u.endsWith('.css') ? 'text/css' : 'text/javascript' });
   });
-  await page.goto(base + (mobile ? '/mobile.html' : '/index.html'));
+  await page.goto(base + (mobile ? '/m/' : '/index.html'));
   if (mobile) {
     await page.fill('#login-email', email); await page.fill('#login-pwd', 'pass1234');
     await page.click('button[onclick="doLogin()"]');
