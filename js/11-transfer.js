@@ -85,7 +85,7 @@
                 if (inOptionsDiv) inOptionsDiv.style.display = 'block';
             } else if (mode === 'out') {
                 titleEl.innerHTML = '<i class="fa-solid fa-truck-arrow-right mr-2 text-orange-400"></i>調撥出庫（本倉→外倉）';
-                descEl.innerHTML = '<span class="text-orange-400"><i class="fa-solid fa-info-circle mr-1"></i>本倉儲位 → 出貨暫存區 → 外倉</span>';
+                descEl.innerHTML = '<span class="text-orange-400"><i class="fa-solid fa-info-circle mr-1"></i>本倉儲位 → 外倉（執行後立即從本倉扣除、加到外倉）</span>';
                 sourceLabelEl.textContent = '目標外倉 *';
                 targetDiv.style.display = 'none';
                 if (locationDiv) locationDiv.style.display = 'block';
@@ -314,7 +314,6 @@
                 transferItem.fromName = location;
                 transferItem.toWh = source;  // source 在此模式是目標外倉
                 transferItem.toName = getWhName(source);
-                transferItem.tempLocation = 'TEMP-OUT';
             } else {
                 transferItem.fromWh = source;
                 transferItem.fromName = getWhName(source);
@@ -479,26 +478,12 @@
                         }
 
                     } else if (t.mode === 'out') {
-                        // ========== 調撥出庫（本倉儲位→出貨暫存區→外倉）==========
+                        // ========== 調撥出庫（本倉儲位 → 外倉，一段式）==========
+                        // 貨從儲位拉下來當天就上車，所以直接扣本倉、加外倉。
+                        // （舊版另外在 TEMP-OUT 建一板，但沒有後續「出車」步驟把它清掉，造成同一批貨算兩次）
                         var srcItem = t.sourceItem;
                         if (!srcItem || !srcItem.id) throw new Error('找不到來源棧板：' + t.productName);
                         changes.push({ ref: window.doc(window.db, 'pallets', srcItem.id), delta: -t.quantity, deleteWhenEmpty: true, label: srcItem.palletId || t.productName });
-
-                        creates.push({ ref: window.db.collection('pallets').doc(), data: {
-                            palletId: 'TRO-' + Date.now() + '-' + i,
-                            productName: t.productName,
-                            spec: t.spec || '',
-                            batchNo: t.batchNo || '',
-                            expiryDate: t.expDate || '',
-                            quantity: t.quantity,
-                            totalWeight: 0,
-                            locationId: 'TEMP-OUT',
-                            company: t.company,
-                            source: '調撥出庫',
-                            targetWarehouse: t.toName,
-                            targetWarehouseId: t.toWh,
-                            createdAt: new Date().toISOString()
-                        }});
 
                         var existExt = findExt(t.toWh, t);
                         if (existExt) {
@@ -1249,7 +1234,6 @@
                 } else if (mode === 'out') {
                     transferItem.fromWh = cartItem.locationId; transferItem.fromName = cartItem.locationId;
                     transferItem.toWh = source; transferItem.toName = getWhName(source);
-                    transferItem.tempLocation = 'TEMP-OUT';
                 } else {
                     transferItem.fromWh = source; transferItem.fromName = getWhName(source);
                     transferItem.toWh = target; transferItem.toName = getWhName(target);

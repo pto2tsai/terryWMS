@@ -79,3 +79,75 @@ window.runDataMigrationUI = async function(dryRun) {
         if (out) out.innerHTML = '<span class="text-red-400">❌ ' + e.message + '</span>';
     }
 };
+
+// ========== 清除「調撥出庫」重複計算（一次性，限管理員）==========
+// 舊版調撥出庫會同時：①在 TEMP-OUT 建一板 ②加到外倉庫存，且沒有後續步驟清掉 ①，
+// 同一批貨在本倉與外倉各算一次。外倉那筆是對的，這裡移除 ① 並留下調整記錄。
+// 已被移到其他儲位的板不會自動刪除，只列出來請人工確認。
+window.cleanupTransferOutDuplicates = async function(dryRun) {
+    if (!window.currentUser || window.currentUser.role !== 'admin') {
+        throw new Error('只有管理員可以執行');
+    }
+    var snap = await window.db.collection('pallets').where('source', '==', '調撥出庫').get();
+    var toRemove = [];
+    var needCheck = [];
+    snap.forEach(function(d) {
+        var p = Object.assign({ id: d.id, ref: d.ref }, d.data());
+        if (p.locationId === 'TEMP-OUT') toRemove.push(p);
+        else needCheck.push(p);
+    });
+
+    if (!dryRun) {
+        for (var i = 0; i < toRemove.length; i += 200) {
+            var batch = window.db.batch();
+            toRemove.slice(i, i + 200).forEach(function(p) {
+                batch.delete(p.ref);
+                batch.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
+                    type: 'adjust',
+                    company: p.company || '',
+                    productName: p.productName,
+                    spec: p.spec || '',
+                    batchNo: p.batchNo || '',
+                    quantity: 0,
+                    quantityChange: -(parseFloat(p.quantity) || 0),
+                    locationId: 'TEMP-OUT',
+                    palletId: p.palletId || p.id,
+                    note: '清除調撥出庫重複計算（已計入外倉 ' + (p.targetWarehouse || p.targetWarehouseId || '') + '）'
+                }));
+            });
+            await batch.commit();
+        }
+    }
+
+    function brief(p) {
+        return { palletId: p.palletId, productName: p.productName, spec: p.spec || '', quantity: p.quantity,
+                 locationId: p.locationId, targetWarehouse: p.targetWarehouse || p.targetWarehouseId || '' };
+    }
+    return { dryRun: !!dryRun, removed: toRemove.map(brief), needCheck: needCheck.map(brief) };
+};
+
+window.runTransferOutCleanupUI = async function(dryRun) {
+    var out = document.getElementById('dev-transfer-cleanup-result');
+    if (!dryRun && !confirm('確定移除 TEMP-OUT 中「調撥出庫」重複計算的棧板？\n\n外倉庫存不受影響。建議先按「預覽」並先做一次備份。')) return;
+    if (out) out.innerHTML = '<span class="text-yellow-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>處理中...</span>';
+    try {
+        var r = await window.cleanupTransferOutDuplicates(dryRun);
+        var esc = window.escapeHtml || function(v) { return String(v == null ? '' : v); };
+        var html = '<div class="text-white font-bold mb-1">' + (r.dryRun ? '預覽（尚未刪除）' : '✅ 已完成') + '：' +
+            (r.dryRun ? '將移除 ' : '已移除 ') + r.removed.length + ' 板</div>';
+        r.removed.slice(0, 30).forEach(function(p) {
+            html += '<div>' + esc(p.palletId) + '　' + esc(p.productName) + ' ' + esc(p.spec) + '　' + esc(p.quantity) + ' 件 → ' + esc(p.targetWarehouse) + '</div>';
+        });
+        if (r.removed.length > 30) html += '<div>…另有 ' + (r.removed.length - 30) + ' 板</div>';
+        if (r.needCheck.length > 0) {
+            html += '<div class="text-amber-400 font-bold mt-2">⚠️ 以下 ' + r.needCheck.length + ' 板已被移出 TEMP-OUT，未自動處理，請人工確認：</div>';
+            r.needCheck.forEach(function(p) {
+                html += '<div>' + esc(p.palletId) + '　' + esc(p.productName) + '　' + esc(p.quantity) + ' 件 @ ' + esc(p.locationId) + '（原目標 ' + esc(p.targetWarehouse) + '）</div>';
+            });
+        }
+        if (out) out.innerHTML = html;
+    } catch (e) {
+        console.error('清除失敗:', e);
+        if (out) out.innerHTML = '<span class="text-red-400">❌ ' + (e.message || e) + '</span>';
+    }
+};

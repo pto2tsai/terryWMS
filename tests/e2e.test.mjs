@@ -33,6 +33,9 @@ await env.withSecurityRulesDisabled(async c => { const d=c.firestore();
   await setDoc(doc(d,'dispatchOrders','DO1'),{orderNo:'DSP-1',productName:'花枝',status:'pending',completedOps:[],createdAt:'2026-09-23T01:00:00Z',operations:[
     {id:'op-0',type:'移位',from:'K-E-02-1F',palletId:'PY',docId:'PY',to:'K-F-05-2F',qty:5,reason:'孤立板'},
     {id:'op-1',type:'合併',from:'K-E-01-1F',palletId:'PX',docId:'PX',to:'K-F-05-2F',toDocId:'PY',toPalletId:'PY',qty:8}]});
+  await P('PT',{locationId:'J-D-07-2F',quantity:10,productName:'魷魚',batchNo:'T1'});
+  await setDoc(doc(d,'pallets','TRO-OLD1'),{palletId:'TRO-OLD1',productName:'魷魚',spec:'S',company:'崇文',batchNo:'T0',quantity:6,locationId:'TEMP-OUT',source:'調撥出庫',targetWarehouse:'外倉1',targetWarehouseId:'W1'});
+  await setDoc(doc(d,'pallets','TRO-OLD2'),{palletId:'TRO-OLD2',productName:'魷魚',spec:'S',company:'崇文',batchNo:'T0',quantity:2,locationId:'J-D-08-1F',source:'調撥出庫',targetWarehouse:'外倉1',targetWarehouseId:'W1'});
   await setDoc(doc(d,'externalStock','E1'),{warehouseId:'W1',productName:'透抽',spec:'L',batchNo:'X',company:'崇文',quantity:20});
   await setDoc(doc(d,'waves','WV'),{waveNo:'WV1',status:'picking'});
   await setDoc(doc(d,'salesOrders','SO1'),{orderNo:'SO1',status:'inWave'});
@@ -246,6 +249,25 @@ ok('migration is idempotent (nothing left to change)', dry2.totalChanged===0, JS
 const alloc = await A.page.evaluate(()=>{ try { const labels = smartAllocateLocations([{id:'t1',productName:'測試品',spec:'S1',company:'崇文',batchNo:'Q',expiryDate:'2027-05-01',quantity:100,perPallet:40,palletCount:3}], {strategy:'smart', zones:['A','B']}); return labels.map(l=>[l.quantity,l.locationId,l.palletType, l.id||l.palletNo]); } catch(e){ return 'ERR '+e.message; } });
 ok('smart allocation runs with shared capacity (40+40+20, real locations, unique numbers)', Array.isArray(alloc) && alloc.length===3 && alloc.every(a=>a[1] && a[1]!=='OVERFLOW' && /^[IJK]-[A-H]-\d{2}-[123]F$/.test(a[1])) && new Set(alloc.map(a=>a[3])).size===3, JSON.stringify(alloc));
 
+
+
+// ===== 調撥出庫一段式 + 清除舊重複 =====
+const to = await A.page.evaluate(async()=>{
+  window.renderTransferList=function(){}; window.loadExternalStock=async function(){}; window.showNotification=function(){};
+  window.externalStock=[];
+  const src=currentPallets().find(p=>p.id==='PT');
+  window.transferList=[{mode:'out',fromWh:'J-D-07-2F',fromName:'J-D-07-2F',toWh:'W2',toName:'外倉2',productName:'魷魚',spec:'S',batchNo:'T1',company:'崇文',quantity:4,sourceItem:src}];
+  await executeTransfer(); return window.__alerts.slice(-1)[0]; });
+const toPallets = await admin(async d=>(await getDocs(collection(d,'pallets'))).docs.map(x=>x.data()).filter(p=>p.locationId==='TEMP-OUT' && p.batchNo==='T1'));
+const extW2 = await admin(async d=>(await getDocs(collection(d,'externalStock'))).docs.map(x=>x.data()).filter(e=>e.warehouseId==='W2'));
+ok('transfer-out is one-step: source 10-4=6, external +4, no TEMP-OUT pallet', await qty('PT')===6 && extW2.length===1 && extW2[0].quantity===4 && toPallets.length===0, to+' '+JSON.stringify(extW2));
+const cOp = await A.page.evaluate(async()=>{ try{ await cleanupTransferOutDuplicates(true); return 'ran'; }catch(e){ return e.message; } });
+ok('duplicate cleanup refused for non-admin', cOp.includes('管理員'), cOp);
+const cDry = await AD.page.evaluate(async()=>cleanupTransferOutDuplicates(true));
+ok('duplicate cleanup preview: 1 to remove, 1 needs manual check, nothing deleted', cDry.removed.length===1 && cDry.needCheck.length===1 && await qty('TRO-OLD1')===6, JSON.stringify(cDry));
+await AD.page.evaluate(async()=>cleanupTransferOutDuplicates(false));
+const cLog = await admin(async d=>(await getDocs(collection(d,'inventoryLogs'))).docs.map(x=>x.data()).find(l=>l.palletId==='TRO-OLD1'));
+ok('duplicate cleanup removes TEMP-OUT pallet only and logs adjustment', await qty('TRO-OLD1')===null && await qty('TRO-OLD2')===2 && cLog && cLog.quantityChange===-6 && cLog.operatorEmail==='admin@t.com', JSON.stringify(cLog));
 
 // ===== 第 4 步：手機版 =====
 const MX = await openMobileAs('stranger@t.com');

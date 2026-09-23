@@ -3120,6 +3120,18 @@
                         </div>
                     </div>
                     <div id="dev-migrate-result" class="text-slate-300 text-xs mt-3"></div>
+
+                    <div class="flex items-center justify-between gap-4 flex-wrap mt-4 pt-4 border-t border-slate-700">
+                        <div>
+                            <div class="text-white font-bold text-sm"><i class="fa-solid fa-truck mr-2 text-orange-400"></i>清除調撥出庫重複計算（管理員）</div>
+                            <div class="text-slate-400 text-xs mt-1">舊版調撥出庫會在 TEMP-OUT 多建一板（外倉也已入帳），造成重複計算。只需執行一次。</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="runTransferOutCleanupUI(true)" class="px-3 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-sm">預覽</button>
+                            <button onclick="runTransferOutCleanupUI(false)" class="px-3 py-2 bg-orange-700 hover:bg-orange-600 text-white rounded-lg text-sm font-bold">執行清除</button>
+                        </div>
+                    </div>
+                    <div id="dev-transfer-cleanup-result" class="text-slate-300 text-xs mt-3"></div>
                 </div>
 
                 <!-- 左右兩欄主區塊 -->
