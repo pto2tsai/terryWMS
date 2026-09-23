@@ -1,0 +1,122 @@
+rules_version = '2';
+
+// ============================================================
+// terryWMS Firestore 安全規則
+//
+// 角色等級與 app.js 的 window.ROLES 一致：
+//   admin 100 / finance 85 / supervisor 80 / sales 70 /
+//   operator 60 / custom 50 / forklift 40 / readonly 10
+//
+// 使用者文件：users/{小寫 email}，欄位 role、active
+// 部署：Firebase 主控台 → Firestore → 規則，貼上本檔內容後發布
+//      （或 firebase deploy --only firestore:rules）
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function profilePath() {
+      return /databases/$(database)/documents/users/$(myEmail());
+    }
+
+    function isActiveUser() {
+      return signedIn()
+        && exists(profilePath())
+        && get(profilePath()).data.get('active', true) != false;
+    }
+
+    function roleLevel() {
+      return {
+        'admin': 100, 'finance': 85, 'supervisor': 80, 'sales': 70,
+        'operator': 60, 'custom': 50, 'forklift': 40, 'readonly': 10
+      }.get(get(profilePath()).data.get('role', 'readonly'), 10);
+    }
+
+    function hasLevel(n) {
+      return isActiveUser() && roleLevel() >= n;
+    }
+
+    // 堆高機手（40）以上可以做庫存作業；只讀（10）不能寫
+    function canOperate() { return hasLevel(40); }
+    function isSupervisor() { return hasLevel(80); }
+    function isAdmin() { return hasLevel(100); }
+
+    // ---------- 使用者 ----------
+    match /users/{email} {
+      // 自己的文件一定可以讀（登入時用來判斷是否開通）
+      allow get: if signedIn() && email == myEmail();
+      allow read: if isActiveUser();
+      allow create, delete: if isAdmin();
+      // 管理員可改任何人；本人只能更新 lastLogin
+      allow update: if isAdmin()
+        || (isActiveUser() && email == myEmail()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLogin']));
+    }
+
+    // ---------- 庫存作業 ----------
+    match /pallets/{id}         { allow read: if isActiveUser(); allow write: if canOperate(); }
+    match /externalStock/{id}   { allow read: if isActiveUser(); allow write: if canOperate(); }
+    match /locations/{id}       { allow read: if isActiveUser(); allow write: if canOperate(); }
+    match /waves/{id}           { allow read: if isActiveUser(); allow write: if canOperate(); }
+    match /salesOrders/{id}     { allow read: if isActiveUser(); allow write: if canOperate(); }
+    match /shippingOrders/{id}  { allow read: if isActiveUser(); allow write: if canOperate(); }
+    match /inboundTasks/{id}    { allow read: if isActiveUser(); allow write: if canOperate(); }
+    match /dispatchOrders/{id}  { allow read: if isActiveUser(); allow write: if canOperate(); }
+    match /transfers/{id}       { allow read: if isActiveUser(); allow write: if canOperate(); }
+    match /pickingOrders/{id}   { allow read: if isActiveUser(); allow write: if canOperate(); }
+    match /consignments/{id}    { allow read: if isActiveUser(); allow write: if canOperate(); }
+
+    // 單號計數器（generateDocNo 用交易遞增）
+    match /counters/{id} {
+      allow read: if isActiveUser();
+      allow create: if canOperate()
+        && request.resource.data.seq is int && request.resource.data.seq > 0;
+      allow update: if canOperate()
+        && request.resource.data.seq is int
+        && request.resource.data.seq > resource.data.get('seq', 0);
+      allow delete: if isAdmin();
+    }
+
+    // 異動記錄：只能新增，不能修改；刪除（清除資料/還原）限管理員
+    match /inventoryLogs/{id} {
+      allow read: if isActiveUser();
+      allow create: if canOperate();
+      allow update, delete: if isAdmin();
+    }
+
+    // 入庫單：核准 / 駁回限主管（80）以上
+    match /inboundOrders/{id} {
+      allow read: if isActiveUser();
+      allow create: if canOperate()
+        && !(request.resource.data.get('approvalStatus', '') in ['approved', 'rejected'] && !isSupervisor());
+      allow update: if canOperate()
+        && (request.resource.data.get('approvalStatus', '') == resource.data.get('approvalStatus', '')
+            || !(request.resource.data.get('approvalStatus', '') in ['approved', 'rejected'])
+            || isSupervisor());
+      allow delete: if canOperate();
+    }
+
+    // ---------- 主檔與設定 ----------
+    match /productMaster/{id} { allow read: if isActiveUser(); allow write: if hasLevel(60); }
+    match /warehouses/{id}    { allow read: if isActiveUser(); allow write: if isSupervisor(); }
+    match /settings/{id}      { allow read: if isActiveUser(); allow write: if isSupervisor(); }
+
+    // 備份：限管理員
+    match /backups/{id}       { allow read, write: if isAdmin(); }
+
+    // 其他未列出的 collection：可讀，只有管理員能寫
+    // （規則是「任一條允許即可」，所以這裡要排除 backups，否則會蓋過上面的限制）
+    match /{collection}/{id} {
+      allow read: if isActiveUser() && collection != 'backups';
+      allow write: if isAdmin();
+    }
+  }
+}

@@ -102,6 +102,7 @@ auth.onAuthStateChanged(async function(user) {
             var appUser = await window.setCurrentUser(user.email);
             if (!appUser) return;
         }
+        if (window.warmDocNoPools) window.warmDocNoPools();
         document.getElementById('login-error').classList.add('hidden');
         document.getElementById('view-login').classList.add('hidden');
         initAllListeners();

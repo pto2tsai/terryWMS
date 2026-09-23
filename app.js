@@ -488,7 +488,6 @@ console.log('✅ WMS 工具函數庫已載入');
         // ========== 統一單據編號產生器 ==========
         // 格式：XX-YYYYMMDD-NNN
         // XX = 單據類型代碼
-        window._docNoCounters = {};
         
         // 單據類型代碼對照表
         window.DOC_TYPE_CODES = {
@@ -503,24 +502,87 @@ console.log('✅ WMS 工具函數庫已載入');
             'SC': '報廢'            // Scrap
         };
         
-        window.generateDocNo = function(type) {
-            type = type || 'IN';
-            
+        // 號碼由 Firestore 的 counters/{類型-日期} 用交易遞增發號，多台裝置不會重複。
+        // generateDocNo 維持同步呼叫：從事先保留的號碼池取號；
+        // 號碼池用完（或離線）時改發臨時號碼 XX-YYYYMMDD-T...，同樣不會重複。
+        window._docNoPool = {};
+        var _docNoRefilling = {};
+        var _docNoFallbackSeq = 0;
+        var DOC_NO_POOL_SIZE = { 'IN': 30 };
+        var DOC_NO_DEFAULT_POOL_SIZE = 5;
+
+        function docNoKey(type) {
             var now = new Date();
             var dateStr = now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2);
-            var key = type + '-' + dateStr;
-            
-            // 如果這個類型+日期的計數器不存在，初始化
-            if (!window._docNoCounters[key]) {
-                window._docNoCounters[key] = 0;
+            return type + '-' + dateStr;
+        }
+
+        // 向 Firestore 保留 count 個連續號碼，回傳號碼陣列
+        window.reserveDocNos = async function(type, count) {
+            var key = docNoKey(type);
+            var ref = window.db.collection('counters').doc(key);
+            var start = await window.db.runTransaction(async function(tx) {
+                var snap = await tx.get(ref);
+                var seq = snap.exists ? (parseInt(snap.data().seq) || 0) : 0;
+                tx.set(ref, { seq: seq + count, updatedAt: new Date().toISOString() });
+                return seq;
+            });
+            var nos = [];
+            for (var i = 1; i <= count; i++) {
+                nos.push(key + '-' + String(start + i).padStart(3, '0'));
             }
-            
-            // 流水號 +1
-            window._docNoCounters[key]++;
-            
-            return type + '-' + dateStr + '-' + String(window._docNoCounters[key]).padStart(3, '0');
+            return nos;
         };
-        
+
+        // 確保號碼池至少有 count 個號碼（失敗時不丟錯，之後會改發臨時號碼）
+        window.ensureDocNoPool = async function(type, count) {
+            var key = docNoKey(type);
+            var pool = window._docNoPool[key] || [];
+            if (pool.length >= count) return;
+            try {
+                var nos = await window.reserveDocNos(type, count - pool.length);
+                window._docNoPool[key] = (window._docNoPool[key] || []).concat(nos);
+            } catch (e) {
+                console.warn('保留單號失敗（將使用臨時號碼）:', e);
+            }
+        };
+
+        function refillDocNoPool(type) {
+            if (_docNoRefilling[type]) return;
+            _docNoRefilling[type] = true;
+            window.ensureDocNoPool(type, DOC_NO_POOL_SIZE[type] || DOC_NO_DEFAULT_POOL_SIZE)
+                .finally(function() { _docNoRefilling[type] = false; });
+        }
+
+        // 登入後預先保留常用單號
+        window.warmDocNoPools = function() {
+            ['IN', 'BI', 'DS', 'PK', 'RM', 'TR'].forEach(refillDocNoPool);
+        };
+
+        window.generateDocNo = function(type) {
+            type = type || 'IN';
+            var key = docNoKey(type);
+            var pool = window._docNoPool[key] || [];
+            var no = pool.shift();
+            window._docNoPool[key] = pool;
+
+            if (pool.length < Math.ceil((DOC_NO_POOL_SIZE[type] || DOC_NO_DEFAULT_POOL_SIZE) / 2)) {
+                refillDocNoPool(type);
+            }
+            if (no) return no;
+
+            _docNoFallbackSeq++;
+            return key + '-T' + Date.now().toString(36).toUpperCase() +
+                Math.random().toString(36).slice(2, 4).toUpperCase() + _docNoFallbackSeq;
+        };
+
+        // 非同步取號：先確保號碼池有號碼再取（在 async 函數中優先使用）
+        window.nextDocNo = async function(type) {
+            type = type || 'IN';
+            await window.ensureDocNoPool(type, 1);
+            return window.generateDocNo(type);
+        };
+
         // 為了向後相容，保留 generatePalletNo
         window.generatePalletNo = function() {
             return window.generateDocNo('IN');
@@ -2370,7 +2432,28 @@ console.log('✅ WMS 工具函數庫已載入');
             }
         };
 
+        // 估計需要的板數，事先保留棧板編號（號碼池不足時 generatePalletNo 會改發臨時號碼）
+        function countContainerPallets(items) {
+            var needed = 0;
+            items.forEach(function(item) {
+                var perPallet = parseInt(item.perPallet) || 40;
+                needed += parseInt(item.palletCount) || Math.ceil((parseInt(item.quantity) || 0) / perPallet) || 1;
+            });
+            return needed + 5;
+        }
+
+        function docNoPoolSize(type) {
+            return (window._docNoPool[docNoKey(type)] || []).length;
+        }
+
+        // 號碼池足夠時同步產生標籤（跟以前一樣）；不足時先向 Firestore 保留號碼再產生
         window.autoGenerateLabels = function() {
+            var needed = countContainerPallets(window._containerData.items);
+            if (docNoPoolSize('IN') >= needed) return doAutoGenerateLabels();
+            return window.ensureDocNoPool('IN', needed).then(doAutoGenerateLabels);
+        };
+
+        function doAutoGenerateLabels() {
             var items = window._containerData.items;
             console.log('🏷️ autoGenerateLabels 被呼叫, items:', items.length);
             
@@ -3768,6 +3851,13 @@ console.log('✅ WMS 工具函數庫已載入');
                 alert('請先新增品項');
                 return;
             }
+            var needed = countContainerPallets(items);
+            if (docNoPoolSize('IN') >= needed) return doGenerateContainerLabels();
+            return window.ensureDocNoPool('IN', needed).then(doGenerateContainerLabels);
+        };
+
+        function doGenerateContainerLabels() {
+            var items = window._containerData.items;
 
             var strategy = document.getElementById('container-strategy').value;
 
@@ -4076,6 +4166,19 @@ console.log('✅ WMS 工具函數庫已載入');
             if (!confirm('確定將 ' + labels.length + ' 板貨物入庫？\n\n入庫後將建立實際庫存記錄。')) return;
 
             try {
+                // 防呆：棧板編號已存在就停止，避免 batch.set 蓋掉現有庫存
+                var palletIds = labels.map(function(label) { return label.id || label.palletNo; }).filter(Boolean);
+                var dupIds = palletIds.filter(function(id, i) { return palletIds.indexOf(id) !== i; });
+                var existingSnaps = await Promise.all(palletIds.map(function(id) {
+                    return window.getDoc(window.doc(window.db, 'pallets', id));
+                }));
+                existingSnaps.forEach(function(snap, i) { if (snap.exists) dupIds.push(palletIds[i]); });
+                if (dupIds.length > 0) {
+                    alert('❌ 以下棧板編號已存在，為避免覆蓋現有庫存已停止入庫：\n' + dupIds.slice(0, 10).join('\n') +
+                          '\n\n請重新產生棧板插單後再入庫。');
+                    return;
+                }
+
                 var batch = window.writeBatch(window.db);
                 var successCount = 0;
 
@@ -4624,7 +4727,7 @@ console.log('✅ WMS 工具函數庫已載入');
             if (!confirm('確定將 ' + source.location + ' 移動到 ' + newLoc + '？')) return;
 
             try {
-                await window.updateDoc(window.doc(window.db, "pallets", source.id), { locationId: newLoc });
+                await window.movePalletTx(window.doc(window.db, "pallets", source.id), newLoc);
                 alert('✅ 移動成功！');
                 window.selectedPallet = null;
                 renderPalletList();
@@ -4643,28 +4746,13 @@ console.log('✅ WMS 工具函數庫已載入');
             if (!confirm('確定合併？\n合併後總數: ' + totalQty + ' 件')) return;
 
             try {
-                var pallets = window.currentPallets ? window.currentPallets() : [];
-                var targetPallet = pallets.find(function(p) { return p.id === targetId; });
-
-                var batch = window.writeBatch(window.db);
-                batch.update(window.doc(window.db, "pallets", targetId), { quantity: totalQty });
-                batch.delete(window.doc(window.db, "pallets", source.id));
-                await batch.commit();
-
-                await window.logInventoryChange({
-                    type: 'merge',
-                    company: source.company || '',
-                    productName: source.productName,
-                    spec: source.spec || '',
-                    quantity: totalQty,
-                    quantityChange: source.quantity,
-                    locationId: targetPallet ? targetPallet.locationId : '',
-                    fromLocation: source.locationId,
-                    toLocation: targetPallet ? targetPallet.locationId : '',
-                    batchNo: source.batchNo || '',
-                    palletId: targetPallet ? targetPallet.palletId : targetId,
-                    note: '合併: ' + source.palletId + '(' + source.quantity + '件)'
-                });
+                var result = await window.mergePalletsTx(
+                    window.doc(window.db, "pallets", source.id),
+                    window.doc(window.db, "pallets", targetId)
+                );
+                if (result.total !== totalQty) {
+                    alert('ℹ️ 庫存在您操作期間有變動，實際合併後數量為 ' + result.total + ' 件');
+                }
 
                 alert('✅ 合併成功！');
                 window.selectedPallet = null;
@@ -5749,6 +5837,7 @@ console.log('✅ WMS 工具函數庫已載入');
                         var currentTotal = keepPallet.quantity || 0;
                         var mergeGroup = {
                             keep: {
+                                docId: keepPallet.id || '',
                                 palletId: keepPallet.palletId,
                                 location: keepPallet.locationId,
                                 qty: keepPallet.quantity,
@@ -5768,6 +5857,7 @@ console.log('✅ WMS 工具函數庫已載入');
 
                             if (newTotal <= palletCapacity) {
                                 mergeGroup.sources.push({
+                                    docId: sourcePallet.id || '',
                                     palletId: sourcePallet.palletId,
                                     location: sourcePallet.locationId,
                                     qty: sourcePallet.quantity,
@@ -5849,6 +5939,7 @@ console.log('✅ WMS 工具函數庫已載入');
 
                                         isolatedMoves.push({
                                             type: 'isolated',
+                                            docId: p.id || '',
                                             palletId: p.palletId,
                                             from: p.locationId,
                                             fromLane: lane,
@@ -6531,6 +6622,7 @@ console.log('✅ WMS 工具函數庫已載入');
                             type: 'merge',
                             typeName: '合併',
                             from: src.location,
+                            docId: src.docId || '',
                             palletId: src.palletId || '',
                             qty: src.qty,
                             to: group.keep.location,
@@ -6553,6 +6645,7 @@ console.log('✅ WMS 工具函數庫已載入');
                         type: 'move',
                         typeName: '移位',
                         from: m.from,
+                        docId: m.docId || '',
                         palletId: m.palletId || '',
                         qty: m.qty,
                         to: m.toSlot,
@@ -6694,61 +6787,14 @@ console.log('✅ WMS 工具函數庫已載入');
         async function executeDispatchOperation(op) {
             try {
                 if (op.type === 'merge') {
-                    var q = window.query(window.collection(window.db, 'pallets'), window.where('palletId', '==', op.palletId));
-                    var snap = await window.getDocs(q);
-
-                    if (!snap.empty) {
-                        var sourceDoc = snap.docs[0];
-                        var sourceData = sourceDoc.data();
-
-                        await window.logInventoryChange({
-                            type: 'merge',
-                            productName: sourceData.productName,
-                            spec: sourceData.spec || '',
-                            quantity: 0,
-                            quantityChange: -sourceData.quantity,
-                            fromLocation: op.from,
-                            toLocation: op.to,
-                            palletId: op.palletId,
-                            batchNo: sourceData.batchNo || '',
-                            note: '合併至 ' + op.to
-                        });
-
-                        await window.deleteDoc(sourceDoc.ref);
-
-                        if (op.keepPallet && op.keepPallet.palletId) {
-                            var q2 = window.query(window.collection(window.db, 'pallets'), window.where('palletId', '==', op.keepPallet.palletId));
-                            var snap2 = await window.getDocs(q2);
-                            if (!snap2.empty) {
-                                var newQty = (parseInt(snap2.docs[0].data().quantity) || 0) + op.qty;
-                                await window.updateDoc(snap2.docs[0].ref, { quantity: newQty });
-                            }
-                        }
-                    }
+                    var keep = op.keepPallet || {};
+                    var sourceRef = await window.resolvePalletRef(op.docId, op.palletId, op.from);
+                    var targetRef = await window.resolvePalletRef(keep.docId, keep.palletId, keep.location);
+                    await window.mergePalletsTx(sourceRef, targetRef, { note: op.note || ('合併至 ' + op.to) });
 
                 } else if (op.type === 'move') {
-                    var q = window.query(window.collection(window.db, 'pallets'), window.where('palletId', '==', op.palletId));
-                    var snap = await window.getDocs(q);
-
-                    if (!snap.empty) {
-                        var palletDoc = snap.docs[0];
-                        var palletData = palletDoc.data();
-
-                        await window.logInventoryChange({
-                            type: 'move',
-                            productName: palletData.productName,
-                            spec: palletData.spec || '',
-                            quantity: palletData.quantity,
-                            quantityChange: 0,
-                            fromLocation: op.from,
-                            toLocation: op.to,
-                            palletId: op.palletId,
-                            batchNo: palletData.batchNo || '',
-                            note: op.note
-                        });
-
-                        await window.updateDoc(palletDoc.ref, { locationId: op.to });
-                    }
+                    var palletRef = await window.resolvePalletRef(op.docId, op.palletId, op.from);
+                    await window.movePalletTx(palletRef, op.to, { note: op.note || '' });
                 }
 
                 op.completed = true;
@@ -7968,43 +8014,43 @@ console.log('✅ WMS 工具函數庫已載入');
             try {
                 var totalQty = 0;
                 var count = 0;
-                
-                for (var key of keys) {
+                var changes = [];
+                var picks = [];
+
+                keys.forEach(function(key) {
                     var sel = window.rmStockSelected[key];
-                    var item = sel.item;
-                    var pickQty = sel.qty;
-                    
-                    // 更新庫存
-                    var newQty = item.quantity - pickQty;
-                    
-                    if (window.db && window.updateDoc) {
-                        var docRef = window.doc(window.db, 'pallets', item.id);
-                        if (newQty <= 0) {
-                            await window.deleteDoc(docRef);
-                        } else {
-                            await window.updateDoc(docRef, { quantity: newQty });
-                        }
-                    }
-                    
-                    // 記錄異動
-                    if (typeof window.logInventoryChange === 'function') {
-                        await window.logInventoryChange({
-                            type: 'picking-rm',
-                            company: item.company || '崇文',
-                            productName: item.productName,
-                            spec: item.spec,
-                            batchNo: item.batchNo,
-                            quantity: -pickQty,
-                            locationId: item.locationId,
-                            note: '原料領用 - ' + user + (dept ? ' (' + dept + ')' : '') + (note ? ' - ' + note : ''),
-                            operator: user
-                        });
-                    }
-                    
+                    var pickQty = parseFloat(sel.qty) || 0;
+                    if (pickQty <= 0) return;
+                    var ref = window.doc(window.db, 'pallets', sel.item.id);
+                    changes.push({ ref: ref, delta: -pickQty, deleteWhenEmpty: true, label: sel.item.palletId || sel.item.productName });
+                    picks.push({ ref: ref, pickQty: pickQty });
                     count++;
                     totalQty += pickQty;
-                }
-                
+                });
+
+                // 全部品項在同一個交易裡扣帳：任何一板庫存不足就整筆取消
+                await window.runStockTransaction({
+                    changes: changes,
+                    logs: function(results) {
+                        return picks.map(function(pk) {
+                            var item = results[pk.ref.path].data;
+                            return {
+                                type: 'picking-rm',
+                                company: item.company || '崇文',
+                                productName: item.productName,
+                                spec: item.spec,
+                                batchNo: item.batchNo,
+                                quantity: -pk.pickQty,
+                                quantityChange: -pk.pickQty,
+                                locationId: item.locationId,
+                                palletId: item.palletId || '',
+                                note: '原料領用 - ' + user + (dept ? ' (' + dept + ')' : '') + (note ? ' - ' + note : ''),
+                                operator: user
+                            };
+                        });
+                    }
+                });
+
                 WMS.closeModal('rm-confirm-modal');
                 showNotification('✅ 原料領用完成！共 ' + count + ' 筆 ' + totalQty + ' 件，正在列印...', 'success');
                 
@@ -9741,7 +9787,7 @@ window.restoreFromFirebase = async function(backupId) {
 
     try {
         var backupDoc = await window.getDoc(window.doc(window.db, 'backups', backupId));
-        if (!backupDoc.exists()) {
+        if (!backupDoc.exists) {
             alert('備份不存在');
             return;
         }
@@ -10678,6 +10724,217 @@ window.clearLocalStorage = function() {
             }
         };
 
+        window.buildInventoryLogEntry = function(data) {
+            var operator = data.operator || (window.getOperatorName ? window.getOperatorName() : 'system');
+            return {
+                timestamp: new Date().toISOString(),
+                type: data.type,
+                company: data.company || '',
+                productName: data.productName || '',
+                spec: data.spec || '',
+                quantity: data.quantity || 0,
+                quantityChange: data.quantityChange || 0,
+                weight: data.weight || 0,
+                weightChange: data.weightChange || 0,
+                locationId: data.locationId || '',
+                fromLocation: data.fromLocation || '',
+                toLocation: data.toLocation || '',
+                batchNo: data.batchNo || '',
+                palletId: data.palletId || '',
+                expDate: data.expDate || '',
+                note: data.note || '',
+                operator: operator,
+                orderId: data.orderId || '',
+                createdAt: window.serverTimestamp ? window.serverTimestamp() : new Date()
+            };
+        };
+
+        // ========== 庫存交易（stock transaction）==========
+        // 在同一筆 Firestore 交易裡：讀最新數量 → 檢查 → 寫入數量 → 寫異動記錄。
+        // 兩個人同時操作同一板時，Firestore 會自動重試，不會互相覆蓋；
+        // 任何一步失敗，整筆都不會寫入（不會只扣一半）。
+        //
+        // changes: [{ ref, delta, deleteWhenEmpty, extra, label }]
+        //   delta 為數量增減；同一個 ref 出現多次會先合併
+        // creates: [{ ref, data }]  同一交易內新增的文件
+        // reads:   [ref]  額外要讀的文件（例如波次狀態），交給 validate / updates 使用
+        // validate: function(results, readSnaps)  丟出錯誤即取消整筆交易
+        // updates: [{ ref, data }] 或 function(results, readSnaps) → 同格式（一般欄位更新）
+        // logs:    function(results) → [logData...]（results 以 ref.path 為 key）
+        window.runStockTransaction = async function(opts) {
+            var changes = opts.changes || [];
+            var merged = {};
+            var order = [];
+            changes.forEach(function(c) {
+                var key = c.ref.path;
+                if (!merged[key]) {
+                    merged[key] = { ref: c.ref, delta: 0, deleteWhenEmpty: false, extra: {}, label: c.label };
+                    order.push(key);
+                }
+                merged[key].delta += (c.delta || 0);
+                if (c.deleteWhenEmpty) merged[key].deleteWhenEmpty = true;
+                Object.assign(merged[key].extra, c.extra || {});
+            });
+
+            return window.db.runTransaction(async function(tx) {
+                var readSnaps = await Promise.all((opts.reads || []).map(function(ref) { return tx.get(ref); }));
+                var snaps = await Promise.all(order.map(function(key) { return tx.get(merged[key].ref); }));
+                var results = {};
+                snaps.forEach(function(snap, i) {
+                    var c = merged[order[i]];
+                    if (!snap.exists) {
+                        throw new Error('資料已不存在（可能已被其他人處理）：' + (c.label || c.ref.id));
+                    }
+                    var data = snap.data();
+                    var before = parseFloat(data.quantity) || 0;
+                    var after = before + c.delta;
+                    if (after < 0) {
+                        throw new Error('庫存不足：' + (data.productName || c.label || c.ref.id) +
+                            ' 目前 ' + before + '，需要 ' + (-c.delta));
+                    }
+                    results[order[i]] = { ref: c.ref, data: data, before: before, after: after };
+                });
+
+                if (opts.validate) opts.validate(results, readSnaps);
+
+                order.forEach(function(key) {
+                    var c = merged[key];
+                    var r = results[key];
+                    if (r.after === 0 && c.deleteWhenEmpty) {
+                        tx.delete(c.ref);
+                        r.deleted = true;
+                    } else {
+                        tx.update(c.ref, Object.assign({ quantity: r.after }, c.extra));
+                    }
+                });
+
+                (opts.creates || []).forEach(function(cr) { tx.set(cr.ref, cr.data); });
+
+                var updates = typeof opts.updates === 'function' ? opts.updates(results, readSnaps) : (opts.updates || []);
+                updates.forEach(function(u) { tx.update(u.ref, u.data); });
+
+                var logs = opts.logs ? opts.logs(results) : [];
+                logs.forEach(function(logData) {
+                    tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry(logData));
+                });
+
+                return results;
+            });
+        };
+
+        // 找出棧板的文件參照：優先用文件 ID；只有板號時必須剛好找到一筆
+        window.resolvePalletRef = async function(docId, palletId, locationId) {
+            if (docId) return window.db.collection('pallets').doc(docId);
+            if (!palletId) throw new Error('缺少板號，無法確認要操作哪一板');
+            var snap = await window.db.collection('pallets').where('palletId', '==', palletId).get();
+            var docs = snap.docs;
+            if (docs.length > 1 && locationId) {
+                docs = docs.filter(function(d) { return d.data().locationId === locationId; });
+            }
+            if (docs.length === 0) throw new Error('找不到棧板 ' + palletId);
+            if (docs.length > 1) throw new Error('板號 ' + palletId + ' 有 ' + docs.length + ' 筆重複，請先人工確認');
+            return docs[0].ref;
+        };
+
+        // 合併前檢查：品名、規格、公司、批號、效期必須相同，且不能是同一板
+        window.checkMergeCompatible = function(source, target) {
+            if (!source || !target) throw new Error('找不到要合併的棧板');
+            var fields = [['productName', '品名'], ['spec', '規格'], ['company', '公司'], ['batchNo', '批號']];
+            fields.forEach(function(f) {
+                if (String(source[f[0]] || '') !== String(target[f[0]] || '')) {
+                    throw new Error('無法合併：' + f[1] + '不同（' + (source[f[0]] || '-') + ' / ' + (target[f[0]] || '-') + '）');
+                }
+            });
+            var expA = normalizeDateKey(source.expiryDate || source.expDate);
+            var expB = normalizeDateKey(target.expiryDate || target.expDate);
+            if (expA !== expB) {
+                throw new Error('無法合併：效期不同（' + (expA || '-') + ' / ' + (expB || '-') + '）');
+            }
+        };
+
+        function normalizeDateKey(v) {
+            if (!v) return '';
+            var d = v.toDate ? v.toDate() : new Date(v);
+            if (isNaN(d.getTime())) return String(v);
+            return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+        }
+
+        // 把 source 整板併入 target（同一交易：target 加上 source 的實際數量、刪除 source、寫記錄）
+        window.mergePalletsTx = async function(sourceRef, targetRef, logExtra) {
+            if (sourceRef.path === targetRef.path) throw new Error('來源與目標是同一板，不能合併');
+            return window.db.runTransaction(async function(tx) {
+                var sSnap = await tx.get(sourceRef);
+                var tSnap = await tx.get(targetRef);
+                if (!sSnap.exists) throw new Error('來源棧板已不存在（可能已被其他人處理）');
+                if (!tSnap.exists) throw new Error('目標棧板已不存在（可能已被其他人處理）');
+                var s = sSnap.data();
+                var t = tSnap.data();
+                window.checkMergeCompatible(s, t);
+                var sQty = parseFloat(s.quantity) || 0;
+                var total = (parseFloat(t.quantity) || 0) + sQty;
+                var sWeight = parseFloat(s.totalWeight) || 0;
+                var totalWeight = Math.round(((parseFloat(t.totalWeight) || 0) + sWeight) * 10) / 10;
+                var update = {
+                    quantity: total,
+                    mergedAt: new Date().toISOString(),
+                    mergedBy: window.currentUser ? window.currentUser.email : ''
+                };
+                if (totalWeight > 0) {
+                    update.totalWeight = totalWeight;
+                    update.unitWeight = total > 0 ? Math.round(totalWeight / total * 100) / 100 : (t.unitWeight || 0);
+                }
+                tx.update(targetRef, update);
+                tx.delete(sourceRef);
+                tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry(Object.assign({
+                    type: 'merge',
+                    company: t.company || '',
+                    productName: t.productName,
+                    spec: t.spec || '',
+                    quantity: total,
+                    quantityChange: sQty,
+                    weight: totalWeight,
+                    weightChange: sWeight,
+                    locationId: t.locationId || '',
+                    fromLocation: s.locationId || '',
+                    toLocation: t.locationId || '',
+                    batchNo: t.batchNo || '',
+                    palletId: t.palletId || targetRef.id,
+                    note: '合併: ' + (s.palletId || sourceRef.id) + '(' + sQty + '件)'
+                }, logExtra || {})));
+                return { source: s, target: t, sourceQty: sQty, total: total, totalWeight: totalWeight };
+            });
+        };
+
+        // 移動整板到新儲位（同一交易：確認棧板還在、更新儲位、寫記錄）
+        window.movePalletTx = async function(palletRef, toLocation, logExtra) {
+            if (!toLocation) throw new Error('請輸入目標儲位');
+            return window.db.runTransaction(async function(tx) {
+                var snap = await tx.get(palletRef);
+                if (!snap.exists) throw new Error('棧板已不存在（可能已被其他人處理）');
+                var p = snap.data();
+                tx.update(palletRef, {
+                    locationId: toLocation,
+                    movedAt: new Date().toISOString(),
+                    movedBy: window.currentUser ? window.currentUser.email : ''
+                });
+                tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry(Object.assign({
+                    type: 'move',
+                    company: p.company || '',
+                    productName: p.productName,
+                    spec: p.spec || '',
+                    quantity: p.quantity,
+                    quantityChange: 0,
+                    weight: p.totalWeight || 0,
+                    locationId: toLocation,
+                    fromLocation: p.locationId || '',
+                    toLocation: toLocation,
+                    batchNo: p.batchNo || '',
+                    palletId: p.palletId || palletRef.id
+                }, logExtra || {})));
+                return p;
+            });
+        };
+
         window.logInventoryChange = async function(data) {
             try {
                 if (!window.db || !window.collection || !window.addDoc) {
@@ -10687,25 +10944,7 @@ window.clearLocalStorage = function() {
 
                 var operator = data.operator || (window.getOperatorName ? window.getOperatorName() : 'system');
 
-                var logEntry = {
-                    timestamp: new Date().toISOString(),
-                    type: data.type,                    // inbound, outbound, move, merge, adjust, scrap
-                    company: data.company || '',        // 公司別
-                    productName: data.productName || '',
-                    spec: data.spec || '',
-                    quantity: data.quantity || 0,
-                    quantityChange: data.quantityChange || 0,  // +入庫 -出庫
-                    locationId: data.locationId || '',
-                    fromLocation: data.fromLocation || '',     // 移位用
-                    toLocation: data.toLocation || '',         // 移位用
-                    batchNo: data.batchNo || '',
-                    palletId: data.palletId || '',
-                    expDate: data.expDate || '',
-                    note: data.note || '',
-                    operator: operator,
-                    orderId: data.orderId || '',               // 關聯單號
-                    createdAt: window.serverTimestamp ? window.serverTimestamp() : new Date()
-                };
+                var logEntry = window.buildInventoryLogEntry(data);
 
                 var docRef = await addDoc(collection(db, 'inventoryLogs'), logEntry);
                 console.log('異動記錄已儲存:', logEntry.type, logEntry.productName, '公司:', logEntry.company, '操作者:', operator);
@@ -11518,15 +11757,21 @@ window.clearLocalStorage = function() {
                 html += '<div class="mb-4 p-3 bg-slate-800/50 rounded border border-slate-700">';
                 html += '<div class="flex justify-between items-center mb-2">';
                 html += '<div class="text-white font-bold">' + item.productName + ' <span class="text-slate-400 text-sm">' + (item.spec || '') + '</span></div>';
-                html += '<div class="text-yellow-400 font-bold">需求: ' + item.quantity + ' 件</div>';
+                // 匯入的訂單數量欄位是 qty，手動訂單是 quantity
+                var requiredQty = parseInt(item.quantity != null ? item.quantity : item.qty) || 0;
+                html += '<div class="text-yellow-400 font-bold">需求: ' + requiredQty + ' 件</div>';
                 html += '</div>';
 
-                var plan = calculateItemPickingPlan(item.productName, item.spec || '', item.quantity);
-                allPlans.push({ item: item, plan: plan });
+                var plan = calculateItemPickingPlan(item.productName, item.spec || '', requiredQty);
+                var plannedQty = plan.reduce(function(sum, p) { return sum + p.pickQty; }, 0);
+                allPlans.push({ item: item, plan: plan, requiredQty: requiredQty, plannedQty: plannedQty });
 
                 if (plan.length === 0) {
                     html += '<div class="text-red-400 text-sm p-2 bg-red-900/30 rounded">❌ 庫存不足或無此品項</div>';
                 } else {
+                    if (plannedQty < requiredQty) {
+                        html += '<div class="text-red-400 text-sm p-2 mb-2 bg-red-900/30 rounded">❌ 庫存不足：需求 ' + requiredQty + '，可揀 ' + plannedQty + '</div>';
+                    }
                     html += '<table class="w-full text-xs">';
                     html += '<thead><tr class="text-slate-500"><th class="text-left p-1">儲位</th><th class="text-right p-1">取用</th><th class="text-center p-1">方式</th><th class="text-left p-1">效期</th></tr></thead>';
                     html += '<tbody>';
@@ -11561,6 +11806,7 @@ window.clearLocalStorage = function() {
                     var floor = parsed ? parseInt(parsed.level) || 1 : 1;
 
                     candidates.push({
+                        docId: p.id,
                         palletId: p.palletId,
                         locationId: p.locationId,
                         quantity: p.quantity,
@@ -11587,6 +11833,7 @@ window.clearLocalStorage = function() {
                 var pickType = pickQty === c.quantity ? 'full' : 'split';
 
                 plan.push({
+                    docId: c.docId,
                     palletId: c.palletId,
                     locationId: c.locationId,
                     quantity: c.quantity,
@@ -11609,37 +11856,59 @@ window.clearLocalStorage = function() {
                 return;
             }
 
-            var hasError = window.orderPickingPlan.some(function(p) { return p.plan.length === 0; });
+            var order = window.currentSelectedOrder;
+            if (order.status === 'Completed') {
+                alert('此訂單已經出貨，不能重複出貨');
+                return;
+            }
+
+            var hasError = window.orderPickingPlan.some(function(p) {
+                return p.plan.length === 0 || p.plannedQty < p.requiredQty;
+            });
             if (hasError) {
                 alert('部分品項庫存不足，無法完成出貨');
                 return;
             }
 
-            if (!confirm('確認完成此訂單出貨？\n\n訂單: ' + window.currentSelectedOrder.orderId + '\n客戶: ' + window.currentSelectedOrder.customer)) {
+            if (!confirm('確認完成此訂單出貨？\n\n訂單: ' + order.orderId + '\n客戶: ' + order.customer)) {
                 return;
             }
 
             try {
-                var batch = window.writeBatch(window.db);
-                var logPromises = [];
-
+                // 同一板被多個品項行使用時，runStockTransaction 會合併扣量；庫存不足則整筆取消
+                var changes = [];
+                var picks = [];
                 window.orderPickingPlan.forEach(function(itemPlan) {
                     itemPlan.plan.forEach(function(p) {
-                        var pallet = window.currentPallets().find(function(pp) {
-                            return pp.palletId === p.palletId || pp.id === p.palletId;
-                        });
+                        if (!p.docId) throw new Error('找不到棧板 ' + p.palletId);
+                        changes.push({ ref: window.doc(window.db, 'pallets', p.docId), delta: -p.pickQty, deleteWhenEmpty: true, label: p.palletId });
+                        picks.push(p);
+                    });
+                });
 
-                        if (pallet) {
-                            if (p.pickType === 'full') {
-                                batch.delete(window.doc(window.db, 'pallets', pallet.id));
-                            } else {
-                                batch.update(window.doc(window.db, 'pallets', pallet.id), {
-                                    quantity: p.remaining
-                                });
-                            }
+                var isFirestoreOrder = (window.manualOrders || []).indexOf(order) === -1;
+                var orderRef = isFirestoreOrder && order.orderId ? window.doc(window.db, 'shippingOrders', String(order.orderId)) : null;
 
-                            logPromises.push(window.logInventoryChange({
+                await window.runStockTransaction({
+                    changes: changes,
+                    reads: orderRef ? [orderRef] : [],
+                    validate: function(results, readSnaps) {
+                        if (orderRef && readSnaps[0].exists && readSnaps[0].data().status === 'Completed') {
+                            throw new Error('此訂單已經由其他人出貨');
+                        }
+                    },
+                    updates: function(results, readSnaps) {
+                        if (orderRef && readSnaps[0].exists) {
+                            return [{ ref: orderRef, data: { status: 'Completed', shippedAt: new Date().toISOString() } }];
+                        }
+                        return [];
+                    },
+                    logs: function(results) {
+                        return picks.map(function(p) {
+                            var pallet = results[window.doc(window.db, 'pallets', p.docId).path].data;
+                            return {
                                 type: 'outbound',
+                                company: pallet.company || '',
                                 productName: pallet.productName,
                                 spec: pallet.spec || '',
                                 quantity: p.pickQty,
@@ -11648,16 +11917,12 @@ window.clearLocalStorage = function() {
                                 batchNo: pallet.batchNo || '',
                                 palletId: pallet.palletId,
                                 expDate: pallet.expDate || pallet.expiryDate,
-                                note: '訂單出貨 - ' + window.currentSelectedOrder.customer,
-                                orderId: window.currentSelectedOrder.orderId
-                            }));
-                        }
-                    });
+                                note: '訂單出貨 - ' + order.customer,
+                                orderId: order.orderId
+                            };
+                        });
+                    }
                 });
-
-                await batch.commit();
-
-                await Promise.all(logPromises);
 
                 window.currentSelectedOrder.status = 'Completed';
 
@@ -12015,28 +12280,28 @@ window.clearLocalStorage = function() {
                 return;
             }
 
-            var newQty = pallet.quantity - qty;
-
             try {
-                if (newQty === 0) {
-                    await window.deleteDoc(window.doc(window.db, "pallets", pallet.id));
-                } else {
-                    await window.updateDoc(window.doc(window.db, "pallets", pallet.id), { quantity: newQty });
-                }
-
-                await window.addDoc(window.collection(window.db, 'inventoryLogs'), {
-                    type: 'outbound',
-                    productName: pallet.productName,
-                    spec: pallet.spec || '',
-                    quantity: qty,
-                    quantityChange: -qty,
-                    locationId: pallet.locationId,
-                    batchNo: pallet.batchNo || '',
-                    palletId: pallet.palletId,
-                    note: '現場掃描出庫',
-                    operator: window.getOperatorName ? window.getOperatorName() : 'field',
-                    timestamp: new Date()
+                var palletRef = window.doc(window.db, "pallets", pallet.id);
+                var results = await window.runStockTransaction({
+                    changes: [{ ref: palletRef, delta: -qty, deleteWhenEmpty: true, label: pallet.palletId }],
+                    logs: function(r) {
+                        var p = r[palletRef.path].data;
+                        return [{
+                            type: 'outbound',
+                            company: p.company || '',
+                            productName: p.productName,
+                            spec: p.spec || '',
+                            quantity: qty,
+                            quantityChange: -qty,
+                            locationId: p.locationId,
+                            batchNo: p.batchNo || '',
+                            palletId: p.palletId,
+                            note: '現場掃描出庫',
+                            operator: window.getOperatorName ? window.getOperatorName() : 'field'
+                        }];
+                    }
                 });
+                var newQty = results[palletRef.path].after;
 
                 alert('✅ 出庫成功！\n\n' + pallet.productName + '\n出庫：' + qty + ' 件\n' + (newQty > 0 ? '剩餘：' + newQty + ' 件' : '（已清空）'));
                 resetFieldOutbound();
@@ -12102,21 +12367,9 @@ window.clearLocalStorage = function() {
             var oldLoc = window._fieldData.move.oldLoc;
 
             try {
-                await window.updateDoc(window.doc(window.db, "pallets", pallet.id), { locationId: newLoc });
-
-                await window.addDoc(window.collection(window.db, 'inventoryLogs'), {
-                    type: 'move',
-                    productName: pallet.productName,
-                    spec: pallet.spec || '',
-                    quantity: pallet.quantity,
-                    quantityChange: 0,
-                    locationId: newLoc,
-                    fromLocation: oldLoc,
-                    batchNo: pallet.batchNo || '',
-                    palletId: pallet.palletId,
+                await window.movePalletTx(window.doc(window.db, "pallets", pallet.id), newLoc, {
                     note: '現場掃描移板：' + oldLoc + ' → ' + newLoc,
-                    operator: window.getOperatorName ? window.getOperatorName() : 'field',
-                    timestamp: new Date()
+                    operator: window.getOperatorName ? window.getOperatorName() : 'field'
                 });
 
                 document.getElementById('field-move-step2-status').innerHTML = '<span class="text-emerald-400">✅ 完成</span>';
@@ -12231,30 +12484,16 @@ window.clearLocalStorage = function() {
                 return;
             }
 
-            var total = less.quantity + more.quantity;
-
             try {
-                var batch = window.writeBatch(window.db);
-
-                batch.update(window.doc(window.db, "pallets", more.id), { quantity: total });
-
-                batch.delete(window.doc(window.db, "pallets", less.id));
-
-                await batch.commit();
-
-                await window.addDoc(window.collection(window.db, 'inventoryLogs'), {
-                    type: 'merge',
-                    productName: more.productName,
-                    spec: more.spec || '',
-                    quantity: total,
-                    quantityChange: 0,
-                    locationId: more.locationId,
-                    batchNo: more.batchNo || '',
-                    palletId: more.palletId,
-                    note: '現場掃描併板：' + less.palletId + '(' + less.quantity + ') → ' + more.palletId + '(' + more.quantity + ') = ' + total,
-                    operator: window.getOperatorName ? window.getOperatorName() : 'field',
-                    timestamp: new Date()
-                });
+                var result = await window.mergePalletsTx(
+                    window.doc(window.db, "pallets", less.id),
+                    window.doc(window.db, "pallets", more.id),
+                    {
+                        note: '現場掃描併板：' + less.palletId + ' → ' + more.palletId,
+                        operator: window.getOperatorName ? window.getOperatorName() : 'field'
+                    }
+                );
+                var total = result.total;
 
                 alert('✅ 併板成功！\n\n' + more.productName + '\n合併後數量：' + total + ' 件\n保留板：' + more.palletId + '\n刪除板：' + less.palletId);
                 resetFieldMerge();
@@ -12426,6 +12665,9 @@ window.clearLocalStorage = function() {
             var pallet = window._movePalletData;
             var pallets = window.currentPallets();
 
+            // 掃描後又改了輸入框時，不能沿用舊的掃描結果
+            if (pallet && String(pallet.palletId || '').toLowerCase() !== palletId.toLowerCase()) pallet = null;
+
             if (!pallet) {
                 pallet = pallets.find(function(p) {
                     return p.palletId === palletId || p.palletId === palletId.toUpperCase() ||
@@ -12454,32 +12696,7 @@ window.clearLocalStorage = function() {
             }
 
             try {
-                var idx = pallets.findIndex(function(p) { return p.palletId === pallet.palletId; });
-                if (idx >= 0) {
-                    pallets[idx].locationId = targetLoc;
-                    pallets[idx].movedAt = new Date().toISOString();
-                    pallets[idx].movedBy = window.currentUser ? window.currentUser.email : 'admin';
-                }
-
-                if (window.db && window.updateDoc && pallet.id) {
-                    await window.updateDoc(window.doc(window.db, 'pallets', pallet.id), {
-                        locationId: targetLoc,
-                        movedAt: new Date().toISOString(),
-                        movedBy: window.currentUser ? window.currentUser.email : 'admin'
-                    });
-                }
-
-                await window.logInventoryChange({
-                    type: 'move',
-                    company: pallet.company || '',
-                    productName: pallet.productName,
-                    spec: pallet.spec || '',
-                    quantity: pallet.quantity,
-                    weight: pallet.totalWeight || 0,
-                    fromLocation: oldLoc,
-                    toLocation: targetLoc,
-                    batchNo: pallet.batchNo || '',
-                    palletId: pallet.palletId,
+                await window.movePalletTx(window.doc(window.db, 'pallets', pallet.id), targetLoc, {
                     note: '移位: ' + oldLoc + ' → ' + targetLoc
                 });
 
@@ -12517,6 +12734,7 @@ window.clearLocalStorage = function() {
             var pallets = window.currentPallets();
 
             var keepPallet = window._keepPalletData;
+            if (keepPallet && String(keepPallet.palletId || '').toLowerCase() !== keepId.toLowerCase()) keepPallet = null;
             if (!keepPallet) {
                 keepPallet = pallets.find(function(p) {
                     return p.palletId === keepId || p.palletId === keepId.toUpperCase() ||
@@ -12525,6 +12743,7 @@ window.clearLocalStorage = function() {
             }
 
             var removePallet = window._removePalletData;
+            if (removePallet && String(removePallet.palletId || '').toLowerCase() !== removeId.toLowerCase()) removePallet = null;
             if (!removePallet) {
                 removePallet = pallets.find(function(p) {
                     return p.palletId === removeId || p.palletId === removeId.toUpperCase() ||
@@ -12541,13 +12760,11 @@ window.clearLocalStorage = function() {
                 return;
             }
 
-            if (keepPallet.productName !== removePallet.productName) {
-                if (!confirm('⚠️ 警告：兩批貨物品名不同！\n\n' +
-                    '保留: ' + keepPallet.productName + '\n' +
-                    '移入: ' + removePallet.productName + '\n\n' +
-                    '確定要繼續合併嗎？')) {
-                    return;
-                }
+            try {
+                window.checkMergeCompatible(removePallet, keepPallet);
+            } catch (e) {
+                alert('⚠️ ' + e.message);
+                return;
             }
 
             var newQty = (keepPallet.quantity || 0) + (removePallet.quantity || 0);
@@ -12575,54 +12792,17 @@ window.clearLocalStorage = function() {
             }
 
             try {
-                var keepIdx = pallets.findIndex(function(p) { return p.palletId === keepPallet.palletId; });
-                var removeIdx = pallets.findIndex(function(p) { return p.palletId === removePallet.palletId; });
-
-                if (keepIdx >= 0) {
-                    pallets[keepIdx].quantity = newQty;
-                    pallets[keepIdx].totalWeight = newWeight;
-                    pallets[keepIdx].unitWeight = newUnitWeight;
-                    pallets[keepIdx].mergedAt = new Date().toISOString();
-                    pallets[keepIdx].mergedBy = window.currentUser ? window.currentUser.email : 'admin';
-                }
-
-                if (removeIdx >= 0) {
-                    pallets.splice(removeIdx, 1);
-                }
-
-                if (window.db && window.writeBatch && keepPallet.id && removePallet.id) {
-                    var batch = window.writeBatch(window.db);
-                    batch.update(window.doc(window.db, 'pallets', keepPallet.id), {
-                        quantity: newQty,
-                        totalWeight: newWeight,
-                        unitWeight: newUnitWeight,
-                        mergedAt: new Date().toISOString(),
-                        mergedBy: window.currentUser ? window.currentUser.email : 'admin'
-                    });
-                    batch.delete(window.doc(window.db, 'pallets', removePallet.id));
-                    await batch.commit();
-                }
-
                 var mergeNote = '合併: ' + removePallet.palletId + '(' + removePallet.quantity + '件';
                 if (removePallet.totalWeight > 0) mergeNote += '/' + removePallet.totalWeight + 'kg';
                 mergeNote += ') → ' + keepPallet.palletId;
 
-                await window.logInventoryChange({
-                    type: 'merge',
-                    company: keepPallet.company || '',
-                    productName: keepPallet.productName,
-                    spec: keepPallet.spec || '',
-                    quantity: newQty,
-                    weight: newWeight,
-                    quantityChange: removePallet.quantity,
-                    weightChange: removePallet.totalWeight || 0,
-                    locationId: keepPallet.locationId,
-                    fromLocation: removePallet.locationId,
-                    toLocation: keepPallet.locationId,
-                    batchNo: keepPallet.batchNo || '',
-                    palletId: keepPallet.palletId,
-                    note: mergeNote
-                });
+                var result = await window.mergePalletsTx(
+                    window.doc(window.db, 'pallets', removePallet.id),
+                    window.doc(window.db, 'pallets', keepPallet.id),
+                    { note: mergeNote }
+                );
+                newQty = result.total;
+                newWeight = result.totalWeight;
 
                 var successMsg = '✅ 合併成功！\n\n新數量: ' + newQty + ' 件';
                 if (newWeight > 0) successMsg += ' / ' + newWeight + ' kg';
@@ -13629,6 +13809,7 @@ window.clearLocalStorage = function() {
                     var availableQty = Math.max(0, p.quantity - consignedQty);
 
                     candidates.push({
+                        docId: p.id,
                         palletId: p.palletId,
                         locationId: p.locationId,
                         quantity: p.quantity,
@@ -13685,6 +13866,7 @@ window.clearLocalStorage = function() {
                 if (c.availableQty <= 0) continue; // 跳過完全被寄庫的
                 if (c.availableQty === remaining) {
                     plan.push({
+                        docId: c.docId,
                         palletId: c.palletId,
                         locationId: c.locationId,
                         quantity: c.quantity,
@@ -13716,7 +13898,8 @@ window.clearLocalStorage = function() {
                 var pickWeight = c.totalWeight > 0 ? Math.round(c.totalWeight * weightRatio * 10) / 10 : 0;
 
                 plan.push({
-                    palletId: c.palletId,
+                    docId: c.docId,
+                        palletId: c.palletId,
                     locationId: c.locationId,
                     quantity: c.quantity,
                     consignedQty: c.consignedQty,
@@ -14203,6 +14386,7 @@ window.clearLocalStorage = function() {
 
                 if (actualQty > 0 && actualQty <= item.quantity) {
                     pickItems.push({
+                        docId: item.docId,
                         palletId: item.palletId,
                         locationId: item.locationId,
                         originalQty: item.quantity,
@@ -14235,44 +14419,42 @@ window.clearLocalStorage = function() {
             if (!confirm(confirmMsg)) return;
 
             try {
-                var batch = window.writeBatch(window.db);
-                var logPromises = [];
-
-                pickItems.forEach(function(item) {
-                    var ref = window.doc(window.db, 'pallets', item.palletId);
-
-                    if (item.pickType === 'full') {
-                        batch.delete(ref);
-                    } else {
-                        var updateData = { quantity: item.remaining };
-                        if (item.originalWeight > 0) {
-                            updateData.totalWeight = Math.round(item.remainingWeight * 10) / 10;
-                        }
-                        batch.update(ref, updateData);
+                // 以文件 ID 找棧板（舊版用板號當文件 ID，多數棧板會找不到）；全部在同一個交易中扣帳
+                var changes = [];
+                for (var k = 0; k < pickItems.length; k++) {
+                    var it = pickItems[k];
+                    it.ref = await window.resolvePalletRef(it.docId, it.palletId, it.locationId);
+                    var extra = {};
+                    if (it.originalWeight > 0 && it.pickType !== 'full') {
+                        extra.totalWeight = Math.round(it.remainingWeight * 10) / 10;
                     }
+                    changes.push({ ref: it.ref, delta: -it.pickQty, deleteWhenEmpty: true, extra: extra, label: it.palletId });
+                }
 
-                    var noteText = '原料領用 - 領用人：' + user;
-                    if (purpose) noteText += '，用途：' + purpose;
-                    if (item.pickWeight > 0) noteText += ' (' + item.pickWeight + 'kg)';
-
-                    logPromises.push(window.logInventoryChange({
-                        type: 'picking',
-                        productName: product ? product.name : '',
-                        spec: product ? product.spec : '',
-                        quantity: item.pickQty,
-                        weight: item.pickWeight || 0,
-                        quantityChange: -item.pickQty,
-                        weightChange: -(item.pickWeight || 0),
-                        locationId: item.locationId,
-                        batchNo: item.batchNo || '',
-                        palletId: item.palletId,
-                        expDate: item.expDate,
-                        note: noteText
-                    }));
+                await window.runStockTransaction({
+                    changes: changes,
+                    logs: function() {
+                        return pickItems.map(function(item) {
+                            var noteText = '原料領用 - 領用人：' + user;
+                            if (purpose) noteText += '，用途：' + purpose;
+                            if (item.pickWeight > 0) noteText += ' (' + item.pickWeight + 'kg)';
+                            return {
+                                type: 'picking',
+                                productName: product ? product.name : '',
+                                spec: product ? product.spec : '',
+                                quantity: item.pickQty,
+                                weight: item.pickWeight || 0,
+                                quantityChange: -item.pickQty,
+                                weightChange: -(item.pickWeight || 0),
+                                locationId: item.locationId,
+                                batchNo: item.batchNo || '',
+                                palletId: item.palletId,
+                                expDate: item.expDate,
+                                note: noteText
+                            };
+                        });
+                    }
                 });
-
-                await batch.commit();
-                await Promise.all(logPromises);
 
                 closeRmConfirmModal();
 
@@ -14735,7 +14917,7 @@ window.clearLocalStorage = function() {
             }
 
             var now = new Date();
-            var docNo = window.generatePalletNo ? window.generatePalletNo() : 'IN-' + now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2) + '-001';
+            var docNo = await window.nextDocNo('IN');
 
             var needsApproval = (category === 'Raw');
 
@@ -15177,7 +15359,7 @@ window.clearLocalStorage = function() {
 
             try {
                 var now = new Date();
-                var docNo = window.generatePalletNo ? window.generatePalletNo() : 'IN-' + now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2) + '-001';
+                var docNo = await window.nextDocNo('IN');
 
                 await window.addDoc(window.collection(window.db, 'pallets'), {
                     palletId: docNo,
@@ -16182,34 +16364,40 @@ window.clearLocalStorage = function() {
 
             if (!confirm(confirmMsg)) return;
 
-            try {
-                var logPromises = [];
-                var pendingCount = 0;
-                var tempCount = 0;
+            // 每一筆調撥用一個交易完成（扣來源、加目的、寫記錄同時成功或同時失敗）。
+            // 成功的筆數立即從清單移除，失敗時停止，剩下的留在清單中可以修正後重試，不會重複扣帳。
+            var totalCount = window.transferList.length;
+            var pendingCount = 0;
+            var tempCount = 0;
+            var doneCount = 0;
 
-                for (var i = 0; i < window.transferList.length; i++) {
-                    var t = window.transferList[i];
+            function findExt(whId, t) {
+                return window.externalStock.find(function(s) {
+                    return s.warehouseId === whId && s.productName === t.productName &&
+                           s.batchNo === t.batchNo && s.company === t.company;
+                });
+            }
+            function extRefOf(item) { return window.doc(window.db, 'externalStock', item.id); }
+            function newExtRef() { return window.db.collection('externalStock').doc(); }
+
+            try {
+                while (window.transferList.length > 0) {
+                    var t = window.transferList[0];
+                    var i = doneCount;
+                    var changes = [];
+                    var creates = [];
+                    var logData;
 
                     if (t.mode === 'in') {
                         // ========== 調撥入庫 ==========
-                        var extItem = window.externalStock.find(function(s) {
-                            return s.warehouseId === t.fromWh && s.productName === t.productName &&
-                                   s.batchNo === t.batchNo && s.company === t.company;
-                        });
-                        if (extItem) {
-                            var newQty = extItem.quantity - t.quantity;
-                            var extRef = window.doc(window.db, 'externalStock', extItem.id);
-                            if (newQty <= 0) {
-                                await window.deleteDoc(extRef);
-                            } else {
-                                await window.updateDoc(extRef, { quantity: newQty });
-                            }
-                        }
+                        var extItem = findExt(t.fromWh, t);
+                        if (!extItem) throw new Error('找不到來源外倉庫存：' + t.fromName + ' ' + t.productName + ' 批號 ' + (t.batchNo || '-'));
+                        changes.push({ ref: extRefOf(extItem), delta: -t.quantity, deleteWhenEmpty: true, label: t.fromName + ' ' + t.productName });
 
                         if (transferInMethod === 'pending') {
                             // ===== 方式A：產生待執行工單 =====
-                            var orderNo = window.generateDocNo ? window.generateDocNo('TR') : 'TR-' + new Date().getFullYear() + ('0'+(new Date().getMonth()+1)).slice(-2) + ('0'+new Date().getDate()).slice(-2) + '-001';
-                            await window.addDoc(window.collection(window.db, 'inboundOrders'), {
+                            var orderNo = await window.nextDocNo('TR');
+                            creates.push({ ref: window.db.collection('inboundOrders').doc(), data: {
                                 docNo: orderNo,          // 單據編號
                                 orderNo: orderNo,
                                 productName: t.productName,
@@ -16228,24 +16416,14 @@ window.clearLocalStorage = function() {
                                 sourceWarehouse: t.fromWh,
                                 sourceWarehouseName: t.fromName,
                                 createdAt: new Date().toISOString()
-                            });
-                            pendingCount++;
-
-                            logPromises.push(window.logInventoryChange({
-                                type: 'transfer-in',
-                                productName: t.productName,
-                                spec: t.spec || '',
-                                quantity: t.quantity,
-                                fromLocation: t.fromWh,
-                                toLocation: '待執行工單',
-                                batchNo: t.batchNo || '',
-                                company: t.company,
+                            }});
+                            logData = {
+                                type: 'transfer-in', toLocation: '待執行工單',
                                 note: '調撥入庫(工單): ' + t.fromName + ' → 待入庫'
-                            }));
-
+                            };
                         } else {
                             // ===== 方式B：直接入暫存區 =====
-                            await window.addDoc(window.collection(window.db, 'pallets'), {
+                            creates.push({ ref: window.db.collection('pallets').doc(), data: {
                                 palletId: 'TRI-' + Date.now() + '-' + i,
                                 productName: t.productName,
                                 spec: t.spec || '',
@@ -16258,36 +16436,20 @@ window.clearLocalStorage = function() {
                                 source: '調撥入庫',
                                 sourceWarehouse: t.fromName,
                                 createdAt: new Date().toISOString()
-                            });
-                            tempCount++;
-
-                            logPromises.push(window.logInventoryChange({
-                                type: 'transfer-in',
-                                productName: t.productName,
-                                spec: t.spec || '',
-                                quantity: t.quantity,
-                                fromLocation: t.fromWh,
-                                toLocation: 'TEMP-IN',
-                                batchNo: t.batchNo || '',
-                                company: t.company,
+                            }});
+                            logData = {
+                                type: 'transfer-in', toLocation: 'TEMP-IN',
                                 note: '調撥入庫: ' + t.fromName + ' → 進貨暫存區'
-                            }));
+                            };
                         }
 
                     } else if (t.mode === 'out') {
                         // ========== 調撥出庫（本倉儲位→出貨暫存區→外倉）==========
                         var srcItem = t.sourceItem;
-                        if (srcItem && srcItem.id) {
-                            var newQty = srcItem.quantity - t.quantity;
-                            var srcRef = window.doc(window.db, 'pallets', srcItem.id);
-                            if (newQty <= 0) {
-                                await window.deleteDoc(srcRef);
-                            } else {
-                                await window.updateDoc(srcRef, { quantity: newQty });
-                            }
-                        }
+                        if (!srcItem || !srcItem.id) throw new Error('找不到來源棧板：' + t.productName);
+                        changes.push({ ref: window.doc(window.db, 'pallets', srcItem.id), delta: -t.quantity, deleteWhenEmpty: true, label: srcItem.palletId || t.productName });
 
-                        await window.addDoc(window.collection(window.db, 'pallets'), {
+                        creates.push({ ref: window.db.collection('pallets').doc(), data: {
                             palletId: 'TRO-' + Date.now() + '-' + i,
                             productName: t.productName,
                             spec: t.spec || '',
@@ -16301,17 +16463,13 @@ window.clearLocalStorage = function() {
                             targetWarehouse: t.toName,
                             targetWarehouseId: t.toWh,
                             createdAt: new Date().toISOString()
-                        });
+                        }});
 
-                        var existExt = window.externalStock.find(function(s) {
-                            return s.warehouseId === t.toWh && s.productName === t.productName &&
-                                   s.batchNo === t.batchNo && s.company === t.company;
-                        });
+                        var existExt = findExt(t.toWh, t);
                         if (existExt) {
-                            var extRef = window.doc(window.db, 'externalStock', existExt.id);
-                            await window.updateDoc(extRef, { quantity: existExt.quantity + t.quantity });
+                            changes.push({ ref: extRefOf(existExt), delta: t.quantity, label: t.toName + ' ' + t.productName });
                         } else {
-                            await window.addDoc(window.collection(window.db, 'externalStock'), {
+                            creates.push({ ref: newExtRef(), data: {
                                 warehouseId: t.toWh,
                                 productName: t.productName,
                                 spec: t.spec || '',
@@ -16321,46 +16479,24 @@ window.clearLocalStorage = function() {
                                 company: t.company,
                                 source: '調撥出庫',
                                 createdAt: new Date().toISOString()
-                            });
+                            }});
                         }
-
-                        logPromises.push(window.logInventoryChange({
-                            type: 'transfer-out',
-                            productName: t.productName,
-                            spec: t.spec || '',
-                            quantity: t.quantity,
-                            fromLocation: t.fromWh,
-                            toLocation: t.toWh,
-                            batchNo: t.batchNo || '',
-                            company: t.company,
+                        logData = {
+                            type: 'transfer-out', toLocation: t.toWh,
                             note: '調撥出庫: ' + t.fromName + ' → ' + t.toName
-                        }));
+                        };
 
                     } else {
                         // ========== 外庫調撥（外倉→外倉）==========
-                        var srcExt = window.externalStock.find(function(s) {
-                            return s.warehouseId === t.fromWh && s.productName === t.productName &&
-                                   s.batchNo === t.batchNo && s.company === t.company;
-                        });
-                        if (srcExt) {
-                            var newQty = srcExt.quantity - t.quantity;
-                            var srcRef = window.doc(window.db, 'externalStock', srcExt.id);
-                            if (newQty <= 0) {
-                                await window.deleteDoc(srcRef);
-                            } else {
-                                await window.updateDoc(srcRef, { quantity: newQty });
-                            }
-                        }
+                        var srcExt = findExt(t.fromWh, t);
+                        if (!srcExt) throw new Error('找不到來源外倉庫存：' + t.fromName + ' ' + t.productName + ' 批號 ' + (t.batchNo || '-'));
+                        changes.push({ ref: extRefOf(srcExt), delta: -t.quantity, deleteWhenEmpty: true, label: t.fromName + ' ' + t.productName });
 
-                        var dstExt = window.externalStock.find(function(s) {
-                            return s.warehouseId === t.toWh && s.productName === t.productName &&
-                                   s.batchNo === t.batchNo && s.company === t.company;
-                        });
+                        var dstExt = findExt(t.toWh, t);
                         if (dstExt) {
-                            var dstRef = window.doc(window.db, 'externalStock', dstExt.id);
-                            await window.updateDoc(dstRef, { quantity: dstExt.quantity + t.quantity });
+                            changes.push({ ref: extRefOf(dstExt), delta: t.quantity, label: t.toName + ' ' + t.productName });
                         } else {
-                            await window.addDoc(window.collection(window.db, 'externalStock'), {
+                            creates.push({ ref: newExtRef(), data: {
                                 warehouseId: t.toWh,
                                 productName: t.productName,
                                 spec: t.spec || '',
@@ -16370,26 +16506,45 @@ window.clearLocalStorage = function() {
                                 company: t.company,
                                 source: '外庫調撥',
                                 createdAt: new Date().toISOString()
-                            });
+                            }});
                         }
-
-                        logPromises.push(window.logInventoryChange({
-                            type: 'transfer-ext',
-                            productName: t.productName,
-                            spec: t.spec || '',
-                            quantity: t.quantity,
-                            fromLocation: t.fromWh,
-                            toLocation: t.toWh,
-                            batchNo: t.batchNo || '',
-                            company: t.company,
+                        logData = {
+                            type: 'transfer-ext', toLocation: t.toWh,
                             note: '外庫調撥: ' + t.fromName + ' → ' + t.toName
-                        }));
+                        };
                     }
+
+                    await window.runStockTransaction({
+                        changes: changes,
+                        creates: creates,
+                        logs: function() {
+                            return [Object.assign({
+                                productName: t.productName,
+                                spec: t.spec || '',
+                                quantity: t.quantity,
+                                quantityChange: 0,
+                                fromLocation: t.fromWh,
+                                batchNo: t.batchNo || '',
+                                company: t.company
+                            }, logData)];
+                        }
+                    });
+
+                    // 新建立的外倉庫存放進快取，後面同品項的調撥才會累加到同一筆
+                    creates.forEach(function(cr) {
+                        if (cr.ref.parent.id === 'externalStock') {
+                            window.externalStock.push(Object.assign({ id: cr.ref.id }, cr.data));
+                        }
+                    });
+
+                    if (t.mode === 'in') {
+                        if (transferInMethod === 'pending') pendingCount++; else tempCount++;
+                    }
+                    doneCount++;
+                    window.transferList.shift();
                 }
 
-                await Promise.all(logPromises);
-
-                var successMsg = '✅ 調撥完成！共 ' + window.transferList.length + ' 筆';
+                var successMsg = '✅ 調撥完成！共 ' + doneCount + ' 筆';
                 if (pendingCount > 0) {
                     successMsg += '\n📋 ' + pendingCount + ' 筆已加入待執行工單';
                     showNotification('✅ 調撥完成！' + pendingCount + ' 筆已加入待執行工單，請至智能入庫中心處理', 'success');
@@ -16397,7 +16552,7 @@ window.clearLocalStorage = function() {
                     successMsg += '\n📦 ' + tempCount + ' 筆已入進貨暫存區';
                     showNotification('✅ 調撥完成！' + tempCount + ' 筆已入暫存區(TEMP-IN)，請移位上架', 'success');
                 } else {
-                    showNotification('✅ 調撥完成！共 ' + window.transferList.length + ' 筆', 'success');
+                    showNotification('✅ 調撥完成！共 ' + doneCount + ' 筆', 'success');
                 }
 
                 window.transferList = [];
@@ -16412,7 +16567,14 @@ window.clearLocalStorage = function() {
 
             } catch(e) {
                 console.error('調撥失敗:', e);
-                alert('❌ 調撥失敗：' + e.message);
+                renderTransferList();
+                alert('❌ 調撥失敗：' + e.message +
+                    (doneCount > 0 ? '\n\n已完成 ' + doneCount + ' / ' + totalCount + ' 筆，' : '\n\n') +
+                    '未完成的 ' + window.transferList.length + ' 筆仍保留在清單中，確認後可再次執行。');
+                if (doneCount > 0) {
+                    await loadExternalStock();
+                    if (typeof fetchInventory === 'function') fetchInventory();
+                }
             }
         };
 
@@ -17241,7 +17403,7 @@ window.clearLocalStorage = function() {
                 try {
                     var docRef = window.doc(window.db, 'pallets', palletId);
                     var docSnap = await window.getDoc(docRef);
-                    if (docSnap.exists()) {
+                    if (docSnap.exists) {
                         pallet = { id: docSnap.id, ...docSnap.data() };
                     }
                 } catch(e) {
@@ -17498,9 +17660,19 @@ window.clearLocalStorage = function() {
         }
 
         window.setCurrentUser = async function(email) {
+            // 先讀自己的使用者文件（安全規則允許本人讀取，即使尚未開通）
+            var ownSnap;
+            try {
+                ownSnap = await window.getDoc(window.doc(window.db, 'users', String(email || '').toLowerCase()));
+            } catch (e) {
+                console.error('讀取使用者資料失敗:', e);
+                return denyLogin('無法載入使用者資料，請檢查網路後再登入');
+            }
+
+            // 使用者清單（使用者管理用；未開通的帳號會被安全規則擋下，屬正常）
             await loadUsersFromFirebase();
 
-            var user = getUserByEmail(email);
+            var user = ownSnap.exists ? { id: ownSnap.id, ...ownSnap.data() } : getUserByEmail(email);
 
             if (!user) {
                 if (window._usersLoaded && window.usersData.length === 0) {
@@ -17519,10 +17691,8 @@ window.clearLocalStorage = function() {
                         window.usersData.push(user);
                     } catch (e) {
                         console.error('建立首位管理員失敗:', e);
-                        return denyLogin('建立管理員帳號失敗，請稍後再試');
+                        return denyLogin('建立管理員帳號失敗：啟用安全規則後，第一位管理員請在 Firebase 主控台的 users 建立');
                     }
-                } else if (!window._usersLoaded) {
-                    return denyLogin('無法載入使用者資料，請檢查網路後再登入');
                 } else {
                     return denyLogin('此帳號尚未開通，請聯絡系統管理員');
                 }
@@ -18128,45 +18298,23 @@ window.clearLocalStorage = function() {
         window.externalOutbound = async function(stockId, outQty, note) {
             try {
                 var stockRef = window.doc(window.db, 'externalStock', stockId);
-                var stockDoc = await window.getDoc(stockRef);
-
-                if (!stockDoc.exists()) {
-                    showToast('❌ 找不到此庫存記錄');
-                    return false;
-                }
-
-                var stock = stockDoc.data();
-                var currentQty = stock.quantity || 0;
-
-                if (outQty > currentQty) {
-                    showToast('❌ 出庫數量超過庫存');
-                    return false;
-                }
-
-                var newQty = currentQty - outQty;
-
-                if (newQty <= 0) {
-                    await window.deleteDoc(stockRef);
-                } else {
-                    await window.updateDoc(stockRef, {
-                        quantity: newQty,
-                        updatedAt: new Date().toISOString()
-                    });
-                }
-
-                await window.addDoc(window.collection(window.db, 'inventoryLogs'), {
-                    type: 'external_outbound',
-                    warehouseId: stock.warehouseId,
-                    warehouseName: stock.warehouseName,
-                    productName: stock.productName,
-                    spec: stock.spec,
-                    batchNo: stock.batchNo,
-                    quantity: outQty,
-                    quantityChange: -outQty,
-                    remainingQty: newQty,
-                    note: note || (stock.warehouseName + '出庫'),
-                    operator: window.currentUser ? window.currentUser.email : 'system',
-                    timestamp: new Date()
+                var results = await window.runStockTransaction({
+                    changes: [{ ref: stockRef, delta: -outQty, deleteWhenEmpty: true, label: '外倉庫存' }],
+                    logs: function(r) {
+                        var stock = r[stockRef.path].data;
+                        return [{
+                            type: 'external_outbound',
+                            company: stock.company || '',
+                            productName: stock.productName,
+                            spec: stock.spec,
+                            batchNo: stock.batchNo,
+                            quantity: outQty,
+                            quantityChange: -outQty,
+                            fromLocation: stock.warehouseId || '',
+                            note: note || ((stock.warehouseName || stock.warehouseId || '外倉') + '出庫'),
+                            operator: window.currentUser ? window.currentUser.email : 'system'
+                        }];
+                    }
                 });
 
                 showToast('✅ 外倉出庫成功');
@@ -18181,66 +18329,53 @@ window.clearLocalStorage = function() {
         window.transferToMainWarehouse = async function(stockId, transferQty, targetLocation) {
             try {
                 var stockRef = window.doc(window.db, 'externalStock', stockId);
-                var stockDoc = await window.getDoc(stockRef);
-
-                if (!stockDoc.exists()) {
-                    showToast('❌ 找不到此庫存記錄');
-                    return false;
-                }
-
-                var stock = stockDoc.data();
-                var currentQty = stock.quantity || 0;
-
-                if (transferQty > currentQty) {
-                    showToast('❌ 調撥數量超過庫存');
-                    return false;
-                }
-
-                var newQty = currentQty - transferQty;
-                if (newQty <= 0) {
-                    await window.deleteDoc(stockRef);
-                } else {
-                    await window.updateDoc(stockRef, {
-                        quantity: newQty,
-                        updatedAt: new Date().toISOString()
-                    });
-                }
-
+                var palletId = await window.nextDocNo('IN');
+                var palletRef = window.db.collection('pallets').doc();
                 var now = new Date();
-                var palletId = window.generatePalletNo ? window.generatePalletNo() : 'IN-' + now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2) + '-001';
 
-                var palletData = {
-                    palletId: palletId,
-                    productName: stock.productName,
-                    spec: stock.spec || '',
-                    batchNo: stock.batchNo || '',
-                    expiryDate: stock.expiryDate ? new Date(stock.expiryDate) : null,
-                    quantity: transferQty,
-                    locationId: targetLocation,
-                    vendor: stock.vendor || '',
-                    category: 'Transfer',
-                    status: 'Active',
-                    sourceWarehouse: stock.warehouseId,
-                    inboundDate: now,
-                    createdAt: now
-                };
+                // 先在交易中讀外倉庫存（確認數量），再用同一筆資料建立本倉棧板
+                await window.db.runTransaction(async function(tx) {
+                    var snap = await tx.get(stockRef);
+                    if (!snap.exists) throw new Error('找不到此庫存記錄');
+                    var stock = snap.data();
+                    var currentQty = parseFloat(stock.quantity) || 0;
+                    if (transferQty > currentQty) throw new Error('調撥數量超過庫存（目前 ' + currentQty + '）');
+                    var newQty = currentQty - transferQty;
+                    if (newQty <= 0) tx.delete(stockRef);
+                    else tx.update(stockRef, { quantity: newQty, updatedAt: now.toISOString() });
 
-                await window.addDoc(window.collection(window.db, 'pallets'), palletData);
-
-                await window.addDoc(window.collection(window.db, 'inventoryLogs'), {
-                    type: 'transfer_in',
-                    fromWarehouse: stock.warehouseId,
-                    fromWarehouseName: stock.warehouseName,
-                    toLocation: targetLocation,
-                    productName: stock.productName,
-                    spec: stock.spec,
-                    batchNo: stock.batchNo,
-                    quantity: transferQty,
-                    quantityChange: transferQty,
-                    palletId: palletId,
-                    note: '從' + stock.warehouseName + '調入',
-                    operator: window.currentUser ? window.currentUser.email : 'system',
-                    timestamp: new Date()
+                    var exp = stock.expiryDate || stock.expDate || '';
+                    tx.set(palletRef, {
+                        palletId: palletId,
+                        company: stock.company || '',
+                        productName: stock.productName,
+                        spec: stock.spec || '',
+                        batchNo: stock.batchNo || '',
+                        expiryDate: exp ? new Date(exp) : null,
+                        quantity: transferQty,
+                        locationId: targetLocation,
+                        vendor: stock.vendor || '',
+                        category: 'Transfer',
+                        status: 'Active',
+                        sourceWarehouse: stock.warehouseId,
+                        inboundDate: now,
+                        createdAt: now
+                    });
+                    tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
+                        type: 'transfer_in',
+                        company: stock.company || '',
+                        productName: stock.productName,
+                        spec: stock.spec,
+                        batchNo: stock.batchNo,
+                        quantity: transferQty,
+                        quantityChange: transferQty,
+                        fromLocation: stock.warehouseId || '',
+                        toLocation: targetLocation,
+                        locationId: targetLocation,
+                        palletId: palletId,
+                        note: '從' + (stock.warehouseName || stock.warehouseId || '外倉') + '調入',
+                        operator: window.currentUser ? window.currentUser.email : 'system'
+                    }));
                 });
 
                 showToast('✅ 調撥成功，已入庫至 ' + targetLocation);
@@ -18783,23 +18918,26 @@ window.clearLocalStorage = function() {
                     return;
                 }
 
-                await window.logInventoryChange({
-                    type: 'scrap',
-                    productName: pallet.productName,
-                    spec: pallet.spec || '',
-                    quantity: pallet.quantity,
-                    quantityChange: -pallet.quantity,
-                    locationId: pallet.locationId,
-                    palletId: palletId,
-                    batchNo: pallet.batchNo || '',
-                    note: '報廢：' + reason
+                // 用文件 ID 刪除這一板，數量與記錄在同一個交易中處理
+                var palletRef = window.doc(window.db, 'pallets', pallet.id);
+                await window.db.runTransaction(async function(tx) {
+                    var snap = await tx.get(palletRef);
+                    if (!snap.exists) throw new Error('此板已不存在（可能已被其他人處理）');
+                    var p = snap.data();
+                    tx.delete(palletRef);
+                    tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
+                        type: 'scrap',
+                        company: p.company || '',
+                        productName: p.productName,
+                        spec: p.spec || '',
+                        quantity: p.quantity,
+                        quantityChange: -(parseFloat(p.quantity) || 0),
+                        locationId: p.locationId,
+                        palletId: p.palletId || palletId,
+                        batchNo: p.batchNo || '',
+                        note: '報廢：' + reason
+                    }));
                 });
-
-                var q = window.query(window.collection(window.db, 'pallets'), window.where('palletId', '==', palletId));
-                var snap = await window.getDocs(q);
-                if (!snap.empty) {
-                    await window.deleteDoc(snap.docs[0].ref);
-                }
 
                 alert('✅ 報廢完成');
                 loadInventory();
@@ -21325,6 +21463,11 @@ window.completeWave = async function() {
     const wave = window._waveData.currentWave;
     const list = window._waveData.pickingList;
 
+    if (wave && wave.status === 'done') {
+        alert('此波次已經完成，不能重複出庫');
+        return;
+    }
+
     const completed = list.filter(i => i.completed).length;
     const total = list.filter(i => !i.shortage).length;
 
@@ -21343,64 +21486,84 @@ window.completeWave = async function() {
         return;
     }
 
-    wave.status = 'done';
-    wave.completedAt = new Date().toISOString();
-
+    // 扣庫存、更新訂單、標記波次完成都在同一個交易裡：
+    // 任何一板庫存不足或波次已被別人完成，就整筆取消，不會重複扣帳或只扣一半
     const pallets = window.currentPallets ? window.currentPallets() : [];
-
-    for (const item of list.filter(i => i.completed)) {
+    const pickedItems = list.filter(i => i.completed);
+    const missing = [];
+    const changes = [];
+    pickedItems.forEach(item => {
         const pallet = pallets.find(p => p.palletId === item.palletId);
-        if (pallet && pallet.id) {
-            const newQty = Math.max(0, (parseInt(pallet.quantity) || 0) - item.pickQty);
+        if (!pallet || !pallet.id) { missing.push(item.palletId || item.productName); return; }
+        changes.push({
+            ref: window.doc(window.db, 'pallets', pallet.id),
+            delta: -(parseInt(item.pickQty) || 0),
+            deleteWhenEmpty: true,
+            label: item.palletId
+        });
+    });
+    if (missing.length > 0) {
+        alert('❌ 找不到以下棧板，無法完成波次（可能已被移動或出庫）：\n' + missing.slice(0, 10).join('\n'));
+        return;
+    }
 
-            try {
-                await window.updateDoc(window.doc(window.db, 'pallets', pallet.id), {
-                    quantity: newQty
-                });
+    const waveRef = wave.id ? window.doc(window.db, 'waves', wave.id) : null;
+    const orderIds = [];
+    (wave.orders || []).forEach(order => {
+        const oid = order.id || order.orderId;
+        if (oid && orderIds.indexOf(oid) === -1) orderIds.push(oid);
+    });
+    const orderRefs = orderIds.map(oid => window.doc(window.db, 'salesOrders', oid));
+    const completedAt = new Date().toISOString();
 
-                if (window.logInventoryChange) {
-                    await window.logInventoryChange({
-                        type: 'outbound',
-                        productName: item.productName,
-                        spec: item.spec,
-                        quantity: item.pickQty,
-                        quantityChange: -item.pickQty,
-                        locationId: item.locationId,
-                        batchNo: item.batchNo,
-                        palletId: item.palletId,
-                        note: '波次揀貨 ' + wave.waveNo
-                    });
+    try {
+        await window.runStockTransaction({
+            changes: changes,
+            reads: (waveRef ? [waveRef] : []).concat(orderRefs),
+            validate: function(results, readSnaps) {
+                if (waveRef && readSnaps[0].exists && readSnaps[0].data().status === 'done') {
+                    throw new Error('此波次已經完成過，不能重複扣庫存');
                 }
-            } catch (err) {
-                console.error('扣減庫存失敗:', item.palletId, err);
-            }
-        }
-    }
-
-    for (const order of wave.orders || []) {
-        if (order.id) {
-            try {
-                await window.updateDoc(window.doc(window.db, 'salesOrders', order.id), {
-                    status: 'shipped',
-                    shippedAt: new Date().toISOString(),
-                    waveNo: wave.waveNo
+            },
+            updates: function(results, readSnaps) {
+                const ups = [];
+                const orderSnaps = waveRef ? readSnaps.slice(1) : readSnaps;
+                orderSnaps.forEach((snap, idx) => {
+                    if (snap.exists) {
+                        ups.push({ ref: orderRefs[idx], data: { status: 'shipped', shippedAt: completedAt, waveNo: wave.waveNo } });
+                    }
                 });
-            } catch (err) {
-                console.error('更新訂單狀態失敗:', order.orderNo, err);
+                if (waveRef && readSnaps[0].exists) {
+                    ups.push({ ref: waveRef, data: { status: 'done', completedAt: completedAt } });
+                }
+                return ups;
+            },
+            logs: function() {
+                return pickedItems.map(item => ({
+                    type: 'outbound',
+                    productName: item.productName,
+                    spec: item.spec,
+                    quantity: item.pickQty,
+                    quantityChange: -item.pickQty,
+                    locationId: item.locationId,
+                    batchNo: item.batchNo,
+                    palletId: item.palletId,
+                    note: '波次揀貨 ' + wave.waveNo
+                }));
             }
-        }
+        });
+    } catch (err) {
+        console.error('完成波次失敗:', err);
+        alert('❌ 完成波次失敗：' + err.message + '\n\n庫存與訂單都沒有變動。');
+        return;
     }
 
-    if (wave.id) {
-        try {
-            await window.updateDoc(window.doc(window.db, 'waves', wave.id), {
-                status: 'done',
-                completedAt: wave.completedAt
-            });
-        } catch (err) {
-            console.error('更新波次狀態失敗:', err);
-        }
-    }
+    wave.status = 'done';
+    wave.completedAt = completedAt;
+    (wave.orders || []).forEach(order => {
+        const local = (window._orderData && window._orderData.orders || []).find(o => o.id && o.id === (order.id || order.orderId));
+        if (local) local.status = 'shipped';
+    });
 
     saveWaves();
 
@@ -22837,6 +23000,7 @@ async function executeImport() {
     const timestamp = firebase.firestore.FieldValue.serverTimestamp();
 
     try {
+        await window.ensureDocNoPool('IN', validRecords.length);
         for (const record of validRecords) {
             if (record.newLocation && !newLocations.has(record.location)) {
                 const isVirtual = VIRTUAL_LOCATIONS.includes(record.location);
@@ -22854,7 +23018,7 @@ async function executeImport() {
                 newLocations.add(record.location);
             }
 
-            const palletId = window.generateDocNo ? window.generateDocNo('IN') : 'IN-' + new Date().getFullYear() + ('0'+(new Date().getMonth()+1)).slice(-2) + ('0'+new Date().getDate()).slice(-2) + '-001';
+            const palletId = await window.nextDocNo('IN');
             const palletRef = db.collection('pallets').doc(palletId);
 
             let expiryDate = null;
@@ -22969,7 +23133,7 @@ window.loadRentalSettingsFromFirebase = async function() {
         var docRef = window.doc(window.db, 'settings', 'rentalSettings');
         var docSnap = await window.getDoc(docRef);
 
-        if (docSnap.exists()) {
+        if (docSnap.exists) {
             window.rentalSettings = docSnap.data();
             console.log('倉租設定已從 Firebase 載入');
         }
@@ -26151,7 +26315,7 @@ console.log('💰 倉租管理模組已載入');
         
         try {
             var now = new Date();
-            var docNo = window.generatePalletNo ? window.generatePalletNo() : 'IN-' + now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2) + '-001';
+            var docNo = await window.nextDocNo('IN');
             
             await window.addDoc(window.collection(window.db, 'pallets'), { palletId: docNo, company: data.company, productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight, locationId: data.locationId, vendor: data.vendor, category: data.category, productType: data.productType, source: 'SmartInbound', createdAt: now.toISOString() });
             
@@ -26169,7 +26333,7 @@ console.log('💰 倉租管理模組已載入');
         
         try {
             var now = new Date();
-            var docNo = window.generatePalletNo ? window.generatePalletNo() : 'IN-' + now.getFullYear() + ('0'+(now.getMonth()+1)).slice(-2) + ('0'+now.getDate()).slice(-2) + '-001';
+            var docNo = await window.nextDocNo('IN');
             
             await window.addDoc(window.collection(window.db, 'pallets'), { palletId: docNo, company: data.company, productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight, locationId: data.locationId, vendor: data.vendor, category: data.category, productType: data.productType, source: 'SmartInbound', createdAt: now.toISOString() });
             
@@ -26567,7 +26731,7 @@ console.log('💰 倉租管理模組已載入');
                 if (window.db && window.doc && window.getDoc) {
                     var docRef = window.doc(window.db, 'pallets', id);
                     var docSnap = await window.getDoc(docRef);
-                    if (docSnap.exists()) {
+                    if (docSnap.exists) {
                         item = { id: docSnap.id, ...docSnap.data() };
                         console.log('✅ 從 Firebase 讀取成功:', item);
                     } else {
