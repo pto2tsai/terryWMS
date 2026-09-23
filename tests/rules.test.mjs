@@ -65,5 +65,11 @@ const b = writeBatch(O2); for (let i=0;i<60;i++){ b.update(doc(O2,'pallets','BP'
 try { await assertSucceeds(b.commit()); pass++; } catch(e){ fail++; console.log('FAIL operator big batch', e.message.slice(0,300)); }
 try { await assertSucceeds(runTransaction(O2, async tx=>{ for (let i=0;i<30;i++){ await tx.get(doc(O2,'pallets','BP'+i)); } for (let i=0;i<30;i++) tx.update(doc(O2,'pallets','BP'+i),{quantity:3}); })); pass++; } catch(e){ fail++; console.log('FAIL operator 30-pallet tx', e.message.slice(0,300)); }
 try { await assertFails(runTransaction(R2, async tx=>{ await tx.get(doc(R2,'pallets','P1')); tx.update(doc(R2,'pallets','P1'),{quantity:0}); })); pass++; } catch(e){ fail++; console.log('FAIL readonly tx', e.message.slice(0,200)); }
+await t('negative pallet quantity rejected', assertFails(updateDoc(doc(O,'pallets','P1'),{quantity:-1})));
+await t('string quantity still allowed (legacy imports)', assertSucceeds(updateDoc(doc(O,'pallets','P1'),{quantity:'3'})));
+await t('negative external quantity rejected', assertFails(addDoc(collection(O,'externalStock'),{quantity:-5})));
+await t('log with own operatorEmail ok', assertSucceeds(addDoc(collection(O,'inventoryLogs'),{type:'out',operatorEmail:'op@x.com'})));
+await t('log impersonating another user rejected', assertFails(addDoc(collection(O,'inventoryLogs'),{type:'out',operatorEmail:'admin@x.com'})));
+await t('mixed-case token email matches lowercase operatorEmail', assertSucceeds(addDoc(collection(MIX,'inventoryLogs'),{type:'out',operatorEmail:'op@x.com'})));
 console.log(`pass ${pass} fail ${fail}`);
 await env.cleanup(); process.exit(fail?1:0);

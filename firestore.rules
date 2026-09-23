@@ -44,6 +44,12 @@ service cloud.firestore {
       return isActiveUser() && roleLevel() >= n;
     }
 
+    // 數量若是數字，不可為負（字串等舊格式由前端轉換，這裡不擋以免影響匯入）
+    function validQuantity() {
+      return !(request.resource.data.get('quantity', 0) is number)
+        || request.resource.data.get('quantity', 0) >= 0;
+    }
+
     // 堆高機手（40）以上可以做庫存作業；只讀（10）不能寫
     function canOperate() { return hasLevel(40); }
     function isSupervisor() { return hasLevel(80); }
@@ -62,8 +68,16 @@ service cloud.firestore {
     }
 
     // ---------- 庫存作業 ----------
-    match /pallets/{id}         { allow read: if isActiveUser(); allow write: if canOperate(); }
-    match /externalStock/{id}   { allow read: if isActiveUser(); allow write: if canOperate(); }
+    match /pallets/{id} {
+      allow read: if isActiveUser();
+      allow create, update: if canOperate() && validQuantity();
+      allow delete: if canOperate();
+    }
+    match /externalStock/{id} {
+      allow read: if isActiveUser();
+      allow create, update: if canOperate() && validQuantity();
+      allow delete: if canOperate();
+    }
     match /locations/{id}       { allow read: if isActiveUser(); allow write: if canOperate(); }
     match /waves/{id}           { allow read: if isActiveUser(); allow write: if canOperate(); }
     match /salesOrders/{id}     { allow read: if isActiveUser(); allow write: if canOperate(); }
@@ -86,9 +100,11 @@ service cloud.firestore {
     }
 
     // 異動記錄：只能新增，不能修改；刪除（清除資料/還原）限管理員
+    // operatorEmail 必須是登入者本人（不能冒用他人名義留下記錄）
     match /inventoryLogs/{id} {
       allow read: if isActiveUser();
-      allow create: if canOperate();
+      allow create: if canOperate()
+        && request.resource.data.get('operatorEmail', myEmail()) == myEmail();
       allow update, delete: if isAdmin();
     }
 

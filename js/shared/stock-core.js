@@ -6,7 +6,7 @@
 
 window.buildInventoryLogEntry = function(data) {
     var operator = data.operator || (window.getOperatorName ? window.getOperatorName() : 'system');
-    return {
+    var entry = {
         timestamp: new Date().toISOString(),
         type: data.type,
         company: data.company || '',
@@ -27,6 +27,11 @@ window.buildInventoryLogEntry = function(data) {
         orderId: data.orderId || '',
         createdAt: window.serverTimestamp ? window.serverTimestamp() : new Date()
     };
+    // 登入帳號（安全規則會驗證必須是本人，不能冒用他人名義）
+    var authUser = window.auth && window.auth.currentUser;
+    var email = (authUser && authUser.email) || (window.currentUser && window.currentUser.email) || '';
+    if (email) entry.operatorEmail = String(email).toLowerCase();
+    return entry;
 };
 
 // ========== 庫存交易（stock transaction）==========

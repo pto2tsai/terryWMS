@@ -554,6 +554,7 @@
         const auth = firebase.auth();
         const FieldValue = firebase.firestore.FieldValue;
         window.db = db;
+        window.auth = auth;
         window.serverTimestamp = function() { return FieldValue.serverTimestamp(); };
         window.getOperatorName = function() {
             const u = window.currentUser;

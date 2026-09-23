@@ -7,11 +7,29 @@
 | 檔案 | 說明 |
 |---|---|
 | `index.html` | 桌機版所有畫面 |
-| `mobile.html` | 手機版（揀貨、掃描） |
-| `firebase-init.js` | Firebase 初始化、登入、庫存即時監聽、資料格式統一工具 |
-| `js/01-core.js` … `js/18-data-migration.js` | 應用程式模組，依編號順序載入 |
+| `mobile.html` | 手機版（揀貨、調度執行、入庫確認、庫存快查），與桌機共用同一個 Firestore |
+| `firebase-init.js` | 桌機版 Firebase 初始化、登入、庫存即時監聽 |
+| `js/shared/*.js` | 桌機與手機共用：Firebase 設定、資料格式、庫存交易核心、揀貨清單 |
+| `js/01-core.js` … `js/18-data-migration.js` | 桌機應用程式模組，依編號順序載入 |
 | `firestore.rules` | Firestore 安全規則（**需要另外發布到 Firebase 才會生效**） |
 | `tests/` | 安全規則測試與端對端測試（Firebase 模擬器） |
+
+### 共用模組（js/shared）
+
+| 檔案 | 內容 |
+|---|---|
+| firebase-config.js | Firebase 專案設定（只此一份） |
+| data-format.js | 日期／效期／數量格式統一（`normalizeDateValue`、`normalizeStockRecord`、`Date#toLocalYMD`） |
+| stock-core.js | 庫存交易（`runStockTransaction`、`mergePalletsTx`、`movePalletTx`、`buildInventoryLogEntry`） |
+| picking-list.js | 波次揀貨清單（`buildWavePickingList`，先進先出、依動線排序） |
+
+載入順序：`firebase-config` → `data-format` → `firebase-init`（桌機）→ `stock-core` → `picking-list` → 桌機模組。
+
+### 手機與桌機的分工
+
+- **揀貨**：手機讀桌機建立的波次，掃描進度即時寫回 `waves.completedItems`（兩邊看到同一份進度）；
+  手機按「揀貨完成」只標記 `status: 'sorting'`，**扣庫存與訂單出貨由桌機「完成波次」以交易處理**。
+- **調度**：桌機「發布到手機」寫入 `dispatchOrders`；手機掃描後直接以交易執行移板／併板並寫異動記錄。
 
 ### js 模組
 
@@ -59,6 +77,17 @@ Firebase 主控台 → Firestore Database → 規則 → 貼上 `firestore.rules
 
 發布前確認：`users` 集合的文件 ID 都是**小寫 email**，且欄位 `role` 正確。
 啟用規則後，第一位管理員必須在主控台手動建立 `users/{email}`（`role: 'admin'`）。
+
+## 伺服器端（Cloud Functions）評估
+
+目前的保護：所有庫存異動走 Firestore 交易（不會互相覆蓋、不會只扣一半），
+安全規則限制角色權限、數量不可為負、異動記錄的 `operatorEmail` 必須是登入者本人。
+
+尚未做到、需要 Cloud Functions 才能完全解決的：規則無法驗證「業務規則」本身
+（例如倉管人員從瀏覽器主控台直接把某板數量改大），因為前端程式可以被繞過。
+若要做到，建議把 `runStockTransaction` 等核心搬到 Cloud Functions（callable functions），
+並把 `pallets` / `externalStock` / `inventoryLogs` 的寫入權限在規則中關閉、只允許函數寫入。
+這需要 Firebase **Blaze（付費）方案**，且所有前端寫入點都要改成呼叫函數，屬於較大的改動。
 
 ## 測試
 

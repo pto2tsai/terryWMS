@@ -120,6 +120,7 @@ const fo = await A.page.evaluate(async()=>{ window._fieldData.outbound.pallet = 
 ok('field outbound empties & deletes pallet', await qty('PD')===null, fo);
 const lastLog = await admin(async d=>{ const s=await getDocs(collection(d,'inventoryLogs')); return s.docs.map(x=>x.data()).find(l=>l.palletId==='PD'); });
 ok('field outbound log has ISO timestamp', lastLog && typeof lastLog.timestamp==='string' && lastLog.quantityChange===-3, JSON.stringify(lastLog));
+ok('log records verified operatorEmail', lastLog && lastLog.operatorEmail==='op@t.com', lastLog && lastLog.operatorEmail);
 
 // T5 transfer (external -> pending inbound order)
 const t5 = await A.page.evaluate(async()=>{
@@ -274,7 +275,7 @@ const do1 = await admin(async d=>(await getDoc(doc(d,'dispatchOrders','DO1'))).d
 ok('mobile dispatch: move then merge executed as transactions (PY at K-F-05-2F, 5+8=13, PX removed)', pyAfter.locationId==='K-F-05-2F' && pyAfter.quantity===13 && await qty('PX')===null, JSON.stringify(md)+' '+JSON.stringify([pyAfter.locationId,pyAfter.quantity]));
 ok('mobile dispatch: order progress saved and completed', do1.completedOps.length===2 && do1.status==='completed', JSON.stringify(do1.completedOps)+do1.status);
 const mlogs = await admin(async d=>(await getDocs(collection(d,'inventoryLogs'))).docs.map(x=>x.data()).filter(l=>String(l.note).includes('手機調度工單')));
-ok('mobile dispatch wrote inventory logs with operator', mlogs.length===2 && mlogs.every(l=>l.operator && l.operator!=='system'), JSON.stringify(mlogs.map(l=>[l.type,l.operator])));
+ok('mobile dispatch wrote inventory logs with operator', mlogs.length===2 && mlogs.every(l=>l.operator && l.operator!=='system' && l.operatorEmail==='op2@t.com'), JSON.stringify(mlogs.map(l=>[l.type,l.operator])));
 
 // T8 readonly & stranger
 const R = await openAs('ro@t.com');
