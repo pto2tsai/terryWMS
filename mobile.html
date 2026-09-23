@@ -435,7 +435,7 @@
         
         <div class="bottom-actions" id="picking-actions" style="display:none">
             <button class="action-btn success" onclick="completePickingWave()">
-                <i class="fa-solid fa-flag-checkered"></i> 完成波次
+                <i class="fa-solid fa-flag-checkered"></i> 完成波次（扣庫存出貨）
             </button>
         </div>
     </div>
@@ -534,505 +534,432 @@
     </div>
 
     <!-- Firebase -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, updateDoc, deleteDoc, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-
-        const firebaseConfig = { 
-            apiKey: "AIzaSyBEWzyRMJQirGbh28ANkE6aN42GzUBuw2s", 
-            authDomain: "terrywms-2345f.firebaseapp.com", 
-            projectId: "terrywms-2345f", 
-            storageBucket: "terrywms-2345f.firebasestorage.app", 
-            messagingSenderId: "75589714942", 
-            appId: "1:75589714942:web:3a7f723c3d1449df78f6af" 
-        };
-        
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        
+    <!-- Firebase（與桌機版相同的 compat SDK 與共用模組）-->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="js/shared/firebase-config.js"></script>
+    <script src="js/shared/data-format.js"></script>
+    <script src="js/shared/stock-core.js"></script>
+    <script src="js/shared/picking-list.js"></script>
+    <script>
+        // ============================================================
+        // 手機版：與桌機版共用同一個 Firestore
+        // - 揀貨：讀取桌機建立的波次，掃描進度即時寫回（桌機看得到）；
+        //   可直接在手機「完成波次」，與桌機用同一個交易扣庫存出貨
+        // - 調度：讀取桌機「發布到手機」的調度工單，掃描後直接以交易執行移板／併板
+        // ============================================================
+        firebase.initializeApp(window.FIREBASE_CONFIG);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        const FieldValue = firebase.firestore.FieldValue;
         window.db = db;
-        window.collection = collection;
-        window.getDocs = getDocs;
-        window.doc = doc;
-        window.updateDoc = updateDoc;
-        window.deleteDoc = deleteDoc;
-        window.query = query;
-        window.where = where;
-        window.orderBy = orderBy;
-        window.onSnapshot = onSnapshot;
-        
-        // 庫存資料
+        window.auth = auth;
+        window.serverTimestamp = function() { return FieldValue.serverTimestamp(); };
+        window.getOperatorName = function() {
+            const u = window.currentUser;
+            return u ? (u.name || u.email) : 'mobile';
+        };
+
         window.pallets = [];
-        
-        // 監聽認證狀態
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                document.getElementById('login-page').style.display = 'none';
-                document.getElementById('app-main').classList.add('active');
-                document.getElementById('display-user').innerText = user.email.split('@')[0];
-                initData();
-            } else {
+        let unsubscribePallets = null;
+
+        function esc(v) {
+            return String(v === undefined || v === null ? '' : v).replace(/[&<>"']/g, function(c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
+        function showLoginError(msg) {
+            const el = document.getElementById('login-error');
+            el.innerText = msg;
+            el.style.display = 'block';
+        }
+
+        // 登入後先確認帳號已開通、未停用（與桌機版相同規則）
+        auth.onAuthStateChanged(async function(user) {
+            if (!user) {
+                window.currentUser = null;
+                if (unsubscribePallets) { unsubscribePallets(); unsubscribePallets = null; }
                 document.getElementById('login-page').style.display = 'flex';
                 document.getElementById('app-main').classList.remove('active');
+                return;
             }
+            try {
+                const snap = await db.collection('users').doc(String(user.email).toLowerCase()).get();
+                if (!snap.exists) { showLoginError('此帳號尚未開通，請聯絡系統管理員'); return auth.signOut(); }
+                const profile = Object.assign({ id: snap.id }, snap.data());
+                if (profile.active === false) { showLoginError('此帳號已停用，請聯絡系統管理員'); return auth.signOut(); }
+                window.currentUser = profile;
+            } catch (e) {
+                console.error(e);
+                showLoginError('無法載入使用者資料，請檢查網路後再登入');
+                return auth.signOut();
+            }
+            document.getElementById('login-error').style.display = 'none';
+            document.getElementById('login-page').style.display = 'none';
+            document.getElementById('app-main').classList.add('active');
+            document.getElementById('display-user').innerText = window.currentUser.name || user.email.split('@')[0];
+            initData();
         });
-        
-        // 登入
+
         window.doLogin = async function() {
             const email = document.getElementById('login-email').value;
             const pwd = document.getElementById('login-pwd').value;
-            const errorEl = document.getElementById('login-error');
-            
+            document.getElementById('login-error').style.display = 'none';
             try {
-                errorEl.style.display = 'none';
-                await signInWithEmailAndPassword(auth, email, pwd);
+                await auth.signInWithEmailAndPassword(email, pwd);
             } catch (err) {
-                errorEl.style.display = 'block';
-                if (err.code === 'auth/user-not-found') errorEl.innerText = '帳號不存在';
-                else if (err.code === 'auth/wrong-password') errorEl.innerText = '密碼錯誤';
-                else errorEl.innerText = '登入失敗';
+                if (err.code === 'auth/user-not-found') showLoginError('帳號不存在');
+                else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') showLoginError('帳號或密碼錯誤');
+                else showLoginError('登入失敗');
             }
         };
-        
-        // 登出
-        window.doLogout = function() {
-            signOut(auth);
-        };
-        
-        // 初始化資料
+
+        window.doLogout = function() { auth.signOut(); };
+
         function initData() {
-            // 監聽庫存
-            onSnapshot(collection(db, 'pallets'), (snap) => {
+            if (unsubscribePallets) unsubscribePallets();
+            unsubscribePallets = db.collection('pallets').onSnapshot(function(snap) {
                 window.pallets = [];
-                snap.forEach(d => window.pallets.push({ id: d.id, ...d.data() }));
+                snap.forEach(function(d) {
+                    const p = window.normalizeStockRecord(Object.assign({ id: d.id }, d.data()));
+                    if ((p.quantity || 0) > 0 || (p.totalWeight || 0) > 0) window.pallets.push(p);
+                });
             });
         }
-    </script>
-    
-    <script>
+
         // 頁面切換
         function openPage(page) {
             document.getElementById('app-main').classList.remove('active');
             document.getElementById('page-' + page).classList.add('active');
-            
             if (page === 'picking') loadPickingWaves();
             if (page === 'inbound') loadInboundRecords();
             if (page === 'dispatch') loadDispatchOrders();
         }
-        
+
         function goBack() {
             document.querySelectorAll('.func-page').forEach(p => p.classList.remove('active'));
             document.getElementById('app-main').classList.add('active');
         }
-        
+
+        function setResult(id, ok, text) {
+            const el = document.getElementById(id);
+            el.className = 'scan-result ' + (ok ? 'success' : 'error');
+            el.innerText = text;
+            if (navigator.vibrate) navigator.vibrate(ok ? 100 : [100, 50, 100]);
+        }
+
         // ========== 揀貨掃描 ==========
+        let waves = [];
         let currentWave = null;
         let pickingItems = [];
-        
-        function loadPickingWaves() {
-            const waves = JSON.parse(localStorage.getItem('wms_waves') || '[]');
+
+        async function loadPickingWaves() {
             const select = document.getElementById('picking-wave-select');
-            select.innerHTML = '<option value="">-- 請選擇 --</option>';
-            
-            waves.filter(w => w.status !== 'done').forEach(w => {
-                select.innerHTML += `<option value="${w.waveNo}">${w.waveNo} - ${w.logistics} (${w.totalQty}件)</option>`;
-            });
+            select.innerHTML = '<option value="">載入中...</option>';
+            try {
+                const snap = await db.collection('waves').where('status', 'in', ['pending', 'picking', 'sorting']).get();
+                waves = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                waves.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+                select.innerHTML = '<option value="">-- 請選擇 --</option>' + waves.map(w =>
+                    '<option value="' + esc(w.id) + '">' + esc(w.waveNo) + ' - ' + esc(w.logistics || '') + ' (' + esc(w.totalQty || 0) + '件)' +
+                    (w.status === 'sorting' ? '【已揀完】' : '') + '</option>').join('');
+            } catch (e) {
+                console.error(e);
+                select.innerHTML = '<option value="">載入失敗：' + esc(e.message) + '</option>';
+            }
         }
-        
-        window.loadPickingWave = function() {
-            const waveNo = document.getElementById('picking-wave-select').value;
-            if (!waveNo) {
+
+        window.loadPickingWave = async function() {
+            const waveId = document.getElementById('picking-wave-select').value;
+            if (!waveId) {
                 document.getElementById('picking-scan-area').style.display = 'none';
                 document.getElementById('picking-actions').style.display = 'none';
                 return;
             }
-            
-            const waves = JSON.parse(localStorage.getItem('wms_waves') || '[]');
-            currentWave = waves.find(w => w.waveNo === waveNo);
-            if (!currentWave) return;
-            
-            // 產生揀貨清單
-            pickingItems = [];
-            (currentWave.orders || []).forEach(order => {
-                let needed = parseInt(order.quantity) || 0;
-                const matching = window.pallets.filter(p => p.productName === order.productName)
-                    .sort((a, b) => (a.expDate || '').localeCompare(b.expDate || ''));
-                
-                matching.forEach(p => {
-                    if (needed <= 0) return;
-                    const pick = Math.min(p.quantity, needed);
-                    pickingItems.push({
-                        id: p.palletId + '-' + order.id,
-                        palletId: p.palletId,
-                        locationId: p.locationId,
-                        productName: p.productName,
-                        pickQty: pick,
-                        orderNo: order.orderNo,
-                        customer: order.customer,
-                        completed: false
-                    });
-                    needed -= pick;
-                });
-                
-                if (needed > 0) {
-                    pickingItems.push({
-                        id: 'shortage-' + order.id,
-                        locationId: '庫存不足',
-                        productName: order.productName,
-                        pickQty: needed,
-                        shortage: true
-                    });
-                }
-            });
-            
-            // 標記已完成
-            const completed = currentWave.completedItems || [];
-            pickingItems.forEach(item => {
-                if (completed.includes(item.id)) item.completed = true;
-            });
-            
+            // 讀最新的波次（含其他裝置的揀貨進度）
+            const snap = await db.collection('waves').doc(waveId).get();
+            if (!snap.exists) { alert('波次已不存在'); return loadPickingWaves(); }
+            currentWave = Object.assign({ id: snap.id }, snap.data());
+
+            // 與桌機版用同一套邏輯產生揀貨清單，項目 ID 一致，進度可以互通
+            pickingItems = window.buildWavePickingList(currentWave, window.pallets);
+
             renderPickingList();
             document.getElementById('picking-scan-area').style.display = 'block';
             document.getElementById('picking-actions').style.display = 'block';
             document.getElementById('picking-scan').focus();
         };
-        
+
         function renderPickingList() {
             const list = document.getElementById('picking-list');
             const completed = pickingItems.filter(i => i.completed).length;
             const total = pickingItems.filter(i => !i.shortage).length;
             document.getElementById('picking-progress').innerText = completed + '/' + total;
-            
+
             if (pickingItems.length === 0) {
                 list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-clipboard-list"></i><p>無揀貨項目</p></div>';
                 return;
             }
-            
-            // 按儲位排序
-            pickingItems.sort((a, b) => (a.locationId || '').localeCompare(b.locationId || ''));
-            
+
             list.innerHTML = pickingItems.map(item => {
                 const cls = item.completed ? 'completed' : item.shortage ? 'shortage' : '';
                 const status = item.completed ? '<span class="item-status done">✓ 完成</span>' :
                               item.shortage ? '<span class="item-status shortage">缺貨</span>' :
                               '<span class="item-status pending">待揀</span>';
-                return `
-                    <div class="list-item ${cls}">
-                        <div class="item-row">
-                            <span class="item-location">${item.locationId}</span>
-                            ${status}
-                        </div>
-                        <div class="item-product">${item.productName}</div>
-                        <div class="item-row">
-                            <span class="item-detail">${item.palletId || '-'} | ${item.customer || ''}</span>
-                            <span class="item-qty">${item.pickQty}</span>
-                        </div>
-                    </div>
-                `;
+                return '<div class="list-item ' + cls + '">' +
+                    '<div class="item-row"><span class="item-location">' + esc(item.locationId) + '</span>' + status + '</div>' +
+                    '<div class="item-product">' + esc(item.productName) + ' ' + esc(item.spec || '') + '</div>' +
+                    '<div class="item-row"><span class="item-detail">' + esc(item.palletId || '-') + ' | ' + esc(item.batchNo || '') + ' ' + esc(item.expDate || '') + '</span>' +
+                    '<span class="item-qty">' + esc(item.pickQty) + '</span></div></div>';
             }).join('');
         }
-        
-        window.confirmPickingScan = function() {
+
+        window.confirmPickingScan = async function() {
             const input = document.getElementById('picking-scan');
-            const result = document.getElementById('picking-scan-result');
             const scanned = input.value.trim();
-            
-            if (!scanned) return;
-            
-            const found = pickingItems.find(i => !i.completed && !i.shortage && 
+            if (!scanned || !currentWave) return;
+
+            const found = pickingItems.find(i => !i.completed && !i.shortage &&
                 (i.palletId === scanned || i.locationId === scanned));
-            
             if (!found) {
-                result.className = 'scan-result error';
-                result.innerText = '❌ 找不到：' + scanned;
+                setResult('picking-scan-result', false, '❌ 找不到：' + scanned);
                 input.select();
                 return;
             }
-            
+
+            try {
+                await db.collection('waves').doc(currentWave.id).update({
+                    completedItems: FieldValue.arrayUnion(found.id),
+                    status: currentWave.status === 'sorting' ? 'sorting' : 'picking'
+                });
+            } catch (e) {
+                setResult('picking-scan-result', false, '❌ 儲存進度失敗：' + e.message);
+                return;
+            }
             found.completed = true;
-            
-            // 儲存進度
-            if (!currentWave.completedItems) currentWave.completedItems = [];
-            currentWave.completedItems.push(found.id);
-            const waves = JSON.parse(localStorage.getItem('wms_waves') || '[]');
-            const idx = waves.findIndex(w => w.waveNo === currentWave.waveNo);
-            if (idx >= 0) waves[idx] = currentWave;
-            localStorage.setItem('wms_waves', JSON.stringify(waves));
-            
-            result.className = 'scan-result success';
-            result.innerText = '✓ ' + found.productName + ' x ' + found.pickQty;
-            
+            setResult('picking-scan-result', true, '✓ ' + found.productName + ' x ' + found.pickQty);
             renderPickingList();
             input.value = '';
             input.focus();
-            
-            // 震動反饋
-            if (navigator.vibrate) navigator.vibrate(100);
         };
-        
-        window.completePickingWave = function() {
-            const completed = pickingItems.filter(i => i.completed).length;
-            const total = pickingItems.filter(i => !i.shortage).length;
-            
-            if (completed === 0) {
-                alert('尚未揀貨任何項目');
+
+        // 完成波次：與桌機相同的交易（扣庫存、訂單標記出貨、缺貨留記錄），不用回電腦
+        window.completePickingWave = async function() {
+            if (!currentWave) return;
+            try {
+                // 先取最新進度（電腦或其他手機掃過的也算）
+                const snap = await db.collection('waves').doc(currentWave.id).get();
+                if (!snap.exists) { alert('波次已不存在'); return; }
+                currentWave = Object.assign({ id: snap.id }, snap.data());
+                const done = currentWave.completedItems || [];
+                pickingItems.forEach(i => { if (done.indexOf(i.id) >= 0) i.completed = true; });
+            } catch (e) {
+                alert('❌ 讀取波次失敗：' + e.message);
                 return;
             }
-            
-            if (!confirm(`完成波次？\n\n已揀：${completed}/${total}`)) return;
-            
-            currentWave.status = 'done';
-            currentWave.completedAt = new Date().toISOString();
-            
-            const waves = JSON.parse(localStorage.getItem('wms_waves') || '[]');
-            const idx = waves.findIndex(w => w.waveNo === currentWave.waveNo);
-            if (idx >= 0) waves[idx] = currentWave;
-            localStorage.setItem('wms_waves', JSON.stringify(waves));
-            
-            alert('✅ 波次完成！');
-            goBack();
+            if (currentWave.status === 'done') { alert('此波次已經完成'); return goBack(); }
+
+            const completed = pickingItems.filter(i => i.completed).length;
+            const total = pickingItems.filter(i => !i.shortage).length;
+            const shortage = pickingItems.filter(i => i.shortage).length;
+            if (completed === 0) { alert('尚未揀貨任何項目'); return; }
+            let msg = '完成波次並出貨？\n\n已揀：' + completed + '/' + total;
+            if (completed < total) msg += '\n未揀 ' + (total - completed) + ' 項會記為缺貨';
+            if (shortage > 0) msg += '\n庫存不足 ' + shortage + ' 項';
+            if (!confirm(msg)) return;
+
+            try {
+                await window.completeWaveTx(currentWave, pickingItems, window.pallets);
+                alert('✅ 波次 ' + currentWave.waveNo + ' 已完成，庫存已扣除');
+                goBack();
+            } catch (e) {
+                alert('❌ 完成波次失敗：' + e.message + '\n\n庫存與訂單都沒有變動。');
+            }
         };
-        
+
         // ========== 入庫確認 ==========
-        let inboundRecords = [];
-        
         function loadInboundRecords() {
-            // 從今日庫存中找
-            const today = new Date().toISOString().split('T')[0];
-            inboundRecords = window.pallets.filter(p => 
-                p.createdAt && p.createdAt.indexOf(today) === 0
-            );
-            
+            const today = new Date().toLocalYMD();
+            const inboundRecords = window.pallets.filter(p => window.normalizeDateValue(p.createdAt || p.inboundDate) === today);
             document.getElementById('inbound-count').innerText = inboundRecords.length + ' 筆';
-            
+
             const list = document.getElementById('inbound-list');
             if (inboundRecords.length === 0) {
                 list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-inbox"></i><p>今日尚無入庫記錄</p></div>';
                 return;
             }
-            
-            list.innerHTML = inboundRecords.map(r => `
-                <div class="list-item completed">
-                    <div class="item-row">
-                        <span class="item-location">${r.locationId}</span>
-                        <span class="item-status done">已入庫</span>
-                    </div>
-                    <div class="item-product">${r.productName}</div>
-                    <div class="item-row">
-                        <span class="item-detail">${r.palletId} | ${r.batchNo || '-'}</span>
-                        <span class="item-qty">${r.quantity}</span>
-                    </div>
-                </div>
-            `).join('');
+            list.innerHTML = inboundRecords.map(r =>
+                '<div class="list-item completed"><div class="item-row"><span class="item-location">' + esc(r.locationId) + '</span>' +
+                '<span class="item-status done">已入庫</span></div><div class="item-product">' + esc(r.productName) + '</div>' +
+                '<div class="item-row"><span class="item-detail">' + esc(r.palletId) + ' | ' + esc(r.batchNo || '-') + '</span>' +
+                '<span class="item-qty">' + esc(r.quantity) + '</span></div></div>').join('');
         }
-        
+
         window.confirmInboundScan = function() {
             const input = document.getElementById('inbound-scan');
-            const result = document.getElementById('inbound-scan-result');
             const scanned = input.value.trim();
-            
             if (!scanned) return;
-            
             const found = window.pallets.find(p => p.palletId === scanned);
-            
-            if (found) {
-                result.className = 'scan-result success';
-                result.innerText = '✓ 已存在：' + found.productName + ' @ ' + found.locationId;
-            } else {
-                result.className = 'scan-result error';
-                result.innerText = '❌ 板號不存在：' + scanned;
-            }
-            
+            if (found) setResult('inbound-scan-result', true, '✓ 已存在：' + found.productName + ' @ ' + found.locationId);
+            else setResult('inbound-scan-result', false, '❌ 板號不存在：' + scanned);
             input.value = '';
             input.focus();
-            if (navigator.vibrate) navigator.vibrate(found ? 100 : [100, 50, 100]);
         };
-        
+
         // ========== 調度執行 ==========
         let dispatchOrders = [];
         let currentDispatch = null;
-        let dispatchItems = [];
-        
-        function loadDispatchOrders() {
-            // 從 localStorage 讀取調度分析結果
-            const analysis = JSON.parse(localStorage.getItem('wms_dispatch_analysis') || '[]');
-            dispatchOrders = analysis;
-            
+
+        async function loadDispatchOrders() {
             const select = document.getElementById('dispatch-order-select');
-            select.innerHTML = '<option value="">-- 請選擇 --</option>';
-            
-            dispatchOrders.forEach((item, idx) => {
-                const ops = (item.partialMerges ? item.partialMerges.reduce((s, m) => s + m.sources.length, 0) : 0) +
-                           (item.isolatedMoves ? item.isolatedMoves.length : 0);
-                select.innerHTML += `<option value="${idx}">工單 #${String(idx+1).padStart(3,'0')} - ${item.name} (${ops}項)</option>`;
-            });
+            select.innerHTML = '<option value="">載入中...</option>';
+            try {
+                const snap = await db.collection('dispatchOrders').get();
+                dispatchOrders = snap.docs.map(d => Object.assign({ id: d.id }, d.data()))
+                    .filter(o => o.status !== 'completed' && (o.operations || []).length > 0);
+                dispatchOrders.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+                select.innerHTML = '<option value="">-- 請選擇 --</option>' + dispatchOrders.map(o =>
+                    '<option value="' + esc(o.id) + '">' + esc(o.orderNo || o.id) + ' - ' + esc(o.productName || '') +
+                    ' (' + (o.completedOps || []).length + '/' + o.operations.length + ')</option>').join('');
+            } catch (e) {
+                console.error(e);
+                select.innerHTML = '<option value="">載入失敗：' + esc(e.message) + '</option>';
+            }
         }
-        
-        window.loadDispatchOrder = function() {
-            const idx = parseInt(document.getElementById('dispatch-order-select').value);
-            if (isNaN(idx) || idx < 0) {
+
+        window.loadDispatchOrder = async function() {
+            const id = document.getElementById('dispatch-order-select').value;
+            if (!id) {
                 document.getElementById('dispatch-scan-area').style.display = 'none';
                 document.getElementById('dispatch-actions').style.display = 'none';
                 return;
             }
-            
-            currentDispatch = dispatchOrders[idx];
-            dispatchItems = [];
-            
-            // 合併操作
-            if (currentDispatch.partialMerges) {
-                currentDispatch.partialMerges.forEach((g, gIdx) => {
-                    g.sources.forEach((src, sIdx) => {
-                        dispatchItems.push({
-                            id: 'merge-' + gIdx + '-' + sIdx,
-                            type: '合併',
-                            from: src.location,
-                            palletId: src.palletId || '',
-                            qty: src.qty,
-                            to: g.keep.location,
-                            completed: false
-                        });
-                    });
-                });
-            }
-            
-            // 移位操作
-            if (currentDispatch.isolatedMoves) {
-                currentDispatch.isolatedMoves.forEach((m, mIdx) => {
-                    dispatchItems.push({
-                        id: 'move-' + mIdx,
-                        type: '移位',
-                        from: m.from,
-                        palletId: m.palletId || '',
-                        qty: m.qty,
-                        to: m.toSlot,
-                        completed: false
-                    });
-                });
-            }
-            
+            const snap = await db.collection('dispatchOrders').doc(id).get();
+            if (!snap.exists) { alert('工單已不存在'); return loadDispatchOrders(); }
+            currentDispatch = Object.assign({ id: snap.id }, snap.data());
             renderDispatchList();
             document.getElementById('dispatch-scan-area').style.display = 'block';
             document.getElementById('dispatch-actions').style.display = 'block';
             document.getElementById('dispatch-scan').focus();
         };
-        
+
         function renderDispatchList() {
+            const ops = currentDispatch ? currentDispatch.operations || [] : [];
+            const done = currentDispatch ? currentDispatch.completedOps || [] : [];
+            document.getElementById('dispatch-progress').innerText = done.length + '/' + ops.length;
             const list = document.getElementById('dispatch-list');
-            const completed = dispatchItems.filter(i => i.completed).length;
-            document.getElementById('dispatch-progress').innerText = completed + '/' + dispatchItems.length;
-            
-            if (dispatchItems.length === 0) {
+            if (ops.length === 0) {
                 list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-clipboard-list"></i><p>無調度項目</p></div>';
                 return;
             }
-            
-            list.innerHTML = dispatchItems.map(item => {
-                const cls = item.completed ? 'completed' : '';
-                const status = item.completed ? '<span class="item-status done">✓ 完成</span>' :
-                              '<span class="item-status pending">' + item.type + '</span>';
-                return `
-                    <div class="list-item ${cls}">
-                        <div class="item-row">
-                            <span class="item-location">${item.from}</span>
-                            ${status}
-                        </div>
-                        <div class="item-product">${item.palletId || '-'} → ${item.to}</div>
-                        <div class="item-row">
-                            <span class="item-detail">${item.type}</span>
-                            <span class="item-qty">${item.qty}</span>
-                        </div>
-                    </div>
-                `;
+            list.innerHTML = ops.map(op => {
+                const completed = done.indexOf(op.id) >= 0;
+                const status = completed ? '<span class="item-status done">✓ 完成</span>' :
+                    '<span class="item-status pending">' + esc(op.type) + '</span>';
+                return '<div class="list-item ' + (completed ? 'completed' : '') + '">' +
+                    '<div class="item-row"><span class="item-location">' + esc(op.from) + '</span>' + status + '</div>' +
+                    '<div class="item-product">' + esc(op.palletId || '-') + ' → ' + esc(op.to) + '</div>' +
+                    '<div class="item-row"><span class="item-detail">' + esc(op.reason || op.type) + '</span>' +
+                    '<span class="item-qty">' + esc(op.qty) + '</span></div></div>';
             }).join('');
         }
-        
-        window.confirmDispatchScan = function() {
+
+        // 合併的目標板：優先用文件 ID；舊工單沒有時，在目標儲位找同品名/規格/批號的一板
+        async function resolveMergeTarget(op, sourceRef) {
+            if (op.toDocId || op.toPalletId) return window.resolvePalletRef(op.toDocId, op.toPalletId, op.to);
+            const src = (await sourceRef.get()).data() || {};
+            const candidates = window.pallets.filter(p => p.locationId === op.to && p.id !== sourceRef.id &&
+                p.productName === src.productName && (p.spec || '') === (src.spec || '') && (p.batchNo || '') === (src.batchNo || ''));
+            if (candidates.length !== 1) throw new Error('目標儲位 ' + op.to + ' 找不到唯一的合併目標，請在電腦確認');
+            return db.collection('pallets').doc(candidates[0].id);
+        }
+
+        window.confirmDispatchScan = async function() {
             const input = document.getElementById('dispatch-scan');
-            const result = document.getElementById('dispatch-scan-result');
             const scanned = input.value.trim();
-            
-            if (!scanned) return;
-            
-            const found = dispatchItems.find(i => !i.completed && 
-                (i.palletId === scanned || i.from === scanned));
-            
-            if (!found) {
-                result.className = 'scan-result error';
-                result.innerText = '❌ 找不到：' + scanned;
+            if (!scanned || !currentDispatch) return;
+            const done = currentDispatch.completedOps || [];
+            const op = (currentDispatch.operations || []).find(o => done.indexOf(o.id) < 0 &&
+                (o.palletId === scanned || o.from === scanned));
+            if (!op) {
+                setResult('dispatch-scan-result', false, '❌ 找不到：' + scanned);
                 input.select();
                 return;
             }
-            
-            found.completed = true;
-            
-            result.className = 'scan-result success';
-            result.innerText = '✓ ' + found.from + ' → ' + found.to;
-            
+
+            try {
+                // 與桌機相同的交易：確認棧板仍在、更新儲位或合併數量、寫異動記錄
+                const sourceRef = await window.resolvePalletRef(op.docId, op.palletId, op.from);
+                if (op.type === '合併' || op.type === 'merge') {
+                    const targetRef = await resolveMergeTarget(op, sourceRef);
+                    await window.mergePalletsConfirm(sourceRef, targetRef, { note: '手機調度工單 ' + (currentDispatch.orderNo || '') });
+                } else {
+                    await window.movePalletTx(sourceRef, op.to, { note: '手機調度工單 ' + (currentDispatch.orderNo || '') + (op.reason ? '：' + op.reason : '') });
+                }
+                await db.collection('dispatchOrders').doc(currentDispatch.id).update({
+                    completedOps: FieldValue.arrayUnion(op.id),
+                    status: 'in_progress'
+                });
+                currentDispatch.completedOps = done.concat([op.id]);
+                setResult('dispatch-scan-result', true, '✓ ' + op.type + '：' + op.from + ' → ' + op.to);
+            } catch (e) {
+                console.error(e);
+                setResult('dispatch-scan-result', false, '❌ ' + e.message);
+                return;
+            }
             renderDispatchList();
             input.value = '';
             input.focus();
-            if (navigator.vibrate) navigator.vibrate(100);
         };
-        
-        window.completeDispatchOrder = function() {
-            const completed = dispatchItems.filter(i => i.completed).length;
-            
-            if (completed === 0) {
-                alert('尚未執行任何操作');
-                return;
+
+        window.completeDispatchOrder = async function() {
+            const ops = currentDispatch ? currentDispatch.operations || [] : [];
+            const done = currentDispatch ? currentDispatch.completedOps || [] : [];
+            if (done.length === 0) { alert('尚未執行任何操作'); return; }
+            if (!confirm('完成工單？\n\n已執行：' + done.length + '/' + ops.length)) return;
+            try {
+                await db.collection('dispatchOrders').doc(currentDispatch.id).update({
+                    status: done.length >= ops.length ? 'completed' : 'partial',
+                    completedAt: new Date().toISOString()
+                });
+                alert('✅ 工單完成！');
+                goBack();
+            } catch (e) {
+                alert('❌ 更新失敗：' + e.message);
             }
-            
-            if (!confirm(`完成工單？\n\n已執行：${completed}/${dispatchItems.length}`)) return;
-            
-            alert('✅ 工單完成！');
-            goBack();
         };
-        
+
         // ========== 庫存快查 ==========
         window.doInventoryQuery = function() {
             const input = document.getElementById('query-input');
             const result = document.getElementById('query-result');
             const keyword = input.value.trim().toLowerCase();
-            
             if (!keyword) return;
-            
-            const matches = window.pallets.filter(p => 
+
+            const matches = window.pallets.filter(p =>
                 (p.productName && p.productName.toLowerCase().includes(keyword)) ||
                 (p.palletId && p.palletId.toLowerCase().includes(keyword)) ||
                 (p.batchNo && p.batchNo.toLowerCase().includes(keyword))
             );
-            
             if (matches.length === 0) {
-                result.innerHTML = '<div class="empty-state"><i class="fa-solid fa-search"></i><p>找不到：' + keyword + '</p></div>';
+                result.innerHTML = '<div class="empty-state"><i class="fa-solid fa-search"></i><p>找不到：' + esc(keyword) + '</p></div>';
                 return;
             }
-            
-            // 按品名分組
             const grouped = {};
             matches.forEach(p => {
-                const key = p.productName;
+                const key = p.productName + '|' + (p.spec || '');
                 if (!grouped[key]) grouped[key] = { name: p.productName, spec: p.spec, items: [] };
                 grouped[key].items.push(p);
             });
-            
-            result.innerHTML = Object.values(grouped).map(g => `
-                <div class="result-card">
-                    <div class="result-product">${g.name}</div>
-                    <div class="result-spec">${g.spec || ''}</div>
-                    ${g.items.map(p => `
-                        <div class="result-row">
-                            <span class="result-loc">${p.locationId}</span>
-                            <span class="result-qty">${p.quantity} 件</span>
-                        </div>
-                    `).join('')}
-                </div>
-            `).join('');
+            result.innerHTML = Object.values(grouped).map(g =>
+                '<div class="result-card"><div class="result-product">' + esc(g.name) + '</div><div class="result-spec">' + esc(g.spec || '') + '</div>' +
+                g.items.map(p => '<div class="result-row"><span class="result-loc">' + esc(p.locationId) + '</span>' +
+                    '<span class="result-qty">' + esc(p.quantity) + ' 件' + (p.expDate ? ' · ' + esc(p.expDate) : '') + '</span></div>').join('') +
+                '</div>').join('');
         };
-        
-        // Enter 鍵觸發
+
         document.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 const active = document.activeElement;
@@ -1040,6 +967,7 @@
                 if (active.id === 'inbound-scan') confirmInboundScan();
                 if (active.id === 'dispatch-scan') confirmDispatchScan();
                 if (active.id === 'query-input') doInventoryQuery();
+                if (active.id === 'login-pwd') doLogin();
             }
         });
     </script>

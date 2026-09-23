@@ -3,15 +3,8 @@
 // 從原始 ES module 手動轉換
 // ============================================================
 
-// Firebase 配置
-const firebaseConfig = { 
-    apiKey: "AIzaSyBEWzyRMJQirGbh28ANkE6aN42GzUBuw2s", 
-    authDomain: "terrywms-2345f.firebaseapp.com", 
-    projectId: "terrywms-2345f", 
-    storageBucket: "terrywms-2345f.firebasestorage.app", 
-    messagingSenderId: "75589714942", 
-    appId: "1:75589714942:web:3a7f723c3d1449df78f6af" 
-};
+// Firebase 配置（js/shared/firebase-config.js）
+const firebaseConfig = window.FIREBASE_CONFIG;
 
 // 初始化
 const app = firebase.initializeApp(firebaseConfig);
@@ -36,14 +29,33 @@ window.doc = function(a, b, c) {
     if (c !== undefined) return a.collection(b).doc(c);
     return a.doc(b);
 };
-window.addDoc = function(r, d) { return r.add(d); };
+window.addDoc = function(r, d) { return r.add(normalizeForWrite(r, d)); };
 window.getDoc = function(r) { return r.get(); };
-window.setDoc = function(r, d, o) { return r.set(d, o || {}); };
+window.setDoc = function(r, d, o) { return r.set(normalizeForWrite(r, d), o || {}); };
 window.getDocs = function(r) { return r.get(); };
 window.updateDoc = function(r, d) { return r.update(d); };
 window.deleteDoc = function(r) { return r.delete(); };
 window.writeBatch = function(d) { return d.batch(); };
-window.query = function(r) { return r; };
+// 將 where / orderBy / limit 條件真正套用到 compat 查詢上
+// （舊版直接回傳 r，所有條件都被忽略，會讀到整個 collection）
+window.query = function(r) {
+    var q = r;
+    for (var i = 1; i < arguments.length; i++) {
+        var c = arguments[i];
+        if (!c) continue;
+        if (c._t === 'w') {
+            if (c.v === undefined) throw new Error('查詢條件 ' + c.f + ' 的值是 undefined');
+            q = q.where(c.f, c.o, c.v);
+        } else if (c._t === 'o') {
+            q = q.orderBy(c.f, c.d || 'asc');
+        } else if (c._t === 'l') {
+            q = q.limit(c.n);
+        } else {
+            throw new Error('不支援的查詢條件');
+        }
+    }
+    return q;
+};
 window.where = function(f, o, v) { return { _t: 'w', f: f, o: o, v: v }; };
 window.orderBy = function(f, d) { return { _t: 'o', f: f, d: d }; };
 window.limit = function(n) { return { _t: 'l', n: n }; };
@@ -75,12 +87,32 @@ window.parseLocationId = function(locId) {
     };
 };
 
+// 登入成功後才執行的初始化（安全規則要求登入才能讀資料，所以不能在開頁時就載入）
+window._loginHooks = [];
+window._loggedIn = false;
+window.onLogin = function(fn) {
+    window._loginHooks.push(fn);
+    if (window._loggedIn) {
+        try { fn(); } catch (e) { console.error('登入後初始化失敗:', e); }
+    }
+};
+
 // 認證狀態監聽
-auth.onAuthStateChanged(function(user) {
+auth.onAuthStateChanged(async function(user) {
     if (user) {
+        // 先確認帳號已開通且未停用，才進入系統並開始監聽資料
+        if (window.setCurrentUser) {
+            var appUser = await window.setCurrentUser(user.email);
+            if (!appUser) return;
+        }
+        if (window.warmDocNoPools) window.warmDocNoPools();
+        document.getElementById('login-error').classList.add('hidden');
         document.getElementById('view-login').classList.add('hidden');
-        if (window.setCurrentUser) window.setCurrentUser(user.email);
         initAllListeners();
+        window._loggedIn = true;
+        window._loginHooks.forEach(function(fn) {
+            try { fn(); } catch (e) { console.error('登入後初始化失敗:', e); }
+        });
     } else {
         document.getElementById('view-login').classList.remove('hidden');
         window.currentUser = null;
@@ -113,7 +145,6 @@ window.logoutSystem = function() { auth.signOut(); location.reload(); };
 
 // 全域變數
 let currentInventory = [];
-let currentOrders = [];
 
 // 資料監聽
 function initAllListeners() {
@@ -126,7 +157,7 @@ function initAllListeners() {
         var inventoryList = [];
 
         snapshot.forEach(function(d) {
-            var data = d.data();
+            var data = window.normalizeStockRecord(d.data());
             if (data.quantity > 0 || data.totalWeight > 0) {
                 var item = Object.assign({ id: d.id }, data);
                 currentInventory.push(item);
@@ -229,14 +260,6 @@ function initAllListeners() {
         }
     });
 
-    // 監聽 shippingOrders
-    db.collection("shippingOrders").onSnapshot(function(snapshot) {
-        currentOrders = [];
-        snapshot.forEach(function(d) {
-            currentOrders.push(d.data());
-        });
-        if (window.renderShippingListWithPicking) window.renderShippingListWithPicking();
-    });
             // 刷新庫存表格以顯示寄庫資訊
             window.refreshInventoryTableWithConsignment = function() {
                 const tbody = document.getElementById('inventory-list-body');
@@ -532,7 +555,7 @@ function initAllListeners() {
             tbody.innerHTML = html || '<tr><td colspan="4" class="text-center text-emerald-400 py-4"><i class="fa-solid fa-check-circle mr-1"></i>目前沒有效期警示</td></tr>';
         }
 
-        window.currentInventory = () => currentInventory; window.currentOrders = () => currentOrders; window.currentPallets = () => currentInventory;
+        window.currentInventory = () => currentInventory; window.currentPallets = () => currentInventory;
         Object.defineProperty(window, 'inventory', {
             get: function() { return currentInventory; }
         });
@@ -542,11 +565,5 @@ function initAllListeners() {
             });
         };
 
-// 暴露全域變數
-window.currentInventory = function() { return currentInventory; };
-window.currentOrders = function() { return currentOrders; };
-window.currentPallets = function() { return currentInventory; };
-Object.defineProperty(window, 'inventory', { get: function() { return currentInventory; } });
-window.fetchInventory = function() { return new Promise(function(r) { setTimeout(r, 100); }); };
 
 console.log('✅ Firebase 初始化完成');
