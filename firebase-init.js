@@ -145,7 +145,6 @@ window.logoutSystem = function() { auth.signOut(); location.reload(); };
 
 // 全域變數
 let currentInventory = [];
-let currentOrders = [];
 
 // 資料監聽
 function initAllListeners() {
@@ -261,14 +260,6 @@ function initAllListeners() {
         }
     });
 
-    // 監聽 shippingOrders
-    db.collection("shippingOrders").onSnapshot(function(snapshot) {
-        currentOrders = [];
-        snapshot.forEach(function(d) {
-            currentOrders.push(d.data());
-        });
-        if (window.renderShippingListWithPicking) window.renderShippingListWithPicking();
-    });
             // 刷新庫存表格以顯示寄庫資訊
             window.refreshInventoryTableWithConsignment = function() {
                 const tbody = document.getElementById('inventory-list-body');
@@ -564,7 +555,7 @@ function initAllListeners() {
             tbody.innerHTML = html || '<tr><td colspan="4" class="text-center text-emerald-400 py-4"><i class="fa-solid fa-check-circle mr-1"></i>目前沒有效期警示</td></tr>';
         }
 
-        window.currentInventory = () => currentInventory; window.currentOrders = () => currentOrders; window.currentPallets = () => currentInventory;
+        window.currentInventory = () => currentInventory; window.currentPallets = () => currentInventory;
         Object.defineProperty(window, 'inventory', {
             get: function() { return currentInventory; }
         });

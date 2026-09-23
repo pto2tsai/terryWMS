@@ -1607,115 +1607,7 @@
                 </div>
             </div>
 
-            <div id="view-shipping" class="view-panel h-full hidden flex flex-col">
-                <!-- 頂部工具列 -->
-                <div class="h-14 border-b border-slate-800 flex items-center px-4 gap-4 bg-slate-900/50">
-                    <input type="file" id="excelInput" accept=".xlsx" class="hidden" onchange="handleExcelImport(event)">
-                    <button onclick="document.getElementById('excelInput').click()" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-500 shadow-lg flex items-center">
-                        <i class="fa-solid fa-file-excel mr-2"></i>匯入訂單
-                    </button>
-                    <button onclick="downloadTemplate('order')" class="text-slate-400 text-xs hover:text-white underline">範本</button>
-                    <button onclick="openManualOrderModal()" class="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center">
-                        <i class="fa-solid fa-plus mr-2"></i>手動新增
-                    </button>
-                    <button onclick="exportShippingResult()" class="bg-slate-600 text-white px-3 py-1.5 rounded text-xs font-bold ml-2">
-                        📤 匯出ERP
-                    </button>
-                    <div class="flex items-center gap-2 border-l border-slate-700 pl-4">
-                        <label class="text-xs text-slate-400">物流:</label>
-                        <select id="filter-carrier" class="bg-slate-800 border border-slate-700 text-white text-xs rounded px-2 py-1.5" onchange="filterShippingList()">
-                            <option value="ALL">全部</option>
-                        </select>
-                    </div>
-                    <div class="text-xs text-slate-400 ml-auto">
-                        待出貨: <span class="text-white font-bold" id="order-count">0</span> 單
-                    </div>
-                </div>
-
-                <!-- 主要內容區 -->
-                <div class="flex-1 flex overflow-hidden">
-                    <!-- 左側：訂單列表 -->
-                    <div class="w-1/2 border-r border-slate-700 flex flex-col">
-                        <div class="p-2 bg-slate-800 border-b border-slate-700">
-                            <div class="text-sm font-bold text-white"><i class="fa-solid fa-list-check mr-2"></i>訂單列表</div>
-                        </div>
-                        <div class="flex-1 overflow-auto p-2">
-                            <table class="w-full dense-table text-left">
-                                <thead>
-                                    <tr>
-                                        <th>物流</th>
-                                        <th>單號</th>
-                                        <th>客戶</th>
-                                        <th>品項</th>
-                                        <th>數量</th>
-                                        <th>狀態</th>
-                                        <th class="text-right">操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="shipping-list-body"></tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- 右側：揀貨明細 -->
-                    <div class="w-1/2 flex flex-col bg-slate-900/50">
-                        <div class="p-2 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
-                            <div class="text-sm font-bold text-white"><i class="fa-solid fa-route mr-2 text-green-400"></i>揀貨明細</div>
-                            <button onclick="printOrderPickingSlip()" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs font-bold">
-                                <i class="fa-solid fa-print mr-1"></i>列印揀貨單
-                            </button>
-                        </div>
-                        <div id="order-picking-detail" class="flex-1 overflow-auto p-3">
-                            <div class="text-center text-slate-500 py-20">
-                                <i class="fa-solid fa-hand-pointer text-4xl mb-4"></i>
-                                <div>請從左側選擇訂單查看揀貨明細</div>
-                            </div>
-                        </div>
-                        <div id="order-picking-actions" class="p-3 border-t border-slate-700 hidden">
-                            <button onclick="confirmOrderPicking()" class="w-full py-3 bg-green-600 hover:bg-green-500 text-white rounded font-bold">
-                                <i class="fa-solid fa-check mr-2"></i>確認出貨完成
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- 手動新增訂單 Modal -->
-            <div id="modal-manual-order" class="fixed inset-0 z-50 bg-black/80 hidden flex items-center justify-center">
-                <div class="bg-slate-800 border border-slate-600 rounded-lg p-6 w-96">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-white font-bold"><i class="fa-solid fa-plus mr-2"></i>手動新增出貨單</h3>
-                        <button onclick="closeManualOrderModal()" class="text-slate-400 hover:text-white">&times;</button>
-                    </div>
-                    <div class="space-y-3">
-                        <div>
-                            <label class="text-xs text-slate-400">客戶名稱</label>
-                            <input type="text" id="manual-order-customer" class="scan-input" placeholder="客戶名稱">
-                        </div>
-                        <div>
-                            <label class="text-xs text-slate-400">品名</label>
-                            <input type="text" id="manual-order-product" class="scan-input" placeholder="品名" oninput="searchProductForOrder()">
-                            <div id="order-product-suggestions" class="max-h-24 overflow-y-auto mt-1"></div>
-                        </div>
-                        <div>
-                            <label class="text-xs text-slate-400">規格</label>
-                            <input type="text" id="manual-order-spec" class="scan-input" placeholder="規格" readonly>
-                        </div>
-                        <div>
-                            <label class="text-xs text-slate-400">出貨數量</label>
-                            <input type="number" id="manual-order-qty" class="scan-input text-center text-xl font-bold text-yellow-400" placeholder="0">
-                        </div>
-                        <div>
-                            <label class="text-xs text-slate-400">物流商</label>
-                            <input type="text" id="manual-order-carrier" class="scan-input" placeholder="如：黑貓、新竹物流">
-                        </div>
-                        <button onclick="createManualOrder()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold mt-4">
-                            <i class="fa-solid fa-plus mr-2"></i>建立出貨單
-                        </button>
-                    </div>
-                </div>
-            </div>
-
             <div id="view-move" class="view-panel h-full hidden flex flex-col p-2 gap-2">
                 <!-- 頂部標題列 -->
                 <div class="flex items-center justify-between bg-gradient-to-r from-blue-900 to-indigo-900 border border-blue-600 px-3 py-2 rounded-lg">
@@ -1889,7 +1781,30 @@
                     </div>
                 </div>
             </div>
-            <div id="view-stocktake" class="view-panel h-full hidden p-6"><div class="flex justify-between items-center mb-6"><h3 class="text-white font-bold">盤點任務</h3><button class="px-4 py-2 bg-blue-600 text-white rounded text-sm font-bold shadow-lg">建立盤點單</button></div><div class="glass-panel p-5 border border-slate-600 relative opacity-50"><div class="text-center py-10 text-slate-500">尚無任務</div></div></div>
+            <div id="view-stocktake" class="view-panel h-full hidden flex flex-col p-4">
+                <div class="flex flex-wrap items-center gap-2 mb-3">
+                    <h3 class="text-white font-bold mr-2"><i class="fa-solid fa-clipboard-check mr-2 text-blue-400"></i>庫存盤點</h3>
+                    <select id="st-zone" class="scan-input text-sm w-44"><option value="">選擇區域</option></select>
+                    <span class="text-slate-400 text-xs">排</span>
+                    <input id="st-row-from" type="number" min="1" class="scan-input text-sm w-16" placeholder="從">
+                    <span class="text-slate-500">~</span>
+                    <input id="st-row-to" type="number" min="1" class="scan-input text-sm w-16" placeholder="到">
+                    <button onclick="loadStocktake()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold">載入盤點清單</button>
+                    <button onclick="printStocktakeSheet()" class="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-white rounded text-sm"><i class="fa-solid fa-print mr-1"></i>列印盤點表</button>
+                    <div id="st-summary" class="text-slate-300 text-sm ml-auto"></div>
+                </div>
+                <div class="glass-panel flex-1 overflow-auto">
+                    <table class="w-full dense-table text-sm">
+                        <thead><tr><th class="text-left">儲位</th><th class="text-left">板號</th><th class="text-left">品名</th><th class="text-left">規格</th><th class="text-left">批號／效期</th><th class="text-right">帳面</th><th class="text-right">實盤</th><th class="text-right">差異</th></tr></thead>
+                        <tbody id="st-list"><tr><td colspan="8" class="text-center text-slate-500 py-10">請選擇區域並載入</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="flex gap-2 mt-3">
+                    <button onclick="fillStocktakeBook()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">未盤的照帳面</button>
+                    <div class="text-slate-500 text-xs self-center">沒輸入實盤數的板不會調整；只有與帳面不同的板會寫入盤點調整記錄。</div>
+                    <button onclick="submitStocktake()" class="ml-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-bold">送出盤點</button>
+                </div>
+            </div>
 
             <!-- 外部倉庫管理 -->
 
@@ -4809,5 +4724,6 @@
     <script src="js/16-rental-consignment.js"></script>
     <script src="js/17-v56-patch.js"></script>
     <script src="js/18-data-migration.js"></script>
+    <script src="js/19-stocktake.js"></script>
 </body>
 </html>

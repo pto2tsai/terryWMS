@@ -336,17 +336,6 @@
             `;
         }
 
-        function exportShippingResult() {
-            if(!window.currentOrders || window.currentOrders().length === 0) { alert("無出貨資料可匯出"); return; }
-            var data = window.currentOrders().map(function(o) {
-                return { '單號': o.orderId, '客戶': o.customer, '物流': o.carrier, '狀態': o.status, '品項數': (o.items || []).length };
-            });
-            var ws = XLSX.utils.json_to_sheet(data);
-            var wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Shipping_Result");
-            XLSX.writeFile(wb, "WMS_Shipping_Result_" + new Date().toLocalYMD() + ".xlsx");
-        }
-
         function openAnalytics(type) { document.getElementById('analytics-title').innerText = type==='Total'?'庫存總覽':type; document.getElementById('modal-analytics').classList.remove('hidden'); }
         function closeAnalytics() { document.getElementById('modal-analytics').classList.add('hidden'); }
 
@@ -1202,10 +1191,6 @@
             printWindow.document.close();
         }
 
-        function handleExcelImport(e) { const file = e.target.files[0]; const reader = new FileReader(); reader.onload = function(evt) { const wb = XLSX.read(evt.target.result, {type:'array'}); const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); processOrders(json); }; reader.readAsArrayBuffer(file); e.target.value = ''; }
-        async function processOrders(json) { const batch = window.writeBatch(window.db); const orders = {}; json.forEach(row => { const oid = row['單號']||row['OrderNo']; if(!oid) return; if(!orders[oid]) orders[oid] = { orderId:oid, customer:row['客戶']||'Unknown', carrier:row['物流']||'自取', status:'Pending', items:[] }; orders[oid].items.push({ productId:row['品號'], productName:row['品名'], qty:row['數量'], spec:row['規格']||'' }); }); Object.values(orders).forEach(o => batch.set(window.doc(window.db, "shippingOrders", o.orderId), o)); await batch.commit(); alert("訂單匯入成功！"); }
-        function renderShippingList() { renderShippingListWithPicking(); }
-        function filterShippingList() { renderShippingListWithPicking(); }
         function handleStockImport(e) {
             const file = e.target.files[0];
             const reader = new FileReader();

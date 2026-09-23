@@ -427,6 +427,7 @@ console.log('✅ WMS 工具函數庫已載入');
             if(viewId === 'wave-picking') { loadWavesFromFirebase(); }
             if(viewId === 'product-master') { loadProductMasterFromFirebase(); }
             if(viewId === 'external-warehouse') { loadExternalStock(); updateExtWarehouseFilter(); }
+            if(viewId === 'stocktake' && window.initStocktakePage) { window.initStocktakePage(); }
             if(viewId === 'consignment') { if(typeof window.loadConsignmentsFromFirebase === 'function') window.loadConsignmentsFromFirebase(); }
             if(viewId === 'rental-settings') { if(typeof window.loadRentalSettingsFromFirebase === 'function') window.loadRentalSettingsFromFirebase(); }
             if(viewId === 'dev-tools') { if(typeof window.refreshDevToolsStats === 'function') window.refreshDevToolsStats(); if(typeof window.initDevToolsBackup === 'function') window.initDevToolsBackup(); }
