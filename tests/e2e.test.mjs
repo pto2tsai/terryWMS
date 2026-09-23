@@ -8,7 +8,10 @@ const FB=path.join(REPO,'tests/node_modules/firebase10/')+'/';
 const PROJECT='terrywms-2345f';
 // static server for repo
 const srv = http.createServer((req,res)=>{ const p=path.join(REPO, decodeURIComponent(req.url.split('?')[0]).replace(/^\/$/,'/index.html'));
-  fs.readFile(p,(e,b)=>{ if(e){res.writeHead(404);return res.end();} res.writeHead(200,{'content-type': p.endsWith('.js')?'text/javascript':'text/html; charset=utf-8'}); res.end(b);});}).listen(8765);
+  fs.readFile(p,(e,b)=>{ if(e){res.writeHead(404);return res.end();}
+    // 手機版：由測試伺服器注入模擬器設定（用 route 攔截文件會讓 Chromium 擋掉跨來源請求）
+    if (p.endsWith('mobile.html')) b = Buffer.from(String(b).replace("const auth = firebase.auth();","const auth = firebase.auth(); db.useEmulator('127.0.0.1',8080); auth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true});"));
+    res.writeHead(200,{'content-type': p.endsWith('.js')?'text/javascript':'text/html; charset=utf-8'}); res.end(b);});}).listen(8765);
 const env = await initializeTestEnvironment({ projectId: PROJECT, firestore: { rules: fs.readFileSync(path.join(REPO,'firestore.rules'),'utf8'), host:'127.0.0.1', port:8080 } });
 const today = new Date(); const ds = today.getFullYear()+String(today.getMonth()+1).padStart(2,'0')+String(today.getDate()).padStart(2,'0');
 await env.withSecurityRulesDisabled(async c => { const d=c.firestore();
@@ -26,6 +29,10 @@ await env.withSecurityRulesDisabled(async c => { const d=c.firestore();
   await setDoc(doc(d,'inventoryLogs','OLD1'),{type:'move',timestamp:Timestamp.fromDate(new Date(2026,0,2,7,30)),palletId:'PX'});
   await setDoc(doc(d,'waves','WP'),{waveNo:'WP1',status:'pending',orders:[{id:'SO2',orderNo:'SO2'}]});
   await setDoc(doc(d,'salesOrders','SO2'),{orderNo:'SO2',status:'inWave',waveNo:'WP1'});
+  await setDoc(doc(d,'waves','WM'),{waveNo:'WM1',status:'pending',logistics:'黑貓',totalQty:3,createdAt:'2026-09-23T01:00:00Z',summary:[{productName:'花枝',spec:'M',totalQty:3,orders:[]}]});
+  await setDoc(doc(d,'dispatchOrders','DO1'),{orderNo:'DSP-1',productName:'花枝',status:'pending',completedOps:[],createdAt:'2026-09-23T01:00:00Z',operations:[
+    {id:'op-0',type:'移位',from:'K-E-02-1F',palletId:'PY',docId:'PY',to:'K-F-05-2F',qty:5,reason:'孤立板'},
+    {id:'op-1',type:'合併',from:'K-E-01-1F',palletId:'PX',docId:'PX',to:'K-F-05-2F',toDocId:'PY',toPalletId:'PY',qty:8}]});
   await setDoc(doc(d,'externalStock','E1'),{warehouseId:'W1',productName:'透抽',spec:'L',batchNo:'X',company:'崇文',quantity:20});
   await setDoc(doc(d,'waves','WV'),{waveNo:'WV1',status:'picking'});
   await setDoc(doc(d,'salesOrders','SO1'),{orderNo:'SO1',status:'inWave'});
@@ -54,6 +61,23 @@ async function openAs(email){
   await page.waitForTimeout(1500);
   return {page, errs};
 }
+
+async function openMobileAs(email){
+  const ctx = await browser.newContext({ viewport:{width:390,height:844} }); const page = await ctx.newPage(); const errs=[];
+  page.on('pageerror', e=>errs.push(e.message));
+  await ctx.route('**/*', r=>{ const u=r.request().url();
+    const m=u.match(/firebasejs\/10\.7\.1\/(firebase-[a-z]+-compat\.js)/); if(m) return r.fulfill({body:fs.readFileSync(FB+m[1]),contentType:'text/javascript'});
+    if(u.startsWith('http://localhost:8765')||u.startsWith('http://127.0.0.1')) return r.continue();
+    return r.fulfill({body:'',contentType:'text/css'}); });
+  await page.addInitScript(()=>{ window.__alerts=[]; window.alert=m=>window.__alerts.push(String(m)); window.confirm=()=>true; });
+  await page.goto('http://localhost:8765/mobile.html');
+  await page.waitForFunction(()=>typeof window.doLogin==='function');
+  await page.fill('#login-email',email); await page.fill('#login-pwd','pass1234');
+  await page.evaluate(()=>window.doLogin());
+  await page.waitForTimeout(2500);
+  return {page, errs};
+}
+
 let pass=0, fail=0; const ok=(name,cond,extra='')=>{ if(cond){pass++;console.log('✔',name);} else {fail++;console.log('✘',name,extra);} };
 const admin = async fn => { let out; await env.withSecurityRulesDisabled(async c=>{ out = await fn(c.firestore()); }); return out; };
 const qty = id => admin(async d=>{ const s=await getDoc(doc(d,'pallets',id)); return s.exists()? s.data().quantity : null; });
@@ -221,6 +245,37 @@ ok('migration is idempotent (nothing left to change)', dry2.totalChanged===0, JS
 const alloc = await A.page.evaluate(()=>{ try { const labels = smartAllocateLocations([{id:'t1',productName:'測試品',spec:'S1',company:'崇文',batchNo:'Q',expiryDate:'2027-05-01',quantity:100,perPallet:40,palletCount:3}], {strategy:'smart', zones:['A','B']}); return labels.map(l=>[l.quantity,l.locationId,l.palletType, l.id||l.palletNo]); } catch(e){ return 'ERR '+e.message; } });
 ok('smart allocation runs with shared capacity (40+40+20, real locations, unique numbers)', Array.isArray(alloc) && alloc.length===3 && alloc.every(a=>a[1] && a[1]!=='OVERFLOW' && /^[IJK]-[A-H]-\d{2}-[123]F$/.test(a[1])) && new Set(alloc.map(a=>a[3])).size===3, JSON.stringify(alloc));
 
+
+// ===== 第 4 步：手機版 =====
+const MX = await openMobileAs('stranger@t.com');
+const mxErr = await MX.page.evaluate(()=>document.getElementById('login-error').innerText);
+ok('mobile: unregistered account denied', mxErr.includes('尚未開通') && !(await MX.page.evaluate(()=>!!window.currentUser)), mxErr);
+const M = await openMobileAs('op2@t.com');
+ok('mobile: operator logged in and pallets loaded', await M.page.evaluate(()=>window.currentUser && window.currentUser.role==='operator' && window.pallets.length>0));
+const mp = await M.page.evaluate(async()=>{ openPage('picking'); await new Promise(r=>setTimeout(r,1200));
+  const sel=document.getElementById('picking-wave-select'); const opts=[...sel.options].map(o=>o.value);
+  sel.value='WM'; await loadPickingWave();
+  const first = pickingItems.find(i=>!i.shortage); document.getElementById('picking-scan').value = first.palletId; await confirmPickingScan();
+  return { opts, first: first.id, progress: document.getElementById('picking-progress').innerText }; });
+const wm = await admin(async d=>(await getDoc(doc(d,'waves','WM'))).data());
+ok('mobile: loads desktop wave from Firestore and saves scan progress', mp.opts.includes('WM') && wm.completedItems.includes(mp.first) && wm.status==='picking', JSON.stringify(mp)+' '+JSON.stringify(wm.completedItems));
+const shared = await A.page.evaluate(async(first)=>{ const w=(await db.collection('waves').doc('WM').get()).data(); const list=buildWavePickingList(w, currentPallets()); return list.find(i=>i.id===first)?.completed; }, mp.first);
+ok('desktop sees the same picking item as completed (shared list builder)', shared===true);
+await M.page.evaluate(async()=>{ await completePickingWave(); });
+ok('mobile: finish picking marks wave for desktop shipment (no stock deducted)', (await admin(async d=>(await getDoc(doc(d,'waves','WM'))).data().status))==='sorting' && await qty('PX')===8 && await qty('PY')===5);
+const md = await M.page.evaluate(async()=>{ openPage('dispatch'); await new Promise(r=>setTimeout(r,1200));
+  const sel=document.getElementById('dispatch-order-select'); sel.value='DO1'; await loadDispatchOrder();
+  document.getElementById('dispatch-scan').value='PY'; await confirmDispatchScan(); const r1=document.getElementById('dispatch-scan-result').innerText;
+  await new Promise(r=>setTimeout(r,500));
+  document.getElementById('dispatch-scan').value='PX'; await confirmDispatchScan(); const r2=document.getElementById('dispatch-scan-result').innerText;
+  await completeDispatchOrder(); return [r1,r2]; });
+const pyAfter = await admin(async d=>(await getDoc(doc(d,'pallets','PY'))).data());
+const do1 = await admin(async d=>(await getDoc(doc(d,'dispatchOrders','DO1'))).data());
+ok('mobile dispatch: move then merge executed as transactions (PY at K-F-05-2F, 5+8=13, PX removed)', pyAfter.locationId==='K-F-05-2F' && pyAfter.quantity===13 && await qty('PX')===null, JSON.stringify(md)+' '+JSON.stringify([pyAfter.locationId,pyAfter.quantity]));
+ok('mobile dispatch: order progress saved and completed', do1.completedOps.length===2 && do1.status==='completed', JSON.stringify(do1.completedOps)+do1.status);
+const mlogs = await admin(async d=>(await getDocs(collection(d,'inventoryLogs'))).docs.map(x=>x.data()).filter(l=>String(l.note).includes('手機調度工單')));
+ok('mobile dispatch wrote inventory logs with operator', mlogs.length===2 && mlogs.every(l=>l.operator && l.operator!=='system'), JSON.stringify(mlogs.map(l=>[l.type,l.operator])));
+
 // T8 readonly & stranger
 const R = await openAs('ro@t.com');
 const rr = await tx(R.page,-1);
@@ -229,6 +284,6 @@ const X = await openAs('stranger@t.com');
 const xmsg = await X.page.evaluate(()=>document.getElementById('login-error').innerText);
 ok('stranger denied at login', xmsg.includes('尚未開通') && !(await X.page.evaluate(()=>!!window.currentUser)), xmsg);
 
-for (const [n,o] of [['A',A],['B',B],['R',R],['X',X],['AD',AD]]) { const e=o.errs.filter(m=>!/tailwind|Chart is not defined|Cannot redefine property: inventory|XLSX|JsBarcode/.test(m)); if(e.length) console.log('page errors',n,e.slice(0,5)); }
+for (const [n,o] of [['A',A],['B',B],['R',R],['X',X],['AD',AD],['M',M],['MX',MX]]) { const e=o.errs.filter(m=>!/tailwind|Chart is not defined|Cannot redefine property: inventory|XLSX|JsBarcode/.test(m)); if(e.length) console.log('page errors',n,e.slice(0,5)); }
 console.log(`pass ${pass} fail ${fail}`);
 await browser.close(); await env.cleanup(); srv.close(); process.exit(fail?1:0);

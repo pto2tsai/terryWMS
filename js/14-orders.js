@@ -1156,98 +1156,8 @@ window.openWaveExecute = function(waveNo) {
 };
 
 function generatePickingListV2(wave) {
-    const pickingList = [];
     const pallets = window.currentPallets ? window.currentPallets() : [];
-
-    (wave.summary || []).forEach(item => {
-        let needed = item.totalQty;
-        const productName = item.productName;
-        const spec = item.spec || '';
-
-        const matchingPallets = pallets.filter(p => {
-            const pName = p.productName || '';
-            const pSpec = p.spec || '';
-            return pName === productName && (spec === '' || pSpec.includes(spec) || spec.includes(pSpec));
-        }).sort((a, b) => {
-            const dateA = a.expDate || '9999-12-31';
-            const dateB = b.expDate || '9999-12-31';
-            return dateA.localeCompare(dateB);
-        });
-
-        matchingPallets.forEach(pallet => {
-            if (needed <= 0) return;
-
-            const available = parseInt(pallet.quantity) || 0;
-            const pick = Math.min(available, needed);
-
-            if (pick > 0) {
-                pickingList.push({
-                    id: pallet.palletId + '-' + item.productName,
-                    palletId: pallet.palletId,
-                    locationId: pallet.locationId,
-                    productName: pallet.productName,
-                    spec: pallet.spec || '',
-                    batchNo: pallet.batchNo || '',
-                    expDate: pallet.expDate || '',
-                    pickQty: pick,
-                    availableQty: available,
-                    orders: item.orders,  // 需要這個品項的訂單列表
-                    completed: false
-                });
-                needed -= pick;
-            }
-        });
-
-        if (needed > 0) {
-            pickingList.push({
-                id: 'shortage-' + item.productName,
-                palletId: '-',
-                locationId: '⚠️ 庫存不足',
-                productName: item.productName,
-                spec: item.spec || '',
-                batchNo: '',
-                pickQty: needed,
-                availableQty: 0,
-                orders: item.orders,
-                completed: false,
-                shortage: true
-            });
-        }
-    });
-
-    (wave.completedItems || []).forEach(itemId => {
-        const item = pickingList.find(p => p.id === itemId);
-        if (item) item.completed = true;
-    });
-
-    pickingList.sort(function(a, b) {
-        if (a.shortage && !b.shortage) return 1;
-        if (!a.shortage && b.shortage) return -1;
-
-        var parseLocation = function(loc) {
-            if (!loc) return { warehouse: 9, zone: 'Z', row: 99, col: 99 };
-            var parts = loc.split('-');
-            var zone = (parts[0] || 'Z').toUpperCase();
-            var warehouse = 9;
-            if (zone === 'A' || zone === 'B') warehouse = 1;
-            else if (zone === 'C' || zone === 'D') warehouse = 2;
-            return {
-                warehouse: warehouse,
-                zone: zone,
-                row: parseInt(parts[1]) || 99,
-                col: parseInt(parts[2]) || 99
-            };
-        };
-
-        var locA = parseLocation(a.locationId);
-        var locB = parseLocation(b.locationId);
-
-        if (locA.warehouse !== locB.warehouse) return locA.warehouse - locB.warehouse;
-        if (locA.zone !== locB.zone) return locA.zone.localeCompare(locB.zone);
-        if (locA.row !== locB.row) return locA.row - locB.row;
-        return locA.col - locB.col;
-    });
-
+    const pickingList = window.buildWavePickingList(wave, pallets);
     window._waveData.pickingList = pickingList;
     renderPickingListV2();
     updateWaveProgress();
@@ -1343,8 +1253,9 @@ window.confirmWaveScan = async function() {
 
     if (wave.id) {
         try {
+            // arrayUnion：手機與電腦同時揀貨時不會互相覆蓋進度
             await window.updateDoc(window.doc(window.db, 'waves', wave.id), {
-                completedItems: wave.completedItems,
+                completedItems: firebase.firestore.FieldValue.arrayUnion(found.id),
                 status: 'picking'
             });
         } catch (err) {

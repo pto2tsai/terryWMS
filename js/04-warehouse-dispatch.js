@@ -972,6 +972,7 @@
                 tasks.push({
                     taskNo: index + 1,
                     fromLocation: sug.from.locationId,
+                    fromDocId: sug.from.id || '',
                     fromPalletId: sug.from.palletId,
                     toLocation: sug.toLocation,
                     toLane: sug.toLane,
@@ -1156,8 +1157,10 @@
                 operations: previewData.tasks.map(function(t, idx) {
                     return {
                         id: 'op-' + idx,
-                        type: t.toLane ? '合併' : '移位',
+                        // 智能調度的任務都是把整板移到目標巷道的儲位
+                        type: '移位',
                         from: t.fromLocation,
+                        docId: t.fromDocId || '',
                         palletId: t.fromPalletId,
                         to: t.toLocation,
                         qty: t.quantity
@@ -1896,6 +1899,9 @@
                                 type: '合併',
                                 from: src.location,
                                 palletId: src.palletId || '',
+                                docId: src.docId || '',
+                                toDocId: group.keep.docId || '',
+                                toPalletId: group.keep.palletId || '',
                                 qty: src.qty,
                                 to: group.keep.location
                             });
@@ -1910,6 +1916,7 @@
                             type: '移位',
                             from: m.from,
                             palletId: m.palletId || '',
+                            docId: m.docId || '',
                             qty: m.qty,
                             to: m.toSlot,
                             reason: m.reason
@@ -1998,6 +2005,9 @@
                                 type: '合併',
                                 from: src.location,
                                 palletId: src.palletId || '',
+                                docId: src.docId || '',
+                                toDocId: group.keep.docId || '',
+                                toPalletId: group.keep.palletId || '',
                                 qty: src.qty,
                                 to: group.keep.location
                             });
@@ -2012,6 +2022,7 @@
                             type: '移位',
                             from: m.from,
                             palletId: m.palletId || '',
+                            docId: m.docId || '',
                             qty: m.qty,
                             to: m.toSlot,
                             reason: m.reason
