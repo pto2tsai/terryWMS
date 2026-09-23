@@ -626,11 +626,5 @@ function initAllListeners() {
             });
         };
 
-// 暴露全域變數
-window.currentInventory = function() { return currentInventory; };
-window.currentOrders = function() { return currentOrders; };
-window.currentPallets = function() { return currentInventory; };
-Object.defineProperty(window, 'inventory', { get: function() { return currentInventory; } });
-window.fetchInventory = function() { return new Promise(function(r) { setTimeout(r, 100); }); };
 
 console.log('✅ Firebase 初始化完成');
