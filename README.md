@@ -19,7 +19,7 @@
 | 檔案 | 內容 |
 |---|---|
 | firebase-config.js | Firebase 專案設定（只此一份） |
-| data-format.js | 日期／效期／數量格式統一（`normalizeDateValue`、`normalizeStockRecord`、`Date#toLocalYMD`） |
+| data-format.js | 日期／效期／數量格式統一（`normalizeDateValue`、`normalizeStockRecord`、`Date#toLocalYMD`）；文字安全（讀寫 Firestore 時 `< > " ' ` \` 轉全形，防 XSS） |
 | stock-core.js | 庫存交易（`runStockTransaction`、`mergePalletsTx`、`movePalletTx`、`buildInventoryLogEntry`） |
 | picking-list.js | 波次揀貨清單（`buildWavePickingList`，先進先出、依動線排序） |
 
@@ -76,6 +76,8 @@
 - **效期**一律是本地日期字串 `'YYYY-MM-DD'`，同時存在 `expiryDate` 與 `expDate`；
   日期轉字串用 `date.toLocalYMD()`，不要用 `toISOString().split('T')[0]`（那是 UTC 日期）。
 - **貨架容量**只從 `RACK_CONFIG` 取得；判斷某層還能放幾板用 `levelRemaining` / `canLevelFit`（支援混放不同板型）。
+- **XSS**：所有從 Firestore 讀出的文字已在資料層轉全形（`sanitizeDeep`），所以既有的 `innerHTML` 拼接不會被注入；
+  但從**使用者輸入框直接拿值**再用 `innerHTML` 顯示時，請用 `escapeHtml()`。
 - 查詢用 `window.query(collection, where(...), orderBy(...), limit(...))`；
   等值條件加上另一個欄位的範圍或排序需要 Firestore 複合索引，沒有建索引就改成在前端篩選。
 

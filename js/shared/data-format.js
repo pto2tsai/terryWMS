@@ -65,6 +65,52 @@ window.normalizeStockRecord = function(rec) {
 var NORMALIZED_COLLECTIONS = ['pallets', 'externalStock', 'inboundOrders'];
 function normalizeForWrite(ref, data) {
     var coll = ref && (ref.parent ? ref.parent.id : ref.id);
-    if (NORMALIZED_COLLECTIONS.indexOf(coll) === -1 || !data) return data;
-    return window.normalizeStockRecord(Object.assign({}, data));
+    if (!data || coll === 'backups') return data;
+    var out = window.sanitizeDeep ? window.sanitizeDeep(data) : data;
+    if (NORMALIZED_COLLECTIONS.indexOf(coll) === -1) return out;
+    return window.normalizeStockRecord(Object.assign({}, out));
 }
+
+// ========== 文字安全（XSS 防護）==========
+// 畫面大量以 innerHTML / onclick 字串拼接資料。為了不必逐處修改，在資料層統一處理：
+// 從 Firestore 讀出（以及寫入）的文字，把 < > " ' ` \ 換成全形字元。
+// 畫面上看起來幾乎一樣，但無法再組成 HTML 標籤或跳出 onclick 的字串。
+// backups 內容是 JSON 字串，轉換會破壞還原，所以排除。
+var SANITIZE_MAP = { '<': '＜', '>': '＞', '"': '＂', "'": '＇', '`': '｀', '\\': '＼' };
+var SANITIZE_SKIP = { backups: true };
+
+window.sanitizeText = function(s) {
+    return typeof s === 'string' ? s.replace(/[<>"'`\\]/g, function(c) { return SANITIZE_MAP[c]; }) : s;
+};
+
+function isPlainObject(v) {
+    if (!v || typeof v !== 'object') return false;
+    var proto = Object.getPrototypeOf(v);
+    return proto === Object.prototype || proto === null;
+}
+
+// 只處理一般物件、陣列、字串；Timestamp、FieldValue、DocumentReference 等保持原樣
+window.sanitizeDeep = function(v) {
+    if (typeof v === 'string') return window.sanitizeText(v);
+    if (Array.isArray(v)) return v.map(window.sanitizeDeep);
+    if (isPlainObject(v)) {
+        var out = {};
+        Object.keys(v).forEach(function(k) { out[k] = window.sanitizeDeep(v[k]); });
+        return out;
+    }
+    return v;
+};
+
+(function patchSnapshotData() {
+    if (!window.firebase || !firebase.firestore) return;
+    [firebase.firestore.DocumentSnapshot, firebase.firestore.QueryDocumentSnapshot].forEach(function(Cls) {
+        if (!Cls || !Cls.prototype || !Object.prototype.hasOwnProperty.call(Cls.prototype, 'data')) return;
+        var orig = Cls.prototype.data;
+        Cls.prototype.data = function(options) {
+            var d = orig.call(this, options);
+            var coll = this.ref && this.ref.parent ? this.ref.parent.id : '';
+            if (!d || SANITIZE_SKIP[coll]) return d;
+            return window.sanitizeDeep(d);
+        };
+    });
+})();
