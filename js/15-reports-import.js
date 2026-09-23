@@ -1134,11 +1134,8 @@ if (originalRefreshVisualMap) {
     window.refreshVisualMap = newRefreshVisualMap;
 }
 
-setTimeout(() => {
-    if (window.db) {
-        loadVirtualLocationCounts();
-    }
-}, 2000);
+// 登入後才載入（未登入時安全規則會拒絕）
+window.onLogin(function() { loadVirtualLocationCounts(); });
 
 console.log('📍 虛擬儲位監控功能已載入');
 

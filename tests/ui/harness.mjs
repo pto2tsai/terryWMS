@@ -84,7 +84,8 @@ export async function openApp(base, email, { mobile = false } = {}) {
   return { page, log, ctx };
 }
 export async function nav(page, tab) {
-  await page.click(`[onclick^="switchTab('${tab}'"]`);
+  try { await page.click(`[onclick^="switchTab('${tab}'"]`, { timeout: 3000 }); }
+  catch (e) { await page.evaluate(t => window.switchTab(t, null), tab); }  // 選單分組收合時直接切換
   await page.waitForTimeout(800);
 }
 export function lastDialog(log) { return log.dialogs.length ? log.dialogs[log.dialogs.length - 1].msg : ''; }

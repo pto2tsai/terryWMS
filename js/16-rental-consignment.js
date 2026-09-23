@@ -31,6 +31,20 @@ window.rentalSettings = {
     }
 };
 
+// 預設值（載入資料庫設定時用來補齊缺少的欄位）
+var RENTAL_DEFAULTS = JSON.parse(JSON.stringify(window.rentalSettings));
+function deepMergeSettings(base, over) {
+    Object.keys(over || {}).forEach(function(k) {
+        var v = over[k];
+        if (v && typeof v === 'object' && !Array.isArray(v) && base[k] && typeof base[k] === 'object') {
+            deepMergeSettings(base[k], v);
+        } else if (v !== undefined && v !== null) {
+            base[k] = v;
+        }
+    });
+    return base;
+}
+
 window.consignmentData = [];
 
 window.loadRentalSettingsFromFirebase = async function() {
@@ -47,7 +61,8 @@ window.loadRentalSettingsFromFirebase = async function() {
         var docSnap = await window.getDoc(docRef);
 
         if (docSnap.exists) {
-            window.rentalSettings = docSnap.data();
+            // 與預設值合併：資料庫裡的舊設定缺欄位時補預設，避免畫面讀到 undefined
+            window.rentalSettings = deepMergeSettings(JSON.parse(JSON.stringify(RENTAL_DEFAULTS)), docSnap.data());
             console.log('倉租設定已從 Firebase 載入');
         }
 

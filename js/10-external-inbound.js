@@ -1297,50 +1297,75 @@
             loadPendingInbounds();
         };
 
+        // 入帳一張入庫單：建立棧板、寫異動記錄、入庫單標記完成，全部在同一筆交易裡
+        // （兩人同時按確認時，只會入帳一次）
         async function executeInbound(order, silent) {
+            var loc = String(order.locationId || '').trim();
+            var validLoc = /^[IJK]-[A-H]-\d{2}-[123]F$/.test(loc) || /^(TEMP-IN|TEMP-OUT|[A-D]00|[A-D]99|OTHER)$/.test(loc);
+            if (!validLoc) {
+                // 例如調撥入庫單的儲位是「待指定」：詢問要放哪裡（批次入帳時先放進貨暫存區）
+                if (silent) {
+                    loc = 'TEMP-IN';
+                } else {
+                    var input = prompt('此入庫單尚未指定儲位（' + (loc || '空白') + '）\n\n請輸入儲位（例如 I-A-01-3F），或直接按確定放進貨暫存區：', 'TEMP-IN');
+                    if (input === null) return false;
+                    loc = input.trim().toUpperCase() || 'TEMP-IN';
+                }
+            }
+
+            var orderRef = window.db.collection('inboundOrders').doc(order.id);
+            var palletRef = window.db.collection('pallets').doc();
+            var palletId = order.docNo || order.orderNo || palletRef.id;
+            var exp = window.normalizeDateValue(order.expiryDate || order.expDate);
             try {
-                await window.addDoc(window.collection(window.db, 'pallets'), {
-                    palletId: order.docNo,
-                    productName: order.productName,
-                    spec: order.spec || '',
-                    batchNo: order.batchNo || '',
-                    expDate: order.expDate,
-                    expiryDate: order.expDate,
-                    quantity: order.quantity,
-                    locationId: order.locationId,
-                    category: order.type,
-                    vendor: order.vendor || '',
-                    source: 'Inbound',
-                    inboundDate: new Date().toISOString(),
-                    createdAt: new Date().toISOString(),
-                    status: 'Available'
-                });
-
-                await window.logInventoryChange({
-                    type: 'inbound',
-                    productName: order.productName,
-                    spec: order.spec || '',
-                    quantity: order.quantity,
-                    quantityChange: order.quantity,
-                    locationId: order.locationId,
-                    batchNo: order.batchNo || '',
-                    palletId: order.docNo,
-                    expDate: order.expDate,
-                    note: '入庫 - ' + (order.vendor || ''),
-                    orderId: order.id
-                });
-
-                await window.updateDoc(window.doc(window.db, 'inboundOrders', order.id), {
-                    status: 'completed',
-                    completedAt: new Date().toISOString(),
-                    completedBy: window.currentUser ? window.currentUser.email : 'admin'
+                await window.db.runTransaction(async function(tx) {
+                    var snap = await tx.get(orderRef);
+                    if (!snap.exists) throw new Error('入庫單已不存在');
+                    if (snap.data().status === 'completed') throw new Error('此入庫單已經入帳過了');
+                    tx.set(palletRef, window.normalizeStockRecord({
+                        palletId: palletId,
+                        company: order.company || '崇文',
+                        productCode: order.productCode || '',
+                        productName: order.productName,
+                        spec: order.spec || '',
+                        batchNo: order.batchNo || '',
+                        expDate: exp,
+                        expiryDate: exp,
+                        quantity: parseFloat(order.quantity) || 0,
+                        locationId: loc,
+                        category: order.type || order.category || 'Raw',
+                        vendor: order.vendor || '',
+                        source: order.source || 'Inbound',
+                        inboundDate: new Date().toISOString(),
+                        createdAt: new Date().toISOString(),
+                        status: 'Available'
+                    }));
+                    tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
+                        type: 'inbound',
+                        company: order.company || '',
+                        productName: order.productName,
+                        spec: order.spec || '',
+                        quantity: order.quantity,
+                        quantityChange: order.quantity,
+                        locationId: loc,
+                        batchNo: order.batchNo || '',
+                        palletId: palletId,
+                        expDate: exp,
+                        note: '入庫 - ' + (order.vendor || order.source || ''),
+                        orderId: order.id
+                    }));
+                    tx.update(orderRef, {
+                        status: 'completed',
+                        locationId: loc,
+                        completedAt: new Date().toISOString(),
+                        completedBy: window.currentUser ? window.currentUser.email : ''
+                    });
                 });
 
                 if (!silent) {
-                    alert('✅ 入帳成功！\n\n儲位：' + order.locationId + '\n品名：' + order.productName);
+                    alert('✅ 入帳成功！\n\n儲位：' + loc + '\n品名：' + order.productName);
                     loadPendingInbounds();
                 }
-
                 return true;
             } catch(e) {
                 if (!silent) {
@@ -1371,7 +1396,7 @@
             }
         };
 
-        setTimeout(function() { updatePendingInboundCount(); }, 2000);
+        window.onLogin(function() { updatePendingInboundCount(); });
 
         window.validateLocationInput = function() {
             var input = document.getElementById('in-loc');
