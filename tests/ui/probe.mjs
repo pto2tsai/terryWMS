@@ -1,0 +1,11 @@
+import * as H from './harness.mjs'; import { baseSeed, USERS } from './seed.mjs';
+const base = H.startServer(); await H.initEnv(); await H.ensureUsers(Object.values(USERS));
+await H.resetData(baseSeed);
+const { page, log } = await H.openApp(base, USERS.op);
+await H.nav(page, 'unified-inbound');
+await page.click("button[onclick=\"openProductSelectModal('inbound')\"]");
+await page.waitForTimeout(1000);
+const html = await page.evaluate(()=>{ const m=[...document.querySelectorAll('[id*="modal"]')].filter(e=>!e.classList.contains('hidden') && e.offsetParent!==null); return m.map(e=>e.id+': '+e.innerText.slice(0,300)+' || '+[...e.querySelectorAll('[onclick]')].slice(0,8).map(x=>x.getAttribute('onclick')).join(' | ')).join('\n'); });
+console.log(html);
+console.log('errors', log.errors, log.dialogs);
+await H.close(); process.exit(0);

@@ -1281,13 +1281,13 @@
             } catch(e) { alert('❌ 補填失敗：' + e.message); }
         };
 
-        setTimeout(function() { loadExternalStock(); }, 2000);
-
-        setTimeout(function() { loadProductMasterFromFirebase(); }, 1500);
-
-        setTimeout(function() { if(typeof window.loadRentalSettingsFromFirebase === 'function') window.loadRentalSettingsFromFirebase(); }, 1800);
-
-        setTimeout(function() { if(typeof window.loadConsignmentsFromFirebase === 'function') window.loadConsignmentsFromFirebase(); }, 2200);
+        // 登入後才載入（原本用固定秒數計時，使用者還沒登入時會被安全規則拒絕，資料就永遠載不到）
+        window.onLogin(function() {
+            loadProductMasterFromFirebase();
+            if (typeof window.loadRentalSettingsFromFirebase === 'function') window.loadRentalSettingsFromFirebase();
+            loadExternalStock();
+            if (typeof window.loadConsignmentsFromFirebase === 'function') window.loadConsignmentsFromFirebase();
+        });
 
         setInboundMode('Raw');
         switchTab('visual-map', null);

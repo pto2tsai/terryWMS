@@ -107,7 +107,15 @@
             if (unitWeight > 0 && quantity > 0) totalWeight = quantity * unitWeight;
         }
         
-        return { company, productName: name, spec, batchNo, vendor, expDate: exp || '', locationId, warehouseId, isExternal, category, productType, quantity, totalWeight, unitWeight };
+        // 品號：表單有填就用，沒填就從品項主檔依品名＋規格帶入
+        var codeEl = document.getElementById('in-product-code');
+        var productCode = codeEl ? codeEl.value.trim() : '';
+        if (!productCode && window.productMasterData) {
+            var pm = window.productMasterData.find(function(p) { return p.name === name && (p.spec || '') === spec; });
+            if (pm) productCode = pm.code || '';
+        }
+
+        return { company, productCode, productName: name, spec, batchNo, vendor, expDate: exp || '', locationId, warehouseId, isExternal, category, productType, quantity, totalWeight, unitWeight };
     }
     
     function validateInboundData(data, isExternal) {
@@ -129,7 +137,7 @@
             if (existing) {
                 await window.updateDoc(window.doc(window.db, 'externalStock', existing.id), { quantity: existing.quantity + data.quantity, totalWeight: (existing.totalWeight || 0) + data.totalWeight, updatedAt: new Date().toISOString() });
             } else {
-                await window.addDoc(window.collection(window.db, 'externalStock'), { company: data.company, warehouseId, productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, vendor: data.vendor, productType: data.productType, createdAt: new Date().toISOString() });
+                await window.addDoc(window.collection(window.db, 'externalStock'), { company: data.company, warehouseId, productCode: data.productCode || '', productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, vendor: data.vendor, productType: data.productType, createdAt: new Date().toISOString() });
             }
             
             if (typeof window.logInventoryChange === 'function') {
@@ -149,7 +157,7 @@
             var now = new Date();
             var docNo = await window.nextDocNo('IN');
             
-            await window.addDoc(window.collection(window.db, 'pallets'), { palletId: docNo, company: data.company, productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight, locationId: data.locationId, vendor: data.vendor, category: data.category, productType: data.productType, source: 'SmartInbound', createdAt: now.toISOString() });
+            await window.addDoc(window.collection(window.db, 'pallets'), { palletId: docNo, company: data.company, productCode: data.productCode || '', productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight, locationId: data.locationId, vendor: data.vendor, category: data.category, productType: data.productType, source: 'SmartInbound', createdAt: now.toISOString() });
             
             if (typeof window.logInventoryChange === 'function') {
                 await window.logInventoryChange({ type: 'inbound', company: data.company, productName: data.productName, spec: data.spec, quantity: data.quantity, totalWeight: data.totalWeight, quantityChange: data.quantity, locationId: data.locationId, batchNo: data.batchNo, palletId: docNo, expDate: data.expDate, note: '入庫' });
@@ -167,7 +175,7 @@
             var now = new Date();
             var docNo = await window.nextDocNo('IN');
             
-            await window.addDoc(window.collection(window.db, 'pallets'), { palletId: docNo, company: data.company, productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight, locationId: data.locationId, vendor: data.vendor, category: data.category, productType: data.productType, source: 'SmartInbound', createdAt: now.toISOString() });
+            await window.addDoc(window.collection(window.db, 'pallets'), { palletId: docNo, company: data.company, productCode: data.productCode || '', productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight, locationId: data.locationId, vendor: data.vendor, category: data.category, productType: data.productType, source: 'SmartInbound', createdAt: now.toISOString() });
             
             if (typeof window.logInventoryChange === 'function') {
                 await window.logInventoryChange({ type: 'inbound', company: data.company, productName: data.productName, spec: data.spec, quantity: data.quantity, totalWeight: data.totalWeight, quantityChange: data.quantity, locationId: data.locationId, batchNo: data.batchNo, palletId: docNo, expDate: data.expDate, note: '入庫' });

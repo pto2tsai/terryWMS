@@ -2158,7 +2158,7 @@
                     return;
                 }
 
-                var batch = window.writeBatch(window.db);
+                var writes = [];
                 var successCount = 0;
 
                 labels.forEach(function(label, index) {
@@ -2206,8 +2206,23 @@
                     };
                     
                     console.log('📝 準備寫入 #' + (index + 1) + ':', palletId, '數量:', quantity, '儲位:', palletData.locationId);
-                    
-                    batch.set(docRef, palletData);
+
+                    // 統一效期格式（本地 YYYY-MM-DD），並同時寫入入庫異動記錄
+                    window.normalizeStockRecord(palletData);
+                    writes.push({ ref: docRef, data: palletData });
+                    writes.push({ ref: window.db.collection('inventoryLogs').doc(), data: window.buildInventoryLogEntry({
+                        type: 'inbound',
+                        company: palletData.company,
+                        productName: palletData.productName,
+                        spec: palletData.spec,
+                        batchNo: palletData.batchNo,
+                        expDate: palletData.expiryDate || '',
+                        quantity: quantity,
+                        quantityChange: quantity,
+                        locationId: palletData.locationId,
+                        palletId: palletId,
+                        note: '貨櫃入庫'
+                    }) });
                     successCount++;
                 });
 
@@ -2217,7 +2232,12 @@
                 }
 
                 console.log('📤 執行批次寫入，共', successCount, '筆...');
-                await batch.commit();
+                // Firestore 一批最多 500 筆寫入，每板 2 筆（棧板＋記錄），分批提交
+                for (var w = 0; w < writes.length; w += 400) {
+                    var chunk = window.writeBatch(window.db);
+                    writes.slice(w, w + 400).forEach(function(x) { chunk.set(x.ref, x.data); });
+                    await chunk.commit();
+                }
                 console.log('✅ 批次寫入成功！');
 
                 alert('✅ 入庫成功！共 ' + successCount + ' 板\n\n請到「庫存查詢」確認資料。');

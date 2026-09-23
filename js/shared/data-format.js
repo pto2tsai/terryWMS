@@ -52,6 +52,13 @@ window.normalizeStockRecord = function(rec) {
     if (typeof rec.quantity === 'string' && rec.quantity.trim() !== '' && !isNaN(Number(rec.quantity))) {
         rec.quantity = Number(rec.quantity);
     }
+    // 品號：沒填時依品名＋規格從品項主檔帶入（品名相同且主檔只有一筆時也帶入）
+    if (!rec.productCode && rec.productName && Array.isArray(window.productMasterData)) {
+        var sameName = window.productMasterData.filter(function(p) { return p.name === rec.productName && p.code; });
+        var exact = sameName.filter(function(p) { return (p.spec || '') === (rec.spec || ''); });
+        var pm = exact.length === 1 ? exact[0] : (sameName.length === 1 ? sameName[0] : null);
+        if (pm) rec.productCode = pm.code;
+    }
     return rec;
 };
 

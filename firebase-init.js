@@ -87,6 +87,16 @@ window.parseLocationId = function(locId) {
     };
 };
 
+// 登入成功後才執行的初始化（安全規則要求登入才能讀資料，所以不能在開頁時就載入）
+window._loginHooks = [];
+window._loggedIn = false;
+window.onLogin = function(fn) {
+    window._loginHooks.push(fn);
+    if (window._loggedIn) {
+        try { fn(); } catch (e) { console.error('登入後初始化失敗:', e); }
+    }
+};
+
 // 認證狀態監聽
 auth.onAuthStateChanged(async function(user) {
     if (user) {
@@ -99,6 +109,10 @@ auth.onAuthStateChanged(async function(user) {
         document.getElementById('login-error').classList.add('hidden');
         document.getElementById('view-login').classList.add('hidden');
         initAllListeners();
+        window._loggedIn = true;
+        window._loginHooks.forEach(function(fn) {
+            try { fn(); } catch (e) { console.error('登入後初始化失敗:', e); }
+        });
     } else {
         document.getElementById('view-login').classList.remove('hidden');
         window.currentUser = null;

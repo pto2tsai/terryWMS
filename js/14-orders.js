@@ -724,7 +724,9 @@ window.importERPExcel = async function(event) {
                 }
 
                 try {
-                    await window.addDoc(window.collection(window.db, 'salesOrders'), order);
+                    // 記下文件 ID：之後排波次、出貨要靠它更新訂單狀態（沒有 ID 時狀態不會存回資料庫，重新整理後可能被重複排波次）
+                    const orderRef = await window.addDoc(window.collection(window.db, 'salesOrders'), order);
+                    order.id = orderRef.id;
                     window._orderData.orders.push(order);
                     savedCount++;
                 } catch (err) {
@@ -1428,11 +1430,10 @@ window.closeWaveExecuteModal = function() {
     refreshWaveList();
 };
 
-document.addEventListener('DOMContentLoaded', function() {
-    if (window.db) {
-        loadOrdersFromFirebase();
-        loadWarehouses();
-    }
+// 登入後才載入（未登入時安全規則會拒絕讀取）
+window.onLogin(function() {
+    loadOrdersFromFirebase();
+    loadWarehouses();
 });
 
 console.log('✅ 波次理貨升級版載入完成');

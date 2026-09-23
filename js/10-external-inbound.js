@@ -391,9 +391,9 @@
                     await createExternalStock(order);
                     alert('✅ 外倉入庫成功！\n單號：' + docNo + '\n' + locationInfo + expiryWarningText);
                 } else if (needsApproval) {
-                    alert('✅ 入庫單建立成功！\n單號：' + docNo + '\n' + locationInfo + expiryWarningText + '\n\n⚠️ 採購進貨已通知財務審核\n📱 堆高機手機已收到任務通知');
+                    alert('✅ 入庫單建立成功！\n單號：' + docNo + '\n' + locationInfo + expiryWarningText + '\n\n⚠️ 採購進貨已通知財務審核');
                 } else {
-                    alert('✅ 入庫單建立成功！\n單號：' + docNo + '\n' + locationInfo + expiryWarningText + '\n\n📱 堆高機手機已收到任務通知');
+                    alert('✅ 入庫單建立成功！\n單號：' + docNo + '\n' + locationInfo + expiryWarningText + '\n');
                 }
 
                 clearInboundForm();
