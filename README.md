@@ -7,7 +7,7 @@
 | 檔案 | 說明 |
 |---|---|
 | `index.html` | 桌機版所有畫面 |
-| `mobile.html` | 手機版（揀貨、調度執行、入庫確認、庫存快查），與桌機共用同一個 Firestore |
+| `mobile.html` | 手機版（揀貨、調度執行、入庫確認、庫存快查；可用相機掃 QR code／條碼），與桌機共用同一個 Firestore |
 | `firebase-init.js` | 桌機版 Firebase 初始化、登入、庫存即時監聽 |
 | `js/shared/*.js` | 桌機與手機共用：Firebase 設定、資料格式、庫存交易核心、揀貨清單 |
 | `js/01-core.js` … `js/18-data-migration.js` | 桌機應用程式模組，依編號順序載入 |

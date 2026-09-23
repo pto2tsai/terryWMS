@@ -201,6 +201,37 @@
             font-size: 16px;
         }
         .scan-btn:active { background: #2563eb; }
+        .cam-btn {
+            padding: 14px 16px;
+            background: #059669;
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 20px;
+        }
+        .cam-btn:active { background: #047857; }
+        /* 相機掃描畫面 */
+        #cam-overlay {
+            position: fixed; inset: 0; z-index: 9999; background: #000;
+            display: none; flex-direction: column;
+        }
+        #cam-overlay.active { display: flex; }
+        /* 影片大小交給 html5-qrcode 處理（改 object-fit 會讓掃描框位置對不上） */
+        .cam-view { flex: 1; display: flex; align-items: center; overflow: hidden; }
+        #cam-reader { width: 100%; }
+        .cam-top, .cam-bottom {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            padding: 12px 16px; background: rgba(15,23,42,0.95); color: #fff;
+        }
+        .cam-title { font-size: 16px; font-weight: bold; }
+        .cam-close, .cam-torch {
+            padding: 10px 16px; border: none; border-radius: 8px; font-size: 16px; color: #fff; background: #334155;
+        }
+        .cam-result { flex: 1; font-size: 15px; min-height: 22px; }
+        .cam-result.ok { color: #34d399; }
+        .cam-result.err { color: #f87171; }
+        .cam-flash { animation: camflash 0.4s; }
+        @keyframes camflash { 0% { background: rgba(16,185,129,0.9); } 100% { background: rgba(15,23,42,0.95); } }
         .scan-hint { color: #64748b; font-size: 13px; }
         .scan-result {
             margin-top: 12px;
@@ -413,10 +444,11 @@
         
         <div class="scan-section" id="picking-scan-area" style="display:none">
             <div class="scan-input-wrap">
-                <input type="text" id="picking-scan" class="scan-input" placeholder="掃描儲位或板號">
+                <input type="text" id="picking-scan" class="scan-input" placeholder="掃描儲位或板號" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('picking-scan')" title="用相機掃描"><i class="fa-solid fa-camera"></i></button>
                 <button class="scan-btn" onclick="confirmPickingScan()"><i class="fa-solid fa-check"></i></button>
             </div>
-            <p class="scan-hint">掃描後自動確認揀貨</p>
+            <p class="scan-hint">按 📷 用相機掃 QR／條碼（可連續掃），或輸入板號後幾碼</p>
             <div id="picking-scan-result" class="scan-result"></div>
         </div>
         
@@ -449,7 +481,8 @@
         
         <div class="scan-section">
             <div class="scan-input-wrap">
-                <input type="text" id="inbound-scan" class="scan-input" placeholder="掃描入庫板號">
+                <input type="text" id="inbound-scan" class="scan-input" placeholder="掃描入庫板號" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('inbound-scan')" title="用相機掃描"><i class="fa-solid fa-camera"></i></button>
                 <button class="scan-btn" onclick="confirmInboundScan()"><i class="fa-solid fa-check"></i></button>
             </div>
             <p class="scan-hint">掃描板號確認實際入庫</p>
@@ -483,10 +516,11 @@
         
         <div class="scan-section" id="dispatch-scan-area" style="display:none">
             <div class="scan-input-wrap">
-                <input type="text" id="dispatch-scan" class="scan-input" placeholder="掃描板號確認">
+                <input type="text" id="dispatch-scan" class="scan-input" placeholder="掃描板號確認" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('dispatch-scan')" title="用相機掃描"><i class="fa-solid fa-camera"></i></button>
                 <button class="scan-btn" onclick="confirmDispatchScan()"><i class="fa-solid fa-check"></i></button>
             </div>
-            <p class="scan-hint">掃描板號確認執行</p>
+            <p class="scan-hint">按 📷 用相機掃板號或儲位，或輸入板號後幾碼</p>
             <div id="dispatch-scan-result" class="scan-result"></div>
         </div>
         
@@ -519,7 +553,8 @@
         
         <div class="scan-section">
             <div class="scan-input-wrap">
-                <input type="text" id="query-input" class="scan-input" placeholder="輸入品名或板號">
+                <input type="text" id="query-input" class="scan-input" placeholder="輸入品名或板號" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('query-input')" title="用相機掃描"><i class="fa-solid fa-camera"></i></button>
                 <button class="scan-btn" onclick="doInventoryQuery()"><i class="fa-solid fa-search"></i></button>
             </div>
             <p class="scan-hint">支援模糊搜尋</p>
@@ -534,6 +569,22 @@
     </div>
 
     <!-- Firebase -->
+    <!-- 相機掃描畫面 -->
+    <div id="cam-overlay">
+        <div class="cam-top">
+            <span class="cam-title" id="cam-title">相機掃描</span>
+            <button class="cam-torch" id="cam-torch" onclick="toggleTorch()" style="display:none"><i class="fa-solid fa-lightbulb"></i> 補光</button>
+            <button class="cam-close" onclick="closeCameraScan()"><i class="fa-solid fa-xmark"></i> 完成</button>
+        </div>
+        <div class="cam-view"><div id="cam-reader"></div></div>
+        <div class="cam-bottom" id="cam-bottom">
+            <span class="cam-result" id="cam-result">對準 QR code 或條碼</span>
+        </div>
+    </div>
+
+    <!-- 相機掃碼（QR code、CODE128 條碼；iPhone／Android 皆可，需 HTTPS）-->
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
     <!-- Firebase（與桌機版相同的 compat SDK 與共用模組）-->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -643,6 +694,102 @@
             document.getElementById('app-main').classList.add('active');
         }
 
+        // 比對掃描／輸入的內容：不分大小寫；完整比對不到時，允許只輸入板號尾碼（至少 3 碼且只有一筆符合）
+        function normCode(v) { return String(v || '').trim().toUpperCase(); }
+        function findByScan(list, scanned, keys) {
+            const code = normCode(scanned);
+            if (!code) return { item: null };
+            const exact = list.filter(it => keys.some(k => normCode(it[k]) === code));
+            if (exact.length > 0) return { item: exact[0] };
+            if (code.length >= 3) {
+                const tail = list.filter(it => normCode(it.palletId).endsWith(code));
+                if (tail.length === 1) return { item: tail[0] };
+                if (tail.length > 1) return { item: null, error: '有 ' + tail.length + ' 板尾碼都是 ' + code + '，請多輸入幾碼' };
+            }
+            return { item: null };
+        }
+
+        // ========== 相機掃描 ==========
+        let camScanner = null, camTarget = null, camBusy = false, camLast = { code: '', at: 0, ok: false }, camTorchOn = false;
+        const CAM_TITLES = { 'picking-scan': '揀貨掃描（可連續）', 'dispatch-scan': '調度掃描（可連續）', 'inbound-scan': '入庫確認', 'query-input': '庫存快查' };
+        const CAM_CONTINUOUS = { 'picking-scan': true, 'dispatch-scan': true };
+
+        window.openCameraScan = async function(targetId) {
+            if (!window.Html5Qrcode) { alert('相機掃描元件載入失敗，請確認網路後重新整理'); return; }
+            camTarget = targetId;
+            camLast = { code: '', at: 0, ok: false };
+            document.getElementById('cam-title').innerText = CAM_TITLES[targetId] || '相機掃描';
+            document.getElementById('cam-result').className = 'cam-result';
+            document.getElementById('cam-result').innerText = '對準 QR code 或條碼';
+            document.getElementById('cam-overlay').classList.add('active');
+            try {
+                camScanner = new Html5Qrcode('cam-reader', {
+                    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.CODE_128],
+                    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+                    verbose: false
+                });
+                await camScanner.start(
+                    { facingMode: 'environment' },
+                    { fps: 12, qrbox: (w, h) => { const s = Math.floor(Math.min(w, h) * 0.85); return { width: s, height: s }; } },
+                    onCameraDecoded,
+                    () => {}
+                );
+                // 手電筒（多數 Android 支援；iPhone 瀏覽器不支援時不顯示按鈕）
+                try {
+                    const caps = camScanner.getRunningTrackCapabilities ? camScanner.getRunningTrackCapabilities() : {};
+                    document.getElementById('cam-torch').style.display = caps && caps.torch ? '' : 'none';
+                } catch (e) { document.getElementById('cam-torch').style.display = 'none'; }
+            } catch (e) {
+                console.error(e);
+                closeCameraScan();
+                alert('無法開啟相機：' + (e && e.message ? e.message : e) + '\n\n請確認已允許瀏覽器使用相機');
+            }
+        };
+
+        async function onCameraDecoded(text) {
+            const code = normCode(text);
+            const now = Date.now();
+            // 處理中不收；同一個碼：成功過就不再處理（直到掃到別的碼），失敗的 2.5 秒後可重試
+            if (camBusy || (code === camLast.code && (camLast.ok || now - camLast.at < 2500))) return;
+            camLast = { code, at: now, ok: false };
+            camBusy = true;
+            try { camLast.ok = await handleCameraCode(code); } finally { camBusy = false; }
+        }
+
+        async function handleCameraCode(code) {
+            const input = document.getElementById(camTarget);
+            if (!input) return;
+            input.value = code;
+            const handlers = { 'picking-scan': confirmPickingScan, 'dispatch-scan': confirmDispatchScan, 'inbound-scan': confirmInboundScan, 'query-input': doInventoryQuery };
+            const resultIds = { 'picking-scan': 'picking-scan-result', 'dispatch-scan': 'dispatch-scan-result', 'inbound-scan': 'inbound-scan-result' };
+            await handlers[camTarget]();
+            const resEl = resultIds[camTarget] && document.getElementById(resultIds[camTarget]);
+            const msg = resEl ? resEl.innerText : ('已查詢：' + code);
+            const ok = !resEl || resEl.classList.contains('success');
+            const camRes = document.getElementById('cam-result');
+            camRes.className = 'cam-result ' + (ok ? 'ok' : 'err');
+            camRes.innerText = msg;
+            const bottom = document.getElementById('cam-bottom');
+            bottom.classList.remove('cam-flash'); void bottom.offsetWidth; if (ok) bottom.classList.add('cam-flash');
+            if (!CAM_CONTINUOUS[camTarget] && ok) setTimeout(closeCameraScan, 600);
+            return ok;
+        }
+
+        window.toggleTorch = async function() {
+            if (!camScanner) return;
+            camTorchOn = !camTorchOn;
+            try { await camScanner.applyVideoConstraints({ advanced: [{ torch: camTorchOn }] }); } catch (e) { camTorchOn = false; }
+        };
+
+        window.closeCameraScan = async function() {
+            document.getElementById('cam-overlay').classList.remove('active');
+            if (camScanner) {
+                try { if (camScanner.isScanning) await camScanner.stop(); camScanner.clear(); } catch (e) {}
+                camScanner = null;
+            }
+            camTorchOn = false;
+        };
+
         function setResult(id, ok, text) {
             const el = document.getElementById(id);
             el.className = 'scan-result ' + (ok ? 'success' : 'error');
@@ -721,10 +868,11 @@
             const scanned = input.value.trim();
             if (!scanned || !currentWave) return;
 
-            const found = pickingItems.find(i => !i.completed && !i.shortage &&
-                (i.palletId === scanned || i.locationId === scanned));
+            const match = findByScan(pickingItems.filter(i => !i.completed && !i.shortage), scanned, ['palletId', 'locationId']);
+            const found = match.item;
             if (!found) {
-                setResult('picking-scan-result', false, '❌ 找不到：' + scanned);
+                const already = findByScan(pickingItems.filter(i => i.completed), scanned, ['palletId', 'locationId']).item;
+                setResult('picking-scan-result', false, match.error ? '❌ ' + match.error : already ? '⚠️ 已揀過：' + already.palletId : '❌ 不在揀貨清單：' + normCode(scanned));
                 input.select();
                 return;
             }
@@ -742,7 +890,7 @@
             setResult('picking-scan-result', true, '✓ ' + found.productName + ' x ' + found.pickQty);
             renderPickingList();
             input.value = '';
-            input.focus();
+            if (!camScanner) input.focus();   // 相機掃描中不要叫出鍵盤
         };
 
         // 完成波次：與桌機相同的交易（扣庫存、訂單標記出貨、缺貨留記錄），不用回電腦
@@ -801,11 +949,12 @@
             const input = document.getElementById('inbound-scan');
             const scanned = input.value.trim();
             if (!scanned) return;
-            const found = window.pallets.find(p => p.palletId === scanned);
+            const match = findByScan(window.pallets, scanned, ['palletId']);
+            const found = match.item;
             if (found) setResult('inbound-scan-result', true, '✓ 已存在：' + found.productName + ' @ ' + found.locationId);
-            else setResult('inbound-scan-result', false, '❌ 板號不存在：' + scanned);
+            else setResult('inbound-scan-result', false, match.error ? '❌ ' + match.error : '❌ 板號不存在：' + normCode(scanned));
             input.value = '';
-            input.focus();
+            if (!camScanner) input.focus();   // 相機掃描中不要叫出鍵盤
         };
 
         // ========== 調度執行 ==========
@@ -881,10 +1030,10 @@
             const scanned = input.value.trim();
             if (!scanned || !currentDispatch) return;
             const done = currentDispatch.completedOps || [];
-            const op = (currentDispatch.operations || []).find(o => done.indexOf(o.id) < 0 &&
-                (o.palletId === scanned || o.from === scanned));
+            const match = findByScan((currentDispatch.operations || []).filter(o => done.indexOf(o.id) < 0), scanned, ['palletId', 'from']);
+            const op = match.item;
             if (!op) {
-                setResult('dispatch-scan-result', false, '❌ 找不到：' + scanned);
+                setResult('dispatch-scan-result', false, match.error ? '❌ ' + match.error : '❌ 不在此工單：' + normCode(scanned));
                 input.select();
                 return;
             }
@@ -911,7 +1060,7 @@
             }
             renderDispatchList();
             input.value = '';
-            input.focus();
+            if (!camScanner) input.focus();   // 相機掃描中不要叫出鍵盤
         };
 
         window.completeDispatchOrder = async function() {
