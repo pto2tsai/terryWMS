@@ -7,11 +7,11 @@ const REPO=path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const FB=path.join(REPO,'tests/node_modules/firebase10/')+'/';
 const PROJECT='terrywms-2345f';
 // static server for repo
-const srv = http.createServer((req,res)=>{ const p=path.join(REPO, decodeURIComponent(req.url.split('?')[0]).replace(/^\/$/,'/index.html'));
+const srv = http.createServer((req,res)=>{ const p=path.join(REPO, decodeURIComponent(req.url.split('?')[0]).replace(/\/$/,'/index.html'));
   fs.readFile(p,(e,b)=>{ if(e){res.writeHead(404);return res.end();}
     // 手機版：由測試伺服器注入模擬器設定（用 route 攔截文件會讓 Chromium 擋掉跨來源請求）
-    if (p.endsWith('mobile.html')) b = Buffer.from(String(b).replace("const auth = firebase.auth();","const auth = firebase.auth(); db.useEmulator('127.0.0.1',8080); auth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true});"));
-    res.writeHead(200,{'content-type': p.endsWith('.js')?'text/javascript':'text/html; charset=utf-8'}); res.end(b);});}).listen(8765);
+    if (p.endsWith(path.join('m','js','core.js'))) b = Buffer.from(String(b).replace("const auth = firebase.auth();","const auth = firebase.auth(); db.useEmulator('127.0.0.1',8080); auth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true});"));
+    res.writeHead(200,{'content-type': p.endsWith('.js')?'text/javascript':p.endsWith('.css')?'text/css':'text/html; charset=utf-8'}); res.end(b);});}).listen(8765);
 const env = await initializeTestEnvironment({ projectId: PROJECT, firestore: { rules: fs.readFileSync(path.join(REPO,'firestore.rules'),'utf8'), host:'127.0.0.1', port:8080 } });
 const today = new Date(); const ds = today.getFullYear()+String(today.getMonth()+1).padStart(2,'0')+String(today.getDate()).padStart(2,'0');
 await env.withSecurityRulesDisabled(async c => { const d=c.firestore();
@@ -72,7 +72,7 @@ async function openMobileAs(email){
     if(u.startsWith('http://localhost:8765')||u.startsWith('http://127.0.0.1')) return r.continue();
     return r.fulfill({body:'',contentType:'text/css'}); });
   await page.addInitScript(()=>{ window.__alerts=[]; window.alert=m=>window.__alerts.push(String(m)); window.confirm=()=>true; });
-  await page.goto('http://localhost:8765/mobile.html');
+  await page.goto('http://localhost:8765/m/');
   await page.waitForFunction(()=>typeof window.doLogin==='function');
   await page.fill('#login-email',email); await page.fill('#login-pwd','pass1234');
   await page.evaluate(()=>window.doLogin());

@@ -1,0 +1,377 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f172a;
+    color: #fff;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* 登入頁 */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+}
+.login-logo { font-size: 48px; color: #3b82f6; margin-bottom: 10px; }
+.login-title { font-size: 28px; font-weight: bold; margin-bottom: 5px; }
+.login-subtitle { color: #64748b; font-size: 14px; margin-bottom: 30px; }
+.login-box {
+    width: 100%;
+    max-width: 320px;
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid #334155;
+    border-radius: 16px;
+    padding: 24px;
+}
+.login-input {
+    width: 100%;
+    padding: 14px 16px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 16px;
+    margin-bottom: 12px;
+}
+.login-input:focus { outline: none; border-color: #3b82f6; }
+.login-btn {
+    width: 100%;
+    padding: 14px;
+    background: #3b82f6;
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.login-btn:active { background: #2563eb; }
+.login-error { color: #f87171; font-size: 14px; margin-bottom: 12px; display: none; }
+
+/* 主頁面 */
+.app-container { display: none; min-height: 100vh; flex-direction: column; }
+.app-container.active { display: flex; }
+
+/* 頂部 */
+.app-header {
+    background: #1e293b;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #334155;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.app-logo { display: flex; align-items: center; gap: 8px; }
+.app-logo i { color: #3b82f6; font-size: 20px; }
+.app-logo span { font-weight: bold; font-size: 16px; }
+.user-info { display: flex; align-items: center; gap: 8px; }
+.user-name { font-size: 12px; color: #94a3b8; }
+.logout-btn {
+    background: rgba(239, 68, 68, 0.2);
+    border: none;
+    color: #f87171;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+/* 主選單：兩欄方塊 */
+.main-menu {
+    flex: 1;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-content: start;
+}
+.menu-card {
+    position: relative;
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    border: 1px solid #475569;
+    border-left: 4px solid var(--c, #3b82f6);
+    border-radius: 14px;
+    padding: 16px 14px;
+    cursor: pointer;
+    min-height: 104px;
+}
+.menu-card:active { transform: scale(0.97); }
+.menu-card .menu-icon { font-size: 26px; color: var(--c, #3b82f6); margin-bottom: 10px; }
+.menu-card h3 { font-size: 17px; margin-bottom: 2px; }
+.menu-card p { font-size: 12px; color: #94a3b8; }
+.menu-card.wide { grid-column: span 2; min-height: 0; display: flex; align-items: center; gap: 14px; }
+.menu-card.wide .menu-icon { margin-bottom: 0; }
+.menu-section { grid-column: span 2; font-size: 13px; color: #64748b; margin-top: 4px; }
+.badge {
+    position: absolute; top: 10px; right: 10px; min-width: 24px; height: 24px; padding: 0 7px;
+    border-radius: 12px; background: #ef4444; color: #fff; font-size: 13px; font-weight: bold;
+    display: none; align-items: center; justify-content: center;
+}
+.badge.show { display: flex; }
+
+/* 功能頁面 */
+.func-page {
+    display: none;
+    flex-direction: column;
+    min-height: 100vh;
+    background: #0f172a;
+}
+.func-page.active { display: flex; }
+
+.func-header {
+    background: #1e293b;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid #334155;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.back-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    padding: 8px;
+    cursor: pointer;
+}
+.func-title { font-size: 18px; font-weight: bold; }
+
+/* 掃描區 */
+.scan-section {
+    background: linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%);
+    padding: 20px 16px;
+    text-align: center;
+}
+.scan-input-wrap {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.scan-input {
+    flex: 1;
+    padding: 14px 16px;
+    background: #0f172a;
+    border: 2px solid #3b82f6;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 18px;
+    text-align: center;
+}
+.scan-input:focus { outline: none; border-color: #60a5fa; }
+.scan-btn {
+    padding: 14px 20px;
+    background: #3b82f6;
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 16px;
+}
+.scan-btn:active { background: #2563eb; }
+.cam-btn {
+    padding: 14px 16px;
+    background: #059669;
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 20px;
+}
+.cam-btn:active { background: #047857; }
+/* 相機掃描畫面 */
+#cam-overlay {
+    position: fixed; inset: 0; z-index: 9999; background: #000;
+    display: none; flex-direction: column;
+}
+#cam-overlay.active { display: flex; }
+/* 影片大小交給 html5-qrcode 處理（改 object-fit 會讓掃描框位置對不上） */
+.cam-view { flex: 1; display: flex; align-items: center; overflow: hidden; }
+#cam-reader { width: 100%; }
+.cam-top, .cam-bottom {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 16px; background: rgba(15,23,42,0.95); color: #fff;
+}
+.cam-title { font-size: 16px; font-weight: bold; }
+.cam-close, .cam-torch {
+    padding: 10px 16px; border: none; border-radius: 8px; font-size: 16px; color: #fff; background: #334155;
+}
+.cam-result { flex: 1; font-size: 15px; min-height: 22px; }
+.cam-result.ok { color: #34d399; }
+.cam-result.err { color: #f87171; }
+.cam-flash { animation: camflash 0.4s; }
+@keyframes camflash { 0% { background: rgba(16,185,129,0.9); } 100% { background: rgba(15,23,42,0.95); } }
+.scan-hint { color: #64748b; font-size: 13px; }
+.scan-result {
+    margin-top: 12px;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+}
+.scan-result.success { display: block; background: rgba(16, 185, 129, 0.2); color: #10b981; }
+.scan-result.error { display: block; background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+/* 清單區 */
+.list-section {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+}
+.list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.list-header h4 { font-size: 16px; color: #94a3b8; }
+.list-progress { font-size: 14px; color: #10b981; font-weight: bold; }
+
+.list-item {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+}
+.list-item.completed { border-color: #10b981; background: rgba(16, 185, 129, 0.1); }
+.list-item.shortage { border-color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+
+.item-row { display: flex; justify-content: space-between; align-items: center; }
+.item-location { font-size: 20px; font-weight: bold; color: #3b82f6; font-family: monospace; }
+.item-status { font-size: 12px; padding: 4px 8px; border-radius: 6px; }
+.item-status.pending { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+.item-status.done { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+.item-status.shortage { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+
+.item-product { font-size: 15px; color: #fff; margin: 8px 0 4px; }
+.item-detail { font-size: 13px; color: #64748b; }
+.item-qty { font-size: 24px; font-weight: bold; color: #fbbf24; text-align: right; }
+
+/* 選擇器 */
+.selector-section { padding: 16px; }
+.selector-label { font-size: 14px; color: #94a3b8; margin-bottom: 8px; }
+.selector-input {
+    width: 100%;
+    padding: 14px 16px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 16px;
+}
+
+/* 庫存查詢結果 */
+.query-result {
+    padding: 16px;
+}
+.result-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+}
+.result-product { font-size: 18px; font-weight: bold; margin-bottom: 8px; }
+.result-spec { font-size: 14px; color: #64748b; margin-bottom: 12px; }
+.result-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-top: 1px solid #334155;
+}
+.result-loc { font-family: monospace; color: #3b82f6; font-weight: bold; }
+.result-qty { color: #fbbf24; font-weight: bold; }
+
+/* 底部操作 */
+.bottom-actions {
+    padding: 16px;
+    background: #1e293b;
+    border-top: 1px solid #334155;
+}
+.action-btn {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+.action-btn:last-child { margin-bottom: 0; }
+.action-btn.primary { background: #3b82f6; color: #fff; }
+.action-btn.success { background: #10b981; color: #fff; }
+.action-btn.secondary { background: #334155; color: #fff; }
+.action-btn:active { opacity: 0.8; }
+
+/* 空狀態 */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #64748b;
+}
+.empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+.empty-state p { font-size: 14px; }
+
+/* 載入中 */
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #64748b;
+}
+.loading i { font-size: 32px; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 隱藏 */
+.hidden { display: none !important; }
+
+/* 步驟卡片 */
+.step-card {
+    margin: 12px 16px; padding: 14px; border-radius: 12px;
+    background: #1e293b; border: 1px solid #334155;
+}
+.step-label { font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+.step-label b { color: #fff; }
+.info-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 15px; }
+.info-grid .k { color: #64748b; }
+.info-grid .v { color: #fff; font-weight: bold; word-break: break-all; }
+.info-grid .v.loc { color: #60a5fa; font-family: monospace; font-size: 18px; }
+.info-grid .v.qty { color: #fbbf24; font-size: 18px; }
+.qty-input {
+    width: 100%; padding: 16px; font-size: 24px; font-weight: bold; text-align: center;
+    background: #0f172a; border: 2px solid #3b82f6; border-radius: 10px; color: #fff;
+}
+.quick-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.quick-btns button {
+    flex: 1; min-width: 56px; padding: 12px 8px; background: #334155; border: 1px solid #475569;
+    border-radius: 8px; color: #fff; font-weight: bold; font-size: 15px;
+}
+.row-btns { display: flex; gap: 10px; margin-top: 12px; }
+.row-btns .action-btn { margin-bottom: 0; }
+.scan-result.info { display: block; background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+.scan-result { white-space: pre-line; }
+.list-item.clickable { cursor: pointer; }
+.list-item.clickable:active { background: #334155; }
+.pick-choice { border: 1px solid #475569; }
+
+/* 提示訊息 */
+#toast {
+    position: fixed; top: 64px; left: 50%; transform: translateX(-50%); max-width: 90%;
+    background: #1d4ed8; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 14px;
+    z-index: 10000; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-align: center;
+}
+#toast.show { opacity: 1; }
+.update-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 10001; padding: 12px 16px;
+    background: #1d4ed8; color: #fff; display: none; align-items: center; justify-content: space-between; gap: 10px;
+}
+.update-bar.show { display: flex; }
+.update-bar button { padding: 8px 14px; border: none; border-radius: 8px; background: #fff; color: #1d4ed8; font-weight: bold; }

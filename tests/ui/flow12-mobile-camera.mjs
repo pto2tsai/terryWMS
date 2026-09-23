@@ -56,12 +56,15 @@ H.check('手打尾碼 9001 → 對到 T-9001', (wv.completedItems || []).include
 await page.fill('#picking-scan', 't-9001'); await page.press('#picking-scan', 'Enter'); await page.waitForTimeout(800);
 H.check('重複掃提示「已揀過」', (await page.innerText('#picking-scan-result')).includes('已揀過'), await page.innerText('#picking-scan-result'));
 
-// 3) 尾碼有兩板符合 → 要求多打幾碼
-await page.evaluate(() => { goBack(); }); await page.click("[onclick=\"openPage('inbound')\"]").catch(() => {}); await page.waitForTimeout(800);
-const r = await page.evaluate(() => { document.getElementById('inbound-scan').value = '0015'; confirmInboundScan(); return document.getElementById('inbound-scan-result').innerText; });
-H.check('尾碼 0015 有兩板 → 提示多輸入幾碼', r.includes('請多輸入幾碼'), r);
-const r2 = await page.evaluate(() => { document.getElementById('inbound-scan').value = 'b-0015'; confirmInboundScan(); return document.getElementById('inbound-scan-result').innerText; });
-H.check('多打幾碼 B-0015 → 唯一對到', r2.includes('K-A-02-1F'), r2);
+// 3) 尾碼有兩板符合 → 列出讓使用者選
+await page.evaluate(() => goBack()); await page.click("[onclick=\"openPage('outbound')\"]"); await page.waitForTimeout(500);
+await page.fill('#out-pallet', '0015'); await page.press('#out-pallet', 'Enter'); await page.waitForTimeout(300);
+const r = await page.innerText('#out-result');
+const nChoices = await page.$$eval('#out-choices .pick-choice', e => e.length);
+H.check('尾碼 0015 有兩板 → 提示多輸入幾碼並列出兩板可點選', r.includes('請多輸入幾碼') && nChoices === 2, r + ' choices=' + nChoices);
+await page.fill('#out-pallet', 'b-0015'); await page.press('#out-pallet', 'Enter'); await page.waitForTimeout(300);
+const info = await page.innerText('#out-pallet-info');
+H.check('多打幾碼 B-0015（不分大小寫、可省略符號）→ 唯一對到', info.includes('K-A-02-1F'), info);
 
 H.note('errors: ' + JSON.stringify(log.errors) + JSON.stringify(log.console));
 H.check('沒有頁面錯誤', log.errors.length === 0, JSON.stringify(log.errors));
