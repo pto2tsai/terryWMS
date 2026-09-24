@@ -234,32 +234,20 @@
         };
 
         window.exportExternalStock = function() {
-            if (window.externalStock.length === 0) {
-                alert('無資料可匯出');
-                return;
-            }
-
-            var csv = '倉庫,品名,規格,批號,數量,類型,箱容kg,總重量kg,效期\n';
-            window.externalStock.forEach(function(s) {
-                var productType = s.productType === 'variable' ? '不定重' : '定重';
-                csv += [
-                    extWhNames[s.warehouseId] || s.warehouseId,
-                    s.productName,
-                    s.spec,
-                    s.batchNo,
-                    s.quantity,
-                    productType,
-                    s.unitWeight || '',
-                    s.totalWeight || '',
-                    s.expDate
-                ].join(',') + '\n';
+            if (window.externalStock.length === 0) { alert('無資料可匯出'); return; }
+            var rows = window.externalStock.map(function(st) {
+                return {
+                    '倉庫': extWhNames[st.warehouseId] || st.warehouseId, '公司': st.company || '', '品名': st.productName || '',
+                    '規格': st.spec || '', '批號': st.batchNo || '', '效期': st.expDate || st.expiryDate || '',
+                    '數量': Number(st.quantity) || 0, '類型': st.productType === 'variable' ? '不定重' : '定重',
+                    '箱容kg': st.unitWeight || '', '總重量kg': Number(st.totalWeight) || 0
+                };
             });
-
-            var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
-            var a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = '外倉庫存_' + new Date().toLocalYMD() + '.csv';
-            a.click();
+            window.exportTableReportXlsx({
+                title: '外倉庫存清單', meta: [['資料時間', '截至 ' + new Date().toLocalYMD()]], rows: rows,
+                columns: ['倉庫', '公司', '品名', '規格', '批號', '效期', '數量', '類型', '箱容kg', '總重量kg'],
+                fileName: '外倉庫存_' + new Date().toLocalYMD() + '.xlsx'
+            });
         };
 
         window.handleExternalImport = function(event) {

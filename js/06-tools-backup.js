@@ -408,7 +408,7 @@ window._allFunctions = [
     { id: 'merge', name: '板號異動', icon: 'fa-arrows-turn-to-dots', color: 'text-blue-400', group: '庫內作業' },
     { id: 'transfer', name: '倉庫調撥', icon: 'fa-right-left', color: 'text-blue-400', group: '庫內作業' },
     { id: 'stocktake', name: '庫存盤點', icon: 'fa-clipboard-check', color: 'text-blue-400', group: '庫內作業' },
-    { id: 'external-warehouse', name: '外倉管理', icon: 'fa-building', color: 'text-purple-400', group: '庫內作業' },
+    { id: 'external-warehouse', name: '外倉管理', icon: 'fa-building', color: 'text-purple-400', group: '設定' },
     { id: 'picking-reports', name: '報表中心', icon: 'fa-chart-pie', color: 'text-green-400', group: '查詢與報表' },
     { id: 'expiry-management', name: '效期管理', icon: 'fa-calendar-xmark', color: 'text-red-400', group: '查詢與報表' },
     { id: 'inventory-log', name: '異動查詢', icon: 'fa-clock-rotate-left', color: 'text-orange-400', group: '查詢與報表' },

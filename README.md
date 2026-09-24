@@ -11,7 +11,7 @@
 | `mobile.html` | 舊網址，自動轉到 `m/` |
 | `firebase-init.js` | 桌機版 Firebase 初始化、登入、庫存即時監聽 |
 | `js/shared/*.js` | 桌機與手機共用：Firebase 設定、資料格式、庫存交易核心、揀貨清單 |
-| `js/01-core.js` … `js/21-step-bars.js` | 桌機應用程式模組，依編號順序載入 |
+| `js/01-core.js` … `js/22-report-print.js` | 桌機應用程式模組，依編號順序載入 |
 | `firestore.rules` | Firestore 安全規則（**需要另外發布到 Firebase 才會生效**） |
 | `tests/` | 安全規則測試與端對端測試（Firebase 模擬器） |
 
@@ -96,6 +96,7 @@
 | 19-stocktake | 庫存盤點（選區域、列印盤點表、輸入實盤、差異以交易調整） |
 | 20-home | 今日工作（登入後第一頁）：待辦卡片、常用流程；`goTab()` 切畫面並同步選單 |
 | 21-step-bars | 波次、調撥、盤點畫面上方的步驟列（依畫面狀態亮起目前這一步） |
+| 22-report-print | 報表列印與 Excel 匯出：`printTableReport`（A4 分頁，每頁抬頭／表頭／頁碼，最後一頁合計與簽核欄）、`exportTableReportXlsx`（上方抬頭與查詢條件、合計列）、`sheetToJsonSmart`（匯入時跳過抬頭） |
 
 ## 開發規則
 

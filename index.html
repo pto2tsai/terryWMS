@@ -164,7 +164,6 @@
                 <div class="nav-item" onclick="switchTab('stocktake', event)"><i class="fa-solid fa-clipboard-check w-4 text-center mr-2 text-sky-400"></i>庫存盤點</div>
                 <div class="nav-item" onclick="switchTab('move', event)"><i class="fa-solid fa-layer-group w-4 text-center mr-2 text-blue-400"></i>智能調度（發到手機）</div>
                 <div class="nav-item" onclick="switchTab('merge', event)"><i class="fa-solid fa-arrows-turn-to-dots w-4 text-center mr-2 text-blue-400"></i>板號異動（移板／併板）</div>
-                <div class="nav-item" onclick="switchTab('external-warehouse', event)"><i class="fa-solid fa-building w-4 text-center mr-2 text-purple-400"></i>外倉管理</div>
             </div>
 
             <div class="nav-group-header" onclick="toggleNavGroup('grp-query')">
@@ -195,6 +194,7 @@
             </div>
             <div class="nav-group-items collapsed" id="grp-settings">
                 <div class="nav-item" onclick="switchTab('product-master', event)"><i class="fa-solid fa-box w-4 text-center mr-2 "></i>品項主檔</div>
+                <div class="nav-item" onclick="switchTab('external-warehouse', event)"><i class="fa-solid fa-building w-4 text-center mr-2 text-purple-400"></i>外倉管理</div>
                 <div class="nav-item" onclick="switchTab('user-management', event)"><i class="fa-solid fa-users-gear w-4 text-center mr-2 text-blue-400"></i>使用者管理</div>
                 <div class="nav-item" onclick="switchTab('label-print', event)"><i class="fa-solid fa-print w-4 text-center mr-2 text-purple-400"></i>標籤列印</div>
                 <div class="nav-item" onclick="switchTab('data-import', event)"><i class="fa-solid fa-file-import w-4 text-center mr-2 text-amber-400"></i>資料匯入</div>
@@ -1909,6 +1909,7 @@
                             <span class="text-slate-500 hidden" id="report-count-info"></span>
                         </div>
                         <div class="flex gap-2">
+                            <button onclick="setReportOrgName()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs mr-1" title="設定報表最上面的公司名稱"><i class="fa-solid fa-heading mr-1"></i>報表抬頭</button>
                             <button onclick="exportReportExcel()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5">
                                 <i class="fa-solid fa-file-excel"></i>匯出
                             </button>
@@ -4745,5 +4746,6 @@
     <script src="js/19-stocktake.js"></script>
     <script src="js/20-home.js"></script>
     <script src="js/21-step-bars.js"></script>
+    <script src="js/22-report-print.js"></script>
 </body>
 </html>

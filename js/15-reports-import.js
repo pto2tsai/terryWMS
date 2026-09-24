@@ -546,7 +546,18 @@ function generateWaveEfficiency(dateFrom, dateTo) {
     renderReportTable('揀貨效率分析', ['波次編號', '物流商', '總件數', '耗時分鐘', '效率'], data);
 }
 
+function reportMeta() {
+    var r = window._reportData, meta = [];
+    // 庫存類報表是「目前」的狀況，不看日期區間
+    var snapshot = ['inventory-summary', 'inventory-expiry', 'inventory-location', 'low-stock', 'pending-orders', 'order-status'].indexOf(r.currentType) >= 0;
+    if (!snapshot && r.dateFrom && r.dateFrom !== '-') meta.push(['查詢期間', r.dateFrom === r.dateTo ? r.dateFrom : r.dateFrom + ' ～ ' + r.dateTo]);
+    else meta.push(['資料時間', '截至 ' + new Date().toLocalYMD()]);
+    return meta;
+}
+
 function renderReportTable(title, columns, data) {
+    window._reportData.title = title;
+    window._reportData.columns = columns;
     var preview = document.getElementById('report-preview-area');
     var titleEl = document.getElementById('report-preview-title');
     var dateInfoEl = document.getElementById('report-date-info');
@@ -566,7 +577,7 @@ function renderReportTable(title, columns, data) {
     
     // 更新日期區間和筆數
     if (dateInfoEl) {
-        dateInfoEl.innerHTML = '<i class="fa-solid fa-calendar mr-1"></i>' + window._reportData.dateFrom + ' ~ ' + window._reportData.dateTo;
+        dateInfoEl.innerHTML = '<i class="fa-solid fa-calendar mr-1"></i>' + reportMeta()[0][1];
         dateInfoEl.classList.remove('hidden');
     }
     if (countInfoEl) {
@@ -582,8 +593,15 @@ function renderReportTable(title, columns, data) {
         });
     }
 
-    // 直接輸出表格，不再有內部標題區塊
-    var html = '<table class="w-full text-sm"><thead class="bg-slate-700/80 sticky top-0 z-10"><tr>';
+    // 報表抬頭：公司、報表名稱、查詢條件、製表時間（列印與 Excel 也有同樣的抬頭）
+    var metaHtml = reportMeta().concat([['製表時間', new Date().toLocaleString('zh-TW', { hour12: false })], ['筆數', data.length + ' 筆']])
+        .map(function(m) { return '<span style="margin:0 12px;white-space:nowrap">' + m[0] + '：<b class="text-white">' + m[1] + '</b></span>'; }).join('');
+    var html = '<div class="px-4 pt-4 pb-3 border-b border-slate-700 mb-1">' +
+        '<div class="text-center text-slate-400 text-xs tracking-widest">' + window.getReportOrgName() + '</div>' +
+        '<div class="text-center text-white text-xl font-bold my-1">' + title + '</div>' +
+        '<div class="text-slate-400 text-xs text-center">' + metaHtml + '</div></div>';
+
+    html += '<table class="w-full text-sm"><thead class="bg-slate-700/80 sticky top-0 z-10"><tr>';
 
     // 標題列：數字欄位靠右對齊，文字欄位靠左對齊
     columns.forEach(function(col) {
@@ -604,44 +622,38 @@ function renderReportTable(title, columns, data) {
         html += '</tr>';
     });
 
+    // 合計列（數量、件數、重量、金額等欄位）
+    var sumCols = columns.filter(function(col) {
+        return numericColumns[col] && !/(率|比|價|平均|排名|序|天數|天$|日$|容)/.test(col) && /(數|量|重|金額|板|件|筆|總|合計|租)/.test(col);
+    });
+    if (sumCols.length > 0) {
+        html += '<tr class="bg-slate-700/60 font-bold border-t-2 border-slate-400">';
+        columns.forEach(function(col, i) {
+            if (sumCols.indexOf(col) >= 0) {
+                var sum = data.reduce(function(t, r) { return t + (parseFloat(r[col]) || 0); }, 0);
+                html += '<td class="px-4 py-2.5 text-right text-yellow-300 font-mono">' + (Math.round(sum * 100) / 100).toLocaleString() + '</td>';
+            } else html += '<td class="px-4 py-2.5 text-white">' + (i === 0 ? '合計' : '') + '</td>';
+        });
+        html += '</tr>';
+    }
     html += '</tbody></table>';
     preview.innerHTML = html;
 }
 
 window.exportReportExcel = function() {
-    var data = window._reportData.currentData;
-    if (!data || data.length === 0) {
-        alert('沒有資料可匯出');
-        return;
-    }
-
-    var ws = XLSX.utils.json_to_sheet(data);
-    var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '報表');
-
-    var fileName = (window._reportData.currentType || 'report') + '_' +
-                   window._reportData.dateFrom + '_' +
-                   window._reportData.dateTo + '.xlsx';
-
-    XLSX.writeFile(wb, fileName);
+    var r = window._reportData;
+    if (!r.currentData || r.currentData.length === 0) { alert('沒有資料可匯出'); return; }
+    var title = r.title || '報表';
+    window.exportTableReportXlsx({
+        title: title, meta: reportMeta(), columns: r.columns || Object.keys(r.currentData[0]), rows: r.currentData,
+        fileName: title + '_' + (r.dateFrom && r.dateFrom !== '-' ? r.dateFrom + '_' + r.dateTo : new Date().toLocalYMD()) + '.xlsx'
+    });
 };
 
 window.printReport = function() {
-    var preview = document.getElementById('report-preview-area');
-    if (!preview.innerHTML.includes('<table')) {
-        alert('沒有報表可列印');
-        return;
-    }
-
-    var printWindow = window.open('', '_blank', 'width=1100,height=800');
-    printWindow.document.write('<!DOCTYPE html><html><head><title>報表列印</title>' +
-        '<style>body{font-family:"Microsoft JhengHei",sans-serif;padding:20px}' +
-        'h3{margin-bottom:5px}p{color:#666;margin-bottom:15px}' +
-        'table{width:100%;border-collapse:collapse;font-size:12px}' +
-        'th,td{border:1px solid #333;padding:6px;text-align:left}' +
-        'th{background:#f0f0f0}tr:nth-child(even){background:#f9f9f9}</style></head>' +
-        '<body>' + preview.innerHTML + '<script>window.print();<\/script></body></html>');
-    printWindow.document.close();
+    var r = window._reportData;
+    if (!r.currentData || r.currentData.length === 0) { alert('沒有報表可列印'); return; }
+    window.printTableReport({ title: r.title || '報表', meta: reportMeta(), columns: r.columns || Object.keys(r.currentData[0]), rows: r.currentData });
 };
 
 window.generateTodayReport = function() {
@@ -1225,7 +1237,7 @@ async function processImportFile(file) {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+            const jsonData = window.sheetToJsonSmart ? window.sheetToJsonSmart(firstSheet) : XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
 
             if (jsonData.length === 0) {
                 showNotification('❌ Excel 檔案沒有資料', 'error');

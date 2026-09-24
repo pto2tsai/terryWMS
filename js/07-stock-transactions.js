@@ -242,6 +242,7 @@
 
         function renderInventoryLogs(logs) {
             var tbody = document.getElementById('inventory-log-list');
+            window._lastInventoryLogs = logs;   // 匯出用
 
             if (logs.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="10" class="text-center text-slate-500 py-16"><i class="fa-solid fa-inbox text-4xl mb-3 opacity-30"></i><p>查無資料</p></td></tr>';
@@ -375,37 +376,27 @@
             }
         }
 
+        // 匯出目前查詢結果（Excel，含抬頭與查詢條件）
         window.exportInventoryLog = function() {
-            var logs = [];
-            var rows = document.querySelectorAll('#inventory-log-list tr');
-
-            if (rows.length === 0 || rows[0].querySelector('td[colspan]')) {
-                alert('沒有資料可匯出');
-                return;
-            }
-
-            var csv = '\uFEFF日期時間,類型,品項,規格,數量,儲位,批號,備註\n';
-
-            rows.forEach(function(row) {
-                var cells = row.querySelectorAll('td');
-                if (cells.length >= 8) {
-                    var rowData = [];
-                    cells.forEach(function(cell, idx) {
-                        var text = cell.textContent.trim().replace(/"/g, '""');
-                        rowData.push('"' + text + '"');
-                    });
-                    csv += rowData.join(',') + '\n';
-                }
+            var logs = window._lastInventoryLogs || [];
+            if (logs.length === 0) { alert('沒有資料可匯出，請先查詢'); return; }
+            var rows = logs.map(function(log) {
+                return {
+                    '時間': formatTimestamp(log.timestamp), '公司': log.company || '', '類型': getLogTypeLabel(log.type),
+                    '品名': log.productName || '', '規格': log.spec || '', '數量變動': Number(log.quantityChange) || 0,
+                    '重量變動kg': Number(log.weightChange) || 0, '儲位': log.fromLocation && log.toLocation && log.fromLocation !== log.toLocation ? log.fromLocation + ' → ' + log.toLocation : (log.locationId || ''),
+                    '板號': log.palletId || '', '批號': log.batchNo || '', '操作人': log.operator || '', '備註': log.note || ''
+                };
             });
-
-            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            var url = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = '庫存異動記錄_' + new Date().toLocalYMD() + '.csv';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            var from = (document.getElementById('log-date-from') || {}).value || '';
+            var to = (document.getElementById('log-date-to') || {}).value || '';
+            var kw = (document.getElementById('log-product-name') || {}).value || '';
+            var meta = [['查詢期間', (from || '最早') + ' ～ ' + (to || '今天')]];
+            if (kw) meta.push(['品名關鍵字', kw]);
+            window.exportTableReportXlsx({
+                title: '庫存異動記錄', meta: meta, rows: rows, totals: null,
+                columns: ['時間', '公司', '類型', '品名', '規格', '數量變動', '重量變動kg', '儲位', '板號', '批號', '操作人', '備註'],
+                fileName: '庫存異動記錄_' + (from || '') + (to ? '_' + to : '') + '_' + new Date().toLocalYMD() + '.xlsx'
+            });
         };
 
