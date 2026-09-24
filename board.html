@@ -31,7 +31,11 @@
         .stat { background: #111827; border-radius: 1vw; padding: .8vw 1vw; border-top: .35vw solid var(--c); }
         .stat .n { font-size: 3.6vw; font-weight: 900; color: #fff; line-height: 1.1; }
         .stat .l { font-size: 1.3vw; color: #94a3b8; }
-        .cols { flex: 1; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1vw; min-height: 0; }
+        .cols { flex: 1; display: grid; grid-template-columns: 2fr 1fr; gap: 1vw; min-height: 0; }
+        /* 調度工單一週用不到幾次：有進行中的工單才出現第三欄 */
+        .cols.with-dispatch { grid-template-columns: 2fr 1fr 1fr; }
+        #col-dispatch { display: none; }
+        .cols.with-dispatch #col-dispatch { display: flex; }
         .col.main h2 { font-size: 2.3vw; }
         .col.main .card .name { font-size: 2.3vw; }
         .col.main .card .qty { font-size: 2.6vw; }
@@ -89,10 +93,10 @@
             <div class="stat" style="--c:#ef4444"><div class="n" id="s-exp">0</div><div class="l">7 天內到期／已過期（板）</div></div>
         </div>
         <!-- 波次出貨是現場最主要的工作：放最左邊、佔一半畫面、字最大 -->
-        <div class="cols">
+        <div class="cols" id="cols">
             <div class="col main" style="--c:#ea580c"><h2><span>📦 揀貨波次（出貨）</span><span id="c-waves">0</span></h2><div class="list" id="l-waves"></div></div>
             <div class="col" style="--c:#16a34a"><h2><span>🚚 待上架</span><span id="c-tasks">0</span></h2><div class="list" id="l-tasks"></div></div>
-            <div class="col" style="--c:#7c3aed"><h2><span>🔁 調度工單</span><span id="c-dispatch">0</span></h2><div class="list" id="l-dispatch"></div></div>
+            <div class="col" id="col-dispatch" style="--c:#7c3aed"><h2><span>🔁 調度工單</span><span id="c-dispatch">0</span></h2><div class="list" id="l-dispatch"></div></div>
         </div>
     </div>
 
@@ -188,6 +192,7 @@
         });
         // 調度工單（手機「調度工單」）
         listen(db.collection('dispatchOrders').where('status', 'in', ['pending', 'in_progress']), function(rows) {
+            $('cols').classList.toggle('with-dispatch', rows.length > 0);
             render('l-dispatch', 'c-dispatch', rows, function(o) {
                 var done = (o.completedOps || []).length, all = (o.operations || []).length;
                 return '<div class="card" style="--c:#7c3aed"><div class="t"><span class="name">' + esc(o.productName || '') + ' ' + esc(o.spec || '') + '</span><span class="qty">' + done + '/' + all + '</span></div>' +
