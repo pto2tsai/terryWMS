@@ -1620,10 +1620,14 @@ window.clearLocalStorage = function() {
                 html += '<td class="p-2"><input type="checkbox" class="wave-order-check w-4 h-4" data-id="' + o.id + '"></td>';
                 html += '<td class="p-2 font-mono text-cyan-400">' + (o.orderNo || o.id) + '</td>';
                 html += '<td class="p-2 text-white">' + (o.customer || '-') + '</td>';
-                html += '<td class="p-2 text-purple-400">' + (o.logistics || '-') + '</td>';
+                var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+                // 沒有物流商的單：直接在這裡指定（自動建波次不會排它）
+                html += (!o.logistics || o.logistics === '未指定') && o.id
+                    ? '<td class="p-2"><select class="bg-red-900 border border-red-500 rounded px-1 py-1 text-xs text-white" onchange="setOrderLogistics(\'' + esc(o.id) + '\', this.value)"><option value="">⚠️ 指定物流商</option>' +
+                        Object.keys(LOGISTICS_KEYWORDS).map(function(k) { return '<option>' + esc(k) + '</option>'; }).join('') + '</select></td>'
+                    : '<td class="p-2 text-purple-400">' + esc(o.logistics) + '</td>';
                 var its = window.orderOpenItems(o);
                 var pk = its.reduce(function(t, it) { return t + (parseFloat(it.packageQty) || 1); }, 0);
-                var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
                 html += '<td class="p-2 text-slate-300">' + esc(its.map(function(it) { return it.productName; }).slice(0, 2).join('、') + (its.length > 2 ? ' 等 ' + its.length + ' 項' : '')) +
                     (Array.isArray(o.backorderItems) ? ' <span class="text-[10px] px-1 rounded bg-amber-900/60 text-amber-300">欠貨</span>' : '') + '</td>';
                 html += '<td class="p-2 text-right text-yellow-400 font-bold">' + pk + '</td>';
