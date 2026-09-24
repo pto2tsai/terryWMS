@@ -597,6 +597,96 @@ function askPackageQty(lines) {
     });
 }
 
+// ERP 銷貨明細的欄位：每個欄位可接受的標題（依序比對，完全相同才算）
+const ERP_HEADERS = {
+    DATE: ['銷貨日期', '單據日期', '日期'],
+    ORDER_NO: ['銷貨單號', '單號', '單據號碼', '訂單單號'],
+    CUST_CODE: ['客戶代號', '客戶編號', '代號'],
+    CUST_NAME: ['客戶全名', '客戶名稱', '客戶簡稱', '客戶'],
+    PRODUCT: ['品名'],
+    SPEC: ['規格'],
+    PKG_QTY: ['包裝數量'],
+    PKG_UNIT: ['包裝單位'],
+    QTY: ['銷貨數量', '數量'],
+    UNIT: ['單位'],
+    PRICE: ['單價'],
+    REMARK: ['備註', '單頭備註', '單身備註', '物流商', '物流'],
+    BATCH: ['批號'],
+    ADDR1: ['送貨地址一', '送貨地址1', '送貨地址', '地址一', '地址'],
+    ADDR2: ['送貨地址二', '送貨地址2', '地址二']
+};
+const ERP_REQUIRED = { ORDER_NO: '銷貨單號', PRODUCT: '品名', QTY: '銷貨數量', REMARK: '備註（物流商）' };
+
+// 在前 20 列找標題列（有「品名」那一列），回傳 { row, col } 或 { error }
+function findErpHeader(rows) {
+    const norm = v => String(v == null ? '' : v).replace(/\s/g, '');
+    let hr = -1;
+    for (let i = 0; i < Math.min(rows.length, 20); i++) {
+        if ((rows[i] || []).some(c => norm(c) === '品名')) { hr = i; break; }
+    }
+    if (hr < 0) return { error: '找不到標題列（要有「品名」「銷貨單號」「銷貨數量」「備註」這些欄位）。\n請確認匯出的是鼎新「銷貨明細」報表。' };
+    const cells = (rows[hr] || []).map(norm);
+    const col = {}, used = {};
+    Object.keys(ERP_HEADERS).forEach(k => {
+        for (const name of ERP_HEADERS[k]) {
+            const i = cells.findIndex((c, j) => c === name && !used[j]);
+            if (i >= 0) { col[k] = i; used[i] = true; return; }
+        }
+    });
+    const missing = Object.keys(ERP_REQUIRED).filter(k => col[k] === undefined).map(k => ERP_REQUIRED[k]);
+    if (missing.length) return { error: '報表少了這些欄位：' + missing.join('、') + '\n請在鼎新報表把欄位加回來再匯出。' };
+    return { row: hr, col: col };
+}
+
+// 匯入時物流商認不出來（備註沒寫或寫錯）的新訂單：列出來請人工選；選「先不排」就留在未指定
+function askLogistics(orders) {
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const opts = '<option value="">-- 請選擇 --</option>' + Object.keys(LOGISTICS_KEYWORDS).map(k => '<option value="' + esc(k) + '">' + esc(k) + '</option>').join('') +
+        '<option value="未指定">先不排（之後再指定）</option>';
+    return new Promise(resolve => {
+        let rows = '';
+        orders.forEach((o, i) => {
+            rows += '<tr class="border-b border-slate-700"><td class="p-2 text-cyan-400 font-mono text-xs">' + esc(o.orderNo) + '</td>' +
+                '<td class="p-2 text-white">' + esc(o.customer) + '</td>' +
+                '<td class="p-2 text-amber-300">' + (esc(o.remark) || '<span class="text-slate-500">（備註空白）</span>') + '</td>' +
+                '<td class="p-2 text-slate-300 text-xs">' + esc(o.address) + '</td>' +
+                '<td class="p-2"><select class="lg-ask-sel bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" data-i="' + i + '">' + opts + '</select></td></tr>';
+        });
+        const content = '<div class="text-sm text-amber-300 mb-3">以下訂單的備註看不出物流商，請選擇（下次請業務在鼎新備註寫上物流商，例如：黑貓、新竹、大榮、自取）：</div>' +
+            '<div class="flex items-center gap-2 mb-2 text-sm text-slate-300">全部設為 <select id="lg-ask-all" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white">' + opts + '</select></div>' +
+            '<div class="max-h-[50vh] overflow-y-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-xs"><th class="p-2 text-left">單號</th><th class="p-2 text-left">客戶</th><th class="p-2 text-left">備註</th><th class="p-2 text-left">地址</th><th class="p-2 text-left">物流商</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+            '<div id="lg-ask-msg" class="text-red-400 text-sm mt-2"></div>' +
+            '<div class="flex gap-2 mt-4"><button id="lg-ask-ok" class="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">選好了，繼續匯入</button>' +
+            '<button id="lg-ask-cancel" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">取消匯入</button></div>';
+        WMS.createModal('modal-lg-ask', { title: '請選物流商（' + orders.length + ' 張訂單）', icon: 'fa-solid fa-truck text-amber-400', content: content, width: '860px', closeOnBackdrop: false });
+        const done = ok => { WMS.closeModal('modal-lg-ask'); resolve(ok); };
+        document.querySelector('#modal-lg-ask button[onclick*="closeModal"]').onclick = () => done(false);
+        document.getElementById('lg-ask-cancel').onclick = () => done(false);
+        document.getElementById('lg-ask-all').onchange = e => { document.querySelectorAll('.lg-ask-sel').forEach(s => { s.value = e.target.value; }); };
+        document.getElementById('lg-ask-ok').onclick = () => {
+            const sels = document.querySelectorAll('.lg-ask-sel');
+            let missing = 0;
+            sels.forEach(sel => { if (!sel.value) { missing++; sel.classList.add('border-red-500'); } else sel.classList.remove('border-red-500'); });
+            if (missing) { document.getElementById('lg-ask-msg').innerText = '還有 ' + missing + ' 張沒選物流商'; return; }
+            sels.forEach(sel => { orders[parseInt(sel.dataset.i, 10)].logistics = sel.value; });
+            done(true);
+        };
+    });
+}
+
+// 訂單列表：未指定物流的單可以直接改物流商
+window.setOrderLogistics = async function(orderId, logistics) {
+    if (!logistics) return;
+    const o = window._orderData.orders.find(x => x.id === orderId);
+    try {
+        await window.db.collection('salesOrders').doc(orderId).update({ logistics: logistics });
+        if (o) o.logistics = logistics;
+        renderOrderList();
+        const m = document.getElementById('modal-create-wave');
+        if (m && !m.classList.contains('hidden')) window.openCreateWaveModal();
+    } catch (e) { alert('❌ 更新物流商失敗：' + e.message); }
+};
+
 window.importERPExcel = async function(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -609,25 +699,11 @@ window.importERPExcel = async function(event) {
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-            const dataRows = rows.slice(5);
-
-            const COL = {
-                DATE: 0,        // 銷貨日期
-                ORDER_NO: 1,    // 銷貨單號
-                CUST_CODE: 2,   // 客戶代號
-                CUST_NAME: 3,   // 客戶全名
-                PRODUCT: 4,     // 品名
-                SPEC: 5,        // 規格
-                PKG_QTY: 6,     // 包裝數量
-                PKG_UNIT: 7,    // 包裝單位
-                QTY: 8,         // 銷貨數量
-                UNIT: 9,        // 單位
-                PRICE: 10,      // 單價
-                REMARK: 11,     // 備註 (物流商)
-                BATCH: 12,      // 批號
-                ADDR1: 13,      // 送貨地址一
-                ADDR2: 14       // 送貨地址二
-            };
+            // 欄位依「標題」找（鼎新報表多一欄、換順序也讀得對）；缺必要欄位就擋下，不會整批讀錯
+            const hdr = findErpHeader(rows);
+            if (hdr.error) { alert('❌ 無法匯入：' + hdr.error); return; }
+            const COL = hdr.col;
+            const dataRows = rows.slice(hdr.row + 1);
 
             const orderMap = new Map();
             let lastOrderNo = null;
@@ -714,6 +790,13 @@ window.importERPExcel = async function(event) {
             }
 
             const orders = Array.from(orderMap.values());
+
+            // 新訂單認不出物流商：列出來請人工選（已經匯入過的單不再問）
+            const noLogistics = orders.filter(o => o.logistics === '未指定' && !window._orderData.orders.some(x => x.orderNo === o.orderNo));
+            if (noLogistics.length > 0) {
+                const ok = await askLogistics(noLogistics);
+                if (!ok) { alert('已取消匯入，資料沒有變動。'); return; }
+            }
 
             console.log('解析訂單:', orders.length, '筆');
 
@@ -804,21 +887,17 @@ window.importERPExcel = async function(event) {
             refreshWaveList();
 
             if (savedCount > 0) {
-                var pendingOrders = window._orderData.orders.filter(window.orderWaveable);
-
-                var autoCreate = confirm(
-                    '✅ 匯入完成！\n\n' +
-                    '新增：' + savedCount + ' 筆\n' +
-                    (modifiedCount > 0 ? '⚠️ 異動：' + modifiedCount + ' 筆\n' : '') +
-                    '略過（無變更）：' + skipCount + ' 筆\n' +
-                    '待建波次：' + pendingOrders.length + ' 筆\n\n' +
+                var plan = planWavesByLogistics();
+                var autoCreate = plan.count > 0 && confirm(
+                    '✅ 匯入完成！新增 ' + savedCount + ' 筆' +
+                    (modifiedCount > 0 ? '、⚠️ 異動 ' + modifiedCount + ' 筆' : '') +
+                    (skipCount > 0 ? '、略過（沒變）' + skipCount + ' 筆' : '') + '\n\n' +
                     '━━━━━━━━━━━━━━━━━━━━━━\n' +
-                    '是否要自動依物流商建立波次？\n' +
-                    '（系統將依 13 種物流商自動分組建立）'
+                    plan.text + '\n按「確定」就建立波次，按「取消」先不建'
                 );
-
+                if (!autoCreate && plan.count === 0) alert('✅ 匯入完成！新增 ' + savedCount + ' 筆\n\n' + plan.text);
                 if (autoCreate) {
-                    await autoCreateWavesByLogistics();
+                    await autoCreateWavesByLogistics({ skipConfirm: true });
                 }
             } else {
                 var resultMsg = '✅ 匯入完成！\n\n' +
@@ -902,36 +981,35 @@ function getLogisticsColor(logistics) {
     return colors[logistics] || 'bg-slate-600';
 }
 
-window.autoCreateWavesByLogistics = async function() {
+// 依物流商分組的預覽（未指定物流的單不自動排，要先指定物流商）
+function planWavesByLogistics() {
     var pendingOrders = window._orderData.orders.filter(window.orderWaveable);
+    var groups = {}, unassigned = [];
+    pendingOrders.forEach(function(order) {
+        var lg = order.logistics || '未指定';
+        if (lg === '未指定') { unassigned.push(order.orderNo); return; }
+        (groups[lg] = groups[lg] || []).push(order);
+    });
+    var keys = Object.keys(groups);
+    var text = keys.length ? '將建立 ' + keys.length + ' 個波次：\n' : '沒有可以建立的波次。\n';
+    keys.forEach(function(lg) {
+        var totalQty = 0;
+        groups[lg].forEach(function(o) { window.orderOpenItems(o).forEach(function(item) { totalQty += item.packageQty || 1; }); });
+        text += '• ' + lg + '：' + groups[lg].length + ' 單 / ' + totalQty + ' 件\n';
+    });
+    if (unassigned.length) text += '\n⚠️ ' + unassigned.length + ' 張沒有物流商，先不排（在「建立波次」清單裡指定物流商後再排）：\n' + unassigned.slice(0, 10).join('、') + (unassigned.length > 10 ? '…' : '') + '\n';
+    return { groups: groups, count: keys.length, text: text };
+}
 
-    if (pendingOrders.length === 0) {
-        alert('沒有待處理的訂單');
+window.autoCreateWavesByLogistics = async function(opts) {
+    var plan = planWavesByLogistics();
+    if (plan.count === 0) {
+        alert(plan.text);
         return;
     }
+    var logisticsGroups = plan.groups;
 
-    var logisticsGroups = {};
-    pendingOrders.forEach(function(order) {
-        var logistics = order.logistics || '未指定物流';
-        if (!logisticsGroups[logistics]) {
-            logisticsGroups[logistics] = [];
-        }
-        logisticsGroups[logistics].push(order);
-    });
-
-    var logisticsCount = Object.keys(logisticsGroups).length;
-
-    var previewText = '將建立 ' + logisticsCount + ' 個波次：\n\n';
-    Object.keys(logisticsGroups).forEach(function(logistics) {
-        var orders = logisticsGroups[logistics];
-        var totalQty = 0;
-        orders.forEach(function(o) {
-            window.orderOpenItems(o).forEach(function(item) { totalQty += item.packageQty || 1; });
-        });
-        previewText += '• ' + logistics + '：' + orders.length + ' 單 / ' + totalQty + ' 件\n';
-    });
-
-    if (!confirm(previewText + '\n確定建立嗎？')) {
+    if (!(opts && opts.skipConfirm) && !confirm(plan.text + '\n確定建立嗎？')) {
         return;
     }
 
