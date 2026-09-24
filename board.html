@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terry WMS 現場看板</title>
+    <!--
+      現場看板：放在倉庫現場的電視／大螢幕，只顯示「現在要做的事」
+      - 沒有選單、全螢幕、大字（3～5 公尺外看得清楚）
+      - 資料即時更新（Firestore 即時監聽，不是定時整頁重新整理），斷線會自動重新連線
+      - 建議用「唯讀」角色的專用帳號登入：螢幕只能看、不能改資料；登入一次就會記住
+      - 晚上 20:00～隔天 06:30 自動調暗（網址加 ?night=off 可關閉）
+    -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="js/shared/firebase-config.js"></script>
+    <script src="js/shared/data-format.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; background: #0b1120; color: #e2e8f0; font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif; overflow: hidden; }
+        body.night #board { filter: brightness(0.35); }
+        #board { height: 100%; display: flex; flex-direction: column; padding: 1.2vw 1.4vw; gap: 1vw; transition: filter 1s; }
+        header { display: flex; align-items: center; gap: 1.5vw; }
+        header h1 { font-size: 2.6vw; font-weight: 900; color: #fff; }
+        #clock { margin-left: auto; font-size: 3vw; font-weight: 900; color: #fff; font-variant-numeric: tabular-nums; }
+        #date { font-size: 1.4vw; color: #94a3b8; }
+        #conn { font-size: 1.2vw; padding: .3vw .8vw; border-radius: 99px; background: #14532d; color: #bbf7d0; }
+        #conn.bad { background: #7f1d1d; color: #fecaca; }
+        .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1vw; }
+        .stat { background: #111827; border-radius: 1vw; padding: .8vw 1vw; border-top: .35vw solid var(--c); }
+        .stat .n { font-size: 3.6vw; font-weight: 900; color: #fff; line-height: 1.1; }
+        .stat .l { font-size: 1.3vw; color: #94a3b8; }
+        .cols { flex: 1; display: grid; grid-template-columns: 2fr 1fr; gap: 1vw; min-height: 0; }
+        /* 調度工單一週用不到幾次：有進行中的工單才出現第三欄 */
+        .cols.with-dispatch { grid-template-columns: 2fr 1fr 1fr; }
+        #col-dispatch { display: none; }
+        .cols.with-dispatch #col-dispatch { display: flex; }
+        .col.main h2 { font-size: 2.3vw; }
+        .col.main .card .name { font-size: 2.3vw; }
+        .col.main .card .qty { font-size: 2.6vw; }
+        .col.main .card .sub { font-size: 1.6vw; }
+        .col.main .bar { height: 1vw; }
+        .col { background: #111827; border-radius: 1vw; display: flex; flex-direction: column; min-height: 0; border: .2vw solid var(--c); }
+        .col h2 { background: var(--c); color: #fff; font-size: 1.9vw; padding: .6vw 1vw; display: flex; justify-content: space-between; }
+        .list { flex: 1; overflow: hidden; padding: .8vw; display: flex; flex-direction: column; gap: .7vw; }
+        .card { background: #1e293b; border-radius: .7vw; padding: .7vw .9vw; border-left: .45vw solid var(--c); }
+        .card.red { border-left-color: #ef4444; background: #3b1219; }
+        .card .t { display: flex; justify-content: space-between; align-items: baseline; gap: .6vw; }
+        .card .name { font-size: 1.8vw; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .card .qty { font-size: 2.1vw; font-weight: 900; color: #fde047; white-space: nowrap; }
+        .card .sub { font-size: 1.35vw; color: #cbd5e1; margin-top: .2vw; display: flex; justify-content: space-between; gap: .6vw; }
+        .card .loc { color: #67e8f9; font-weight: 800; font-size: 1.6vw; white-space: nowrap; }
+        .bar { height: .7vw; background: #334155; border-radius: 99px; margin-top: .5vw; overflow: hidden; }
+        .bar > div { height: 100%; background: var(--c); }
+        .empty { margin: auto; text-align: center; color: #4ade80; font-size: 2vw; font-weight: 800; }
+        /* 像速食店出餐螢幕：每張單顯示等了多久，超時變黃、變紅；新進來的單閃一下 */
+        .card .age { font-weight: 800; color: #94a3b8; white-space: nowrap; }
+        .card.warn { border-left-color: #eab308; background: #3a3413; }
+        .card.warn .age { color: #fde047; }
+        .card.late { border-left-color: #ef4444; background: #3b1219; }
+        .card.late .age { color: #fca5a5; animation: blink 1.2s step-end infinite; }
+        .card.fresh { animation: fresh 2.5s ease-out; }
+        @keyframes blink { 50% { opacity: .35; } }
+        @keyframes fresh { 0% { box-shadow: 0 0 0 .4vw #fff; } 100% { box-shadow: 0 0 0 0 transparent; } }
+        .more { text-align: center; color: #94a3b8; font-size: 1.3vw; }
+        #login { position: fixed; inset: 0; background: #0b1120; display: flex; align-items: center; justify-content: center; z-index: 10; }
+        #login form { background: #111827; padding: 32px; border-radius: 16px; width: 380px; display: flex; flex-direction: column; gap: 12px; }
+        #login h2 { color: #fff; font-size: 22px; }
+        #login p { color: #94a3b8; font-size: 13px; }
+        #login input { padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #0b1120; color: #fff; font-size: 16px; }
+        #login button { padding: 12px; border-radius: 8px; border: none; background: #2563eb; color: #fff; font-size: 16px; font-weight: bold; }
+        #login-err { color: #f87171; font-size: 14px; min-height: 18px; }
+    </style>
+</head>
+<body>
+    <div id="login">
+        <form onsubmit="doLogin(event)">
+            <h2>現場看板登入</h2>
+            <p>建議用「唯讀」角色的專用帳號（螢幕只能看、不能改資料）。登入一次就會記住。</p>
+            <input id="email" type="email" placeholder="帳號（Email）" autocomplete="username" required>
+            <input id="pwd" type="password" placeholder="密碼" autocomplete="current-password" required>
+            <div id="login-err"></div>
+            <button type="submit">登入</button>
+        </form>
+    </div>
+
+    <div id="board">
+        <header>
+            <h1>📋 倉庫現場看板</h1>
+            <span id="conn">● 即時更新中</span>
+            <div style="margin-left:auto;text-align:right">
+                <div id="clock">--:--</div>
+                <div id="date"></div>
+            </div>
+        </header>
+        <div class="stats">
+            <div class="stat" style="--c:#f97316"><div class="n" id="s-wave">0</div><div class="l">今天完成波次</div></div>
+            <div class="stat" style="--c:#fb923c"><div class="n" id="s-out">0</div><div class="l">今天出貨（件）</div></div>
+            <div class="stat" style="--c:#22c55e"><div class="n" id="s-in">0</div><div class="l">今天入庫（板）</div></div>
+            <div class="stat" style="--c:#6366f1"><div class="n" id="s-move">0</div><div class="l">今天搬板</div></div>
+            <div class="stat" style="--c:#ef4444"><div class="n" id="s-exp">0</div><div class="l">7 天內到期／已過期（板）</div></div>
+        </div>
+        <!-- 波次出貨是現場最主要的工作：放最左邊、佔一半畫面、字最大 -->
+        <div class="cols" id="cols">
+            <div class="col main" style="--c:#ea580c"><h2><span>📦 揀貨波次（出貨）</span><span id="c-waves">0</span></h2><div class="list" id="l-waves"></div></div>
+            <div class="col" style="--c:#16a34a"><h2><span>🚚 待上架</span><span id="c-tasks">0</span></h2><div class="list" id="l-tasks"></div></div>
+            <div class="col" id="col-dispatch" style="--c:#7c3aed"><h2><span>🔁 調度工單</span><span id="c-dispatch">0</span></h2><div class="list" id="l-dispatch"></div></div>
+        </div>
+    </div>
+
+    <script>
+    firebase.initializeApp(window.FIREBASE_CONFIG);
+    var db = firebase.firestore(), auth = firebase.auth();
+    window.db = db;
+    var unsubs = [];
+    // 等待時間超過幾分鐘變黃、變紅（揀貨波次、待上架、調度工單）
+    var AGE_LIMIT = { waves: [30, 60], tasks: [60, 120], dispatch: [120, 240] };
+    var seen = {}, lastDraw = {};
+    function minsSince(v) {
+        if (!v) return null;
+        var t = v.toDate ? v.toDate().getTime() : (v.seconds ? v.seconds * 1000 : new Date(v).getTime());
+        return isNaN(t) ? null : Math.max(0, Math.floor((Date.now() - t) / 60000));
+    }
+    function ageText(m) { return m == null ? '' : m < 60 ? '⏱ ' + m + ' 分' : '⏱ ' + Math.floor(m / 60) + ' 時 ' + (m % 60) + ' 分'; }
+    // 卡片共用：等待時間、超時顏色、新單閃一下
+    function ageClass(kind, row, extra) {
+        var m = minsSince(row.createdAt), lim = AGE_LIMIT[kind];
+        var cls = extra ? ' ' + extra : (m != null && m >= lim[1] ? ' late' : m != null && m >= lim[0] ? ' warn' : '');
+        var key = kind + ':' + row.id;
+        if (seen[kind] && !seen[kind][key + '#']) cls += ' fresh';
+        return { cls: cls, age: '<span class="age">' + ageText(m) + '</span>' };
+    }
+    function remember(kind, rows) { seen[kind] = {}; rows.forEach(function(r) { seen[kind][kind + ':' + r.id + '#'] = true; }); }
+    var MAX = 30;   // 每欄最多畫幾張卡片（實際依螢幕放得下的數量，其他顯示「還有 N 筆」）
+
+    function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function $(id) { return document.getElementById(id); }
+
+    window.doLogin = async function(e) {
+        e.preventDefault();
+        $('login-err').textContent = '';
+        try { await auth.signInWithEmailAndPassword($('email').value.trim(), $('pwd').value); }
+        catch (err) { $('login-err').textContent = '登入失敗：' + (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential' ? '帳號或密碼錯誤' : err.message); }
+    };
+
+    auth.onAuthStateChanged(async function(user) {
+        unsubs.forEach(function(u) { u(); }); unsubs = [];
+        if (!user) { $('login').style.display = 'flex'; return; }
+        try {
+            var snap = await db.collection('users').doc(String(user.email).toLowerCase()).get();
+            if (!snap.exists || snap.data().active === false) { $('login-err').textContent = '此帳號尚未開通或已停用'; return auth.signOut(); }
+        } catch (err) { $('login-err').textContent = '無法讀取帳號資料，請檢查網路'; return; }
+        $('login').style.display = 'none';
+        startListeners();
+        keepAwake();
+    });
+
+    // ---------- 連線狀態：斷線時顯示紅色，監聽失敗 10 秒後自動重新連線 ----------
+    var failed = false;
+    function setConn(ok, text) {
+        var el = $('conn');
+        el.className = ok ? '' : 'bad';
+        el.textContent = ok ? '● 即時更新中' : '● ' + (text || '連線中斷，重新連線中…');
+    }
+    window.addEventListener('offline', function() { setConn(false, '網路斷線，恢復後會自動更新'); });
+    window.addEventListener('online', function() { setConn(true); });
+
+    function listen(query, onData) {
+        var u = query.onSnapshot({ includeMetadataChanges: true }, function(snap) {
+            if (!snap.metadata.fromCache) setConn(true);
+            onData(snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }));
+        }, function(err) {
+            console.warn('看板監聽失敗', err);
+            if (failed) return;
+            failed = true;
+            setConn(false);
+            setTimeout(function() { failed = false; unsubs.forEach(function(f) { f(); }); unsubs = []; startListeners(); }, 10000);
+        });
+        unsubs.push(u);
+    }
+
+    // 依螢幕實際放得下幾張卡片顯示，放不下的寫「還有 N 筆」（不同尺寸的電視都不會被切掉）
+    function render(listId, countId, rows, cardFn, emptyText, kind) {
+        if (kind) lastDraw[kind] = function() { render(listId, countId, rows, cardFn, emptyText); };
+        $(countId).textContent = rows.length;
+        var el = $(listId);
+        if (rows.length === 0) { el.innerHTML = '<div class="empty">✅ ' + emptyText + '</div>'; return; }
+        var n = Math.min(rows.length, MAX);
+        var draw = function() {
+            el.innerHTML = rows.slice(0, n).map(cardFn).join('') + (rows.length > n ? '<div class="more">還有 ' + (rows.length - n) + ' 筆…</div>' : '');
+        };
+        draw();
+        while (n > 1 && el.scrollHeight > el.clientHeight + 1) { n--; draw(); }
+        if (kind) remember(kind, rows);
+    }
+    // 每分鐘更新等待時間（不用等資料變動）
+    setInterval(function() { Object.keys(lastDraw).forEach(function(k) { lastDraw[k](); }); }, 60000);
+
+    function startListeners() {
+        // 待上架：手機「入庫任務」（即期品待主管核准用紅色）
+        listen(db.collection('inboundTasks').where('status', '==', 'pending'), function(rows) {
+            rows.sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
+            render('l-tasks', 'c-tasks', rows, function(t) {
+                var hold = t.expiryApproval === 'pending', a = ageClass('tasks', t, hold ? 'red' : '');
+                return '<div class="card' + a.cls + '" style="--c:#16a34a"><div class="t"><span class="name">' + esc(t.productName) + ' ' + esc(t.spec || '') + '</span><span class="qty">' + esc(t.quantity) + ' 件</span></div>' +
+                    '<div class="sub"><span>' + (hold ? '🔴 即期品待主管核准' : esc(t.orderNo || t.palletId || '')) + '　' + a.age + '</span><span class="loc">→ ' + esc(t.locationId || '待指定') + '</span></div></div>';
+            }, '目前沒有待上架的貨', 'tasks');
+        });
+        // 揀貨波次：待揀、揀貨中、待分貨
+        listen(db.collection('waves').where('status', 'in', ['pending', 'picking', 'sorting']), function(rows) {
+            // 揀貨中的排最前面，其次待揀貨、待分貨；同狀態先來先做（等最久的在上面）
+            var rank = { picking: 0, pending: 1, sorting: 2 };
+            rows.sort(function(a, b) { return (rank[a.status] - rank[b.status]) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.waveNo || '').localeCompare(String(b.waveNo || '')); });
+            render('l-waves', 'c-waves', rows, function(w) {
+                var done = (w.completedItems || []).length, all = w.itemCount || (w.summary || []).length || 0;
+                var pct = all ? Math.min(100, Math.round(done / all * 100)) : 0;
+                var st = w.status === 'picking' ? '揀貨中' : w.status === 'sorting' ? '待分貨' : '待揀貨';
+                var a = ageClass('waves', w);
+                return '<div class="card' + a.cls + '" style="--c:#ea580c"><div class="t"><span class="name">' + esc(w.waveNo) + '　' + esc(w.logistics || '') + '</span><span class="qty">' + esc(w.totalQty || 0) + ' 件</span></div>' +
+                    '<div class="sub"><span>' + st + '　' + (w.orderCount || (w.orders || []).length) + ' 單　' + a.age + '</span><span>' + done + '/' + all + ' 項</span></div>' +
+                    '<div class="bar"><div style="width:' + pct + '%"></div></div></div>';
+            }, '目前沒有要揀的波次', 'waves');
+        });
+        // 調度工單（手機「調度工單」）
+        listen(db.collection('dispatchOrders').where('status', 'in', ['pending', 'in_progress']), function(rows) {
+            $('cols').classList.toggle('with-dispatch', rows.length > 0);
+            rows.sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
+            render('l-dispatch', 'c-dispatch', rows, function(o) {
+                var done = (o.completedOps || []).length, all = (o.operations || []).length, a = ageClass('dispatch', o);
+                return '<div class="card' + a.cls + '" style="--c:#7c3aed"><div class="t"><span class="name">' + esc(o.productName || '') + ' ' + esc(o.spec || '') + '</span><span class="qty">' + done + '/' + all + '</span></div>' +
+                    '<div class="sub"><span>' + esc(o.orderNo || '') + '　' + a.age + '</span><span>' + (done ? '進行中' : '待執行') + '</span></div>' +
+                    '<div class="bar"><div style="width:' + (all ? Math.round(done / all * 100) : 0) + '%"></div></div></div>';
+            }, '目前沒有調度工單', 'dispatch');
+        });
+        // 今天完成：今天的異動記錄
+        var today = new Date().toLocalYMD();
+        listen(db.collection('inventoryLogs').where('timestamp', '>=', window.localDayStartISO(today)), function(rows) {
+            var waves = {}, inN = 0, outQty = 0, moveN = 0;
+            rows.forEach(function(l) {
+                if (l.type === 'inbound') inN++;
+                else if (l.type === 'move') moveN++;
+                else if (l.type === 'outbound') {
+                    outQty += Math.abs(parseFloat(l.quantityChange) || 0);
+                    var m = /波次揀貨 (\S+)/.exec(l.note || '');
+                    if (m) waves[m[1]] = true;
+                }
+            });
+            $('s-in').textContent = inN; $('s-out').textContent = outQty; $('s-move').textContent = moveN;
+            $('s-wave').textContent = Object.keys(waves).length;
+        });
+        // 7 天內到期（含已過期）的板數
+        var limit = new Date(); limit.setDate(limit.getDate() + 7);
+        listen(db.collection('pallets').where('expiryDate', '<=', limit.toLocalYMD()), function(rows) {
+            $('s-exp').textContent = rows.filter(function(p) { return p.expiryDate && (parseFloat(p.quantity) || 0) > 0; }).length;
+        });
+    }
+
+    // ---------- 時鐘、夜間調暗、過午夜重新整理（今天的統計重新開始算）----------
+    var startDay = new Date().toLocalYMD();
+    function tick() {
+        var d = new Date();
+        $('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        $('date').textContent = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+        var mins = d.getHours() * 60 + d.getMinutes();
+        var night = !/[?&]night=off/.test(location.search) && (mins >= 20 * 60 || mins < 6 * 60 + 30);
+        document.body.classList.toggle('night', night);
+        if (d.toLocalYMD() !== startDay) location.reload();
+    }
+    tick(); setInterval(tick, 15000);
+
+    // 螢幕不要自動休眠（支援的瀏覽器）
+    async function keepAwake() {
+        try {
+            if (!navigator.wakeLock) return;
+            var lock = await navigator.wakeLock.request('screen');
+            document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'visible') navigator.wakeLock.request('screen').catch(function() {}); });
+        } catch (e) {}
+    }
+    </script>
+</body>
+</html>
