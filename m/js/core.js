@@ -172,8 +172,8 @@ auth.onAuthStateChanged(async function(user) {
     if (window._userWatch) window._userWatch();
     window._userWatch = db.collection('users').doc(String(user.email).toLowerCase()).onSnapshot(function(snap) {
         const d = snap.exists ? snap.data() : null;
-        if (!d || d.active === false) { alert('此帳號已被停用，系統將登出'); auth.signOut().then(function() { location.reload(); }); return; }
-        if (d.role) window.currentUser.role = d.role;
+        if (d && d.active === false) { alert('此帳號已被停用，系統將登出'); auth.signOut().then(function() { location.reload(); }); return; }
+        if (d && d.role) window.currentUser.role = d.role;
     }, function(err) { console.warn('帳號狀態監聽失敗', err); });
     initData();
 });

@@ -109,7 +109,7 @@ auth.onAuthStateChanged(async function(user) {
         if (window._userWatch) window._userWatch();
         window._userWatch = db.collection('users').doc(String(user.email).toLowerCase()).onSnapshot(function(snap) {
             var d = snap.exists ? snap.data() : null;
-            if (!d || d.active === false) {
+            if (d && d.active === false) {
                 alert('此帳號已被停用，系統將登出');
                 auth.signOut().then(function() { location.reload(); });
                 return;

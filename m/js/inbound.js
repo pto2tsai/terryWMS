@@ -131,7 +131,7 @@ window.confirmInboundLocation = async function() {
                 const pid = (e.order && e.order.docNo) || task.palletId;
                 const p = (e.order && e.order.palletDocId && window.pallets.find(function(x) { return x.id === e.order.palletDocId; })) ||
                     window.pallets.find(function(x) { return codeKey(x.palletId) === codeKey(pid); });
-                if (p && p.locationId !== loc) await window.movePalletTx(palletRef(p), loc, { note: '手機上架（已入帳，更新儲位）' }, { skipCapacityCheck: true, expectFrom: (e.order && e.order.locationId) || p.locationId });
+                if (p && p.locationId !== loc) await window.movePalletTx(palletRef(p), loc, { note: '手機上架（已入帳，更新儲位）' }, { skipCapacityCheck: true, expectFrom: p.locationId });
                 await taskRef.update({ status: 'done', confirmedAt: new Date().toISOString(), confirmedBy: who, confirmedLocation: loc });
                 setResult('inbound-result', true, '✅ 已上架 @ ' + loc + '（此單電腦已入帳' + (p && p.locationId !== loc ? '，儲位已更新' : '') + '）');
             } catch (e2) {
