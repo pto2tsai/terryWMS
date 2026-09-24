@@ -2,7 +2,7 @@
 # 依序執行所有畫面走查流程（需先有 Firestore/Auth 模擬器：npm run ui 會自動啟動）
 cd "$(dirname "$0")"
 fail=0; pass=0
-for f in flow0-slow-login flow1-inbound flow1b-orders flow1c-external flow2-container flow3-wave flow4-rm flow5-transfer flow6-palletchange flow7-dispatch flow8-external flow9-edit flow10-stocktake flow11-xss flow12-mobile-camera flow13-mobile-ops flow14-acceptance flow15-logic-fixes flow16-ux flow17-reports flow18-consign-rent flow19-orders-stock-fixes flow20-dispatch-container-reports flow21-location-shortcode; do
+for f in flow0-slow-login flow1-inbound flow1b-orders flow1c-external flow2-container flow3-wave flow4-rm flow5-transfer flow6-palletchange flow7-dispatch flow8-external flow9-edit flow10-stocktake flow11-xss flow12-mobile-camera flow13-mobile-ops flow14-acceptance flow15-logic-fixes flow16-ux flow17-reports flow18-consign-rent flow19-orders-stock-fixes flow20-dispatch-container-reports flow21-location-shortcode flow22-restore-approval-mobile; do
   echo "===== $f ====="
   out=$(timeout 300 node $f.mjs 2>&1)
   echo "$out" | grep -E "^(✔|✘)"

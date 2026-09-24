@@ -60,9 +60,13 @@
             if (ec.status === 'expired') {
                 alert('❌ 無法入庫！\n\n此商品已過期（' + formData.expDate + '）\n\n請退回供應商或進行報廢處理');
                 return;
-            } else if (ec.status === 'critical' && typeof window.showExpiryApprovalModal === 'function') {
-                var r = await window.showExpiryApprovalModal(ec);
-                if (r !== 'approve') return;
+            } else if (ec.status === 'critical') {
+                // 即期品要主管核准：一般人不能馬上入帳，改用「交給堆高機」建立入庫單，主管核准後才能上架入帳
+                if (!window.isSupervisorRole()) {
+                    alert('🔴 即期品（剩 ' + ec.remainingDays + ' 天）要主管核准才能入帳\n\n請改按「交給堆高機」建立入庫單，主管在「入庫核准」頁同意後，手機才能上架入帳。');
+                    return;
+                }
+                if (!confirm('🔴 即期品（剩 ' + ec.remainingDays + ' 天）\n\n你是主管，按確定表示你核准允收並直接入帳。')) return;
             } else if (ec.status === 'warning') {
                 if (!confirm('⚠️ 效期警示\n\n' + ec.message + '\n\n剩餘天數：' + ec.remainingDays + ' 天\n\n確定要允收此批貨物嗎？')) return;
             }
@@ -908,7 +912,22 @@
         var item = (window.externalStock || []).find(s => s.id === id);
         if (!item) { alert('找不到此筆資料'); return; }
         if (!confirm('確定刪除？\n\n倉庫：' + getWarehouseName(item.warehouseId) + '\n品名：' + item.productName + '\n數量：' + item.quantity)) return;
-        try { await window.deleteDoc(window.doc(window.db, 'externalStock', id)); alert('✅ 已刪除'); await window.loadExternalStock(); } catch (e) { alert('❌ 刪除失敗：' + e.message); }
+        // 以交易讀最新數量刪除，並寫一筆調整記錄（原本直接刪掉，異動記錄對不上庫存）
+        try {
+            var ref = window.db.collection('externalStock').doc(id);
+            await window.db.runTransaction(async function(tx) {
+                var snap = await tx.get(ref);
+                if (!snap.exists) throw new Error('這筆外倉庫存已經不存在');
+                var cur = snap.data(), before = parseFloat(cur.quantity) || 0;
+                tx.delete(ref);
+                tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
+                    type: 'adjust', company: cur.company || '', productName: cur.productName, spec: cur.spec || '',
+                    batchNo: cur.batchNo || '', quantity: 0, quantityChange: -before, locationId: cur.warehouseId || '',
+                    note: '外倉庫存刪除（原 ' + before + ' 件）'
+                }));
+            });
+            alert('✅ 已刪除'); await window.loadExternalStock();
+        } catch (e) { alert('❌ 刪除失敗：' + e.message); }
     };
     
     var originalLoadExternalStock = window.loadExternalStock;

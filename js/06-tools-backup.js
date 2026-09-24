@@ -832,9 +832,11 @@ window.updateBackupReminder = function() {
 
 window.serializeFirestoreData = function(data) {
     if (!data) return data;
+    // Firestore 時間戳記加上標記，還原時才知道要轉回時間戳記（一般的 ISO 字串保持字串）
     if (data.toDate && typeof data.toDate === 'function') {
-        return data.toDate().toISOString();
+        return { __ts: data.toDate().toISOString() };
     }
+    if (data instanceof Date) return { __ts: data.toISOString() };
     if (Array.isArray(data)) {
         return data.map(function(item) { return serializeFirestoreData(item); });
     }
@@ -923,12 +925,11 @@ window.exportBackupExcel = async function() {
 
 window.deserializeData = function(data) {
     if (!data) return data;
-    if (typeof data === 'string') {
-        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(data)) {
-            return new Date(data);
-        }
-        return data;
+    // 只有標記過的才轉回時間戳記；字串一律保持字串（異動記錄的 timestamp 是字串，轉成時間戳記後查詢會查不到）
+    if (typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 1 && typeof data.__ts === 'string') {
+        return new Date(data.__ts);
     }
+    if (typeof data === 'string') return data;
     if (Array.isArray(data)) {
         return data.map(function(item) { return deserializeData(item); });
     }
@@ -942,28 +943,61 @@ window.deserializeData = function(data) {
     return data;
 };
 
+// 清空一個集合：每次刪 400 筆，直到刪完（原本一批塞全部，超過 500 筆就整批失敗、錯誤還被吞掉）
 window.clearCollection = async function(collectionName) {
-    var snap = await window.getDocs(window.collection(window.db, collectionName));
-    var batch = window.writeBatch(window.db);
-    var count = 0;
-
-    snap.forEach(function(doc) {
-        batch.delete(doc.ref);
-        count++;
-        if (count >= 450) {
-            return;
-        }
-    });
-
-    if (count > 0) {
+    var total = 0;
+    for (;;) {
+        var snap = await window.db.collection(collectionName).limit(400).get();
+        if (snap.empty) break;
+        var batch = window.db.batch();
+        snap.forEach(function(d) { batch.delete(d.ref); });
         await batch.commit();
+        total += snap.size;
     }
+    return total;
+};
 
-    if (snap.size >= 450) {
-        await clearCollection(collectionName);
+// 共用還原：data＝{ 集合名稱: [{ id, data }] }
+// 1. 先檢查備份內容（沒有任何認得的集合就停止，什麼都不刪）
+// 2. 只清空「備份裡有的」集合（備份時失敗、沒備到的集合保留現有資料，不會被清空）
+// 3. 顯示每個集合的筆數，確認後才開始；清空失敗就停止，不會把新舊資料混在一起
+window.restoreCollectionsFromBackup = async function(data, setStatus) {
+    var known = window._backupConfig.collections.map(function(c) { return c.name; });
+    var label = function(n) { var c = window._backupConfig.collections.find(function(x) { return x.name === n; }); return c ? c.label : n; };
+    var names = Object.keys(data || {}).filter(function(n) { return known.indexOf(n) >= 0 && Array.isArray(data[n]); });
+    if (names.length === 0) throw new Error('這個檔案不是系統的備份（找不到任何資料表），沒有做任何變動');
+    var missing = known.filter(function(n) { return names.indexOf(n) < 0; });
+    // 異動記錄只能新增、不能刪改（安全規則）：不清空，只補回資料庫裡沒有的
+    var APPEND_ONLY = ['inventoryLogs'];
+    var summary = names.map(function(n) { return '・' + label(n) + '：' + data[n].length + ' 筆' + (APPEND_ONLY.indexOf(n) >= 0 ? '（不清空，只補回缺少的）' : ''); }).join('\n');
+    if (!confirm('即將還原以下資料（會先清空這些資料表的現有資料）：\n\n' + summary +
+        (missing.length ? '\n\n備份裡沒有、會保留現有資料：' + missing.map(label).join('、') : '') + '\n\n確定開始還原？')) {
+        var c = new Error('已取消還原，沒有做任何變動'); c.code = 'CANCELLED'; throw c;
     }
-
-    return count;
+    var restored = {};
+    for (var i = 0; i < names.length; i++) {
+        var n = names[i];
+        var items = data[n];
+        if (APPEND_ONLY.indexOf(n) >= 0) {
+            var have = {};
+            (await window.db.collection(n).get()).forEach(function(d) { have[d.id] = true; });
+            items = items.filter(function(it) { return !have[String(it.id)]; });
+        } else {
+            setStatus && setStatus('清空 ' + label(n) + '...');
+            try { await window.clearCollection(n); }
+            catch (e) { throw new Error('清空「' + label(n) + '」失敗：' + e.message + '\n已還原：' + (Object.keys(restored).map(label).join('、') || '無') + '，請檢查網路後重新還原'); }
+        }
+        setStatus && setStatus('還原 ' + label(n) + '...');
+        for (var j = 0; j < items.length; j += 400) {
+            var batch = window.db.batch();
+            items.slice(j, j + 400).forEach(function(it) {
+                batch.set(window.db.collection(n).doc(String(it.id)), window.deserializeData(it.data || {}));
+            });
+            await batch.commit();
+        }
+        restored[n] = items.length;
+    }
+    return Object.keys(restored).map(function(k) { return label(k) + ': ' + restored[k] + ' 筆'; }).join('\n');
 };
 
 window.restoreFromExcel = async function(event) {
@@ -996,59 +1030,28 @@ window.restoreFromExcel = async function(event) {
                 sheetToCollection[col.label.substring(0, 31)] = col.name;
             });
 
-            statusEl.innerHTML = '<span class="text-red-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>清空現有資料...</span>';
-
-            for (var i = 0; i < collections.length; i++) {
-                var col = collections[i];
-                statusEl.innerHTML = '<span class="text-red-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>清空 ' + col.label + '...</span>';
-                try {
-                    await clearCollection(col.name);
-                } catch (e) {
-                    console.log('清空 ' + col.name + ' 跳過:', e);
-                }
-            }
-
+            var backup = {};
             for (var i = 0; i < workbook.SheetNames.length; i++) {
                 var sheetName = workbook.SheetNames[i];
-
                 if (sheetName === '_備份資訊') continue;
-
                 var collectionName = sheetToCollection[sheetName];
-                if (!collectionName) {
-                    console.log('未知工作表:', sheetName);
-                    continue;
-                }
-
-                var colConfig = collections.find(function(c) { return c.name === collectionName; });
-                statusEl.innerHTML = '<span class="text-yellow-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>還原 ' + (colConfig ? colConfig.label : collectionName) + '...</span>';
-
-                var sheet = workbook.Sheets[sheetName];
-                var rows = XLSX.utils.sheet_to_json(sheet);
-
-                restored[collectionName] = 0;
-
-                for (var j = 0; j < rows.length; j++) {
-                    var row = rows[j];
-                    var docId = row['_docId'] || (collectionName + '-' + Date.now() + '-' + j);
-                    var docData = {};
-
-                    try {
-                        docData = JSON.parse(row['_data'] || '{}');
-                        docData = deserializeData(docData);
-                    } catch (e) {
-                        console.log('解析資料失敗:', e);
-                        continue;
-                    }
-
-                    await window.setDoc(window.doc(window.db, collectionName, docId), docData);
-                    restored[collectionName]++;
-                }
+                if (!collectionName) { console.log('未知工作表:', sheetName); continue; }
+                backup[collectionName] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]).map(function(row, j) {
+                    var d = {};
+                    try { d = JSON.parse(row['_data'] || '{}'); } catch (e) { console.log('解析資料失敗:', e); }
+                    return { id: row['_docId'] || (collectionName + '-' + Date.now() + '-' + j), data: d };
+                });
             }
-
-            var summaryText = Object.keys(restored).map(function(k) {
-                var col = collections.find(function(c) { return c.name === k; });
-                return (col ? col.label : k) + ': ' + restored[k] + ' 筆';
-            }).join('\n');
+            var summaryText;
+            try {
+                summaryText = await window.restoreCollectionsFromBackup(backup, function(t) {
+                    statusEl.innerHTML = '<span class="text-yellow-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>' + t + '</span>';
+                });
+            } catch (err) {
+                statusEl.innerHTML = '<span class="text-red-400"><i class="fa-solid fa-xmark mr-1"></i>' + err.message.split('\n')[0] + '</span>';
+                alert('❌ ' + err.message);
+                return;
+            }
 
             statusEl.innerHTML = '<span class="text-emerald-400"><i class="fa-solid fa-check mr-1"></i>還原完成！</span>';
 
@@ -1298,38 +1301,15 @@ window.handleRestoreFile = async function(event) {
         reader.onload = async function(e) {
             try {
                 var backupData = JSON.parse(e.target.result);
-                var collections = window._backupConfig.collections;
-
-                // 清空現有資料
-                for (var i = 0; i < collections.length; i++) {
-                    var col = collections[i];
-                    if (statusEl) statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>清空 ' + col.label + '...';
-                    try {
-                        await clearCollection(col.name);
-                    } catch (e) {
-                        console.log('清空 ' + col.name + ' 跳過:', e);
-                    }
-                }
-
-                // 還原資料
-                var totalRestored = 0;
-                for (var colName in backupData.collections) {
-                    var items = backupData.collections[colName];
-                    var colConfig = collections.find(function(c) { return c.name === colName; });
-                    var label = colConfig ? colConfig.label : colName;
-                    
-                    if (statusEl) statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>還原 ' + label + '...';
-
-                    for (var j = 0; j < items.length; j++) {
-                        var item = items[j];
-                        var data = deserializeData(item.data);
-                        try {
-                            await window.setDoc(window.doc(window.db, colName, item.id), data);
-                            totalRestored++;
-                        } catch (e) {
-                            console.log('還原文件失敗:', e);
-                        }
-                    }
+                var totalRestored;
+                try {
+                    totalRestored = await window.restoreCollectionsFromBackup(backupData.collections, function(t) {
+                        if (statusEl) statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>' + t;
+                    });
+                } catch (err) {
+                    if (statusEl) { statusEl.innerHTML = '<i class="fa-solid fa-xmark mr-1"></i>沒有還原'; statusEl.className = 'text-red-400 font-bold'; }
+                    alert('❌ ' + err.message);
+                    return;
                 }
 
                 if (statusEl) {
@@ -1337,7 +1317,7 @@ window.handleRestoreFile = async function(event) {
                     statusEl.className = 'text-emerald-400 font-bold';
                 }
 
-                alert('✅ 還原完成！\n\n共還原 ' + totalRestored + ' 筆資料\n\n請重新整理頁面以載入新資料。');
+                alert('✅ 還原完成！\n\n' + totalRestored + '\n\n請重新整理頁面以載入新資料。');
 
                 // 重新載入頁面
                 if (confirm('是否立即重新整理頁面？')) {
@@ -1383,44 +1363,9 @@ window.restoreFromFirebase = async function(backupId) {
         }
 
         var backupData = JSON.parse(backupDoc.data().data);
-        var collections = window._backupConfig.collections;
-        var restored = {};
-
-        statusEl.innerHTML = '<span class="text-red-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>清空現有資料...</span>';
-
-        for (var i = 0; i < collections.length; i++) {
-            var col = collections[i];
-            statusEl.innerHTML = '<span class="text-red-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>清空 ' + col.label + '...</span>';
-            try {
-                await clearCollection(col.name);
-            } catch (e) {
-                console.log('清空 ' + col.name + ' 跳過:', e);
-            }
-        }
-
-        var collectionNames = Object.keys(backupData.collections || {});
-
-        for (var i = 0; i < collectionNames.length; i++) {
-            var colName = collectionNames[i];
-            var colConfig = collections.find(function(c) { return c.name === colName; });
-            var items = backupData.collections[colName] || [];
-
-            statusEl.innerHTML = '<span class="text-yellow-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>還原 ' + (colConfig ? colConfig.label : colName) + '...</span>';
-
-            restored[colName] = 0;
-
-            for (var j = 0; j < items.length; j++) {
-                var item = items[j];
-                var docData = deserializeData(item.data);
-                await window.setDoc(window.doc(window.db, colName, item.id), docData);
-                restored[colName]++;
-            }
-        }
-
-        var summaryText = Object.keys(restored).map(function(k) {
-            var col = collections.find(function(c) { return c.name === k; });
-            return (col ? col.label : k) + ': ' + restored[k] + ' 筆';
-        }).join('\n');
+        var summaryText = await window.restoreCollectionsFromBackup(backupData.collections, function(t) {
+            statusEl.innerHTML = '<span class="text-yellow-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>' + t + '</span>';
+        });
 
         statusEl.innerHTML = '<span class="text-emerald-400"><i class="fa-solid fa-check mr-1"></i>還原完成！</span>';
 
@@ -1552,17 +1497,33 @@ window.clearAllWaves = async function() {
     alert('已清除 ' + cleared + ' 個波次！' + (failed.length ? '\n\n❌ 沒有清除：\n' + failed.join('\n') : ''));
 };
 
+// 清除訂單：只刪「還沒出貨」的訂單和「還沒開始揀」的波次
+// 已出貨（含部分出貨）的訂單、已完成或揀貨中的波次是出貨記錄，保留（刪了之後扣過的庫存就追不到是哪張訂單）
 window.clearAllOrders = async function() {
-    var orderCount = (window._orderData.orders || []).length;
-    var waveCount = (window._waveData.waves || []).length;
+    var db = window.db;
+    var waveSnap = await db.collection('waves').get();
+    var orderSnap = await db.collection('salesOrders').get();
+    var delWaves = [], delWaveNos = {}, keptWaves = 0;
+    waveSnap.forEach(function(d) {
+        var w = d.data();
+        if (w.status === 'pending' && !(w.completedItems || []).length) { delWaves.push(d.ref); delWaveNos[w.waveNo] = true; }
+        else keptWaves++;
+    });
+    var delOrders = [], keptOrders = 0;
+    orderSnap.forEach(function(d) {
+        var o = d.data();
+        var notShipped = (['pending', 'confirmed'].indexOf(o.status) >= 0 && !o.waveNo) || (o.status === 'inWave' && delWaveNos[o.waveNo]);
+        if (notShipped && !Array.isArray(o.backorderItems)) delOrders.push(d.ref); else keptOrders++;
+    });
 
-    if (orderCount === 0 && waveCount === 0) {
-        alert('目前沒有資料');
+    if (delOrders.length === 0 && delWaves.length === 0) {
+        alert('沒有可以清除的訂單或波次' + (keptOrders + keptWaves ? '\n（已出貨的訂單、已開始揀或已完成的波次是出貨記錄，不會清除）' : ''));
         return;
     }
 
-    if (!confirm('警告！將永久刪除：\n\n' + orderCount + ' 筆訂單\n' + waveCount + ' 個波次\n\n此操作無法復原！')) return;
-    if (!confirm('再次確認：確定要刪除所有資料嗎？')) return;
+    if (!confirm('將永久刪除還沒出貨的資料：\n\n' + delOrders.length + ' 筆訂單\n' + delWaves.length + ' 個還沒開始揀的波次\n\n' +
+        '保留（出貨記錄）：' + keptOrders + ' 筆訂單、' + keptWaves + ' 個波次\n\n此操作無法復原！')) return;
+    if (!confirm('再次確認：確定要刪除嗎？')) return;
 
     var progressDiv = document.createElement('div');
     progressDiv.id = 'clear-progress';
@@ -1572,23 +1533,25 @@ window.clearAllOrders = async function() {
         '<div class="text-white text-lg">清除資料中...</div></div>';
     document.body.appendChild(progressDiv);
 
-    for (var i = 0; i < window._orderData.orders.length; i++) {
-        var order = window._orderData.orders[i];
-        if (order.id) {
-            try { await window.deleteDoc(window.doc(window.db, 'salesOrders', order.id)); } catch (err) {}
+    try {
+        var refs = delOrders.concat(delWaves);
+        for (var i = 0; i < refs.length; i += 400) {
+            var batch = db.batch();
+            refs.slice(i, i + 400).forEach(function(r) { batch.delete(r); });
+            await batch.commit();
         }
+    } catch (err) {
+        document.getElementById('clear-progress').remove();
+        alert('❌ 清除失敗：' + err.message);
+        return;
     }
 
-    for (var j = 0; j < window._waveData.waves.length; j++) {
-        var wave = window._waveData.waves[j];
-        if (wave.id) {
-            try { await window.deleteDoc(window.doc(window.db, 'waves', wave.id)); } catch (err) {}
-        }
-    }
-
-    window._orderData.orders = [];
-    window._waveData.waves = [];
-    localStorage.removeItem('wms_waves');
+    var delIds = {};
+    delOrders.forEach(function(r) { delIds[r.id] = true; });
+    delWaves.forEach(function(r) { delIds['w:' + r.id] = true; });
+    window._orderData.orders = (window._orderData.orders || []).filter(function(o) { return !delIds[o.id]; });
+    window._waveData.waves = (window._waveData.waves || []).filter(function(w) { return !(w.id && delIds['w:' + w.id]); });
+    if (typeof saveWaves === 'function') saveWaves();
 
     document.getElementById('clear-progress').remove();
 
@@ -1596,7 +1559,7 @@ window.clearAllOrders = async function() {
     renderOrderList();
     closeClearDataModal();
 
-    alert('已清除所有資料！');
+    alert('已清除 ' + delOrders.length + ' 筆訂單、' + delWaves.length + ' 個波次');
 };
 
 window.clearLocalStorage = function() {

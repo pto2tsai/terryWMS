@@ -73,11 +73,17 @@ window.confirmShelve = async function() {
     const delta = qty - (parseFloat(p.quantity) || 0);
     const moved = p.locationId !== loc;
     if (!moved && delta === 0) { setResult('shelve-result', 'info', '儲位與數量都沒有變動'); return resetShelve(); }
-    if (delta !== 0 && !confirm('點數與帳上不同\n\n帳上：' + p.quantity + '\n實際：' + qty + '\n\n以實際數量更新？')) return;
+    if (delta !== 0 && !confirm('點數與帳上不同\n\n帳上：' + p.quantity + '\n實際：' + qty + '\n\n以實際數量更新？' + (qty === 0 ? '\n（實際 0 件會刪除這板）' : ''))) return;
+    if (moved) {
+        const warn = window.locationFullWarning(loc, p, window.pallets);
+        if (warn && !confirm(warn + '\n\n確定還是要放到 ' + loc + ' 嗎？')) return;
+        if (window.isHoldLocation(p.locationId) && !window.isHoldLocation(loc) &&
+            !confirm('這板原本在 ' + p.locationId + '（品管留置／業務保留）\n\n放到 ' + loc + ' 之後就可以被揀貨出庫，確定嗎？')) return;
+    }
     const extra = moved ? { locationId: loc, movedAt: new Date().toISOString(), movedBy: window.currentUser ? window.currentUser.email : '' } : {};
     try {
         await window.runStockTransaction({
-            changes: [{ ref: palletRef(p), delta: delta, extra: extra, label: p.palletId }],
+            changes: [{ ref: palletRef(p), delta: delta, extra: extra, label: p.palletId, deleteWhenEmpty: true }],
             validate: function(results) {
                 const r = results[palletRef(p).path];
                 if (r.before !== (parseFloat(p.quantity) || 0)) throw new Error('此板數量剛被其他人異動（現在 ' + r.before + '），請重新掃描');
@@ -122,6 +128,11 @@ window.outScanPallet = function() {
 window.outPick = function(id) { const p = palletById(id); if (p) outSetPallet(p); };
 
 function outSetPallet(p) {
+    // 品管留置、業務保留的貨不能出庫（和波次揀貨、領用一樣）
+    if (window.isHoldLocation(p.locationId)) {
+        setResult('out-result', false, '❌ ' + p.locationId + '（品管留置／業務保留）的貨不能出庫，要先移出留置區');
+        return;
+    }
     outPallet = p;
     $('out-choices').innerHTML = '';
     $('out-pallet-info').innerHTML = palletInfoHtml(p);
@@ -146,13 +157,23 @@ window.confirmOutbound = async function() {
     const qty = parseFloat($('out-qty').value) || 0;
     if (qty <= 0) { setResult('out-result', false, '❌ 請輸入出庫數量'); return; }
     const note = $('out-note').value.trim();
+    // 過期：可以出（例如報廢），但要確認
+    const exp = window.normalizeDateValue(p.expiryDate || p.expDate);
+    if (exp && exp < new Date().toLocalYMD() && !confirm('⚠️ 這板已經過期（' + exp + '）\n\n確定要出庫嗎？')) return;
+    // 寄倉客戶已買下、寄放的件數：出到這些要確認
+    const reserved = (window.consignReserve(window.pallets, window.consignmentData || [])[p.id]) || 0;
+    const free = (parseFloat(p.quantity) || 0) - reserved;
+    if (reserved > 0 && qty > free && !confirm('⚠️ 這板有 ' + reserved + ' 件是寄倉客戶的貨（可自由出庫 ' + Math.max(0, free) + ' 件）\n\n出庫 ' + qty + ' 件會用到寄倉的貨，確定嗎？')) return;
     try {
         const results = await window.runStockTransaction({
             changes: [{ ref: palletRef(p), delta: -qty, deleteWhenEmpty: true, label: p.palletId }],
             logs: function(res) {
-                const r = res[palletRef(p).path];
-                return [{ type: 'outbound', company: p.company, productName: p.productName, spec: p.spec, batchNo: p.batchNo,
-                    palletId: p.palletId, expDate: p.expDate, locationId: p.locationId, quantity: qty, quantityChange: -qty,
+                // 用交易讀到的最新資料寫記錄（不是掃描當下的舊資料）
+                const r = res[palletRef(p).path], d = r.data;
+                const w = parseFloat(d.totalWeight) || 0, wOut = w > 0 && r.before > 0 ? Math.round(w * qty / r.before * 10) / 10 : 0;
+                return [{ type: 'outbound', company: d.company, productName: d.productName, spec: d.spec, batchNo: d.batchNo,
+                    palletId: d.palletId, expDate: d.expiryDate || d.expDate, locationId: d.locationId, quantity: qty, quantityChange: -qty,
+                    weight: wOut, weightChange: -wOut,
                     note: '手機掃描出庫' + (note ? '：' + note : '') + '（剩 ' + r.after + '）' }];
             }
         });

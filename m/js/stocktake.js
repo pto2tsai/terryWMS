@@ -37,8 +37,10 @@ function stSetPallet(p) {
     $('st-choices').innerHTML = '';
     $('st-pallet-info').innerHTML = palletInfoHtml(p);
     $('st-qty').value = '';
+    $('st-loc').value = '';
+    $('st-book-loc').innerText = p.locationId || '-';
     show('st-step1', false); show('st-step2', true);
-    setResult('st-result', true, '✓ 請點數後輸入實際數量');
+    setResult('st-result', true, '✓ 請點數後輸入實際數量（確認板子真的在 ' + (p.locationId || '-') + '）');
     focusIfNoCamera('st-qty');
 }
 
@@ -52,33 +54,41 @@ window.submitStocktakeItem = async function() {
     if (raw === '' || isNaN(counted) || counted < 0) { setResult('st-result', false, '❌ 請輸入實際數量'); return; }
     const book = parseFloat(p.quantity) || 0;
     const diff = counted - book;
+    // 實際儲位跟系統不同：同一筆交易把位置改正（寫移板記錄）
+    const locRaw = $('st-loc').value.trim();
+    const realLoc = locRaw ? window.formatLocationId(locRaw) : '';
+    if (realLoc && !window.isValidStorageLocation(realLoc)) { setResult('st-result', false, '❌ 儲位格式不正確：' + realLoc); return; }
+    const moveTo = realLoc && realLoc !== p.locationId ? realLoc : '';
     if (diff !== 0 && counted === 0 && !confirm('實盤 0 件會刪除此板，確定？')) return;
     const ref = palletRef(p);
     try {
-        if (diff !== 0) {
-            await db.runTransaction(async function(tx) {
-                const snap = await tx.get(ref);
-                if (!snap.exists) throw new Error('此板已不存在');
-                const cur = parseFloat(snap.data().quantity) || 0;
-                if (cur !== book) throw new Error('盤點期間有異動（帳面 ' + book + ' → 現在 ' + cur + '），請重新掃描此板');
-                if (counted === 0) tx.delete(ref);
-                else tx.update(ref, Object.assign({ quantity: counted, lastStocktakeAt: new Date().toISOString() }, window.scaledWeight(snap.data(), cur, counted)));
-                tx.set(db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
-                    type: 'adjust', company: p.company, productName: p.productName, spec: p.spec, batchNo: p.batchNo,
-                    quantity: counted, quantityChange: diff, locationId: p.locationId, palletId: p.palletId, expDate: p.expDate,
-                    note: '手機盤點：帳面 ' + book + ' → 實盤 ' + counted
-                }));
-            });
-        } else {
-            await ref.update({ lastStocktakeAt: new Date().toISOString() });
-        }
+        await db.runTransaction(async function(tx) {
+            const snap = await tx.get(ref);
+            if (!snap.exists) throw new Error('此板已不存在');
+            const d = snap.data();
+            const cur = parseFloat(d.quantity) || 0;
+            if (cur !== book) throw new Error('盤點期間有異動（帳面 ' + book + ' → 現在 ' + cur + '），請重新掃描此板');
+            if (String(d.locationId || '') !== String(p.locationId || '')) throw new Error('盤點期間這板被移到 ' + d.locationId + '，請重新掃描');
+            const now = new Date().toISOString();
+            const base = { company: d.company, productName: d.productName, spec: d.spec, batchNo: d.batchNo, palletId: d.palletId, expDate: d.expiryDate || d.expDate };
+            if (counted === 0 && diff !== 0) tx.delete(ref);
+            else tx.update(ref, Object.assign({ quantity: counted, lastStocktakeAt: now }, moveTo ? { locationId: moveTo, movedAt: now } : {}, window.scaledWeight(d, cur, counted)));
+            if (moveTo) tx.set(db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry(Object.assign({}, base, {
+                type: 'move', quantity: counted, quantityChange: 0, locationId: moveTo, fromLocation: d.locationId, toLocation: moveTo,
+                note: '手機盤點：實際儲位與系統不同，更正位置'
+            })));
+            if (diff !== 0) tx.set(db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry(Object.assign({}, base, {
+                type: 'adjust', quantity: counted, quantityChange: diff, locationId: moveTo || d.locationId,
+                note: '手機盤點：帳面 ' + book + ' → 實盤 ' + counted
+            })));
+        });
     } catch (e) {
         setResult('st-result', false, '❌ ' + e.message);
         return;
     }
-    stToday.unshift({ time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }), name: p.productName, loc: p.locationId, book: book, counted: counted, diff: diff });
+    stToday.unshift({ time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }), name: p.productName, loc: (moveTo ? p.locationId + ' → ' + moveTo : p.locationId), book: book, counted: counted, diff: diff });
     renderStToday();
-    setResult('st-result', true, diff === 0 ? '✅ ' + p.productName + ' 相符（' + book + '）' : '✅ ' + p.productName + ' 已調整：' + book + ' → ' + counted + '（' + (diff > 0 ? '+' : '') + diff + '）');
+    setResult('st-result', true, (diff === 0 ? '✅ ' + p.productName + ' 相符（' + book + '）' : '✅ ' + p.productName + ' 已調整：' + book + ' → ' + counted + '（' + (diff > 0 ? '+' : '') + diff + '）') + (moveTo ? '，位置更正為 ' + moveTo : ''));
     stPallet = null;
     show('st-step2', false); show('st-step1', true);
     scanNext('st-scan');

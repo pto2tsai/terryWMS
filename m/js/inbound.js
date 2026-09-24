@@ -28,7 +28,7 @@ function renderInboundTasks() {
         const sel = currentTask && currentTask.id === t.id;
         return '<div class="list-item clickable' + (sel ? ' completed' : '') + '" onclick="selectInboundTask(\'' + esc(t.id) + '\')">' +
             '<div class="item-row"><span class="item-location">' + esc(t.locationId || '待指定') + '</span>' +
-            '<span class="item-status pending">' + (t.approvalStatus === 'pending' ? '待核准' : '點選執行') + '</span></div>' +
+            '<span class="item-status pending">' + (t.expiryApproval === 'pending' ? '即期品待主管核准' : t.approvalStatus === 'pending' ? '待財務對帳' : '點選執行') + '</span></div>' +
             '<div class="item-product">' + esc(t.productName) + ' ' + esc(t.spec || '') + '</div>' +
             '<div class="item-row"><span class="item-detail">' + esc(t.palletId || t.orderNo || '-') + ' | ' + esc(t.batchNo || '-') + '</span>' +
             '<span class="item-qty">' + esc(t.quantity) + '</span></div></div>';
@@ -60,7 +60,8 @@ window.selectInboundTask = function(id) {
         '<span class="k">批號</span><span class="v">' + esc(t.batchNo || '-') + '</span>' +
         '<span class="k">數量</span><span class="v qty">' + esc(t.quantity) + ' 件</span>' +
         '<span class="k">放到</span><span class="v loc">' + esc(t.locationId || '待指定') + '</span></div>' +
-        (t.approvalStatus === 'pending' ? '<div style="color:#fbbf24;font-size:13px;margin-top:8px">⚠️ 此單尚待主管／財務核准，仍可先上架</div>' : '');
+        (t.expiryApproval === 'pending' ? '<div style="color:#f87171;font-size:13px;margin-top:8px">🔴 即期品還沒經主管核准，不能入帳；貨先放暫存區，等主管在電腦同意</div>' :
+         t.approvalStatus === 'pending' ? '<div style="color:#fbbf24;font-size:13px;margin-top:8px">⚠️ 此單財務還沒對帳（不影響上架）</div>' : '');
     show('inbound-step1', false);
     show('inbound-step2', true);
     setResult('inbound-result', 'info', '📍 放到儲位後，掃描儲位標籤確認');
@@ -126,15 +127,21 @@ window.confirmInboundLocation = async function() {
         if (e.code === 'ALREADY_POSTED') {
             // 電腦已先入帳：棧板已存在，放的位置不同就移過去，任務結案
             try {
+                // 用入帳時記下的那一板（palletDocId）；舊單才用板號找。只在那板還在電腦入帳的儲位時才移（被揀過、移過就不動）
                 const pid = (e.order && e.order.docNo) || task.palletId;
-                const p = window.pallets.find(function(x) { return codeKey(x.palletId) === codeKey(pid); });
-                if (p && p.locationId !== loc) await window.movePalletTx(palletRef(p), loc, { note: '手機上架（已入帳，更新儲位）' }, { skipCapacityCheck: true });
+                const p = (e.order && e.order.palletDocId && window.pallets.find(function(x) { return x.id === e.order.palletDocId; })) ||
+                    window.pallets.find(function(x) { return codeKey(x.palletId) === codeKey(pid); });
+                if (p && p.locationId !== loc) await window.movePalletTx(palletRef(p), loc, { note: '手機上架（已入帳，更新儲位）' }, { skipCapacityCheck: true, expectFrom: (e.order && e.order.locationId) || p.locationId });
                 await taskRef.update({ status: 'done', confirmedAt: new Date().toISOString(), confirmedBy: who, confirmedLocation: loc });
                 setResult('inbound-result', true, '✅ 已上架 @ ' + loc + '（此單電腦已入帳' + (p && p.locationId !== loc ? '，儲位已更新' : '') + '）');
             } catch (e2) {
                 setResult('inbound-result', false, '❌ ' + e2.message);
                 return;
             }
+        } else if (e.code === 'ORDER_CANCELLED') {
+            await taskRef.update({ status: 'cancelled', note: '入庫單已取消' }).catch(function() {});
+            setResult('inbound-result', false, '❌ ' + e.message);
+            return;
         } else if (e.code === 'ORDER_MISSING') {
             if (camScanner) await closeCameraScan();
             if (confirm('此任務的入庫單已不存在（可能已取消）\n\n要把這個任務移除嗎？')) {

@@ -105,6 +105,20 @@ auth.onAuthStateChanged(async function(user) {
             var appUser = await window.setCurrentUser(user.email);
             if (!appUser) return;
         }
+        // 帳號被停用或角色改變：馬上生效（不用等下次登入）
+        if (window._userWatch) window._userWatch();
+        window._userWatch = db.collection('users').doc(String(user.email).toLowerCase()).onSnapshot(function(snap) {
+            var d = snap.exists ? snap.data() : null;
+            if (!d || d.active === false) {
+                alert('此帳號已被停用，系統將登出');
+                auth.signOut().then(function() { location.reload(); });
+                return;
+            }
+            if (window.currentUser && d.role && d.role !== window.currentUser.role) {
+                window.currentUser.role = d.role;
+                if (typeof window.applyPermissions === 'function') window.applyPermissions();
+            }
+        }, function(err) { console.warn('帳號狀態監聽失敗', err); });
         if (window.warmDocNoPools) window.warmDocNoPools();
         document.getElementById('login-error').classList.add('hidden');
         document.getElementById('view-login').classList.add('hidden');

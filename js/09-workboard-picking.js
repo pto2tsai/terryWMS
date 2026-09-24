@@ -7,73 +7,27 @@
         var boardRefreshTimer = null;
         
         // 🔧 修正：載入工單看板所需資料（領料工單取代待入庫工單）
+        // 看板資料放在自己的變數（原本會把波次頁、調撥頁共用的清單換成看板的資料）
+        // 讀實際有在用的資料：待上架的入庫任務、進行中的波次（含待分貨）、還沒完成的調度工單
         window.loadWorkBoardData = async function() {
-            console.log('📋 載入工單看板資料...');
-            
+            var db = window.db;
+            if (!db) return;
+            var board = window._board = window._board || { tasks: [], waves: [], dispatch: [] };
             try {
-                if (window.db && window.collection && window.query && window.getDocs && window.where) {
-                    // 1. 載入領料工單（待處理的領料申請）
-                    try {
-                        var pickingQ = window.query(
-                            window.collection(window.db, 'pickingOrders'), 
-                            window.where('status', '==', 'pending')
-                        );
-                        var pickingSnapshot = await window.getDocs(pickingQ);
-                        window.pendingPickingOrders = [];
-                        pickingSnapshot.forEach(function(doc) {
-                            window.pendingPickingOrders.push({ id: doc.id, ...doc.data() });
-                        });
-                        window.pendingPickingOrders.sort(function(a, b) {
-                            return new Date(b.createdAt) - new Date(a.createdAt);
-                        });
-                        console.log('📋 領料工單載入完成:', window.pendingPickingOrders.length, '筆');
-                    } catch(e) {
-                        console.warn('載入領料工單失敗:', e);
-                        window.pendingPickingOrders = window.pendingPickingOrders || [];
-                    }
-                    
-                    // 2. 載入揀貨波次
-                    try {
-                        var waveQ = window.query(
-                            window.collection(window.db, 'waves'),
-                            window.where('status', 'in', ['pending', 'picking'])
-                        );
-                        var waveSnapshot = await window.getDocs(waveQ);
-                        if (!window._waveData) window._waveData = { waves: [] };
-                        window._waveData.waves = [];
-                        waveSnapshot.forEach(function(doc) {
-                            window._waveData.waves.push({ id: doc.id, ...doc.data() });
-                        });
-                        console.log('📋 揀貨波次載入完成:', window._waveData.waves.length, '筆');
-                    } catch(e) {
-                        console.warn('載入揀貨波次失敗:', e);
-                        if (!window._waveData) window._waveData = { waves: [] };
-                    }
-                    
-                    // 3. 載入調撥工單
-                    try {
-                        // 不用 '!=' 查詢：Firestore 的 != 會排除沒有 status 欄位的文件
-                        var transferSnapshot = await window.getDocs(window.collection(window.db, 'transfers'));
-                        window.transferList = [];
-                        transferSnapshot.forEach(function(doc) {
-                            if (doc.data().status === 'completed') return;
-                            window.transferList.push({ id: doc.id, ...doc.data() });
-                        });
-                        console.log('📋 調撥工單載入完成:', window.transferList.length, '筆');
-                    } catch(e) {
-                        console.warn('載入調撥工單失敗:', e);
-                        window.transferList = window.transferList || [];
-                    }
-                } else {
-                    console.warn('Firebase 尚未初始化，使用現有資料');
-                }
-            } catch(e) {
-                console.error('載入工單看板資料失敗:', e);
-            }
-            
-            console.log('📋 工單看板資料載入完成');
+                var t = await db.collection('inboundTasks').where('status', '==', 'pending').get();
+                board.tasks = t.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+                    .sort(function(x, y) { return String(x.createdAt || '').localeCompare(String(y.createdAt || '')); });
+            } catch (e) { console.warn('看板：讀入庫任務失敗', e); }
+            try {
+                var w = await db.collection('waves').where('status', 'in', ['pending', 'picking', 'sorting']).get();
+                board.waves = w.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+            } catch (e) { console.warn('看板：讀波次失敗', e); }
+            try {
+                var o = await db.collection('dispatchOrders').where('status', 'in', ['pending', 'in_progress']).get();
+                board.dispatch = o.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+            } catch (e) { console.warn('看板：讀調度工單失敗', e); }
         };
-        
+
         // 刷新工單看板
         window.refreshWorkBoard = function() {
             // 更新時間
@@ -88,50 +42,45 @@
             var moveCount = 0;
             var urgentCount = 0;
             
-            // 1. 領料工單（取代原本的待入庫工單）
+            var board = window._board || { tasks: [], waves: [], dispatch: [] };
+            var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+
+            // 1. 待上架的入庫任務（手機「入庫任務」）
             var pendingHtml = '';
-            var pendingPickingOrders = window.pendingPickingOrders || [];
-            pendingCount = pendingPickingOrders.length;
-            
-            pendingPickingOrders.forEach(function(order, idx) {
-                if (idx >= 10) return; // 最多顯示 10 筆
-                var isUrgent = order.priority === 'urgent';
-                if (isUrgent) urgentCount++;
-                
-                var timeStr = order.createdAt ? new Date(order.createdAt).toLocaleTimeString('zh-TW', {hour: '2-digit', minute: '2-digit'}) : '';
-                
-                pendingHtml += '<div class="bg-slate-800 rounded-lg p-3 border-l-4 ' + 
-                    (isUrgent ? 'border-red-500 animate-pulse' : 'border-green-500') + '">';
+            pendingCount = board.tasks.length;
+            board.tasks.forEach(function(task, idx) {
+                if (idx >= 10) return;
+                var hold = task.expiryApproval === 'pending';
+                if (hold) urgentCount++;
+                var timeStr = task.createdAt ? new Date(task.createdAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }) : '';
+                pendingHtml += '<div class="bg-slate-800 rounded-lg p-3 border-l-4 ' + (hold ? 'border-red-500' : 'border-green-500') + '">';
                 pendingHtml += '<div class="flex justify-between items-start">';
-                pendingHtml += '<div class="text-lg font-bold text-white truncate flex-1">' + (order.productName || '-') + '</div>';
-                pendingHtml += '<div class="text-2xl font-bold ' + (isUrgent ? 'text-red-400' : 'text-green-400') + '">' + (order.quantity || 0) + ' 件</div>';
+                pendingHtml += '<div class="text-lg font-bold text-white truncate flex-1">' + esc(task.productName || '-') + ' <span class="text-sm text-slate-400">' + esc(task.spec || '') + '</span></div>';
+                pendingHtml += '<div class="text-2xl font-bold text-green-400">' + esc(task.quantity || 0) + ' 件</div>';
                 pendingHtml += '</div>';
                 pendingHtml += '<div class="flex justify-between items-center mt-2 text-sm">';
-                pendingHtml += '<span class="text-slate-400">' + (order.applicant || order.requester || '-') + '</span>';
-                pendingHtml += '<span class="text-cyan-400 font-bold">' + (order.purpose || '生產領用') + '</span>';
+                pendingHtml += '<span class="text-slate-400">' + esc(task.orderNo || task.palletId || '-') + '</span>';
+                pendingHtml += '<span class="text-cyan-400 font-bold">→ ' + esc(task.locationId || '待指定') + '</span>';
                 pendingHtml += '</div>';
-                if (timeStr) {
-                    pendingHtml += '<div class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-clock mr-1"></i>' + timeStr + '</div>';
-                }
+                if (hold) pendingHtml += '<div class="text-xs text-red-400 mt-1">即期品待主管核准</div>';
+                else if (timeStr) pendingHtml += '<div class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-clock mr-1"></i>' + timeStr + '</div>';
                 pendingHtml += '</div>';
             });
-            
             if (pendingCount === 0) {
-                pendingHtml = '<div class="text-center text-slate-500 py-8"><i class="fa-solid fa-check-circle text-4xl mb-2 block text-emerald-500"></i>無待領料工單</div>';
+                pendingHtml = '<div class="text-center text-slate-500 py-8"><i class="fa-solid fa-check-circle text-4xl mb-2 block text-emerald-500"></i>沒有待上架的貨</div>';
             }
             document.getElementById('board-pending-list').innerHTML = pendingHtml;
-            
+
             // 2. 揀貨工單（波次）- 修正數據來源
             var waveHtml = '';
-            var waves = (window._waveData && window._waveData.waves) ? window._waveData.waves : (window.waveData || []);
-            var activeWaves = waves.filter(function(w) { 
-                return w.status === 'picking' || w.status === 'pending'; 
-            });
+            var activeWaves = board.waves;
             waveCount = activeWaves.length;
             
             activeWaves.forEach(function(wave, idx) {
                 if (idx >= 10) return;
-                var progress = wave.pickedOrders ? Math.round(wave.pickedOrders / wave.totalOrders * 100) : 0;
+                // 進度＝已揀項目／品項數（completedItems 是手機、電腦掃過的揀貨項目）
+                var doneN = (wave.completedItems || []).length, allN = wave.itemCount || (wave.summary || []).length || 0;
+                var progress = allN ? Math.min(100, Math.round(doneN / allN * 100)) : 0;
                 var isUrgent = wave.priority === 'urgent';
                 if (isUrgent) urgentCount++;
                 
@@ -141,12 +90,12 @@
                 waveHtml += '<div class="text-lg font-bold text-white">' + (wave.waveNo || wave.id) + '</div>';
                 waveHtml += '<div class="text-sm px-2 py-0.5 rounded ' + 
                     (wave.status === 'picking' ? 'bg-orange-600' : 'bg-slate-600') + ' text-white">' + 
-                    (wave.status === 'picking' ? '揀貨中' : '待處理') + '</div>';
+                    (wave.status === 'picking' ? '揀貨中' : wave.status === 'sorting' ? '待分貨' : '待處理') + '</div>';
                 waveHtml += '</div>';
                 waveHtml += '<div class="mt-2">';
                 waveHtml += '<div class="flex justify-between text-sm mb-1">';
                 waveHtml += '<span class="text-slate-400">進度</span>';
-                waveHtml += '<span class="text-orange-400 font-bold">' + (wave.pickedOrders || 0) + '/' + (wave.totalOrders || 0) + '</span>';
+                waveHtml += '<span class="text-orange-400 font-bold">' + doneN + '/' + allN + ' 項（' + (wave.orderCount || (wave.orders || []).length) + ' 單）</span>';
                 waveHtml += '</div>';
                 waveHtml += '<div class="w-full bg-slate-700 rounded-full h-2">';
                 waveHtml += '<div class="bg-orange-500 h-2 rounded-full" style="width:' + progress + '%"></div>';
@@ -160,27 +109,21 @@
             }
             document.getElementById('board-wave-list').innerHTML = waveHtml;
             
-            // 3. 調撥/移位工單
+            // 3. 還沒完成的調度工單（手機「調度工單」）
             var transferHtml = '';
-            var transferList = window.transferList || [];
-            var pendingTransfers = transferList.filter(function(t) { return t.status !== 'completed'; });
-            transferCount = pendingTransfers.length;
-            
-            pendingTransfers.forEach(function(item, idx) {
+            transferCount = board.dispatch.length;
+            board.dispatch.forEach(function(item, idx) {
                 if (idx >= 10) return;
+                var done = (item.completedOps || []).length, all = (item.operations || []).length;
                 transferHtml += '<div class="bg-slate-800 rounded-lg p-3 border-l-4 border-purple-500">';
-                transferHtml += '<div class="text-lg font-bold text-white truncate">' + (item.productName || '-') + '</div>';
+                transferHtml += '<div class="text-lg font-bold text-white truncate">' + esc(item.productName || '-') + ' <span class="text-sm text-slate-400">' + esc(item.spec || '') + '</span></div>';
                 transferHtml += '<div class="flex justify-between items-center mt-2">';
-                transferHtml += '<div class="text-sm">';
-                transferHtml += '<span class="text-cyan-400">' + (item.fromWarehouse || item.from || '-') + '</span>';
-                transferHtml += '<i class="fa-solid fa-arrow-right mx-2 text-slate-500"></i>';
-                transferHtml += '<span class="text-emerald-400">' + (item.toWarehouse || item.to || '-') + '</span>';
-                transferHtml += '</div>';
-                transferHtml += '<div class="text-xl font-bold text-purple-400">' + (item.quantity || 0) + ' 件</div>';
+                transferHtml += '<div class="text-sm text-slate-400">' + esc(item.orderNo || '') + '</div>';
+                transferHtml += '<div class="text-xl font-bold text-purple-400">' + done + '/' + all + ' 項</div>';
                 transferHtml += '</div>';
                 transferHtml += '</div>';
             });
-            
+
             // 移位工單（從待移位佇列）
             var moveList = window.pendingMoves || [];
             moveCount = moveList.length;
@@ -203,7 +146,7 @@
             });
             
             if (transferCount === 0 && moveCount === 0) {
-                transferHtml = '<div class="text-center text-slate-500 py-8"><i class="fa-solid fa-check-circle text-4xl mb-2 block text-emerald-500"></i>無待處理調撥</div>';
+                transferHtml = '<div class="text-center text-slate-500 py-8"><i class="fa-solid fa-check-circle text-4xl mb-2 block text-emerald-500"></i>沒有進行中的調度工單</div>';
             }
             document.getElementById('board-transfer-list').innerHTML = transferHtml;
             
@@ -239,6 +182,9 @@
             // 🔧 修正：設定新計時器，每次刷新時重新載入資料
             if (interval > 0) {
                 boardRefreshTimer = setInterval(function() {
+                    // 離開看板就不要再背景讀資料
+                    var v = document.getElementById('view-work-board');
+                    if (!v || v.classList.contains('hidden')) return;
                     loadWorkBoardData().then(function() {
                         refreshWorkBoard();
                     });
@@ -266,11 +212,15 @@
         
         // 開啟電視投放視窗
         window.openTVBoard = function() {
-            var pendingPickingOrders = window.pendingPickingOrders || [];
-            var waves = (window._waveData && window._waveData.waves) ? window._waveData.waves : [];
-            var activeWaves = waves.filter(function(w) { return w.status === 'picking' || w.status === 'pending'; });
-            var transferList = window.transferList || [];
-            var pendingTransfers = transferList.filter(function(t) { return t.status !== 'completed'; });
+            // 與看板同一份資料：待上架入庫任務、進行中波次、未完成調度工單
+            var board = window._board || { tasks: [], waves: [], dispatch: [] };
+            var pendingPickingOrders = board.tasks.map(function(t) {
+                return { productName: (t.productName || '') + ' ' + (t.spec || ''), quantity: t.quantity, applicant: t.orderNo || t.palletId || '', purpose: '→ ' + (t.locationId || '待指定') };
+            });
+            var activeWaves = board.waves;
+            var pendingTransfers = board.dispatch.map(function(d) {
+                return { productName: d.productName || '', fromWarehouse: d.orderNo || '', toWarehouse: (d.completedOps || []).length + '/' + (d.operations || []).length + ' 項', quantity: (d.operations || []).length };
+            });
             
             var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">';
             html += '<title>工單看板 - 電視投放</title>';
@@ -291,13 +241,13 @@
             html += '<div class="grid grid-cols-4 gap-6 mb-6">';
             html += '<div class="bg-gradient-to-br from-green-600 to-green-700 rounded-2xl p-6 text-center">';
             html += '<div class="text-6xl font-bold text-white">' + pendingPickingOrders.length + '</div>';
-            html += '<div class="text-green-200 text-2xl mt-2">待領料</div></div>';
+            html += '<div class="text-green-200 text-2xl mt-2">待上架</div></div>';
             html += '<div class="bg-gradient-to-br from-orange-600 to-orange-700 rounded-2xl p-6 text-center">';
             html += '<div class="text-6xl font-bold text-white">' + activeWaves.length + '</div>';
             html += '<div class="text-orange-200 text-2xl mt-2">揀貨中</div></div>';
             html += '<div class="bg-gradient-to-br from-purple-600 to-purple-700 rounded-2xl p-6 text-center">';
             html += '<div class="text-6xl font-bold text-white">' + pendingTransfers.length + '</div>';
-            html += '<div class="text-purple-200 text-2xl mt-2">待調撥</div></div>';
+            html += '<div class="text-purple-200 text-2xl mt-2">調度工單</div></div>';
             html += '<div class="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-6 text-center">';
             html += '<div class="text-6xl font-bold text-white">' + (pendingPickingOrders.length + activeWaves.length + pendingTransfers.length) + '</div>';
             html += '<div class="text-emerald-200 text-2xl mt-2">總工單</div></div>';
@@ -308,10 +258,10 @@
             
             // 領料工單
             html += '<div class="bg-slate-900 rounded-2xl border-4 border-green-500 flex flex-col overflow-hidden">';
-            html += '<div class="bg-green-600 px-6 py-4"><span class="text-2xl font-bold text-white"><i class="fa-solid fa-hand mr-3"></i>待領料</span></div>';
+            html += '<div class="bg-green-600 px-6 py-4"><span class="text-2xl font-bold text-white"><i class="fa-solid fa-truck-ramp-box mr-3"></i>待上架入庫</span></div>';
             html += '<div class="flex-1 overflow-y-auto p-4 space-y-3">';
             if (pendingPickingOrders.length === 0) {
-                html += '<div class="text-center text-slate-500 py-12"><i class="fa-solid fa-check-circle text-6xl mb-4 block text-emerald-500"></i><span class="text-2xl">無待領料工單</span></div>';
+                html += '<div class="text-center text-slate-500 py-12"><i class="fa-solid fa-check-circle text-6xl mb-4 block text-emerald-500"></i><span class="text-2xl">沒有待上架的貨</span></div>';
             } else {
                 pendingPickingOrders.slice(0, 8).forEach(function(order) {
                     html += '<div class="bg-slate-800 rounded-xl p-4 border-l-4 border-green-500">';
@@ -335,7 +285,9 @@
                 html += '<div class="text-center text-slate-500 py-12"><i class="fa-solid fa-check-circle text-6xl mb-4 block text-emerald-500"></i><span class="text-2xl">無進行中揀貨</span></div>';
             } else {
                 activeWaves.slice(0, 8).forEach(function(wave) {
-                    var progress = wave.pickedOrders ? Math.round(wave.pickedOrders / wave.totalOrders * 100) : 0;
+                    // 進度＝已揀項目／品項數（completedItems 是手機、電腦掃過的揀貨項目）
+                var doneN = (wave.completedItems || []).length, allN = wave.itemCount || (wave.summary || []).length || 0;
+                var progress = allN ? Math.min(100, Math.round(doneN / allN * 100)) : 0;
                     html += '<div class="bg-slate-800 rounded-xl p-4 border-l-4 border-orange-500">';
                     html += '<div class="flex justify-between items-center">';
                     html += '<div class="text-xl font-bold text-white">' + (wave.waveNo || wave.id) + '</div>';
@@ -344,7 +296,7 @@
                     html += '<div class="mt-3">';
                     html += '<div class="flex justify-between text-lg mb-2">';
                     html += '<span class="text-slate-400">進度</span>';
-                    html += '<span class="text-orange-400 font-bold">' + (wave.pickedOrders || 0) + '/' + (wave.totalOrders || 0) + '</span>';
+                    html += '<span class="text-orange-400 font-bold">' + doneN + '/' + allN + ' 項</span>';
                     html += '</div>';
                     html += '<div class="w-full bg-slate-700 rounded-full h-4">';
                     html += '<div class="bg-orange-500 h-4 rounded-full" style="width:' + progress + '%"></div>';

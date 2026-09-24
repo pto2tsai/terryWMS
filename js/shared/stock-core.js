@@ -146,6 +146,10 @@ window.checkMergeCompatible = function(source, target) {
             throw new Error('無法合併：' + f[1] + '不同（' + (source[f[0]] || '-') + ' / ' + (target[f[0]] || '-') + '）');
         }
     });
+    // 留置區（品管留置／業務保留）的貨不能和一般的貨合併：合併後留置的貨就會被揀出去
+    if (typeof window.isHoldLocation === 'function' && window.isHoldLocation(source.locationId) !== window.isHoldLocation(target.locationId)) {
+        throw new Error('無法合併：一板在留置區（' + (window.isHoldLocation(source.locationId) ? source.locationId : target.locationId) + '），一板不在；要先把留置的貨放行');
+    }
 };
 
 // 效期不同 → 可以合併，但要提醒（回傳提醒文字陣列）

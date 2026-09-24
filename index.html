@@ -558,7 +558,7 @@
                 <div class="grid grid-cols-5 gap-4 mb-4">
                     <div class="bg-gradient-to-br from-green-600 to-green-700 rounded-xl p-4 text-center">
                         <div class="text-5xl font-bold text-white" id="board-pending-count">0</div>
-                        <div class="text-green-200 text-lg mt-1">待領料</div>
+                        <div class="text-green-200 text-lg mt-1">待上架</div>
                     </div>
                     <div class="bg-gradient-to-br from-orange-600 to-orange-700 rounded-xl p-4 text-center">
                         <div class="text-5xl font-bold text-white" id="board-wave-count">0</div>
@@ -566,7 +566,7 @@
                     </div>
                     <div class="bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl p-4 text-center">
                         <div class="text-5xl font-bold text-white" id="board-transfer-count">0</div>
-                        <div class="text-purple-200 text-lg mt-1">待調撥</div>
+                        <div class="text-purple-200 text-lg mt-1">調度工單</div>
                     </div>
                     <div class="bg-gradient-to-br from-cyan-600 to-cyan-700 rounded-xl p-4 text-center">
                         <div class="text-5xl font-bold text-white" id="board-move-count">0</div>
@@ -580,10 +580,10 @@
                 
                 <!-- 工單列表區域 -->
                 <div class="flex-1 grid grid-cols-3 gap-4 overflow-hidden">
-                    <!-- 領料工單 -->
+                    <!-- 待上架入庫任務 -->
                     <div class="bg-slate-900 rounded-xl border-2 border-green-600 flex flex-col overflow-hidden">
                         <div class="bg-green-600 px-4 py-3 flex items-center justify-between">
-                            <span class="text-xl font-bold text-white"><i class="fa-solid fa-hand mr-2"></i>待領料</span>
+                            <span class="text-xl font-bold text-white"><i class="fa-solid fa-truck-ramp-box mr-2"></i>待上架入庫</span>
                             <span class="bg-green-800 px-3 py-1 rounded-full text-white font-bold" id="board-pending-badge">0</span>
                         </div>
                         <div class="flex-1 overflow-y-auto p-3 space-y-2" id="board-pending-list">
@@ -603,7 +603,7 @@
                     <!-- 調撥/移位工單 -->
                     <div class="bg-slate-900 rounded-xl border-2 border-purple-600 flex flex-col overflow-hidden">
                         <div class="bg-purple-600 px-4 py-3 flex items-center justify-between">
-                            <span class="text-xl font-bold text-white"><i class="fa-solid fa-right-left mr-2"></i>調撥/移位</span>
+                            <span class="text-xl font-bold text-white"><i class="fa-solid fa-right-left mr-2"></i>調度／移位</span>
                             <span class="bg-purple-800 px-3 py-1 rounded-full text-white font-bold" id="board-transfer-badge">0</span>
                         </div>
                         <div class="flex-1 overflow-y-auto p-3 space-y-2" id="board-transfer-list">
@@ -944,6 +944,12 @@
                             <i class="fa-solid fa-refresh mr-1"></i>重新整理
                         </button>
                     </div>
+                </div>
+
+                <!-- 即期品待主管核准（核准前手機不能上架入帳） -->
+                <div id="expiry-approval-section" class="hidden mb-4 bg-red-900/20 border border-red-700/60 rounded-lg p-3">
+                    <div class="text-red-300 font-bold text-sm mb-2"><i class="fa-solid fa-hourglass-half mr-1"></i>即期品待主管核准（核准前不能上架入帳）</div>
+                    <div id="expiry-approval-list" class="space-y-2"></div>
                 </div>
 
                 <!-- 篩選 -->
@@ -3951,9 +3957,9 @@
                         <div>
                             <label class="text-slate-400 text-xs mb-1 block">熱力指標</label>
                             <select id="heatmap-metric" class="scan-input" onchange="refreshWarehouseHeatmap()">
-                                <option value="frequency">使用頻率（出入庫次數）</option>
-                                <option value="turnover">週轉率</option>
-                                <option value="duration">平均停留天數</option>
+                                <option value="frequency">使用頻率（入庫＋出庫＋移板）</option>
+                                <option value="outbound">只看出庫（揀貨、領用）</option>
+                                <option value="inbound">只看入庫</option>
                             </select>
                         </div>
                         <div class="flex gap-2">
