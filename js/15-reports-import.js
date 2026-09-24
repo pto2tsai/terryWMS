@@ -1209,7 +1209,7 @@ async function validateAndPreviewData(jsonData) {
     jsonData.forEach((row, index) => {
         const record = {
             rowNum: index + 2,
-            location: String(findField(row, fieldMappings.location)).trim().toUpperCase(),
+            location: window.formatLocationId(findField(row, fieldMappings.location)),
             company: String(findField(row, fieldMappings.company)).trim(),
             productId: String(findField(row, fieldMappings.productId)).trim(),
             productName: String(findField(row, fieldMappings.productName)).trim(),

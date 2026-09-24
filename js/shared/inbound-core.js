@@ -14,7 +14,7 @@ window.isValidStorageLocation = function(loc) {
 // opts.note：異動記錄備註
 window.postInboundOrderTx = async function(orderId, loc, opts) {
     opts = opts || {};
-    loc = String(loc || '').trim().toUpperCase();
+    loc = window.formatLocationId(loc);   // 簡碼 IA011 → I-A-01-1F
     if (!window.isValidStorageLocation(loc)) throw new Error('儲位格式不正確：' + (loc || '空白'));
     var db = window.db;
     var orderRef = db.collection('inboundOrders').doc(orderId);
@@ -35,6 +35,16 @@ window.postInboundOrderTx = async function(orderId, loc, opts) {
             dup.code = 'ALREADY_POSTED';
             dup.order = order;
             throw dup;
+        }
+        if (order.status === 'cancelled') {
+            var cx = new Error('這張入庫單已經取消了（' + (order.cancelReason || '') + '），不能入帳');
+            cx.code = 'ORDER_CANCELLED';
+            throw cx;
+        }
+        if (order.expiryApproval === 'pending') {
+            var ex = new Error('即期品還沒經主管核准，暫時不能入帳（請主管到「入庫核准」頁同意；貨先放暫存區）');
+            ex.code = 'EXPIRY_PENDING';
+            throw ex;
         }
         if (order.isExternal) {
             var ext = new Error('這是外倉入庫單，建立時已加到外倉庫存，不能再入帳到本倉');
@@ -85,7 +95,7 @@ window.postInboundOrderTx = async function(orderId, loc, opts) {
             note: opts.note || ('入庫 - ' + (order.vendor || order.source || '')),
             orderId: orderId
         }));
-        tx.update(orderRef, { status: 'completed', locationId: loc, completedAt: nowIso, completedBy: who });
+        tx.update(orderRef, { status: 'completed', locationId: loc, completedAt: nowIso, completedBy: who, palletDocId: palletRef.id });   // 記下建立的那一板（改入庫單時同步調整庫存用）
         if (opts.taskRef) {
             tx.update(opts.taskRef, { status: 'done', confirmedAt: nowIso, confirmedBy: who, confirmedLocation: loc });
         }

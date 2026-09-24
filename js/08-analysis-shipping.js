@@ -223,26 +223,25 @@
                     var q = constraints.length > 0 ? query(logsRef, ...constraints) : logsRef;
                     var snapshot = await window.getDocs(q);
 
+                    // 只算實際搬動貨的記錄（盤點調整、期初匯入不算使用）；同一筆記錄同一巷道只算一次
+                    var OUT = ['outbound', 'picking', 'picking-rm'], IN = ['inbound', 'transfer-in'], MOVE = ['move', 'merge', 'transfer-out'];
                     snapshot.forEach(function(doc) {
                         var data = doc.data();
+                        var isOut = OUT.indexOf(data.type) >= 0, isIn = IN.indexOf(data.type) >= 0, isMove = MOVE.indexOf(data.type) >= 0;
+                        if (!isOut && !isIn && !isMove) return;
+                        if (metric === 'outbound' && !isOut) return;
+                        if (metric === 'inbound' && !isIn) return;
 
-                        var locations = [];
-                        if (data.locationId) locations.push(data.locationId);
-                        if (data.fromLocation) locations.push(data.fromLocation);
-                        if (data.toLocation) locations.push(data.toLocation);
-
-                        locations.forEach(function(loc) {
-                            if (!loc) return;
-                            var parts = loc.split('-');
-                            if (parts.length >= 3) {
-                                var laneKey = parts[0] + '-' + parts[1] + '-' + parts[2];
-                                if (!locationStats[laneKey]) {
-                                    locationStats[laneKey] = { count: 0, inbound: 0, outbound: 0 };
-                                }
-                                locationStats[laneKey].count++;
-                                if (data.type === 'inbound') locationStats[laneKey].inbound++;
-                                if (data.type === 'outbound' || data.type === 'picking') locationStats[laneKey].outbound++;
-                            }
+                        var lanes = {};
+                        [data.locationId, data.fromLocation, data.toLocation].forEach(function(loc) {
+                            var parts = String(loc || '').split('-');
+                            if (parts.length >= 3) lanes[parts[0] + '-' + parts[1] + '-' + parts[2]] = true;
+                        });
+                        Object.keys(lanes).forEach(function(laneKey) {
+                            if (!locationStats[laneKey]) locationStats[laneKey] = { count: 0, inbound: 0, outbound: 0 };
+                            locationStats[laneKey].count++;
+                            if (isIn) locationStats[laneKey].inbound++;
+                            if (isOut) locationStats[laneKey].outbound++;
                         });
                     });
                 }

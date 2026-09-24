@@ -32,6 +32,25 @@ window.normalizeDateValue = function(v) {
     return s;
 };
 
+// ========== 儲位簡碼 ==========
+// 登打時不用打「-」：IA011 → I-A-01-1F、ia123 → I-A-12-3F、KE221 → K-E-22-1F（倉＋區＋排 1～2 碼＋層 1～3，最後的 F 可省略）
+// tempin → TEMP-IN、vqc → V-QC；已經是標準格式的只轉大寫、去空白；其他看不懂的原樣（大寫）回傳，交給格式檢查擋下
+var LOC_SPECIAL = { TEMPIN: 'TEMP-IN', TEMPOUT: 'TEMP-OUT', VQC: 'V-QC', VSALES: 'V-SALES', VTEMP: 'V-TEMP', OTHER: 'OTHER' };
+window.formatLocationId = function(input) {
+    var s = String(input == null ? '' : input).trim().toUpperCase().replace(/\s+/g, '');
+    if (!s) return '';
+    var flat = s.replace(/[^A-Z0-9]/g, '');
+    if (LOC_SPECIAL[flat]) return LOC_SPECIAL[flat];
+    var m = flat.match(/^([A-Z])([A-Z])(\d{1,2})([1-3])F?$/);
+    if (m) return m[1] + '-' + m[2] + '-' + ('0' + m[3]).slice(-2) + '-' + m[4] + 'F';
+    return s;
+};
+// 標準儲位 → 簡碼（印在儲位標籤上，照著打就好）：I-A-01-1F → IA011
+window.locationShortCode = function(loc) {
+    var m = /^([A-Z])-([A-Z])-(\d{2})-(\d)F$/.exec(String(loc || ''));
+    return m ? m[1] + m[2] + m[3] + m[4] : '';
+};
+
 // 本地日期 'YYYY-MM-DD'（取代 toISOString().split('T')[0]：那是 UTC 日期，台灣早上 8 點前會變成前一天）
 Date.prototype.toLocalYMD = function() {
     return this.getFullYear() + '-' + pad2(this.getMonth() + 1) + '-' + pad2(this.getDate());

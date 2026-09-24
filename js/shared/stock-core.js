@@ -146,6 +146,10 @@ window.checkMergeCompatible = function(source, target) {
             throw new Error('無法合併：' + f[1] + '不同（' + (source[f[0]] || '-') + ' / ' + (target[f[0]] || '-') + '）');
         }
     });
+    // 留置區（品管留置／業務保留）的貨不能和一般的貨合併：合併後留置的貨就會被揀出去
+    if (typeof window.isHoldLocation === 'function' && window.isHoldLocation(source.locationId) !== window.isHoldLocation(target.locationId)) {
+        throw new Error('無法合併：一板在留置區（' + (window.isHoldLocation(source.locationId) ? source.locationId : target.locationId) + '），一板不在；要先把留置的貨放行');
+    }
 };
 
 // 效期不同 → 可以合併，但要提醒（回傳提醒文字陣列）
@@ -264,7 +268,7 @@ function checkExpectFrom(p, expectFrom, label) {
 // 目標那一層已經滿了會先詢問（現場常有臨時堆放，按確定就照搬）；opts.skipCapacityCheck 可略過
 // opts.expectFrom：棧板必須還在這個儲位；opts.dispatch：調度工單的操作（同一筆交易標記完成、防重複執行）
 window.movePalletTx = async function(palletRef, toLocation, logExtra, opts) {
-    toLocation = String(toLocation || '').trim().toUpperCase().replace(/\s+/g, '');
+    toLocation = window.formatLocationId(toLocation);   // 簡碼 IA011 → I-A-01-1F
     if (!toLocation) throw new Error('請輸入目標儲位');
     if (!(window.isValidStorageLocation(toLocation) || /^V-(SALES|TEMP|QC)$/.test(toLocation))) {
         throw new Error('儲位格式不正確：' + toLocation + '（例如 I-A-01-1F）');

@@ -271,7 +271,7 @@
         };
 
         window.createInboundOrder = async function() {
-            var loc = document.getElementById('in-loc').value;
+            var loc = window.formatLocationId(document.getElementById('in-loc').value);   // 簡碼 IA011 → I-A-01-1F
             var name = document.getElementById('in-name').value.trim();
             var spec = document.getElementById('in-spec').value.trim();
             var batch = document.getElementById('in-batch').value.trim();
@@ -308,6 +308,7 @@
             var isExternal = isExternalWarehouse(warehouseId);
 
             if (!isExternal && !loc) { alert('請選擇儲位'); return null; }
+            if (!isExternal && !window.isValidStorageLocation(loc)) { alert('❌ 儲位格式不正確：' + loc + '\n\n例如 IA011（＝I-A-01-1F）或 TEMP-IN'); return null; }
             if (!name) { alert('請輸入品名'); return null; }
             if (!exp) { alert('⚠️ 效期為必填欄位'); return null; }
             if (qty <= 0) { alert('請輸入有效數量'); return null; }
@@ -352,7 +353,9 @@
 
             var needsApproval = (category === 'Raw');
 
+            // 即期品：主管／管理員建單就等於核准；其他人建的要主管在核准頁同意後，手機才能上架入帳
             var needsExpiryApproval = (expiryCheck.status === 'critical');
+            var expiryApproval = needsExpiryApproval ? (window.isSupervisorRole() ? 'approved' : 'pending') : null;
 
             var order = {
                 docNo: docNo,
@@ -379,6 +382,8 @@
                 approvalStatus: needsApproval ? 'pending' : 'not_required', // pending=待審核, approved=已審核, not_required=不需審核
                 expiryWarning: expiryCheck.status !== 'ok' ? expiryCheck.status : null, // 效期警示狀態
                 expiryNote: expiryCheck.status !== 'ok' ? expiryCheck.message : null, // 效期警示訊息
+                expiryApproval: expiryApproval,   // 即期品主管核准：pending＝等核准（不能入帳）、approved＝已核准
+                expiryApprovedBy: expiryApproval === 'approved' ? (window.currentUser ? window.currentUser.email : '') : null,
                 createdBy: window.currentUser ? window.currentUser.email : 'admin',
                 createdAt: now.toISOString()
             };
@@ -389,12 +394,16 @@
 
                 var expiryWarningText = '';
                 if (expiryCheck.status === 'critical') {
-                    expiryWarningText = '\n\n🔴 即期品已申請主管核准';
+                    expiryWarningText = expiryApproval === 'pending'
+                        ? '\n\n🔴 即期品：要主管在「入庫核准」頁同意後，手機才能上架入帳'
+                        : '\n\n🔴 即期品（你是主管，已直接核准）';
                 } else if (expiryCheck.status === 'warning') {
                     expiryWarningText = '\n\n⚠️ 效期較短，已記錄';
                 }
 
-                await window.publishInboundTask(order);
+                if (!(await window.publishInboundTask(order)) && !isExternal) {
+                    alert('⚠️ 入庫單已建立（' + docNo + '），但發到手機失敗（網路？）。\n\n請到「待執行入庫單」確認，或重新整理後再試。');
+                }
 
                 var locationInfo = isExternal ? ('倉庫：' + order.warehouseName) : ('儲位：' + loc);
 
@@ -894,7 +903,8 @@
                     html += '<td class="p-2 text-slate-500 text-xs">' + new Date(order.createdAt).toLocaleString() + '</td>';
                     html += '<td class="p-2 text-center">';
                     html += '<button onclick="reprintInbound(' + idx + ')" class="text-blue-400 hover:text-blue-300 mr-2" title="重印"><i class="fa-solid fa-print"></i></button>';
-                    html += '<button onclick="confirmSingleInbound(' + idx + ')" class="text-emerald-400 hover:text-emerald-300" title="確認入帳"><i class="fa-solid fa-check"></i></button>';
+                    html += '<button onclick="confirmSingleInbound(' + idx + ')" class="text-emerald-400 hover:text-emerald-300 mr-2" title="確認入帳"><i class="fa-solid fa-check"></i></button>';
+                    html += '<button onclick="cancelPendingInbound(' + idx + ')" class="text-red-400 hover:text-red-300" title="取消這張入庫單"><i class="fa-solid fa-ban"></i></button>';
                     html += '</td>';
                     html += '</tr>';
                 });
@@ -942,6 +952,111 @@
         };
 
         window.approvalList = [];
+
+        // 主管／管理員（可以核准即期品）
+        window.isSupervisorRole = function() {
+            var r = window.currentUser && window.currentUser.role;
+            return r === 'admin' || r === 'supervisor';
+        };
+
+        // 財務核准／駁回：交易裡確認單子還是待審核、數量與重送時間跟畫面上看到的一樣
+        async function approvalTx(shown, data) {
+            var ref = window.db.collection('inboundOrders').doc(shown.id);
+            return window.db.runTransaction(async function(tx) {
+                var snap = await tx.get(ref);
+                if (!snap.exists) throw new Error('入庫單已不存在');
+                var cur = snap.data();
+                if (cur.approvalStatus !== 'pending') {
+                    var names = { approved: '已審核', rejected: '已駁回', not_required: '不需審核' };
+                    throw new Error('這張單已經是「' + (names[cur.approvalStatus] || cur.approvalStatus) + '」（可能別人剛處理過），請重新整理');
+                }
+                if (shown.quantity !== undefined && (String(cur.quantity) !== String(shown.quantity) || (cur.resubmittedAt || '') !== (shown.resubmittedAt || ''))) {
+                    throw new Error('這張單剛被修改過（現在數量 ' + cur.quantity + '），請重新整理後再確認');
+                }
+                tx.update(ref, data);
+                return cur;
+            });
+        }
+
+        // 取消入庫單（還沒入帳的）：入庫單標為已取消、手機上的入庫任務一起取消
+        window.cancelInboundOrder = async function(orderId, reason) {
+            var db = window.db;
+            var ref = db.collection('inboundOrders').doc(orderId);
+            var tasks = await db.collection('inboundTasks').where('orderId', '==', orderId).get();
+            var now = new Date().toISOString(), who = window.currentUser ? window.currentUser.email : '';
+            await db.runTransaction(async function(tx) {
+                var snap = await tx.get(ref);
+                if (!snap.exists) throw new Error('入庫單已不存在');
+                var cur = snap.data();
+                if (cur.status === 'completed') throw new Error('這張單已經入帳了，不能取消（庫存有誤請用「編輯棧板」或盤點調整）');
+                if (cur.status === 'cancelled') throw new Error('這張單已經取消過了');
+                tx.update(ref, { status: 'cancelled', cancelReason: reason || '', cancelledBy: who, cancelledAt: now });
+                tasks.forEach(function(t) { if (t.data().status === 'pending') tx.update(t.ref, { status: 'cancelled', cancelledAt: now }); });
+            });
+        };
+
+        window.cancelPendingInbound = async function(idx) {
+            var order = (window.pendingInbounds || [])[idx];
+            if (!order) return;
+            var reason = prompt('取消入庫單 ' + order.docNo + '（' + order.productName + ' ' + order.quantity + ' 件）\n\n請輸入取消原因：');
+            if (reason === null) return;
+            try {
+                await window.cancelInboundOrder(order.id, reason);
+                alert('✅ 已取消，手機上的入庫任務也一併取消');
+                if (typeof window.showPendingInbounds === 'function') window.showPendingInbounds();
+            } catch (e) { alert('❌ 取消失敗：' + e.message); }
+        };
+
+        // 即期品主管核准區
+        async function loadExpiryApprovals() {
+            var box = document.getElementById('expiry-approval-section'), list = document.getElementById('expiry-approval-list');
+            if (!box || !list) return;
+            var snap = await window.db.collection('inboundOrders').where('expiryApproval', '==', 'pending').get();
+            var rows = [];
+            snap.forEach(function(d) { var o = d.data(); if (o.status !== 'cancelled') rows.push(Object.assign({ id: d.id }, o)); });
+            box.classList.toggle('hidden', rows.length === 0);
+            var can = window.isSupervisorRole();
+            var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+            list.innerHTML = rows.map(function(o) {
+                return '<div class="flex items-center gap-3 bg-slate-900/60 rounded p-2 text-sm">' +
+                    '<span class="text-blue-400 font-mono text-xs">' + esc(o.docNo) + '</span>' +
+                    '<span class="text-white font-bold">' + esc(o.productName) + ' ' + esc(o.spec || '') + '</span>' +
+                    '<span class="text-yellow-400">' + esc(o.quantity) + ' 件</span>' +
+                    '<span class="text-red-300">效期 ' + esc(o.expDate) + '（剩 ' + window.daysUntil(o.expDate) + ' 天）</span>' +
+                    '<span class="text-slate-400 text-xs">' + esc(o.createdBy || '') + '</span>' +
+                    '<span class="ml-auto flex gap-2">' + (can
+                        ? '<button onclick="decideExpiry(\'' + o.id + '\', true)" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold">同意允收</button>' +
+                          '<button onclick="decideExpiry(\'' + o.id + '\', false)" class="px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-xs font-bold">拒收（取消入庫）</button>'
+                        : '<span class="text-slate-500 text-xs">要主管或管理員核准</span>') + '</span></div>';
+            }).join('');
+        }
+
+        window.decideExpiry = async function(orderId, ok) {
+            if (!window.isSupervisorRole()) { alert('要主管或管理員才能核准即期品'); return; }
+            try {
+                if (ok) {
+                    if (!confirm('同意允收這批即期品？\n\n同意後手機就可以上架入帳。')) return;
+                    var db = window.db, ref = db.collection('inboundOrders').doc(orderId);
+                    var tasks = await db.collection('inboundTasks').where('orderId', '==', orderId).get();
+                    await db.runTransaction(async function(tx) {
+                        var snap = await tx.get(ref);
+                        if (!snap.exists || snap.data().expiryApproval !== 'pending') throw new Error('這張單已經處理過了，請重新整理');
+                        var data = { expiryApproval: 'approved', expiryApprovedBy: window.currentUser.email, expiryApprovedAt: new Date().toISOString() };
+                        tx.update(ref, data);
+                        tasks.forEach(function(t) { tx.update(t.ref, { expiryApproval: 'approved' }); });
+                    });
+                    alert('✅ 已同意，手機可以上架入帳了');
+                } else {
+                    var reason = prompt('拒收原因：', '即期品不允收');
+                    if (reason === null) return;
+                    await window.cancelInboundOrder(orderId, '即期品拒收：' + reason);
+                    await window.db.collection('inboundOrders').doc(orderId).update({ expiryApproval: 'rejected' });
+                    alert('✅ 已拒收，入庫單與手機任務已取消');
+                }
+            } catch (e) { alert('❌ ' + e.message); }
+            loadExpiryApprovals();
+        };
+
         window.loadApprovalList = async function() {
             var tbody = document.getElementById('approval-list-body');
             if (!tbody) return;
@@ -979,6 +1094,7 @@
                 });
 
                 renderApprovalList();
+                loadExpiryApprovals().catch(function(e) { console.warn('載入即期品核准失敗', e); });
             } catch(e) {
                 console.error('載入審核列表失敗:', e);
                 tbody.innerHTML = '<tr><td colspan="12" class="text-center text-red-400 py-10">載入失敗</td></tr>';
@@ -1067,7 +1183,8 @@
             }
 
             try {
-                await window.updateDoc(window.doc(window.db, 'inboundOrders', order.id), {
+                // 交易裡確認這張單還是「待審核」、而且沒被修改過（別人剛駁回或倉管剛改數量，就不能用舊畫面核准）
+                await approvalTx(order, {
                     approvalStatus: 'approved',
                     approvedBy: window.currentUser ? window.currentUser.email : 'admin',
                     approvedAt: new Date().toISOString()
@@ -1104,9 +1221,8 @@
             }
 
             try {
-                var ref = window.doc(window.db, 'inboundOrders', orderId);
-                var cur = (await window.getDoc(ref)).data() || {};
-                await window.updateDoc(ref, {
+                var shown = (window.approvalList || []).find(function(o) { return o.id === orderId; }) || { id: orderId };
+                var cur = await approvalTx(shown, {
                     approvalStatus: 'rejected',
                     rejectReason: reason,
                     rejectedBy: window.currentUser ? window.currentUser.email : 'admin',
@@ -1156,8 +1272,8 @@
             if (!exp) { alert('請輸入效期'); return; }
 
             try {
-                var ref = window.doc(window.db, 'inboundOrders', orderId);
-                var cur = (await window.getDoc(ref)).data() || {};
+                var db = window.db;
+                var ref = db.collection('inboundOrders').doc(orderId);
                 var fields = {
                     productName: name,
                     spec: document.getElementById('edit-spec').value.trim(),
@@ -1167,23 +1283,58 @@
                     expiryDate: exp || '',   // 入帳時讀 expiryDate，兩個欄位都要改，不然會用舊效期
                     vendor: document.getElementById('edit-vendor').value.trim()
                 };
-                var posted = cur.status === 'completed';
-                if (!posted) fields.locationId = document.getElementById('edit-loc').value.trim().toUpperCase();
-                // 重新送審：回到財務待核准清單（入帳狀態不變；之前改成 pending_approval 會讓單子從兩邊清單都消失）
-                await window.updateDoc(ref, Object.assign({}, fields, {
-                    approvalStatus: 'pending',
-                    resubmittedAt: new Date().toISOString()
-                }));
-                // 還沒上架的：手機入庫任務一併更新顯示內容
-                if (!posted && cur.docNo) {
-                    var tasks = await window.db.collection('inboundTasks').where('orderNo', '==', cur.docNo).get();
-                    await Promise.all(tasks.docs.filter(function(d) { return d.data().status === 'pending'; }).map(function(d) {
-                        return d.ref.update({ productName: fields.productName, spec: fields.spec, quantity: qty, batchNo: fields.batchNo, expDate: fields.expDate, locationId: fields.locationId || d.data().locationId });
-                    }));
+                var editLoc = window.formatLocationId(document.getElementById('edit-loc').value);
+                var pre = (await ref.get()).data() || {};
+                // 已入帳的單：找出它建立的那一板（新單記在 palletDocId；舊單用板號＝入庫單號找）
+                var palletRef = null;
+                if (pre.status === 'completed') {
+                    if (pre.palletDocId) palletRef = db.collection('pallets').doc(pre.palletDocId);
+                    else if (pre.docNo) {
+                        var ps = await db.collection('pallets').where('palletId', '==', pre.docNo).limit(1).get();
+                        if (!ps.empty) palletRef = ps.docs[0].ref;
+                    }
                 }
-                var changedStock = posted && (Number(cur.quantity) !== qty || cur.productName !== name || (cur.batchNo || '') !== fields.batchNo);
-                alert('✅ 已修改並重新送審！' + (changedStock
-                    ? '\n\n⚠️ 此單的貨已經入帳，修改入庫單不會改動庫存。\n請到「庫存查詢」找板號 ' + (cur.docNo || '') + ' 調整數量／品項。' : ''));
+                var tasks = pre.docNo ? await db.collection('inboundTasks').where('orderNo', '==', pre.docNo).get() : null;
+                var result = await db.runTransaction(async function(tx) {
+                    var snap = await tx.get(ref);
+                    if (!snap.exists) throw new Error('入庫單已不存在');
+                    var cur = snap.data();
+                    var posted = cur.status === 'completed';
+                    var pSnap = posted && palletRef ? await tx.get(palletRef) : null;
+                    var stockChanged = posted && (Number(cur.quantity) !== qty || cur.productName !== name || (cur.spec || '') !== fields.spec ||
+                        (cur.batchNo || '') !== fields.batchNo || window.normalizeDateValue(cur.expiryDate || cur.expDate) !== exp);
+                    var note = '';
+                    if (stockChanged) {
+                        // 已入帳：庫存一起改（那一板已經出貨或不存在就不能改，請用盤點／編輯棧板調整）
+                        if (!pSnap || !pSnap.exists) throw new Error('這張單入帳的那一板（' + (cur.docNo || '') + '）已經出貨或不存在，不能從入庫單改數量／品項；請用「編輯棧板」或盤點調整');
+                        var p = pSnap.data();
+                        var delta = qty - Number(cur.quantity || 0);
+                        var newQty = (parseFloat(p.quantity) || 0) + delta;
+                        if (newQty < 0) throw new Error('那一板現在只剩 ' + p.quantity + ' 件（已經出過貨），數量不能改少 ' + (-delta) + ' 件');
+                        var pu = { productName: name, spec: fields.spec, batchNo: fields.batchNo, expiryDate: exp, expDate: exp, updatedAt: new Date().toISOString() };
+                        if (delta !== 0) { pu.quantity = newQty; Object.assign(pu, window.scaledWeight(p, parseFloat(p.quantity) || 0, newQty)); }
+                        tx.update(palletRef, pu);
+                        tx.set(db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
+                            type: 'adjust', company: p.company || '', productName: name, spec: fields.spec, batchNo: fields.batchNo,
+                            quantity: delta !== 0 ? newQty : (parseFloat(p.quantity) || 0), quantityChange: delta, locationId: p.locationId || '',
+                            palletId: p.palletId || cur.docNo || '', expDate: exp,
+                            note: '修改入庫單 ' + (cur.docNo || '') + '：' + [Number(cur.quantity) !== qty ? '數量 ' + cur.quantity + ' → ' + qty : '',
+                                cur.productName !== name ? '品名 ' + cur.productName + ' → ' + name : '',
+                                (cur.batchNo || '') !== fields.batchNo ? '批號 ' + (cur.batchNo || '-') + ' → ' + (fields.batchNo || '-') : ''].filter(Boolean).join('、')
+                        }));
+                        note = '\n\n庫存已同步調整：板號 ' + (p.palletId || '') + (delta !== 0 ? '（' + p.quantity + ' → ' + newQty + '）' : '');
+                    }
+                    var upd = Object.assign({}, fields, { approvalStatus: 'pending', resubmittedAt: new Date().toISOString() });
+                    if (!posted) upd.locationId = editLoc;
+                    // 重新送審：回到財務待核准清單（入帳狀態不變）
+                    tx.update(ref, upd);
+                    // 還沒上架的：手機入庫任務一併更新
+                    if (!posted && tasks) tasks.forEach(function(d) {
+                        if (d.data().status === 'pending') tx.update(d.ref, { productName: name, spec: fields.spec, quantity: qty, batchNo: fields.batchNo, expDate: exp, locationId: editLoc || d.data().locationId });
+                    });
+                    return note;
+                });
+                alert('✅ 已修改並重新送審！' + result);
                 closeEditInboundModal();
                 loadApprovalList();
                 updateApprovalCount();
@@ -1381,6 +1532,7 @@
                     company: order.company || '',
                     expDate: order.expDate || '',
                     approvalStatus: order.approvalStatus || '',
+                    expiryApproval: order.expiryApproval || null,
                     orderNo: order.docNo,
                     palletId: order.docNo,
                     productName: order.productName,
@@ -1403,10 +1555,10 @@
 
         window.validateLocationInput = function() {
             var input = document.getElementById('in-loc');
-            var value = input.value.trim().toUpperCase();
-            input.value = value;
+            // 打字中不改輸入框內容（可以打簡碼 IA011），用轉換後的儲位判斷
+            var value = window.formatLocationId(input.value);
 
-            var valid = /^[IJK]-[A-H]-\d{2}-[123]F$/.test(value);
+            var valid = window.isValidStorageLocation(value);
 
             if (value && valid) {
                 input.classList.remove('border-red-500');

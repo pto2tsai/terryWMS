@@ -95,14 +95,7 @@ function findByScan(list, scanned, keys, tailKey) {
 }
 
 // 儲位：I-A-01-1F；手打可省略符號（IA011、ia011f → I-A-01-1F）
-window.formatLocationId = function(input) {
-    let s = String(input || '').trim().toUpperCase();
-    if (!s) return '';
-    if (s.indexOf('-') !== -1) return s;
-    const m = s.replace(/[^A-Z0-9]/g, '').match(/^([A-Z])([A-Z])(\d{1,2})(\d)F?$/);
-    if (!m) return s;
-    return m[1] + '-' + m[2] + '-' + ('0' + m[3]).slice(-2) + '-' + m[4] + 'F';
-};
+// 儲位簡碼轉換 window.formatLocationId 在 js/shared/data-format.js（電腦版與手機版共用）
 
 function palletsAt(loc) {
     const key = codeKey(loc);
@@ -175,6 +168,13 @@ auth.onAuthStateChanged(async function(user) {
     $('login-page').style.display = 'none';
     $('app-main').classList.add('active');
     $('display-user').innerText = window.currentUser.name || user.email.split('@')[0];
+    // 帳號被停用：馬上登出（不用等下次登入）
+    if (window._userWatch) window._userWatch();
+    window._userWatch = db.collection('users').doc(String(user.email).toLowerCase()).onSnapshot(function(snap) {
+        const d = snap.exists ? snap.data() : null;
+        if (d && d.active === false) { alert('此帳號已被停用，系統將登出'); auth.signOut().then(function() { location.reload(); }); return; }
+        if (d && d.role) window.currentUser.role = d.role;
+    }, function(err) { console.warn('帳號狀態監聽失敗', err); });
     initData();
 });
 

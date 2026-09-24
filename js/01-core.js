@@ -631,3 +631,45 @@ console.log('✅ WMS 工具函數庫已載入');
             return window.RACK_CONFIG.LEVEL_VOLUME[levelStr] || 8;
         };
         
+
+
+// ========== 儲位輸入框：可以打簡碼（IA011），旁邊即時顯示轉換結果，離開欄位或按 Enter 自動換成標準格式 ==========
+(function() {
+    var IDS = ['in-loc', 'move-target-loc', 'fallback-move-loc', 'fallback-merge-loc', 'transfer-location', 'transfer-loc',
+        'edit-loc', 'edit-location-field'];
+    function isLocInput(el) {
+        return el && el.tagName === 'INPUT' && (IDS.indexOf(el.id) >= 0 || el.hasAttribute('data-loc-input'));
+    }
+    function hintOf(el) {
+        var h = el.parentNode && el.parentNode.querySelector('.loc-hint[data-for="' + el.id + '"]');
+        if (!h) {
+            h = document.createElement('div');
+            h.className = 'loc-hint';
+            h.setAttribute('data-for', el.id);
+            h.style.cssText = 'font-size:11px;margin-top:2px;min-height:14px;';
+            el.insertAdjacentElement('afterend', h);
+        }
+        return h;
+    }
+    function showHint(el) {
+        var raw = el.value.trim(), f = window.formatLocationId(raw), h = hintOf(el);
+        if (!raw) { h.textContent = ''; return; }
+        var ok = window.isValidStorageLocation(f) || /^V-(SALES|TEMP|QC)$/.test(f);
+        if (f !== raw.toUpperCase()) { h.textContent = '→ ' + f + (ok ? '' : '（格式不對）'); }
+        else h.textContent = ok ? '' : '格式不對，例如 IA011 或 I-A-01-1F';
+        h.style.color = ok ? '#34d399' : '#f87171';
+    }
+    function commit(el) {
+        var f = window.formatLocationId(el.value);
+        if (f && f !== el.value) {
+            el.value = f;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        showHint(el);
+    }
+    document.addEventListener('input', function(e) { if (isLocInput(e.target)) showHint(e.target); }, true);
+    document.addEventListener('change', function(e) { if (isLocInput(e.target)) commit(e.target); }, true);
+    document.addEventListener('blur', function(e) { if (isLocInput(e.target)) commit(e.target); }, true);
+    // 按 Enter 送出前先換成標準格式（捕獲階段，比欄位自己的 Enter 處理先執行）
+    document.addEventListener('keydown', function(e) { if (e.key === 'Enter' && isLocInput(e.target)) commit(e.target); }, true);
+})();

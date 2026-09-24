@@ -599,7 +599,7 @@
                 if(avail > 0) {
                     var toPlace = Math.min(avail, remaining);
                     for(var j = 0; j < toPlace; j++) {
-                        allocations.push(formatLocationId(zone, row, level));
+                        allocations.push(window.buildLocationId(zone, row, level));
                     }
                     remaining -= toPlace;
                 }

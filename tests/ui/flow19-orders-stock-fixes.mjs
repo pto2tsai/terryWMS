@@ -189,7 +189,7 @@ H.check('J-C-05-2F 已有 4 整板：提醒已滿，按取消就不搬', mv1.inc
 page.__dialogPlan = [];
 await page.evaluate(async () => { await movePalletTx(db.collection('pallets').doc('PM'), 'j-c-05-2f'); });
 H.check('按確定照搬；小寫儲位存成大寫', (await H.one('pallets', 'PM')).locationId === 'J-C-05-2F');
-const mv3 = await page.evaluate(async () => { try { await movePalletTx(db.collection('pallets').doc('PM'), 'IA011F'); return 'moved'; } catch (e) { return e.message; } });
+const mv3 = await page.evaluate(async () => { try { await movePalletTx(db.collection('pallets').doc('PM'), 'XY1'); return 'moved'; } catch (e) { return e.message; } });
 H.check('格式不對的儲位擋下', mv3.includes('儲位格式不正確') && (await H.one('pallets', 'PM')).locationId === 'J-C-05-2F', mv3);
 
 // ---------- 調撥：外倉比對規格／效期、重量跟著走 ----------

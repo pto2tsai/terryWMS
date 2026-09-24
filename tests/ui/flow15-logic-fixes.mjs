@@ -57,6 +57,8 @@ await SUP.page.evaluate(async () => {
   await confirmReject();
 });
 H.check('駁回已入帳的單：提醒庫存要另外調整', H.lastDialog(SUP.log).includes('已經入帳'), H.lastDialog(SUP.log));
+// 這張單入帳的那一板（到這裡才建立，不影響前面的揀貨測試）
+await H.admin(async d => { await H.setDoc(H.doc(d, 'pallets', 'IN-RAW-1'), { palletId: 'IN-RAW-1', company: '崇文', productName: '白蝦', spec: '50/60', batchNo: 'R1', quantity: 8, locationId: 'I-B-02-1F', expiryDate: '2027-01-01' }); });
 await OP.page.evaluate(async () => {
   document.getElementById('edit-order-id').value = 'RAW1';
   document.getElementById('edit-name').value = '白蝦'; document.getElementById('edit-spec').value = '50/60';
@@ -67,7 +69,7 @@ await OP.page.evaluate(async () => {
 });
 const raw1 = await H.one('inboundOrders', 'RAW1');
 H.check('重新送審：回到財務待核准、入帳狀態與儲位不變', raw1.approvalStatus === 'pending' && raw1.status === 'completed' && raw1.locationId === 'I-B-02-1F' && raw1.quantity === 6, JSON.stringify(raw1));
-H.check('重新送審已入帳的單：提醒去調整庫存', H.lastDialog(OP.log).includes('不會改動庫存'), H.lastDialog(OP.log));
+H.check('重新送審已入帳的單：數量 8 → 6，那一板庫存同步調整', H.lastDialog(OP.log).includes('庫存已同步調整') && (await H.one('pallets', 'IN-RAW-1')).quantity === 6, H.lastDialog(OP.log));
 
 // ---------- 舊資料修正（系統維護 → 資料格式統一）----------
 const AD = await H.openApp(base, USERS.admin);
