@@ -50,7 +50,7 @@
         // 馬上入帳／外倉入庫也要檢查儲位格式與效期（交給堆高機的 createInboundOrder 會自己檢查）
         if (mode !== 'forklift') {
             if (!formData.isExternal && mode !== 'external') {
-                formData.locationId = String(formData.locationId || '').trim().toUpperCase().replace(/\s+/g, '');
+                formData.locationId = window.formatLocationId(formData.locationId);
                 if (window.isValidStorageLocation && !window.isValidStorageLocation(formData.locationId)) {
                     alert('❌ 儲位格式不正確：' + formData.locationId + '\n\n正確格式例如 I-A-01-1F，或 TEMP-IN（進貨暫存區）');
                     return;
@@ -730,7 +730,7 @@
                 updateData.expiryDate = window.normalizeDateValue(expiryStr);
                 updateData.expDate = updateData.expiryDate;
             }
-            updateData.locationId = updateData.locationId.toUpperCase().replace(/\s+/g, '');
+            updateData.locationId = window.formatLocationId(updateData.locationId);
             if (window.isValidStorageLocation && !window.isValidStorageLocation(updateData.locationId) && updateData.locationId !== String(item.locationId || '').toUpperCase()) {
                 alert('❌ 儲位格式不正確：' + updateData.locationId + '\n\n正確格式例如 I-A-01-1F'); return;
             }

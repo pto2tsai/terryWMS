@@ -95,14 +95,7 @@ function findByScan(list, scanned, keys, tailKey) {
 }
 
 // 儲位：I-A-01-1F；手打可省略符號（IA011、ia011f → I-A-01-1F）
-window.formatLocationId = function(input) {
-    let s = String(input || '').trim().toUpperCase();
-    if (!s) return '';
-    if (s.indexOf('-') !== -1) return s;
-    const m = s.replace(/[^A-Z0-9]/g, '').match(/^([A-Z])([A-Z])(\d{1,2})(\d)F?$/);
-    if (!m) return s;
-    return m[1] + '-' + m[2] + '-' + ('0' + m[3]).slice(-2) + '-' + m[4] + 'F';
-};
+// 儲位簡碼轉換 window.formatLocationId 在 js/shared/data-format.js（電腦版與手機版共用）
 
 function palletsAt(loc) {
     const key = codeKey(loc);

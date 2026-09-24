@@ -21,126 +21,144 @@
         var reprintPalletData = null;
         var reprintHistory = [];
 
+        var VIRTUAL_LOC_LABELS = ['TEMP-IN', 'TEMP-OUT', 'V-QC', 'V-SALES', 'V-TEMP'];
+        var VIRTUAL_LOC_NAMES = { 'TEMP-IN': '進貨暫存區', 'TEMP-OUT': '出貨暫存區', 'V-QC': '品管留置', 'V-SALES': '業務保留', 'V-TEMP': '臨時暫存' };
+
         window.selectLocZone = function(zone) {
             selectedLocZone = zone;
             document.querySelectorAll('.loc-zone-btn').forEach(function(btn) {
                 btn.classList.remove('ring-2', 'ring-white');
             });
             document.querySelector('.loc-zone-btn[data-zone="' + zone + '"]').classList.add('ring-2', 'ring-white');
+            // 排號範圍帶入這一區實際的排數（I、J 區 8 排，K 區 22 排），不會印出不存在的儲位
+            var lanes = (window.RACK_CONFIG && window.RACK_CONFIG.ZONE_LANES[zone]) || 22;
+            var s = document.getElementById('loc-row-start'), e = document.getElementById('loc-row-end');
+            if (s) { s.max = lanes; s.value = 1; }
+            if (e) { e.max = lanes; e.value = lanes; }
             updateLocPrintPreview();
         };
 
-        function updateLocPrintPreview() {
-            var countEl = document.getElementById('loc-print-count');
-            var previewEl = document.getElementById('loc-print-preview');
-
-            if (!selectedLocZone) {
-                if (previewEl) previewEl.innerHTML = '<span class="text-slate-500">請選擇倉庫區域</span>';
-                if (countEl) countEl.textContent = '0 張';
-                return;
-            }
-
-            var startRow = parseInt(document.getElementById('loc-row-start').value) || 1;
-            var endRow = parseInt(document.getElementById('loc-row-end').value) || 22;
+        // 要印的儲位清單（依排、層；排數不超過這一區實際的排數）
+        function collectLocationLabels() {
+            var labels = [];
             var floors = [];
             if (document.getElementById('loc-floor-1f').checked) floors.push('1F');
             if (document.getElementById('loc-floor-2f').checked) floors.push('2F');
             if (document.getElementById('loc-floor-3f').checked) floors.push('3F');
+            if (selectedLocZone) {
+                var lanes = (window.RACK_CONFIG && window.RACK_CONFIG.ZONE_LANES[selectedLocZone]) || 22;
+                var startRow = Math.max(1, parseInt(document.getElementById('loc-row-start').value) || 1);
+                var endRow = Math.min(lanes, parseInt(document.getElementById('loc-row-end').value) || lanes);
+                for (var row = startRow; row <= endRow; row++) {
+                    floors.forEach(function(floor) {
+                        var loc = selectedLocZone + '-' + String(row).padStart(2, '0') + '-' + floor;
+                        labels.push({ locationId: loc, shortCode: window.locationShortCode(loc), name: '' });
+                    });
+                }
+            }
+            var v = document.getElementById('loc-include-virtual');
+            if (v && v.checked) VIRTUAL_LOC_LABELS.forEach(function(loc) { labels.push({ locationId: loc, shortCode: loc.replace('-', ''), name: VIRTUAL_LOC_NAMES[loc] }); });
+            return { labels: labels, floors: floors };
+        }
 
-            var count = (endRow - startRow + 1) * floors.length;
+        function updateLocPrintPreview() {
+            var countEl = document.getElementById('loc-print-count');
+            var previewEl = document.getElementById('loc-print-preview');
+            var c = collectLocationLabels();
 
-            if (countEl) countEl.textContent = count + ' 張';
-
+            if (c.labels.length === 0) {
+                if (previewEl) previewEl.innerHTML = '<span class="text-slate-500">請選擇倉庫區域（或勾選加印暫存區）</span>';
+                if (countEl) countEl.textContent = '0 張';
+                return;
+            }
+            if (countEl) countEl.textContent = c.labels.length + ' 張';
+            var first = c.labels[0], last = c.labels[c.labels.length - 1];
             var preview = '<div class="flex items-center gap-3">';
-            preview += '<span class="text-lg font-bold text-blue-400">' + selectedLocZone + '</span>';
-            preview += '<span class="text-slate-400">排 ' + startRow.toString().padStart(2, '0') + '-' + endRow.toString().padStart(2, '0') + '</span>';
-            preview += '<span class="text-slate-400">' + floors.join('/') + '</span>';
+            if (selectedLocZone) preview += '<span class="text-lg font-bold text-blue-400">' + selectedLocZone + '</span>';
+            preview += '<span class="text-slate-400">' + first.locationId + ' ～ ' + last.locationId + '</span>';
             preview += '</div>';
-            preview += '<div class="text-xs text-slate-500 mt-1">範例：' + selectedLocZone + '-' + startRow.toString().padStart(2, '0') + '-' + floors[0] + '</div>';
-
+            preview += '<div class="text-xs text-slate-500 mt-1">範例：' + first.locationId + '　簡碼 <b class="text-emerald-400">' + first.shortCode + '</b></div>';
             if (previewEl) previewEl.innerHTML = preview;
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            var rowStart = document.getElementById('loc-row-start');
-            var rowEnd = document.getElementById('loc-row-end');
-            if (rowStart) rowStart.addEventListener('change', updateLocPrintPreview);
-            if (rowEnd) rowEnd.addEventListener('change', updateLocPrintPreview);
-            ['loc-floor-1f', 'loc-floor-2f', 'loc-floor-3f'].forEach(function(id) {
+            ['loc-row-start', 'loc-row-end', 'loc-floor-1f', 'loc-floor-2f', 'loc-floor-3f', 'loc-include-virtual'].forEach(function(id) {
                 var el = document.getElementById(id);
                 if (el) el.addEventListener('change', updateLocPrintPreview);
             });
         });
 
         window.printLocationLabels = function() {
-            if (!selectedLocZone) {
-                alert('請先選擇倉庫區域');
-                return;
-            }
+            var c = collectLocationLabels();
+            if (!selectedLocZone && c.labels.length === 0) { alert('請先選擇倉庫區域（或勾選加印暫存區）'); return; }
+            if (selectedLocZone && c.floors.length === 0 && c.labels.length === 0) { alert('請至少選擇一個樓層'); return; }
+            if (c.labels.length === 0) { alert('沒有要印的儲位'); return; }
+            var paperEl = document.querySelector('input[name="loc-paper"]:checked');
+            var a4 = paperEl && paperEl.value === 'a4';
+            var labels = c.labels;
+            var esc = function(v) { return String(v).replace(/[&<>"']/g, function(ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]; }); };
 
-            var startRow = parseInt(document.getElementById('loc-row-start').value) || 1;
-            var endRow = parseInt(document.getElementById('loc-row-end').value) || 22;
-            var floors = [];
-            if (document.getElementById('loc-floor-1f').checked) floors.push('1F');
-            if (document.getElementById('loc-floor-2f').checked) floors.push('2F');
-            if (document.getElementById('loc-floor-3f').checked) floors.push('3F');
-
-            if (floors.length === 0) {
-                alert('請至少選擇一個樓層');
-                return;
-            }
-
-            var labels = [];
-            for (var row = startRow; row <= endRow; row++) {
-                floors.forEach(function(floor) {
-                    var rowStr = row.toString().padStart(2, '0');
-                    labels.push({
-                        locationId: selectedLocZone + '-' + rowStr + '-' + floor,
-                        zone: selectedLocZone,
-                        row: rowStr,
-                        floor: floor
-                    });
-                });
-            }
-
-            var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>儲位條碼</title>';
+            var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>儲位標籤</title>';
             html += '<style>';
-            html += '@page { size: 60mm 40mm; margin: 0; }';
             html += '* { margin: 0; padding: 0; box-sizing: border-box; }';
             html += 'body { font-family: Microsoft JhengHei, Arial, sans-serif; }';
-            html += '.label { width: 60mm; height: 40mm; padding: 3mm; page-break-after: always; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed #ccc; }';
-            html += '.label:last-child { page-break-after: auto; }';
-            html += '.loc-text { font-size: 24px; font-weight: 900; margin-bottom: 2mm; letter-spacing: 1px; }';
-            html += '.qr-box { margin: 2mm 0; }';
+            if (a4) {
+                // A4 直式：2 欄 × 4 列，每格 105×74mm
+                html += '@page { size: A4 portrait; margin: 0; }';
+                html += '.sheet { width: 210mm; height: 297mm; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, 1fr); page-break-after: always; }';
+                html += '.sheet:last-of-type { page-break-after: auto; }';
+                html += '.label { border: 1px dashed #bbb; display: flex; align-items: center; justify-content: space-between; padding: 5mm 7mm; }';
+                html += '.txt { display: flex; flex-direction: column; }';
+                html += '.loc-text { font-size: 30px; font-weight: 900; letter-spacing: 1px; }';
+                html += '.short { font-size: 20px; margin-top: 2mm; } .short b { font-size: 26px; }';
+                html += '.name { font-size: 16px; margin-top: 1mm; }';
+                html += '.qr-box svg { width: 40mm; height: 40mm; }';
+            } else {
+                html += '@page { size: 60mm 40mm; margin: 0; }';
+                html += '.label { width: 60mm; height: 40mm; padding: 2mm 3mm; page-break-after: always; display: flex; align-items: center; justify-content: space-between; }';
+                html += '.label:last-of-type { page-break-after: auto; }';
+                html += '.txt { display: flex; flex-direction: column; }';
+                html += '.loc-text { font-size: 17px; font-weight: 900; }';
+                html += '.short { font-size: 12px; margin-top: 1mm; } .short b { font-size: 16px; }';
+                html += '.name { font-size: 11px; }';
+                html += '.qr-box svg { width: 26mm; height: 26mm; }';
+            }
             html += '.no-print { text-align: center; padding: 20px; }';
             html += '.no-print button { padding: 15px 40px; font-size: 18px; border: none; cursor: pointer; font-weight: bold; margin: 0 10px; border-radius: 8px; }';
             html += '.btn-print { background: #3b82f6; color: white; }';
             html += '.btn-close { background: #666; color: white; }';
-            html += '@media print { .no-print { display: none !important; } }';
+            html += '@media print { .no-print { display: none !important; } .label { border: none !important; } }';
             html += '</style>';
-            html += '<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>';
             html += '</head><body>';
-
-            labels.forEach(function(label, idx) {
-                html += '<div class="label">';
-                html += '<div class="loc-text">' + label.locationId + '</div>';
-                html += '<div class="qr-box" id="qr-' + idx + '"></div>';
-                html += '</div>';
-            });
 
             html += '<div class="no-print">';
             html += '<button class="btn-print" onclick="window.print()">🖨️ 列印全部 ' + labels.length + ' 張</button>';
             html += '<button class="btn-close" onclick="window.close()">關閉</button>';
             html += '</div>';
 
-            html += '<script>window.onload = function() {';
-            labels.forEach(function(label, idx) {
-                html += 'try { var qr = qrcode(0, "M"); qr.addData("' + label.locationId + '"); qr.make(); document.getElementById("qr-' + idx + '").innerHTML = qr.createSvgTag(3, 0); } catch(e) {}';
-            });
-            html += '};<\/script>';
+            var cell = function(label, idx) {
+                return '<div class="label"><div class="txt">' +
+                    '<div class="loc-text">' + esc(label.locationId) + '</div>' +
+                    (label.name ? '<div class="name">' + esc(label.name) + '</div>' : '') +
+                    '<div class="short">簡碼 <b>' + esc(label.shortCode) + '</b></div>' +
+                    '</div><div class="qr-box" id="qr-' + idx + '"></div></div>';
+            };
+            if (a4) {
+                for (var i = 0; i < labels.length; i += 8) {
+                    html += '<div class="sheet">' + labels.slice(i, i + 8).map(function(l, k) { return cell(l, i + k); }).join('') + '</div>';
+                }
+            } else {
+                html += labels.map(cell).join('');
+            }
+
+            // QR 碼內容＝標準儲位（手機掃了直接是 I-A-01-1F）
+            // QR 函式庫放在最後載入：網路慢時標籤文字先出來，不會整頁空白
+            html += '<script>function drawQr() { var locs = ' + JSON.stringify(labels.map(function(l) { return l.locationId; })) + ';';
+            html += 'locs.forEach(function(loc, i) { try { var qr = qrcode(0, "M"); qr.addData(loc); qr.make(); document.getElementById("qr-" + i).innerHTML = qr.createSvgTag(4, 0); } catch (e) {} }); }<\/script>';
+            html += '<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js" onload="drawQr()"><\/script>';
             html += '</body></html>';
 
-            var printWindow = window.open('', '_blank', 'width=600,height=800');
+            var printWindow = window.open('', '_blank', 'width=700,height=900');
             printWindow.document.write(html);
             printWindow.document.close();
         };

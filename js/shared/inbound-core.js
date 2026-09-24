@@ -14,7 +14,7 @@ window.isValidStorageLocation = function(loc) {
 // opts.note：異動記錄備註
 window.postInboundOrderTx = async function(orderId, loc, opts) {
     opts = opts || {};
-    loc = String(loc || '').trim().toUpperCase();
+    loc = window.formatLocationId(loc);   // 簡碼 IA011 → I-A-01-1F
     if (!window.isValidStorageLocation(loc)) throw new Error('儲位格式不正確：' + (loc || '空白'));
     var db = window.db;
     var orderRef = db.collection('inboundOrders').doc(orderId);

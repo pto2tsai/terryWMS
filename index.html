@@ -828,7 +828,7 @@
                         <div id="location-section" class="bg-emerald-900/40 border border-emerald-500 rounded-lg p-3 flex flex-col flex-1">
                             <div class="flex justify-between items-center mb-2">
                                 <div class="text-emerald-400 font-bold text-sm"><i class="fa-solid fa-map-marker-alt mr-1"></i>選擇儲位</div>
-                                <input type="text" id="in-loc" class="w-32 p-1.5 bg-slate-800 border-2 border-emerald-500 rounded text-sm font-bold text-emerald-400 text-center" placeholder="儲位" oninput="validateLocationInput(); updateInboundProgress();" onchange="validateLocationInput()">
+                                <input type="text" id="in-loc" class="w-32 p-1.5 bg-slate-800 border-2 border-emerald-500 rounded text-sm font-bold text-emerald-400 text-center" placeholder="儲位 例 IA011" oninput="validateLocationInput(); updateInboundProgress();" onchange="validateLocationInput()">
                             </div>
 
                             <!-- 快速選擇暫存區（精簡版）-->
@@ -1703,7 +1703,7 @@
                             <div class="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold">2</div>
                             <span class="text-white font-bold">輸入目標儲位</span>
                         </div>
-                        <input type="text" id="move-target-loc" class="scan-input text-xl text-center font-bold tracking-wider" placeholder="I-A-05-2F">
+                        <input type="text" id="move-target-loc" class="scan-input text-xl text-center font-bold tracking-wider" placeholder="IA052（＝I-A-05-2F）">
                     </div>
 
                     <!-- 確認按鈕 -->
@@ -1721,7 +1721,7 @@
                         </div>
                         <div class="p-3 border-b border-slate-700">
                             <div class="flex gap-2">
-                                <input type="text" id="fallback-move-loc" class="scan-input flex-1" placeholder="儲位 I-A-03-2F" onchange="searchPalletsByLocation(this.value, 'move')">
+                                <input type="text" id="fallback-move-loc" class="scan-input flex-1" placeholder="儲位 例 IA032" onchange="searchPalletsByLocation(this.value, 'move')">
                                 <input type="text" id="fallback-move-search" class="scan-input flex-1" placeholder="品名" oninput="searchPalletsByName(this.value, 'move')">
                             </div>
                         </div>
@@ -1785,7 +1785,7 @@
                         </div>
                         <div class="p-3 border-b border-slate-700">
                             <div class="flex gap-2">
-                                <input type="text" id="fallback-merge-loc" class="scan-input flex-1" placeholder="儲位" onchange="searchPalletsByLocation(this.value, 'merge')">
+                                <input type="text" id="fallback-merge-loc" class="scan-input flex-1" placeholder="儲位 例 IA032" onchange="searchPalletsByLocation(this.value, 'merge')">
                                 <input type="text" id="fallback-merge-search" class="scan-input flex-1" placeholder="品名" oninput="searchPalletsByName(this.value, 'merge')">
                             </div>
                         </div>
@@ -2858,6 +2858,26 @@
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+
+                            <!-- Step 3: 紙張、暫存區 -->
+                            <div class="bg-slate-800/50 rounded-lg p-3">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="bg-blue-600 text-white text-xs px-2 py-0.5 rounded font-bold">3</span>
+                                    <span class="text-sm text-slate-300 font-bold">紙張</span>
+                                </div>
+                                <div class="flex flex-wrap gap-2 text-xs">
+                                    <label class="flex items-center gap-1 px-2 py-1 bg-slate-700 rounded cursor-pointer">
+                                        <input type="radio" name="loc-paper" value="label" checked class="w-3 h-3"><span class="text-white">標籤機 60×40mm（一張一個）</span>
+                                    </label>
+                                    <label class="flex items-center gap-1 px-2 py-1 bg-slate-700 rounded cursor-pointer">
+                                        <input type="radio" name="loc-paper" value="a4" class="w-3 h-3"><span class="text-white">A4 一頁 8 個（剪下貼貨架）</span>
+                                    </label>
+                                    <label class="flex items-center gap-1 px-2 py-1 bg-slate-700 rounded cursor-pointer">
+                                        <input type="checkbox" id="loc-include-virtual" class="w-3 h-3"><span class="text-white">加印暫存區／留置區（TEMP-IN、TEMP-OUT、V-QC、V-SALES、V-TEMP）</span>
+                                    </label>
+                                </div>
+                                <div class="text-[11px] text-slate-500 mt-2">標籤上會印「簡碼」（例如 IA011），沒有條碼機時照著打就好，不用打「-」。</div>
                             </div>
 
                             <!-- 預覽 -->
@@ -4700,7 +4720,7 @@
                     </div>
                     <div>
                         <label class="text-xs text-slate-400">儲位</label>
-                        <input type="text" id="edit-loc" class="scan-input w-full">
+                        <input type="text" id="edit-loc" class="scan-input w-full" placeholder="例 IA011">
                     </div>
                     <div>
                         <label class="text-xs text-slate-400">廠商</label>

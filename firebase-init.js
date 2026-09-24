@@ -63,7 +63,7 @@ window.onSnapshot = function(r, c) { return r.onSnapshot(c); };
 window.serverTimestamp = function() { return firebase.firestore.FieldValue.serverTimestamp(); };
 
 // 儲位格式工具
-window.formatLocationId = function(zone, row, level) {
+window.buildLocationId = function(zone, row, level) {   // 組合儲位（原名 formatLocationId，改名避免蓋掉簡碼轉換）
     var rowStr = row < 10 ? '0' + row : '' + row;
     return zone + '-' + rowStr + '-' + level;
 };

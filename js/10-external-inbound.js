@@ -271,7 +271,7 @@
         };
 
         window.createInboundOrder = async function() {
-            var loc = document.getElementById('in-loc').value;
+            var loc = window.formatLocationId(document.getElementById('in-loc').value);   // 簡碼 IA011 → I-A-01-1F
             var name = document.getElementById('in-name').value.trim();
             var spec = document.getElementById('in-spec').value.trim();
             var batch = document.getElementById('in-batch').value.trim();
@@ -1168,7 +1168,7 @@
                     vendor: document.getElementById('edit-vendor').value.trim()
                 };
                 var posted = cur.status === 'completed';
-                if (!posted) fields.locationId = document.getElementById('edit-loc').value.trim().toUpperCase();
+                if (!posted) fields.locationId = window.formatLocationId(document.getElementById('edit-loc').value);
                 // 重新送審：回到財務待核准清單（入帳狀態不變；之前改成 pending_approval 會讓單子從兩邊清單都消失）
                 await window.updateDoc(ref, Object.assign({}, fields, {
                     approvalStatus: 'pending',
@@ -1403,10 +1403,10 @@
 
         window.validateLocationInput = function() {
             var input = document.getElementById('in-loc');
-            var value = input.value.trim().toUpperCase();
-            input.value = value;
+            // 打字中不改輸入框內容（可以打簡碼 IA011），用轉換後的儲位判斷
+            var value = window.formatLocationId(input.value);
 
-            var valid = /^[IJK]-[A-H]-\d{2}-[123]F$/.test(value);
+            var valid = window.isValidStorageLocation(value);
 
             if (value && valid) {
                 input.classList.remove('border-red-500');
