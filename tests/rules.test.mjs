@@ -71,5 +71,8 @@ await t('negative external quantity rejected', assertFails(addDoc(collection(O,'
 await t('log with own operatorEmail ok', assertSucceeds(addDoc(collection(O,'inventoryLogs'),{type:'out',operatorEmail:'op@x.com'})));
 await t('log impersonating another user rejected', assertFails(addDoc(collection(O,'inventoryLogs'),{type:'out',operatorEmail:'admin@x.com'})));
 await t('mixed-case token email matches lowercase operatorEmail', assertSucceeds(addDoc(collection(MIX,'inventoryLogs'),{type:'out',operatorEmail:'op@x.com'})));
+await t('operator can record today stock snapshot', assertSucceeds(setDoc(doc(O,'stockSnapshots','2026-01-01'),{date:'2026-01-01',pallets:{'崇文':3}})));
+await t('operator cannot change a past stock snapshot', assertFails(setDoc(doc(O,'stockSnapshots','2026-01-01'),{date:'2026-01-01',pallets:{'崇文':99}})));
+await t('readonly cannot record stock snapshot', assertFails(setDoc(doc(R,'stockSnapshots','2026-01-02'),{date:'2026-01-02',pallets:{}})));
 console.log(`pass ${pass} fail ${fail}`);
 await env.cleanup(); process.exit(fail?1:0);

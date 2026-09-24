@@ -88,6 +88,13 @@ service cloud.firestore {
     match /pickingOrders/{id}   { allow read: if isActiveUser(); allow write: if canOperate(); }
     match /consignments/{id}    { allow read: if isActiveUser(); allow write: if canOperate(); }
 
+    // 每日庫存板數快照（倉租計算用）：可新增當天的，不能改過去的
+    match /stockSnapshots/{date} {
+      allow read: if isActiveUser();
+      allow create: if canOperate();
+      allow update, delete: if isAdmin();
+    }
+
     // 單號計數器（generateDocNo 用交易遞增）
     match /counters/{id} {
       allow read: if isActiveUser();

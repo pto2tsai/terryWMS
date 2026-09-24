@@ -21,7 +21,7 @@ window.waves = [];
 window.dispatchOrders = [];
 window.inboundTasks = [];
 // 各頁在資料更新時要重畫：dataHooks.pallets.push(fn)
-window.dataHooks = { pallets: [], waves: [], dispatchOrders: [], inboundTasks: [] };
+window.dataHooks = { pallets: [], waves: [], dispatchOrders: [], inboundTasks: [], consignmentData: [] };
 // 各頁開啟時的初始化：pageInit['picking'] = fn
 window.pageInit = {};
 
@@ -222,9 +222,17 @@ function initData() {
         p = window.normalizeStockRecord(p);
         return ((p.quantity || 0) > 0 || (p.totalWeight || 0) > 0) ? p : null;
     });
+    // 第一次拿到庫存：記錄今天的板數（倉租用，一天一次）
+    window.dataHooks.pallets.push(function() {
+        if (window._snapshotRecorded) return;
+        window._snapshotRecorded = true;
+        window.recordDailyStockSnapshot(window.pallets);
+    });
     watch('waves', 'waves', function(w) { return w; }, window.isWaveOpen, 'badge-picking', '新的波次待揀貨');
     watch('dispatchOrders', 'dispatchOrders', function(o) { return o; }, window.isDispatchOpen, 'badge-dispatch', '新的調度工單');
     watch('inboundTasks', 'inboundTasks', function(t) { return t; }, window.isTaskOpen, 'badge-inbound', '新的入庫任務');
+    // 寄倉：揀貨時保留已賣給客戶的件數（與桌機相同規則）
+    watch('consignments', 'consignmentData', function(c) { return c; });
 }
 
 function notify(text) {

@@ -171,6 +171,12 @@ function initAllListeners() {
             }
         });
 
+        // 登入後第一次拿到庫存：記錄今天的板數（倉租用，一天一次）
+        if (!window._snapshotRecorded && window.recordDailyStockSnapshot) {
+            window._snapshotRecorded = true;
+            window.recordDailyStockSnapshot(currentInventory);
+        }
+
         // 排序
         inventoryList = window.sortByProductGroup ? window.sortByProductGroup(inventoryList) : inventoryList;
 

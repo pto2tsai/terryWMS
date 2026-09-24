@@ -274,3 +274,32 @@ window.mergePalletsConfirm = async function(sourceRef, targetRef, logExtra) {
         return window.mergePalletsTx(sourceRef, targetRef, logExtra, { allowMixed: true });
     }
 };
+
+// ========== 每日庫存板數快照（倉租用）==========
+// 每天第一位登入的人記一次各公司在本倉（I/J/K）的板數；倉租照每天實際板數加總（板天）
+// 同一天只會記一次（已有就不覆蓋）；寫入失敗不影響作業
+window.countOwnPallets = function(pallets) {
+    var out = { '崇文': 0, '八方': 0 };
+    (pallets || []).forEach(function(p) {
+        if ((parseFloat(p.quantity) || 0) <= 0 || !/^[IJK]-/.test(String(p.locationId || ''))) return;
+        if (out[p.company] === undefined) out[p.company] = 0;
+        out[p.company]++;
+    });
+    return out;
+};
+window.recordDailyStockSnapshot = async function(pallets) {
+    try {
+        var today = new Date().toLocalYMD();
+        var ref = window.db.collection('stockSnapshots').doc(today);
+        await window.db.runTransaction(async function(tx) {
+            var snap = await tx.get(ref);
+            if (snap.exists) return;
+            tx.set(ref, {
+                date: today,
+                pallets: window.countOwnPallets(pallets),
+                createdAt: new Date().toISOString(),
+                createdBy: window.currentUser ? (window.currentUser.email || '') : ''
+            });
+        });
+    } catch (e) { console.warn('每日板數快照未記錄：', e.message); }
+};
