@@ -23,7 +23,7 @@
 | data-format.js | 日期／效期／數量格式統一（`normalizeDateValue`、`normalizeStockRecord`、`Date#toLocalYMD`）；文字安全（讀寫 Firestore 時 `< > " ' ` \` 轉全形，防 XSS） |
 | stock-core.js | 庫存交易（`runStockTransaction`、`mergePalletsTx`、`movePalletTx`、`buildInventoryLogEntry`） |
 | inbound-core.js | 入庫單入帳（`postInboundOrderTx`：建立棧板、入庫單完成、入庫任務完成在同一筆交易） |
-| picking-list.js | 波次揀貨清單（`buildWavePickingList`，先進先出、依動線排序） |
+| picking-list.js | 波次揀貨清單（`buildWavePickingList`，先進先出、依動線排序：面對面的 A/B、C/D… 區沿通道一起揀） |
 
 載入順序：`firebase-config` → `data-format` → `firebase-init`（桌機）→ `stock-core` → `inbound-core` → `picking-list` → 桌機模組。
 

@@ -161,7 +161,8 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
         if (a.shortage && !b.shortage) return 1;
         if (!a.shortage && b.shortage) return -1;
 
-        // 儲位格式：倉-區-排-層（例如 I-A-01-3F），依揀貨動線排序：倉 → 區 → 排 → 層（低層先）
+        // 儲位格式：倉-區-排-層（例如 I-A-01-3F）。面對面的兩區（A/B、C/D、E/F、G/H）共用一條主通道，
+        // 沿通道走一趟兩邊一起揀：倉 → 通道 → 排 → 區（A 側、B 側）→ 層（低層先），即 IA01 → IB01 → IA02 → IB02…
         var parseLocation = function(loc) {
             var parts = String(loc || '').split('-');
             if (parts.length < 4) return { warehouse: 'Z', zone: 'Z', row: 999, level: 9 };
@@ -177,8 +178,10 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
         var locB = parseLocation(b.locationId);
 
         if (locA.warehouse !== locB.warehouse) return locA.warehouse.localeCompare(locB.warehouse);
-        if (locA.zone !== locB.zone) return locA.zone.localeCompare(locB.zone);
+        var aisle = function(z) { return z.length === 1 && z >= 'A' && z <= 'Z' ? Math.floor((z.charCodeAt(0) - 65) / 2) : 99; };
+        if (aisle(locA.zone) !== aisle(locB.zone)) return aisle(locA.zone) - aisle(locB.zone);
         if (locA.row !== locB.row) return locA.row - locB.row;
+        if (locA.zone !== locB.zone) return locA.zone.localeCompare(locB.zone);
         return locA.level - locB.level;
     });
 

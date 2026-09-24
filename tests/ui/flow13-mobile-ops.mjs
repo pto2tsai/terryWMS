@@ -139,6 +139,13 @@ H.note('揀貨清單: ' + JSON.stringify(items));
 const ns = await txt('picking-next');
 const first = await page.evaluate(() => { const i = pickingItems.find(x => !x.shortage); return [locationShortCode(i.locationId) || i.locationId, i.productName, i.pickQty]; });
 H.check('揀貨「下一站」大字：儲位簡碼、品項、拿幾件', ns.includes('下一站') && ns.includes(first[0]) && ns.includes(first[1]) && ns.includes('拿 ' + first[2] + ' 件'), ns);
+const route = await page.evaluate(() => {
+  const locs = ['I-B-02-1F', 'J-C-01-1F', 'I-A-02-2F', 'I-A-01-1F', 'I-B-01-1F', 'I-A-02-1F', 'J-D-01-1F'];
+  const pals = locs.map((l, i) => ({ id: 'R' + i, palletId: 'R' + i, productName: 'R' + i, spec: '', quantity: 5, locationId: l, expiryDate: '2099-01-01' }));
+  const wave = { summary: locs.map((l, i) => ({ productName: 'R' + i, spec: '', totalQty: 1, orders: [] })), completedItems: [] };
+  return buildWavePickingList(wave, pals).map(i => locationShortCode(i.locationId)).join(' ');
+});
+H.check('揀貨動線：面對面的 A、B 區沿通道一起揀（IA01→IB01→IA02→IB02），再到下一條通道', route === 'IA011 IB011 IA021 IA022 IB021 JC011 JD011', route);
 for (const it of items) await scan('picking-scan', it[0]);
 H.check('全部揀完：下一站顯示「全部揀完」', (await txt('picking-next')).includes('全部揀完'), await txt('picking-next'));
 page.__dialogPlan = [true, true];
