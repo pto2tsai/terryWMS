@@ -34,6 +34,16 @@ const logs = async () => (await H.all('inventoryLogs'));
 
 H.check('主選單徽章：波次 1、入庫 2', (await txt('badge-picking')) === '1' && (await txt('badge-inbound')) === '2', (await txt('badge-picking')) + '/' + (await txt('badge-inbound')));
 
+// ---------- 手機的「返回」手勢回主選單，不會離開程式 ----------
+await page.click(`[onclick="openPage('query')"]`); await page.waitForTimeout(300);
+await page.goBack(); await page.waitForTimeout(400);
+H.check('手機返回手勢：回到主選單、仍在程式內', (await page.isVisible('#app-main')) && !(await page.isVisible('#page-query')) && page.url().includes('/m/'), page.url());
+await page.click(`[onclick="openPage('query')"]`); await page.waitForTimeout(300);
+await page.click('#page-query .back-btn'); await page.waitForTimeout(400);
+await page.click(`[onclick="openPage('move')"]`); await page.waitForTimeout(400);
+H.check('按返回鍵後馬上開別頁不會被關掉', await page.isVisible('#page-move'));
+await page.evaluate(() => goBack()); await page.waitForTimeout(300);
+
 // ---------- 入庫任務：掃棧板單 → 掃儲位（和指定不同）→ 入帳 ----------
 await go('inbound');
 H.check('入庫任務列出 2 筆', (await page.$$eval('#inbound-list .list-item', e => e.length)) === 2);

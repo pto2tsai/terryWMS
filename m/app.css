@@ -375,3 +375,23 @@ body {
 }
 .update-bar.show { display: flex; }
 .update-bar button { padding: 8px 14px; border: none; border-radius: 8px; background: #fff; color: #1d4ed8; font-weight: bold; }
+
+/* iPhone 瀏海／狀態列：加到主畫面後頁面會延伸到狀態列底下，頁首要往下讓開 */
+.app-header, .func-header, .cam-top {
+    padding-top: calc(12px + env(safe-area-inset-top));
+    padding-left: calc(16px + env(safe-area-inset-left));
+    padding-right: calc(16px + env(safe-area-inset-right));
+}
+.bottom-actions, .cam-bottom { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+.login-page { padding-top: calc(20px + env(safe-area-inset-top)); }
+.update-bar { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+#toast { top: calc(64px + env(safe-area-inset-top)); }
+
+/* 返回鍵：加大好按（至少 48×48） */
+.back-btn {
+    min-width: 48px; min-height: 48px; margin-left: -8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; border-radius: 12px;
+}
+.back-btn:active { background: #334155; }
+.func-header { gap: 4px; }

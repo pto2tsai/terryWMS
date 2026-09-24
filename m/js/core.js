@@ -240,14 +240,30 @@ window.openPage = function(page) {
     $('page-' + page).classList.add('active');
     window.currentPage = page;
     window.scrollTo(0, 0);
+    // 記一筆瀏覽紀錄：手機的「返回」手勢／按鍵會回主選單，而不是直接離開程式
+    try {
+        if (history.state && history.state.page) history.replaceState({ page: page }, '');
+        else history.pushState({ page: page }, '');
+    } catch (e) {}
     if (window.pageInit[page]) window.pageInit[page]();
 };
-window.goBack = function() {
+function showMenu() {
     closeCameraScan();
     document.querySelectorAll('.func-page').forEach(function(p) { p.classList.remove('active'); });
     $('app-main').classList.add('active');
     window.currentPage = null;
+}
+let ignoreNextPop = false;
+window.goBack = function() {
+    showMenu();
+    if (history.state && history.state.page) { ignoreNextPop = true; history.back(); }
 };
+window.addEventListener('popstate', function() {
+    if (ignoreNextPop) { ignoreNextPop = false; return; }
+    // 相機開著時，返回先關相機
+    if (camScanner) { closeCameraScan(); if (window.currentPage) history.pushState({ page: window.currentPage }, ''); return; }
+    if (window.currentPage) showMenu();
+});
 
 // 下一步要掃哪一格：相機開著就直接換目標，否則把游標移過去
 function scanNext(inputId) {
