@@ -1861,10 +1861,15 @@ window.generateMonthlyBill = function() {
     const wb = XLSX.utils.book_new();
     
     // ===== 工作表1：費用總表 =====
+    const orgName = window.getReportOrgName ? window.getReportOrgName() : '';
+    const madeBy = window.currentUser ? (window.currentUser.name || window.currentUser.email) : '';
+    const madeAt = new Date().toLocalYMD() + ' ' + new Date().toTimeString().slice(0, 5);
     const summaryRows = [
+        [orgName],
         ['倉租費用總表'],
         ['計費月份：' + monthStr],
         ['計費期間：' + periodStr],
+        ['製表時間：' + madeAt + '　製表人：' + madeBy],
         [],
         ['項目', '說明', '金額'],
         ['自有庫存倉租', '帳面成本，不收費', data.totals.ownRent],
@@ -1894,10 +1899,12 @@ window.generateMonthlyBill = function() {
     if (data.consignmentDetails && Object.keys(data.consignmentDetails).length > 0) {
         Object.entries(data.consignmentDetails).forEach(([customer, custData]) => {
             const custRows = [
+                [orgName],
                 ['客戶寄倉帳單'],
                 ['客戶名稱：' + customer],
                 ['計費月份：' + monthStr],
                 ['計費期間：' + periodStr],
+                ['製表時間：' + madeAt],
                 [],
                 ['品名', '規格', '件數', '費率(元/件/天)', '計費起日', '計費迄日', '天數', '金額'],
             ];

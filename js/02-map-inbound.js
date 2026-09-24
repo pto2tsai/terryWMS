@@ -1214,7 +1214,7 @@
             const reader = new FileReader();
             reader.onload = async function(evt) {
                 const wb = XLSX.read(evt.target.result, {type:'array'});
-                const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                const json = window.sheetToJsonSmart ? window.sheetToJsonSmart(wb.Sheets[wb.SheetNames[0]]) : XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
                 if(confirm(`匯入 ${json.length} 筆？`)) {
                     const batch = window.writeBatch(window.db);
                     var logPromises = [];
@@ -1278,6 +1278,10 @@
 
         window.exportInventoryToExcel = function() {
             var pallets = window.currentPallets ? window.currentPallets() : [];
+            // 跟畫面一樣：選了崇文／八方就只匯出該公司
+            if (window.inventoryCompanyFilter && window.inventoryCompanyFilter !== 'all') {
+                pallets = pallets.filter(function(p) { return p.company === window.inventoryCompanyFilter; });
+            }
 
             if (pallets.length === 0) {
                 alert('沒有庫存資料可匯出');
@@ -1326,27 +1330,16 @@
                 ]);
             });
 
-            var ws = XLSX.utils.aoa_to_sheet(data);
-            ws['!cols'] = [
-                {wch:18}, // 條碼
-                {wch:20}, // 品名
-                {wch:15}, // 規格
-                {wch:12}, // 批號
-                {wch:12}, // 效期
-                {wch:8},  // 數量
-                {wch:8},  // 類型
-                {wch:8},  // 箱容
-                {wch:10}, // 總重量
-                {wch:12}, // 儲位
-                {wch:10}, // 廠商
-                {wch:12}  // 入庫日期
-            ];
-
-            var wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, '庫存清單');
-
-            var filename = '庫存清單_' + new Date().toLocalYMD() + '.xlsx';
-            XLSX.writeFile(wb, filename);
+            // 表頭列 → 物件，交給共用匯出（加抬頭、製表時間、合計）
+            var head = data[0];
+            var rows = data.slice(1).map(function(r) { var o = {}; head.forEach(function(k, i) { o[k] = r[i]; }); return o; });
+            var co = window.inventoryCompanyFilter && window.inventoryCompanyFilter !== 'all' ? window.inventoryCompanyFilter : '全部';
+            window.exportTableReportXlsx({
+                title: '庫存清單', meta: [['資料時間', '截至 ' + new Date().toLocalYMD()], ['公司', co], ['板數', rows.length + ' 板']],
+                columns: head.map(function(k) { return { key: k, label: k, num: k === '數量' || k === '總重量kg' }; }), rows: rows,
+                totals: { '數量': rows.reduce(function(t, r) { return t + (Number(r['數量']) || 0); }, 0), '總重量kg': Math.round(rows.reduce(function(t, r) { return t + (Number(r['總重量kg']) || 0); }, 0) * 10) / 10 },
+                fileName: '庫存清單_' + new Date().toLocalYMD() + '.xlsx'
+            });
 
             alert('✅ 匯出成功！\n\n共 ' + (data.length - 1) + ' 筆庫存');
         };
