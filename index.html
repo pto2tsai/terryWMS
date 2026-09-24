@@ -1292,7 +1292,7 @@
                 </div>
             </div>
 
-            <div id="view-inventory-query" class="view-panel h-full hidden flex flex-col p-4"><div class="flex gap-2 mb-3 items-center"><div class="flex gap-1 bg-slate-800 rounded p-1 mr-2"><button onclick="setInventoryCompany('all')" id="btn-inv-all" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-600 text-white">全部</button><button onclick="setInventoryCompany('崇文')" id="btn-inv-cw" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">崇文</button><button onclick="setInventoryCompany('八方')" id="btn-inv-bf" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">八方</button></div><input type="text" id="global-search" class="scan-input pl-9 flex-1" placeholder="萬用搜尋..." oninput="filterInventory()"><button onclick="exportInventoryToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-500 flex items-center gap-2"><i class="fa-solid fa-file-excel"></i> 匯出庫存</button><button onclick="document.getElementById('stockImportInput').click()" class="bg-orange-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-orange-500 ml-auto flex items-center gap-2"><i class="fa-solid fa-file-import"></i> 期初匯入</button><button onclick="downloadTemplate('stock')" class="text-slate-400 text-xs hover:text-white underline">範本</button><input type="file" id="stockImportInput" accept=".xlsx" class="hidden" onchange="handleStockImport(event)"></div><div class="glass-panel flex-1 overflow-auto"><table class="w-full dense-table"><thead><tr><th class="text-left">公司</th><th class="text-left">品名</th><th class="text-left">規格</th><th class="text-left">批號</th><th class="text-right">數量</th><th class="text-right">重量</th><th class="text-left">位置</th><th class="text-left">效期</th><th class="text-left">寄庫客戶</th><th class="text-right">操作</th></tr></thead><tbody id="inventory-list-body"></tbody></table></div></div>
+            <div id="view-inventory-query" class="view-panel h-full hidden flex flex-col p-4"><div class="flex gap-2 mb-3 items-center"><div class="flex gap-1 bg-slate-800 rounded p-1 mr-2"><button onclick="setInventoryCompany('all')" id="btn-inv-all" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-600 text-white">全部</button><button onclick="setInventoryCompany('崇文')" id="btn-inv-cw" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">崇文</button><button onclick="setInventoryCompany('八方')" id="btn-inv-bf" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">八方</button></div><input type="text" id="global-search" class="scan-input pl-9 flex-1" placeholder="萬用搜尋..." oninput="filterInventory()"><button onclick="exportInventoryToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-emerald-500 flex items-center gap-2"><i class="fa-solid fa-file-excel"></i> 匯出庫存</button><button onclick="goTab('data-import')" class="bg-orange-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-orange-500 ml-auto flex items-center gap-2" title="到「資料匯入」：先預覽、會跳過重複的資料"><i class="fa-solid fa-file-import"></i> 匯入庫存</button></div><div class="glass-panel flex-1 overflow-auto"><table class="w-full dense-table"><thead><tr><th class="text-left">公司</th><th class="text-left">品名</th><th class="text-left">規格</th><th class="text-left">批號</th><th class="text-right">數量</th><th class="text-right">重量</th><th class="text-left">位置</th><th class="text-left">效期</th><th class="text-left">寄庫客戶</th><th class="text-right">操作</th></tr></thead><tbody id="inventory-list-body"></tbody></table></div></div>
 
             <!-- 成品出貨（自動揀貨） -->
 
@@ -2375,15 +2375,18 @@
                             <div>
                                 <label class="text-slate-400 text-xs mb-1 block">角色範本 <span class="text-red-400">*</span></label>
                                 <select id="edit-user-role" class="scan-input w-full" onchange="applyRoleTemplate()">
-                                    <option value="admin">管理員（全部權限）</option>
-                                    <option value="finance">財務人員</option>
-                                    <option value="supervisor">倉管主管</option>
-                                    <option value="sales">業務人員</option>
-                                    <option value="operator" selected>倉管人員</option>
-                                    <option value="forklift">堆高機手</option>
-                                    <option value="readonly">只讀</option>
-                                    <option value="custom">🔧 自訂權限</option>
+                                    <option value="admin">管理員（全部，含使用者管理、備份）</option>
+                                    <option value="supervisor">主管（可核准入庫、改外倉／系統設定）</option>
+                                    <option value="operator" selected>一般（倉管日常作業）</option>
+                                    <option value="readonly">只讀（只能查看，不能改資料）</option>
+                                    <optgroup label="舊角色（照常可用）">
+                                        <option value="finance">財務人員（同主管）</option>
+                                        <option value="sales">業務人員（同一般）</option>
+                                        <option value="forklift">堆高機手（同一般）</option>
+                                        <option value="custom">自訂（同一般）</option>
+                                    </optgroup>
                                 </select>
+                                <p class="text-[11px] text-slate-500 mt-1">所有人看到的功能都一樣；角色只決定能不能改資料、能不能核准與管理。</p>
                             </div>
                             <div>
                                 <label class="text-slate-400 text-xs mb-1 block">部門</label>
@@ -2392,7 +2395,7 @@
                         </div>
 
                         <!-- 自訂權限區塊 -->
-                        <div id="custom-permissions-section" class="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                        <div id="custom-permissions-section" class="bg-slate-800/50 border border-slate-700 rounded-xl p-4" style="display:none">
                             <div class="flex items-center justify-between mb-3">
                                 <label class="text-slate-300 text-sm font-bold"><i class="fa-solid fa-key mr-2 text-amber-400"></i>功能權限</label>
                                 <div class="flex gap-2">

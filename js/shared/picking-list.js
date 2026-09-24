@@ -3,21 +3,49 @@
 // 先進先出（效期早的先揀），同品項依效期排序；庫存不足的項目標記 shortage
 // 不揀：已過期的板、品管留置（V-QC）與業務保留（V-SALES）儲位的板
 // 崇文／八方的庫存可以互相調用，揀貨項目帶 company 讓現場看得出是哪家的貨
+// 寄倉（已賣給客戶、寄放在倉庫）的件數保留，不分給波次
 // ============================================================
+
+// 寄倉保留：每板保留幾件 { 棧板文件 ID: 件數 }
+// 先扣寄倉登記的那個儲位上同品名／規格／批號的板，不夠再扣其他同批的板（效期晚的先扣，早的留給出貨）
+window.consignReserve = function(pallets, consignments) {
+    const reserve = {};
+    (consignments || []).forEach(c => {
+        if (c.status && c.status !== 'active') return;
+        if (c.source && c.source !== 'internal') return;
+        let left = parseFloat(c.remainingQty) || 0;
+        if (left <= 0) return;
+        const same = p => (p.productName || '') === (c.productName || '') && (p.spec || '') === (c.spec || '') &&
+            (!c.batchNo || (p.batchNo || '') === c.batchNo);
+        const exp = p => window.normalizeDateValue(p.expiryDate || p.expDate) || '9999-12-31';
+        const cands = pallets.filter(same).sort((a, b) => {
+            const la = c.locationId && a.locationId === c.locationId ? 0 : 1, lb = c.locationId && b.locationId === c.locationId ? 0 : 1;
+            return la - lb || exp(b).localeCompare(exp(a));
+        });
+        cands.forEach(p => {
+            if (left <= 0) return;
+            const free = (parseFloat(p.quantity) || 0) - (reserve[p.id] || 0);
+            const take = Math.min(free, left);
+            if (take > 0) { reserve[p.id] = (reserve[p.id] || 0) + take; left -= take; }
+        });
+    });
+    return reserve;
+};
 
 // 這些儲位的貨不能拿去出貨
 window.isHoldLocation = function(loc) { return /^V-(QC|SALES)/.test(String(loc || '').toUpperCase()); };
 
-window.buildWavePickingList = function(wave, pallets) {
+window.buildWavePickingList = function(wave, pallets, consignments) {
     const pickingList = [];
     const today = new Date().toLocalYMD();
+    const reserve = window.consignReserve(pallets, consignments || window.consignmentData || []);
 
     (wave.summary || []).forEach(item => {
         let needed = item.totalQty;
         const productName = item.productName;
         const spec = item.spec || '';
 
-        let expiredQty = 0, heldQty = 0;
+        let expiredQty = 0, heldQty = 0, consignQty = 0;
         const matchingPallets = pallets.filter(p => {
             const pName = p.productName || '';
             const pSpec = p.spec || '';
@@ -36,9 +64,11 @@ window.buildWavePickingList = function(wave, pallets) {
         });
 
         matchingPallets.forEach(pallet => {
+            const reserved = reserve[pallet.id] || 0;
             if (needed <= 0) return;
+            consignQty += reserved;
 
-            const available = parseInt(pallet.quantity) || 0;
+            const available = (parseInt(pallet.quantity) || 0) - reserved;
             const pick = Math.min(available, needed);
 
             if (pick > 0) {
@@ -67,7 +97,7 @@ window.buildWavePickingList = function(wave, pallets) {
                 id: 'shortage-' + item.productName,
                 palletId: '-',
                 locationId: '⚠️ 庫存不足',
-                note: [expiredQty ? '過期 ' + expiredQty + ' 件未揀' : '', heldQty ? '留置／保留 ' + heldQty + ' 件未揀' : ''].filter(Boolean).join('、'),
+                note: [expiredQty ? '過期 ' + expiredQty + ' 件未揀' : '', heldQty ? '留置／保留 ' + heldQty + ' 件未揀' : '', consignQty ? '寄倉保留 ' + consignQty + ' 件' : ''].filter(Boolean).join('、'),
                 productName: item.productName,
                 spec: item.spec || '',
                 batchNo: '',

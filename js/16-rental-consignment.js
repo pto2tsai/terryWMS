@@ -1355,9 +1355,7 @@ window.loadConsignmentList = function() {
             freeCount++;
         } else {
             chargingCount++;
-            const chargeStart = new Date(c.chargeStartDate);
-            const daysDiff = Math.max(0, Math.floor((today - chargeStart) / (1000 * 60 * 60 * 24)));
-            totalRent += c.remainingQty * c.ratePerUnit * daysDiff;
+            totalRent += window.consignUnitDays(c, new Date(c.chargeStartDate), today).unitDays * (c.ratePerUnit || 0);
         }
 
         const freeUntilDate = new Date(c.freeUntil);
@@ -1395,10 +1393,12 @@ window.loadConsignmentList = function() {
 
         let chargeDays = 0;
         let accumulatedRent = 0;
-        if (!isFree && c.status === 'active') {
-            const chargeStart = new Date(c.chargeStartDate);
-            chargeDays = Math.max(0, Math.floor((today - chargeStart) / (1000 * 60 * 60 * 24)));
-            accumulatedRent = c.remainingQty * c.ratePerUnit * chargeDays;
+        if (!isFree && c.chargeStartDate) {
+            // 已結清的也顯示提貨前累計的倉租
+            const endDay = c.status === 'active' ? today : new Date(c.completedAt || today);
+            const ud = window.consignUnitDays(c, new Date(c.chargeStartDate), endDay);
+            chargeDays = ud.days;
+            accumulatedRent = ud.unitDays * (c.ratePerUnit || 0);
         }
 
         html += `
@@ -1477,48 +1477,78 @@ window.openPickupModal = function(consignmentId) {
     });
 };
 
+// 寄倉提貨＝出倉：從保留這批寄倉的板扣庫存、寫出庫記錄，寄倉剩餘件數一起更新（同一筆交易）
 window.savePickup = async function(consignmentId) {
-    const pickupDate = document.getElementById('pickup-date')?.value;
+    const pickupDate = document.getElementById('pickup-date')?.value || new Date().toLocalYMD();
     const pickupQty = parseInt(document.getElementById('pickup-qty')?.value) || 0;
 
     const c = window.consignmentData.find(item => item.id === consignmentId);
     if (!c) return;
+    if (pickupQty <= 0) { alert('請輸入提貨件數'); return; }
+    if (pickupQty > c.remainingQty) { alert(`提貨件數不能超過剩餘 ${c.remainingQty} 件`); return; }
 
-    if (pickupQty <= 0) {
-        alert('請輸入提貨件數');
-        return;
-    }
-    if (pickupQty > c.remainingQty) {
-        alert(`提貨件數不能超過剩餘 ${c.remainingQty} 件`);
-        return;
-    }
-
-    c.pickups.push({
-        date: pickupDate,
-        qty: pickupQty
-    });
-
-    c.remainingQty -= pickupQty;
-
-    if (c.remainingQty <= 0) {
-        c.status = 'completed';
-        c.completedAt = new Date().toISOString();
-    }
-
-    try {
-        await window.updateConsignmentInFirebase(consignmentId, {
-            pickups: c.pickups,
-            remainingQty: c.remainingQty,
-            status: c.status,
-            completedAt: c.completedAt || null
+    const internal = !c.source || c.source === 'internal';
+    const changes = [];
+    if (internal) {
+        // 與揀貨保留相同的板：登記的儲位優先，其次同品名／規格／批號的板（效期晚的先扣）
+        const pallets = window.currentPallets ? window.currentPallets() : [];
+        const exp = p => window.normalizeDateValue(p.expiryDate || p.expDate) || '9999-12-31';
+        const cands = pallets.filter(p => (p.productName || '') === (c.productName || '') && (p.spec || '') === (c.spec || '') &&
+            (!c.batchNo || (p.batchNo || '') === c.batchNo)).sort((a, b) => {
+            const la = c.locationId && a.locationId === c.locationId ? 0 : 1, lb = c.locationId && b.locationId === c.locationId ? 0 : 1;
+            return la - lb || exp(b).localeCompare(exp(a));
         });
+        let left = pickupQty;
+        cands.forEach(p => {
+            if (left <= 0) return;
+            const take = Math.min(parseFloat(p.quantity) || 0, left);
+            if (take > 0) { changes.push({ ref: window.db.collection('pallets').doc(p.id), delta: -take, deleteWhenEmpty: true, label: p.palletId, _p: p, _take: take }); left -= take; }
+        });
+        if (left > 0) {
+            alert('❌ 倉庫裡找不到足夠的「' + c.productName + ' ' + (c.spec || '') + (c.batchNo ? ' 批號 ' + c.batchNo : '') + '」\n\n還差 ' + left + ' 件，請先確認庫存（可能已被出貨或移到別的品項）。');
+            return;
+        }
+        const where = changes.map(ch => ch._p.locationId + ' ' + ch._take + ' 件').join('、');
+        if (!confirm('確認提貨出倉？\n\n客戶：' + c.customer + '\n' + c.productName + ' ' + (c.spec || '') + '　' + pickupQty + ' 件\n從：' + where +
+            '\n\n按「確定」會扣庫存、寫出庫記錄，並更新寄倉剩餘件數。')) return;
+    } else if (!confirm('確認提貨？\n\n客戶：' + c.customer + '\n' + c.productName + '　' + pickupQty + ' 件\n\n（外倉寄倉：只更新寄倉剩餘件數，外倉庫存請在外倉管理調整）')) return;
 
+    const consRef = window.db.collection('consignments').doc(consignmentId);
+    try {
+        await window.runStockTransaction({
+            changes: changes.map(ch => ({ ref: ch.ref, delta: ch.delta, deleteWhenEmpty: true, label: ch.label })),
+            reads: [consRef],
+            validate: function(results, readSnaps) {
+                const cur = readSnaps[0].exists ? readSnaps[0].data() : null;
+                if (!cur) throw new Error('寄倉記錄已不存在');
+                if ((parseFloat(cur.remainingQty) || 0) < pickupQty) throw new Error('寄倉剩餘只有 ' + cur.remainingQty + ' 件（可能剛被別人提貨）');
+            },
+            updates: function(results, readSnaps) {
+                const cur = readSnaps[0].data();
+                const remaining = (parseFloat(cur.remainingQty) || 0) - pickupQty;
+                const data = {
+                    pickups: (cur.pickups || []).concat([{ date: pickupDate, qty: pickupQty, by: window.currentUser ? (window.currentUser.name || window.currentUser.email) : '' }]),
+                    remainingQty: remaining,
+                    status: remaining <= 0 ? 'completed' : 'active'
+                };
+                if (remaining <= 0) data.completedAt = new Date().toISOString();
+                return [{ ref: consRef, data: data }];
+            },
+            logs: function() {
+                return changes.map(ch => ({
+                    type: 'outbound', company: ch._p.company || '', productName: ch._p.productName, spec: ch._p.spec || '',
+                    batchNo: ch._p.batchNo || '', palletId: ch._p.palletId, locationId: ch._p.locationId,
+                    quantity: ch._take, quantityChange: -ch._take, note: '寄倉提貨：' + c.customer
+                }));
+            }
+        });
         WMS.closeModal('pickup-modal');
-        showNotification(`✅ 已提貨 ${pickupQty} 件`, 'success');
-        loadConsignmentList();
-    } catch(e) {
-        console.error('提貨儲存失敗:', e);
-        alert('❌ 儲存失敗：' + e.message);
+        showNotification(`✅ 已提貨 ${pickupQty} 件` + (internal ? '，庫存已扣除' : ''), 'success');
+        if (typeof window.loadConsignmentsFromFirebase === 'function') await window.loadConsignmentsFromFirebase();
+        else loadConsignmentList();
+    } catch (e) {
+        console.error('提貨失敗:', e);
+        alert('❌ 提貨失敗：' + e.message + '\n\n庫存與寄倉記錄都沒有變動。');
     }
 };
 
@@ -1550,6 +1580,22 @@ window.toggleCustomerDetail = function(detailId) {
     }
 };
 
+
+// 寄倉的「件天」：from～to 每天依當天還在倉庫的件數累加（提貨當天仍計費）
+window.consignUnitDays = function(c, from, to) {
+    const pickups = (c.pickups || []).filter(pk => pk && pk.date);
+    const picked = pickups.reduce((t, pk) => t + (parseFloat(pk.qty) || 0), 0);
+    const original = parseFloat(c.originalQty) || ((parseFloat(c.remainingQty) || 0) + picked);
+    let unitDays = 0, days = 0, qtyAtEnd = 0;
+    for (let t = new Date(from.getFullYear(), from.getMonth(), from.getDate()); t <= to; t.setDate(t.getDate() + 1)) {
+        const d = t.toLocalYMD();
+        const onHand = original - pickups.filter(pk => String(pk.date).slice(0, 10) < d).reduce((x, pk) => x + (parseFloat(pk.qty) || 0), 0);
+        if (onHand <= 0) continue;
+        unitDays += onHand; days++; qtyAtEnd = onHand;
+    }
+    return { unitDays: unitDays, days: days, qtyAtEnd: qtyAtEnd };
+};
+
 window.loadRentalReport = async function() {
     const monthInput = document.getElementById('rental-month');
     if (!monthInput || !monthInput.value) return;
@@ -1573,28 +1619,36 @@ window.loadRentalReport = async function() {
     // 這是本倉庫中，崇文和八方自己的庫存的帳面成本
     let ownStockData = { '崇文': { pallets: 0, palletDays: 0, rent: 0, rate: 22 }, '八方': { pallets: 0, palletDays: 0, rent: 0, rate: 22 } };
     
+    let estimatedDays = 0;
     try {
-        // 取得目前庫存（只計算本倉，排除外倉和寄倉）
-        let currentPallets = [];
-        if (window.db && window.collection && window.getDocs) {
-            const snapshot = await window.getDocs(window.collection(window.db, 'pallets'));
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                // 只計算有數量且在本倉（I/J/K 區）的庫存
-                if (data.quantity > 0 && data.locationId && /^[IJK]-/.test(data.locationId)) {
-                    currentPallets.push(data);
-                }
-            });
+        // 每天的板數：取每日快照（stockSnapshots）；某天沒有快照就沿用前一天；
+        // 快照開始之前的日子沒有資料，用目前的板數估算並標示
+        const current = window.countOwnPallets(window.currentPallets ? window.currentPallets() : []);
+        const startYMD = startDate.toLocalYMD(), endYMD = actualEndDate.toLocalYMD();
+        const snaps = {};
+        let carry = null;
+        try {
+            const inRange = await window.db.collection('stockSnapshots').where('date', '>=', startYMD).where('date', '<=', endYMD).get();
+            inRange.forEach(d => { snaps[d.data().date] = d.data().pallets || {}; });
+            const before = await window.db.collection('stockSnapshots').where('date', '<', startYMD).orderBy('date', 'desc').limit(1).get();
+            before.forEach(d => { carry = d.data().pallets || {}; });
+        } catch (e) { console.warn('讀取每日板數失敗，改用目前板數估算', e); }
+
+        const daily = [];   // [{ 崇文: n, 八方: n }]
+        for (let t = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()); t <= actualEndDate; t.setDate(t.getDate() + 1)) {
+            const d = t.toLocalYMD();
+            if (snaps[d]) carry = snaps[d];
+            if (carry) daily.push(carry);
+            else { daily.push(current); estimatedDays++; }
         }
 
-        // 計算各公司的板數和倉租
+        // 計算各公司的板天數和倉租
         const companies = ['崇文', '八方'];
         companies.forEach(company => {
-            const companyPallets = currentPallets.filter(p => p.company === company);
-            const palletCount = companyPallets.length;
-            const palletDays = palletCount * daysInPeriod;
-            
-            // 取得費率設定
+            const palletDays = daily.reduce((t, day) => t + (day[company] || 0), 0);
+            const palletCount = daily.length ? Math.round(palletDays / daily.length) : 0;   // 平均板數
+
+            // 取得費率設定（崇文超過門檻板數時，整批用第二段費率）
             let rate = 22; // 預設費率
             if (company === '八方' && window.rentalSettings && window.rentalSettings.storageRate) {
                 rate = window.rentalSettings.storageRate.bafang || 22;
@@ -1606,9 +1660,9 @@ window.loadRentalReport = async function() {
                     rate = cwRates ? (cwRates.tier1Rate || 22) : 22;
                 }
             }
-            
+
             const rent = palletDays * rate;
-            
+
             ownStockData[company] = {
                 pallets: palletCount,
                 palletDays: palletDays,
@@ -1616,7 +1670,7 @@ window.loadRentalReport = async function() {
                 rate: rate
             };
         });
-        
+
         console.log('📦 自有庫存:', ownStockData);
         
     } catch(e) {
@@ -1634,7 +1688,7 @@ window.loadRentalReport = async function() {
         ownStockHtml += `
             <tr class="border-b border-slate-700">
                 <td class="p-2 text-white font-bold">${company}</td>
-                <td class="p-2 text-right">${data.pallets > 0 ? data.pallets + ' 板' : '-'}</td>
+                <td class="p-2 text-right">${data.pallets > 0 ? '平均 ' + data.pallets + ' 板' : '-'}</td>
                 <td class="p-2 text-right text-slate-400 text-xs">${data.pallets > 0 ? data.palletDays.toLocaleString() + ' 板天' : '-'}</td>
                 <td class="p-2 text-right text-blue-400">${data.rent > 0 ? '$' + Math.round(data.rent).toLocaleString() : '-'}</td>
             </tr>
@@ -1646,7 +1700,8 @@ window.loadRentalReport = async function() {
     ownStockHtml += `
         <tr class="border-t border-slate-600">
             <td colspan="4" class="p-2 text-slate-500 text-xs">
-                📅 計費期間：${startDate.toLocaleDateString('zh-TW')} ~ ${actualEndDate.toLocaleDateString('zh-TW')}（${daysInPeriod} 天）
+                📅 計費期間：${startDate.toLocaleDateString('zh-TW')} ~ ${actualEndDate.toLocaleDateString('zh-TW')}（${daysInPeriod} 天）｜板數＝期間平均，板天＝每天實際板數加總
+                ${estimatedDays > 0 ? `<div class="text-amber-400 mt-1">⚠️ 其中 ${estimatedDays} 天沒有每日板數紀錄（系統開始記錄前），用目前板數估算</div>` : ''}
             </td>
         </tr>
     `;
@@ -1659,26 +1714,23 @@ window.loadRentalReport = async function() {
     const allDetails = []; // 所有明細（用於匯出）
 
     if (window.consignmentData && window.consignmentData.length > 0) {
+        // 每天依「當天還在倉庫的件數」計費（提貨當天仍計費）；當月提完的寄倉也要收提貨前的天數
         window.consignmentData.forEach(c => {
-            if (c.status !== 'active') return;
-            if (!c.remainingQty || c.remainingQty <= 0) return;
-            
             const freeUntil = new Date(c.freeUntil);
-            
             // 只計算免費期已過的
             if (freeUntil >= actualEndDate) return;
-            
+
             // 計費開始日 = 免費期結束後一天 或 計費期間開始日（取較晚者）
             const chargeStartDate = new Date(freeUntil);
             chargeStartDate.setDate(chargeStartDate.getDate() + 1);
             const effectiveStart = new Date(Math.max(chargeStartDate.getTime(), startDate.getTime()));
             const effectiveEnd = actualEndDate;
-            
-            if (effectiveStart >= effectiveEnd) return;
-            
-            const days = Math.max(0, Math.floor((effectiveEnd - effectiveStart) / (1000 * 60 * 60 * 24)) + 1);
+            if (effectiveStart > effectiveEnd) return;
+
+            const { unitDays, days, qtyAtEnd } = window.consignUnitDays(c, effectiveStart, effectiveEnd);
+            if (unitDays <= 0) return;
             const ratePerUnit = c.ratePerUnit || 0.37; // 預設費率
-            const rent = c.remainingQty * ratePerUnit * days;
+            const rent = unitDays * ratePerUnit;
 
             // 建立明細記錄
             const detail = {
@@ -1686,11 +1738,12 @@ window.loadRentalReport = async function() {
                 productName: c.productName,
                 spec: c.spec || '',
                 batchNo: c.batchNo || '',
-                qty: c.remainingQty,
+                qty: qtyAtEnd,
                 ratePerUnit: ratePerUnit,
                 chargeStart: effectiveStart,
                 chargeEnd: effectiveEnd,
                 days: days,
+                unitDays: unitDays,
                 rent: rent,
                 freeUntil: c.freeUntil
             };
@@ -1702,8 +1755,8 @@ window.loadRentalReport = async function() {
                 customerDetails[c.customer] = { items: [], totalQty: 0, totalDays: 0, totalRent: 0 };
             }
             customerDetails[c.customer].items.push(detail);
-            customerDetails[c.customer].totalQty += c.remainingQty;
-            customerDetails[c.customer].totalDays += c.remainingQty * days;
+            customerDetails[c.customer].totalQty += qtyAtEnd;
+            customerDetails[c.customer].totalDays += unitDays;
             customerDetails[c.customer].totalRent += rent;
         });
     }
@@ -1742,7 +1795,7 @@ window.loadRentalReport = async function() {
                                     <th class="text-left py-1">品名</th>
                                     <th class="text-right py-1">件數</th>
                                     <th class="text-right py-1">費率</th>
-                                    <th class="text-right py-1">天數</th>
+                                    <th class="text-right py-1">件天</th>
                                     <th class="text-right py-1">金額</th>
                                 </tr>
                             </thead>
@@ -1768,7 +1821,7 @@ window.loadRentalReport = async function() {
                                     </td>
                                     <td class="text-right">${item.qty}</td>
                                     <td class="text-right text-slate-400">$${item.ratePerUnit.toFixed(2)}</td>
-                                    <td class="text-right">${item.days}</td>
+                                    <td class="text-right">${item.unitDays}<div class="text-slate-500 text-[10px]">${item.days} 天</div></td>
                                     <td class="text-right text-white">$${Math.round(item.rent).toLocaleString()}</td>
                                 </tr>`;
             });
@@ -1792,7 +1845,7 @@ window.loadRentalReport = async function() {
         // 計算說明
         detailHtml += `
             <div class="text-slate-500 text-[10px] mt-2 p-2 bg-slate-800/30 rounded">
-                💡 計算方式：件數 × 費率(元/件/天) × 計費天數 = 倉租金額<br>
+                💡 計算方式：每天依當天還在倉庫的件數計費，件天 × 費率(元/件/天) = 倉租金額（提貨當天仍計費）<br>
                 📅 計費期間：${startDate.toLocaleDateString('zh-TW')} ~ ${actualEndDate.toLocaleDateString('zh-TW')}
             </div>`;
     }
@@ -1880,7 +1933,7 @@ window.generateMonthlyBill = function() {
         [],
         [],
         ['【自有庫存明細】'],
-        ['公司', '現有板數', '板天數', '費率(元/板/天)', '倉租金額'],
+        ['公司', '平均板數', '板天數', '費率(元/板/天)', '倉租金額'],
     ];
     
     Object.entries(data.ownStock).forEach(([company, info]) => {
@@ -1906,7 +1959,7 @@ window.generateMonthlyBill = function() {
                 ['計費期間：' + periodStr],
                 ['製表時間：' + madeAt],
                 [],
-                ['品名', '規格', '件數', '費率(元/件/天)', '計費起日', '計費迄日', '天數', '金額'],
+                ['品名', '規格', '期末件數', '費率(元/件/天)', '計費起日', '計費迄日', '件天', '金額'],
             ];
             
             custData.items.forEach(item => {
@@ -1920,7 +1973,7 @@ window.generateMonthlyBill = function() {
                     item.ratePerUnit.toFixed(4),
                     startStr,
                     endStr,
-                    item.days,
+                    item.unitDays,
                     Math.round(item.rent)
                 ]);
             });
@@ -1928,7 +1981,7 @@ window.generateMonthlyBill = function() {
             custRows.push([]);
             custRows.push(['', '', custData.totalQty + ' 件', '', '', '合計', custData.totalDays + ' 件天', Math.round(custData.totalRent)]);
             custRows.push([]);
-            custRows.push(['計算公式：件數 × 費率(元/件/天) × 計費天數 = 倉租金額']);
+            custRows.push(['計算公式：每天依當天還在倉庫的件數計費（提貨當天仍計費），件天 × 費率(元/件/天) = 倉租金額']);
             
             // 工作表名稱（Excel 限制 31 字元，且不能有特殊字元）
             let sheetName = customer.replace(/[\\\/\?\*\[\]:]/g, '').substring(0, 28);

@@ -312,9 +312,9 @@
         window.ROLES = {
             admin: { name: '管理員', color: 'red', icon: 'crown', level: 100, permissions: ['all'] },
             finance: { name: '財務人員', color: 'emerald', icon: 'calculator', level: 85, permissions: ['approve', 'report', 'rental', 'consignment', 'inventory', 'analysis'] },
-            supervisor: { name: '倉管主管', color: 'purple', icon: 'user-tie', level: 80, permissions: ['inbound', 'outbound', 'move', 'merge', 'stocktake', 'report', 'approve', 'inventory', 'dispatch', 'analysis'] },
+            supervisor: { name: '主管', color: 'purple', icon: 'user-tie', level: 80, permissions: ['inbound', 'outbound', 'move', 'merge', 'stocktake', 'report', 'approve', 'inventory', 'dispatch', 'analysis'] },
             sales: { name: '業務人員', color: 'cyan', icon: 'briefcase', level: 70, permissions: ['inventory', 'report', 'consignment', 'rental', 'analysis'] },
-            operator: { name: '倉管人員', color: 'blue', icon: 'user', level: 60, permissions: ['inbound', 'outbound', 'move', 'merge', 'stocktake', 'inventory', 'report'] },
+            operator: { name: '一般', color: 'blue', icon: 'user', level: 60, permissions: ['inbound', 'outbound', 'move', 'merge', 'stocktake', 'inventory', 'report'] },
             forklift: { name: '堆高機手', color: 'orange', icon: 'truck', level: 40, permissions: ['move', 'merge', 'dispatch', 'inventory'] },
             readonly: { name: '只讀', color: 'slate', icon: 'eye', level: 10, permissions: ['inventory'] },
             custom: { name: '自訂權限', color: 'amber', icon: 'sliders', level: 50, permissions: [] }
@@ -590,12 +590,8 @@
             document.getElementById('edit-user-active').checked = user.active !== false;
             document.getElementById('password-fields').style.display = 'none'; // 編輯時隱藏密碼
 
-            if (user.customPermissions && Array.isArray(user.customPermissions)) {
-                document.getElementById('edit-user-role').value = 'custom';
-                setPermissionCheckboxes(user.customPermissions);
-            } else {
-                applyRoleTemplate();
-            }
+            // 功能權限勾選已不使用（所有人功能相同），顯示實際角色即可
+            applyRoleTemplate();
 
             document.getElementById('modal-user-edit').classList.remove('hidden');
         };
@@ -827,7 +823,7 @@
                 var permBadge = '';
                 if (userPerms.includes('all')) {
                     permBadge = '<span class="text-amber-400 text-[10px] ml-1" title="全部權限"><i class="fa-solid fa-star"></i></span>';
-                } else if (user.customPermissions && user.customPermissions.length > 0) {
+                } else if (false) {   // 功能權限已不使用
                     permBadge = '<span class="text-amber-400 text-[10px] ml-1" title="自訂 ' + user.customPermissions.length + ' 項權限"><i class="fa-solid fa-sliders"></i> ' + user.customPermissions.length + '</span>';
                 }
 
@@ -945,7 +941,7 @@
                 var permBadge = '';
                 if (userPerms.includes('all')) {
                     permBadge = '<span class="text-amber-400 text-[10px] ml-1" title="全部權限"><i class="fa-solid fa-star"></i></span>';
-                } else if (user.customPermissions && user.customPermissions.length > 0) {
+                } else if (false) {   // 功能權限已不使用
                     permBadge = '<span class="text-amber-400 text-[10px] ml-1" title="自訂 ' + user.customPermissions.length + ' 項權限"><i class="fa-solid fa-sliders"></i> ' + user.customPermissions.length + '</span>';
                 }
 
