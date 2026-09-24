@@ -31,6 +31,7 @@ window.buildInventoryLogEntry = function(data) {
     var authUser = window.auth && window.auth.currentUser;
     var email = (authUser && authUser.email) || (window.currentUser && window.currentUser.email) || '';
     if (email) entry.operatorEmail = String(email).toLowerCase();
+    if (data.vendor) entry.vendor = data.vendor;   // 入庫記錄帶廠商（入庫報表依廠商統計）
     return entry;
 };
 
@@ -174,8 +175,10 @@ window.mergePalletsTx = async function(sourceRef, targetRef, logExtra, opts) {
         var tSnap = await tx.get(targetRef);
         if (!sSnap.exists) throw new Error('來源棧板已不存在（可能已被其他人處理）');
         if (!tSnap.exists) throw new Error('目標棧板已不存在（可能已被其他人處理）');
+        await readDispatchOp(tx, opts && opts.dispatch);
         var s = sSnap.data();
         var t = tSnap.data();
+        checkExpectFrom(s, opts && opts.expectFrom, s.palletId);
         window.checkMergeCompatible(s, t);
         var warnings = window.mergeWarnings(s, t);
         if (warnings.length > 0 && !(opts && opts.allowMixed)) {
@@ -204,6 +207,7 @@ window.mergePalletsTx = async function(sourceRef, targetRef, logExtra, opts) {
             update.totalWeight = totalWeight;
             update.unitWeight = total > 0 ? Math.round(totalWeight / total * 100) / 100 : (t.unitWeight || 0);
         }
+        markDispatchOp(tx, opts && opts.dispatch);
         tx.update(targetRef, update);
         tx.delete(sourceRef);
         tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry(Object.assign({
@@ -228,8 +232,37 @@ window.mergePalletsTx = async function(sourceRef, targetRef, logExtra, opts) {
 };
 
 // 移動整板到新儲位（同一交易：確認棧板還在、更新儲位、寫記錄）
+// 調度工單的一項操作：在同一筆交易裡確認這項還沒做過、工單還沒結束，並標記完成
+// dispatch：{ ref: 工單文件參照, opId: 操作 ID }；先 readDispatchOp（讀）再 markDispatchOp（寫）
+async function readDispatchOp(tx, dispatch) {
+    if (!dispatch || !dispatch.ref) return null;
+    var ds = await tx.get(dispatch.ref);
+    if (!ds.exists) throw new Error('調度工單已不存在');
+    var d = ds.data();
+    if (['completed', 'partial', 'cancelled'].indexOf(d.status) >= 0) throw new Error('調度工單已經結束，不能再執行');
+    if ((d.completedOps || []).indexOf(dispatch.opId) >= 0) {
+        var e = new Error('這一項已經執行過了');
+        e.code = 'OP_DONE';
+        throw e;
+    }
+    return d;
+}
+function markDispatchOp(tx, dispatch) {
+    if (!dispatch || !dispatch.ref) return;
+    tx.update(dispatch.ref, { completedOps: firebase.firestore.FieldValue.arrayUnion(dispatch.opId), status: 'in_progress' });
+}
+// 棧板必須還在預期的儲位（調度工單：別人已經搬走就不能照單搬，系統會記錯位置）
+function checkExpectFrom(p, expectFrom, label) {
+    if (!expectFrom) return;
+    var now = String(p.locationId || '').toUpperCase();
+    if (now !== String(expectFrom).toUpperCase()) {
+        throw new Error((label || '棧板') + ' 已經不在 ' + expectFrom + '（系統上在 ' + (now || '-') + '），請先確認實際位置');
+    }
+}
+
 // 儲位一律大寫、去空白；只能搬到本倉貨架、暫存區、虛擬儲位（業務保留／臨時暫存／品管留置）
 // 目標那一層已經滿了會先詢問（現場常有臨時堆放，按確定就照搬）；opts.skipCapacityCheck 可略過
+// opts.expectFrom：棧板必須還在這個儲位；opts.dispatch：調度工單的操作（同一筆交易標記完成、防重複執行）
 window.movePalletTx = async function(palletRef, toLocation, logExtra, opts) {
     toLocation = String(toLocation || '').trim().toUpperCase().replace(/\s+/g, '');
     if (!toLocation) throw new Error('請輸入目標儲位');
@@ -248,8 +281,11 @@ window.movePalletTx = async function(palletRef, toLocation, logExtra, opts) {
     }
     return window.db.runTransaction(async function(tx) {
         var snap = await tx.get(palletRef);
+        await readDispatchOp(tx, opts && opts.dispatch);
         if (!snap.exists) throw new Error('棧板已不存在（可能已被其他人處理）');
         var p = snap.data();
+        checkExpectFrom(p, opts && opts.expectFrom, p.palletId);
+        markDispatchOp(tx, opts && opts.dispatch);
         tx.update(palletRef, {
             locationId: toLocation,
             movedAt: new Date().toISOString(),
@@ -274,9 +310,9 @@ window.movePalletTx = async function(palletRef, toLocation, logExtra, opts) {
 };
 
 // 合併並在需要時詢問：效期不同會跳 confirm，按確定才合併；按取消丟出「已取消」
-window.mergePalletsConfirm = async function(sourceRef, targetRef, logExtra) {
+window.mergePalletsConfirm = async function(sourceRef, targetRef, logExtra, opts) {
     try {
-        return await window.mergePalletsTx(sourceRef, targetRef, logExtra);
+        return await window.mergePalletsTx(sourceRef, targetRef, logExtra, opts);
     } catch (e) {
         if (e.code !== 'MERGE_MIXED') throw e;
         if (!confirm('⚠️ ' + e.warnings.join('\n') + '\n\n確定仍要合併嗎？')) {
@@ -284,7 +320,7 @@ window.mergePalletsConfirm = async function(sourceRef, targetRef, logExtra) {
             cancel.code = 'CANCELLED';
             throw cancel;
         }
-        return window.mergePalletsTx(sourceRef, targetRef, logExtra, { allowMixed: true });
+        return window.mergePalletsTx(sourceRef, targetRef, logExtra, Object.assign({}, opts || {}, { allowMixed: true }));
     }
 };
 

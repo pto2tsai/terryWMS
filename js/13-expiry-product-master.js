@@ -1185,13 +1185,14 @@
                         name: item.name,
                         spec: item.spec || '',
                         palletCapacity: item.palletCapacity,
-                        partialThreshold: 50,
                         shelfLife: item.shelfLife || 24,
                         category: item.category || '成品',
                         note: item.note || '',
                         updatedAt: new Date().toISOString()
                     };
 
+                    // 新增的品項才給預設的不足板比例；更新時保留原本自訂的設定（不足板比例、箱重、計重方式、入庫類型）
+                    if (item.status !== 'update') data.partialThreshold = 50;
                     try {
                         if (item.status === 'update' && item.existingId) {
                             if (window.db && window.updateDoc) {
@@ -1199,7 +1200,7 @@
                             }
                             var idx = window.productMasterData.findIndex(function(p) { return p.id === item.existingId; });
                             if (idx >= 0) {
-                                window.productMasterData[idx] = { id: item.existingId, ...data };
+                                window.productMasterData[idx] = Object.assign({}, window.productMasterData[idx], data, { id: item.existingId });
                             }
                         } else {
                             if (window.db && window.addDoc) {

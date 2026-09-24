@@ -37,6 +37,15 @@ Date.prototype.toLocalYMD = function() {
     return this.getFullYear() + '-' + pad2(this.getMonth() + 1) + '-' + pad2(this.getDate());
 };
 
+// 距離某天還有幾天（以本地日期算：今天到期＝0、昨天到期＝-1；不受現在幾點影響）
+window.daysUntil = function(v) {
+    var ymd = window.normalizeDateValue(v);
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || '');
+    if (!m) return null;
+    var t = new Date(); t.setHours(0, 0, 0, 0);
+    return Math.round((new Date(+m[1], +m[2] - 1, +m[3]) - t) / 86400000);
+};
+
 // 本地日期區間 → UTC ISO 字串（異動記錄的 timestamp 是 UTC ISO，比較前要先換算）
 window.localDayStartISO = function(ymd) { return new Date(ymd + 'T00:00:00').toISOString(); };
 window.localDayEndISO = function(ymd) { return new Date(ymd + 'T23:59:59.999').toISOString(); };

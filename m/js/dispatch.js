@@ -117,22 +117,22 @@ window.confirmDispatchScan = async function() {
     try {
         const note = '手機調度工單 ' + (currentDispatch.orderNo || '') + (op.reason ? '：' + op.reason : '');
         const sourceRef = await window.resolvePalletRef(op.docId, op.palletId, op.from);
+        // 同一筆交易：確認棧板還在工單上的儲位、這一項沒被別台手機做過，搬完同時標記完成
+        const txOpts = { expectFrom: op.from, dispatch: { ref: db.collection('dispatchOrders').doc(currentDispatch.id), opId: op.id } };
         if (isMergeOp(op)) {
             const targetRef = await resolveMergeTarget(op, sourceRef);
-            await window.mergePalletsConfirm(sourceRef, targetRef, { note: note });
+            await window.mergePalletsConfirm(sourceRef, targetRef, { note: note }, txOpts);
         } else {
-            await window.movePalletTx(sourceRef, op.to, { note: note });
+            await window.movePalletTx(sourceRef, op.to, { note: note }, txOpts);
         }
-        await db.collection('dispatchOrders').doc(currentDispatch.id).update({
-            completedOps: FieldValue.arrayUnion(op.id),
-            status: 'in_progress'
-        });
         currentDispatch.completedOps = done.concat([op.id]);
         const left = pending.length - 1;
         setResult('dispatch-scan-result', true, '✓ ' + (isMergeOp(op) ? '併板' : '移板') + '：' + op.from + ' → ' + op.to + (left ? '　還剩 ' + left + ' 項' : '　🎉 全部完成'));
     } catch (e) {
         console.error(e);
+        if (e.code === 'OP_DONE' && currentDispatch.completedOps.indexOf(op.id) < 0) currentDispatch.completedOps = done.concat([op.id]);
         setResult('dispatch-scan-result', false, '❌ ' + e.message);
+        renderDispatchList();
         return;
     }
     renderDispatchList();

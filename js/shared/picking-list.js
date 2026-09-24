@@ -251,22 +251,29 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
         const entry = orderEntry[oid];
         const got = Object.assign({}, shippedTo[oid] || shippedTo[entry.orderNo] || {});
         const back = [];
+        const sent = [];
         let any = false;
         (entry.items || []).forEach(it => {
             const k = keyOf(it.productName, it.spec);
             const need = parseFloat(it.packageQty) || 1;
             const g = Math.min(need, got[k] || 0);
             got[k] = (got[k] || 0) - g;
-            if (g > 0) any = true;
+            if (g > 0) { any = true; sent.push({ productName: it.productName || '', spec: it.spec || '', qty: g }); }
             if (need - g > 0) {
                 const b = Object.assign({}, it, { packageQty: need - g });
                 if (parseFloat(it.quantity) > 0) b.quantity = Math.round(parseFloat(it.quantity) * (need - g) / need * 100) / 100;
                 back.push(JSON.parse(JSON.stringify(b)));
             }
         });
-        return { back: back, any: any };
+        return { back: back, any: any, sent: sent };
     };
     wave.orderResults = {};
+    // 實際出貨明細（報表用：規劃的件數扣掉缺貨；部分出貨的訂單再排波次時不會重複計算）
+    const shipped = orderIds.map(oid => {
+        const e = orderEntry[oid], r = orderOutcome(oid);
+        return { orderId: oid, orderNo: e.orderNo || '', customer: e.customer || '', logistics: e.logistics || '', items: r.sent };
+    }).filter(x => x.items.length > 0);
+    const shippedQty = shipped.reduce((t, x) => t + x.items.reduce((u, i) => u + i.qty, 0), 0);
     const orderRefs = orderIds.map(oid => db.collection('salesOrders').doc(oid));
     const completedAt = new Date().toISOString();
 
@@ -338,7 +345,7 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
                 ups.push({ ref: orderRefs[idx], data: data });
             });
             if (waveRef && readSnaps[0].exists) {
-                ups.push({ ref: waveRef, data: { status: 'done', completedAt: completedAt, shortages: shortages } });
+                ups.push({ ref: waveRef, data: { status: 'done', completedAt: completedAt, shortages: shortages, shipped: shipped, shippedQty: shippedQty } });
             }
             return ups;
         },
@@ -357,5 +364,7 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
             }));
         }
     });
+    wave.shipped = shipped;
+    wave.shippedQty = shippedQty;
     return completedAt;
 };

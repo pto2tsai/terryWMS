@@ -467,15 +467,38 @@
             console.log('🏷️ 開始自動分配儲位，品項數:', items.length, '區域:', selectedZones, '策略:', strategy);
 
             var labels = [];
-            try {
-                labels = smartAllocateLocations(items, {
-                    strategy: strategy,
-                    zones: selectedZones
+            // 插單已經印出來貼上：保留原本的板號和儲位，只替新增的數量產生新插單
+            var cd = window._containerData;
+            var keep = [], voided = [], allocItems = items;
+            if (cd.labelsPrinted && (cd.labels || []).length) {
+                allocItems = [];
+                items.forEach(function(item) {
+                    var mine = cd.labels.filter(function(l) { return l.itemId === item.id; });
+                    var printedQty = mine.reduce(function(t, l) { return t + (parseFloat(l.quantity) || 0); }, 0);
+                    // 數量改少：多出來的插單作廢（從最後一張開始）
+                    while (mine.length && printedQty - (parseFloat(mine[mine.length - 1].quantity) || 0) >= item.quantity) {
+                        var v = mine.pop(); printedQty -= parseFloat(v.quantity) || 0; voided.push(v);
+                    }
+                    keep = keep.concat(mine);
+                    var rest = item.quantity - printedQty;
+                    if (rest > 0) {
+                        var d = Object.assign({}, item, { quantity: rest, palletCount: Math.ceil(rest / (item.perPallet || 40)) });
+                        if (item.totalWeight > 0 && item.quantity > 0) d.totalWeight = Math.round(item.totalWeight * rest / item.quantity * 10) / 10;
+                        allocItems.push(d);
+                    }
                 });
+                cd.labels.forEach(function(l) { if (!items.some(function(it) { return it.id === l.itemId; })) voided.push(l); });
+            }
+            try {
+                labels = allocItems.length ? smartAllocateLocations(allocItems, {
+                    strategy: strategy,
+                    zones: selectedZones,
+                    extraOccupied: keep.map(function(l) { return { locationId: l.locationId, quantity: l.quantity, palletCapacity: l.perPallet, productName: l.productName, spec: l.spec }; })
+                }) : [];
             } catch (e) {
                 console.error('❌ smartAllocateLocations 錯誤:', e);
                 // 即使失敗也生成基本標籤
-                items.forEach(function(item) {
+                allocItems.forEach(function(item) {
                     for (var p = 0; p < item.palletCount; p++) {
                         labels.push({
                             productName: item.productName,
@@ -488,6 +511,7 @@
                             vendor: item.vendor,
                             company: item.company,
                             locationId: 'TEMP-IN',
+                            itemId: item.id,
                             palletNo: item.id + '-' + (p + 1)
                         });
                     }
@@ -495,6 +519,15 @@
             }
 
             console.log('🏷️ 分配完成，標籤數:', labels.length);
+
+            labels = keep.concat(labels);
+            if (voided.length) {
+                alert('⚠️ 插單已經印過，以下 ' + voided.length + ' 張作廢（品項刪除或數量減少），請把貼上的撕掉：\n\n' +
+                    voided.map(function(l) { return (l.id || l.palletNo) + '　' + l.productName + ' ' + l.quantity + ' 件 @ ' + l.locationId; }).slice(0, 20).join('\n') +
+                    (labels.length > keep.length ? '\n\n新增的 ' + (labels.length - keep.length) + ' 張插單要另外印。' : ''));
+            }
+            var ov = labels.filter(function(l) { return l.overflow; }).length;
+            if (ov && typeof window.showNotification === 'function') window.showNotification('⚠️ 有 ' + ov + ' 板貨架排不下，先放進貨暫存區 TEMP-IN', 'warning');
 
             window._containerData.labels = labels;
             renderContainerLabels();
@@ -1177,7 +1210,8 @@
                 return Array.isArray(pallets) ? pallets : [];
             }
             
-            var existingInventory = getExistingInventory();
+            // 已經印出來的插單（還沒入帳）也佔位置
+            var existingInventory = getExistingInventory().concat((options && options.extraOccupied) || []);
             
             // ========== 2. 建立巷道狀態表 ==========
             var zones = opts.zones || ['A', 'B'];
@@ -1738,6 +1772,7 @@
                         
                         allocations.push({
                             id: palletNo,
+                            itemId: item.id,
                             company: item.company || '崇文',
                             vendor: item.vendor,
                             productName: item.productName,
@@ -1749,7 +1784,8 @@
                             totalWeight: palletWeight,
                             unitWeight: item.unitWeight || 0,
                             productType: item.productType || 'fixed',
-                            locationId: locationId || 'OVERFLOW',
+                            // 貨架排不下的板先放進貨暫存區，之後用手機「上架」
+                            locationId: (!locationId || locationId === 'OVERFLOW') ? 'TEMP-IN' : locationId,
                             palletNo: palletNo,
                             palletType: palletType,
                             boxSize: boxSize,
@@ -2011,6 +2047,8 @@
                 alert('請先產生棧板插單');
                 return;
             }
+            // 印出來之後就不再整批重新產生板號（改品項只補新的插單）
+            window._containerData.labelsPrinted = true;
 
             var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>棧板插單</title>';
             html += '<style>';
@@ -2131,38 +2169,54 @@
             printWindow.document.close();
         };
 
+        var _containerPosting = false;
         window.confirmContainerInbound = async function() {
             var labels = window._containerData.labels;
             if (!labels || labels.length === 0) {
                 alert('請先產生棧板插單');
                 return;
             }
+            if (_containerPosting) return;   // 連點兩次不會入帳兩次
 
             console.log('═══════════════════════════════════════════════════════════');
             console.log('📦 開始貨櫃入庫確認，共', labels.length, '板');
             console.log('📦 標籤資料範例:', labels[0]);
 
-            if (!confirm('確定將 ' + labels.length + ' 板貨物入庫？\n\n入庫後將建立實際庫存記錄。')) return;
+            var ovN = labels.filter(function(l) { return l.overflow; }).length;
+            if (!confirm('確定將 ' + labels.length + ' 板貨物入庫？\n\n入庫後將建立實際庫存記錄。' +
+                (ovN ? '\n\n⚠️ 其中 ' + ovN + ' 板貨架排不下，會放在進貨暫存區 TEMP-IN，之後用手機「上架」放到儲位。' : ''))) return;
 
+            _containerPosting = true;
+            var btnConfirm = document.getElementById('btn-confirm-inbound');
+            if (btnConfirm) btnConfirm.disabled = true;
             try {
-                // 防呆：棧板編號已存在就停止，避免 batch.set 蓋掉現有庫存
+                // 防呆：棧板編號已存在就停止，避免 batch.set 蓋掉現有庫存；
+                // 但如果是這批貨櫃入庫上次寫到一半（網路斷掉）已經建立的板，就略過、只補沒寫進去的
                 var palletIds = labels.map(function(label) { return label.id || label.palletNo; }).filter(Boolean);
                 var dupIds = palletIds.filter(function(id, i) { return palletIds.indexOf(id) !== i; });
                 var existingSnaps = await Promise.all(palletIds.map(function(id) {
                     return window.getDoc(window.doc(window.db, 'pallets', id));
                 }));
-                existingSnaps.forEach(function(snap, i) { if (snap.exists) dupIds.push(palletIds[i]); });
+                var alreadyPosted = {};
+                existingSnaps.forEach(function(snap, i) {
+                    if (!snap.exists) return;
+                    var d = snap.data(), l = labels.find(function(x) { return (x.id || x.palletNo) === palletIds[i]; }) || {};
+                    if (d.source === 'ContainerInbound' && d.productName === l.productName) alreadyPosted[palletIds[i]] = true;
+                    else dupIds.push(palletIds[i]);
+                });
                 if (dupIds.length > 0) {
-                    alert('❌ 以下棧板編號已存在，為避免覆蓋現有庫存已停止入庫：\n' + dupIds.slice(0, 10).join('\n') +
+                    alert('❌ 以下棧板編號已被其他庫存使用，為避免覆蓋現有庫存已停止入庫：\n' + dupIds.slice(0, 10).join('\n') +
                           '\n\n請重新產生棧板插單後再入庫。');
                     return;
                 }
 
                 var writes = [];
                 var successCount = 0;
+                var skippedPosted = 0;
 
                 labels.forEach(function(label, index) {
                     var palletId = label.id || label.palletNo || ('CT-' + Date.now() + '-' + index);
+                    if (alreadyPosted[palletId]) { skippedPosted++; return; }
                     
                     // 確保 quantity 有值
                     var quantity = parseInt(label.quantity) || 0;
@@ -2221,12 +2275,15 @@
                         quantityChange: quantity,
                         locationId: palletData.locationId,
                         palletId: palletId,
+                        vendor: palletData.vendor || '',
+                        weight: totalWeight,
+                        weightChange: totalWeight,
                         note: '貨櫃入庫'
                     }) });
                     successCount++;
                 });
 
-                if (successCount === 0) {
+                if (successCount === 0 && skippedPosted === 0) {
                     alert('❌ 沒有有效的入庫資料');
                     return;
                 }
@@ -2240,11 +2297,12 @@
                 }
                 console.log('✅ 批次寫入成功！');
 
-                alert('✅ 入庫成功！共 ' + successCount + ' 板\n\n請到「庫存查詢」確認資料。');
+                alert('✅ 入庫成功！共 ' + successCount + ' 板' + (skippedPosted ? '（另有 ' + skippedPosted + ' 板上次已經入帳，這次沒有重複寫入）' : '') + '\n\n請到「庫存查詢」確認資料。');
 
                 // 清空資料
                 window._containerData.items = [];
                 window._containerData.labels = [];
+                window._containerData.labelsPrinted = false;
                 renderContainerItems();
                 document.getElementById('container-labels-preview').innerHTML = '<div class="col-span-2 text-center text-slate-500 py-8"><i class="fa-solid fa-tags text-3xl mb-2"></i><div>請先新增品項並產生插單</div></div>';
                 document.getElementById('btn-print-labels').disabled = true;
@@ -2252,7 +2310,10 @@
 
             } catch (err) {
                 console.error('❌ 入庫失敗:', err);
-                alert('❌ 入庫失敗：' + err.message);
+                alert('❌ 入庫失敗：' + err.message + '\n\n請檢查網路後再按一次「確認入庫」：已經寫進去的板會自動略過，不會重複。');
+            } finally {
+                _containerPosting = false;
+                if (btnConfirm) btnConfirm.disabled = false;
             }
         };
 

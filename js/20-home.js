@@ -106,7 +106,7 @@ window.refreshHome = async function() {
         countWhere('inboundOrders', 'status', '==', 'pending', function(o) { return !o.isExternal; }),
         countWhere('inboundTasks', 'status', '==', 'pending'),
         countWhere('inboundOrders', 'approvalStatus', '==', 'pending'),
-        countWhere('salesOrders', 'status', '==', 'pending'),
+        countWhere('salesOrders', 'status', 'in', ['pending', 'confirmed', 'partial'], function(o) { return !o.waveNo; }),
         countWhere('waves', 'status', 'in', ['pending', 'picking', 'sorting']),
         countWhere('dispatchOrders', 'status', 'in', ['pending', 'in_progress'])
     ]);
