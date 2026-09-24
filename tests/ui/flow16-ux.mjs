@@ -52,8 +52,9 @@ H.check('馬上入帳：棧板＋異動記錄一起寫入，類型＝成品', p1
 await fill(7, 'I-A-06-1F', '八方');
 const nD2 = log.dialogs.length;
 await page.click('#btn-inbound-forklift'); await page.waitForTimeout(2500);
-const conf2 = log.dialogs.slice(nD2).find(d => d.msg.startsWith('🚜 交給堆高機'));
-H.check('交給堆高機的確認訊息說明手機上架後才入帳', conf2 && conf2.msg.includes('入庫任務') && conf2.msg.includes('八方'), conf2 && conf2.msg);
+// 交給堆高機只是發任務、不動庫存：不再跳確認，完成訊息寫清楚品項、數量、公司
+const conf2 = log.dialogs.slice(nD2).find(d => d.msg.includes('已發到手機'));
+H.check('交給堆高機不用再按確認；完成訊息寫品項、數量、公司、手機上架後才入帳', !log.dialogs.slice(nD2).some(d => d.type === 'confirm') && conf2 && conf2.msg.includes('7 件（八方）') && conf2.msg.includes('掃儲位後就會入帳'), JSON.stringify(log.dialogs.slice(nD2).map(d => d.msg.slice(0, 80))));
 const o2 = (await H.all('inboundOrders')).find(o => o.quantity === 7);
 const t2 = (await H.all('inboundTasks')).find(t => t.quantity === 7);
 H.check('八方的入庫單與手機任務都記公司＝八方（之前會變成崇文）', o2 && o2.company === '八方' && o2.type === 'FG' && t2 && t2.company === '八方', JSON.stringify([o2 && o2.company, t2 && t2.company]));
