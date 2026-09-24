@@ -212,6 +212,12 @@
                 <div class="nav-item" onclick="switchTab('warehouse-heatmap', event)"><i class="fa-solid fa-fire w-4 text-center mr-2 "></i>熱力圖</div>
             </div>
 
+            <!-- 精簡／完整選單切換（精簡只顯示每天會用到的功能；隨時可以切換，不影響權限） -->
+            <div class="px-3 pt-3 mt-2 border-t border-slate-800">
+                <button id="menu-mode-toggle" onclick="toggleMenuMode()" class="w-full text-left text-xs text-slate-400 hover:text-white py-1.5">
+                    <i class="fa-solid fa-list mr-1"></i><span id="menu-mode-text">顯示全部功能</span>
+                </button>
+            </div>
         </nav>
         <!-- 版本資訊 -->
         <div class="p-3 border-t border-slate-800 text-center">
@@ -719,7 +725,7 @@
                                     <div class="grid grid-cols-2 gap-2">
                                         <div class="relative">
                                             <span class="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">批號</span>
-                                            <input type="text" id="in-batch" class="w-full p-2 pl-9 bg-slate-800 border border-slate-600 rounded text-white text-sm" oninput="updateLivePreview()">
+                                            <input type="text" id="in-batch" class="w-full p-2 pl-9 bg-slate-800 border border-slate-600 rounded text-white text-sm placeholder-yellow-500/70" placeholder="進口、自產、大宗原料建議填" oninput="updateLivePreview()">
                                         </div>
                                         <div class="relative">
                                             <span class="absolute left-2 top-1/2 -translate-y-1/2 text-orange-400 text-[10px] font-bold">效期*</span>

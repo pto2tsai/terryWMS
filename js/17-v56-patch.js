@@ -68,7 +68,8 @@
                 }
                 if (!confirm('🔴 即期品（剩 ' + ec.remainingDays + ' 天）\n\n你是主管，按確定表示你核准允收並直接入帳。')) return;
             } else if (ec.status === 'warning') {
-                if (!confirm('⚠️ 效期警示\n\n' + ec.message + '\n\n剩餘天數：' + ec.remainingDays + ' 天\n\n確定要允收此批貨物嗎？')) return;
+                // 效期偏短：只提醒、不擋
+                if (typeof window.showNotification === 'function') window.showNotification('⚠️ 效期剩 ' + ec.remainingDays + ' 天', 'warning');
             }
         }
 

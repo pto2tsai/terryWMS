@@ -528,11 +528,8 @@
 
                 if (window.playSuccessSound) window.playSuccessSound();
 
-                setTimeout(function() {
-                    if (confirm('入庫成功！\n\n是否繼續下一筆？')) {
-                        resetFieldInbound();
-                    }
-                }, 500);
+                // 直接準備下一筆（不再問「是否繼續」）
+                setTimeout(function() { resetFieldInbound(); }, 1500);
 
             } catch (err) {
                 console.error(err);
@@ -711,11 +708,7 @@
                     '<span class="text-emerald-400 font-bold text-xl">' + newLoc + '</span>' +
                     '</div></div>';
 
-                setTimeout(function() {
-                    if (confirm('移板成功！\n\n是否繼續下一筆？')) {
-                        resetFieldMove();
-                    }
-                }, 500);
+                setTimeout(function() { resetFieldMove(); }, 1500);
 
             } catch (err) {
                 console.error(err);
@@ -1014,13 +1007,7 @@
                 return;
             }
 
-            if (!confirm('確認移動？\n\n' +
-                '📦 ' + pallet.productName + ' ' + (pallet.spec || '') + '\n' +
-                '數量: ' + pallet.quantity + ' 件' + (pallet.totalWeight > 0 ? ' / ' + pallet.totalWeight + ' kg' : '') + '\n' +
-                '批號: ' + (pallet.batchNo || '-') + '\n\n' +
-                '📍 ' + oldLoc + ' → ' + targetLoc)) {
-                return;
-            }
+            // 搬板不再跳「確認移動？」：搬錯再搬回來就好（完成訊息會寫從哪到哪）
 
             try {
                 await window.movePalletTx(window.doc(window.db, 'pallets', pallet.id), targetLoc, {

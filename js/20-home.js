@@ -132,3 +132,46 @@ window.onLogin(function() {
         if (v && !v.classList.contains('hidden')) window.refreshHome();
     }, 800);
 });
+
+
+// ========== 精簡選單 ==========
+// 一般人員預設只看到每天會用到的功能，選單短、比較不會迷路；主管／管理員／財務預設看全部。
+// 左下角可以隨時切換「顯示全部功能／只顯示常用」（記在這台電腦，不影響權限：所有人都能用所有功能）
+var SIMPLE_MENU_TABS = ['unified-inbound', 'pre-inbound', 'wave-picking', 'picking-rm', 'stocktake', 'merge', 'inventory-query', 'label-print'];
+
+function menuModeKey() { return 'wms_menu_full_' + ((window.currentUser && window.currentUser.email) || ''); }
+
+window.isFullMenu = function() {
+    var v = null;
+    try { v = localStorage.getItem(menuModeKey()); } catch (e) {}
+    if (v === '1') return true;
+    if (v === '0') return false;
+    var r = window.currentUser && window.currentUser.role;
+    return r === 'admin' || r === 'supervisor' || r === 'finance';
+};
+
+window.applyMenuMode = function() {
+    var full = window.isFullMenu();
+    document.querySelectorAll('nav .nav-group-items .nav-item').forEach(function(el) {
+        var m = /switchTab\('([^']+)'/.exec(el.getAttribute('onclick') || '');
+        var show = full || (m && SIMPLE_MENU_TABS.indexOf(m[1]) >= 0);
+        el.style.display = show ? '' : 'none';
+    });
+    // 整組都藏起來的就連標題一起藏；精簡模式時把組展開（只剩幾項，不用再點開）
+    document.querySelectorAll('nav .nav-group-items').forEach(function(g) {
+        var any = Array.prototype.some.call(g.querySelectorAll('.nav-item'), function(el) { return el.style.display !== 'none'; });
+        var header = g.previousElementSibling;
+        if (header && header.classList.contains('nav-group-header')) header.style.display = any ? '' : 'none';
+        g.style.display = any ? '' : 'none';
+        if (!full && any) g.classList.remove('collapsed');
+    });
+    var t = document.getElementById('menu-mode-text');
+    if (t) t.textContent = full ? '只顯示常用功能' : '顯示全部功能';
+};
+
+window.toggleMenuMode = function() {
+    try { localStorage.setItem(menuModeKey(), window.isFullMenu() ? '0' : '1'); } catch (e) {}
+    window.applyMenuMode();
+};
+
+if (window.onLogin) window.onLogin(function() { window.applyMenuMode(); });

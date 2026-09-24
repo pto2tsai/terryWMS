@@ -98,14 +98,8 @@ window.confirmInboundLocation = async function() {
     }
     const task = currentTask;
     const planned = String(task.locationId || '').toUpperCase();
-    if (window.isValidStorageLocation(planned) && planned !== loc) {
-        if (camScanner) await closeCameraScan();
-        if (!confirm('放的儲位和指定的不同\n\n指定：' + planned + '\n實際：' + loc + '\n\n以實際儲位 ' + loc + ' 入帳？')) {
-            setResult('inbound-result', 'info', '請放到 ' + planned + ' 後再掃一次');
-            input.value = '';
-            return;
-        }
-    }
+    // 放的儲位和指定的不同：直接以實際儲位入帳（結果訊息會寫出來），不再跳確認
+    const differs = window.isValidStorageLocation(planned) && planned !== loc;
 
     // 這一層已經滿了先提醒（按確定就照放）
     const fullWarn = window.locationFullWarning(loc, { id: '', quantity: task.quantity, palletCapacity: task.palletCapacity }, window.pallets);
@@ -122,7 +116,7 @@ window.confirmInboundLocation = async function() {
             const e = new Error('入庫單已不存在（可能已被刪除）'); e.code = 'ORDER_MISSING'; throw e;
         }
         await window.postInboundOrderTx(orderId, loc, { taskRef: taskRef, note: '手機上架入帳' });
-        setResult('inbound-result', true, '✅ ' + task.productName + ' ' + task.quantity + ' 件已入庫 @ ' + loc);
+        setResult('inbound-result', true, '✅ ' + task.productName + ' ' + task.quantity + ' 件已入庫 @ ' + loc + (differs ? '（指定的是 ' + planned + '，以實際儲位入帳）' : ''));
     } catch (e) {
         if (e.code === 'ALREADY_POSTED') {
             // 電腦已先入帳：棧板已存在，放的位置不同就移過去，任務結案

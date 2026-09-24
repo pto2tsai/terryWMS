@@ -173,11 +173,6 @@
             if (!wh) { alert('請選擇倉庫'); return; }
             if (!name) { alert('請輸入品名'); return; }
             if (!exp) { alert('⚠️ 效期為必填欄位，請輸入效期'); return; }
-            if (!batch) {
-                if (!confirm('⚠️ 批號未填寫\n\n自家生產、進口、大宗原料應填寫批號。\n\n確定不填寫批號嗎？')) {
-                    return;
-                }
-            }
             if (qty === 0) { alert('請輸入調整數量'); return; }
 
             try {
@@ -329,25 +324,10 @@
                 }
                 // result === 'approve' 繼續執行，但標記需要主管核准
             } else if (expiryCheck.status === 'warning') {
-                if (!confirm('⚠️ 效期警示\n\n' + expiryCheck.message + '\n\n剩餘天數：' + expiryCheck.remainingDays + ' 天\n\n確定要允收此批貨物嗎？')) {
-                    return null;
-                }
+                // 效期偏短：只提醒、不擋（記在入庫單上）
+                if (typeof window.showNotification === 'function') window.showNotification('⚠️ 效期剩 ' + expiryCheck.remainingDays + ' 天（已記錄在入庫單）', 'warning');
             }
-
-            if (!batch) {
-                if (!confirm('⚠️ 批號未填寫\n\n自家生產、進口、大宗原料應填寫批號。\n\n確定不填寫批號嗎？')) {
-                    return null;
-                }
-            }
-
-            if (!isExternal) {
-                var typeNames = { Raw: '採購', FG: '成品', WIP: '半成品', RM: '原料', Return: '退庫' };
-                if (!confirm('🚜 交給堆高機\n\n' + name + (spec ? ' ' + spec : '') + '　' + qty + ' 件' +
-                    '\n指定儲位：' + loc + '　公司：' + company + '\n批號：' + (batch || '-') + '　效期：' + exp +
-                    '\n類型：' + (typeNames[category] || category) +
-                    '\n\n按「確定」會建立入庫單並發到手機「入庫任務」。\n堆高機上架後掃儲位才會入帳（放別的儲位也可以，以實際儲位為準）。' +
-                    (category === 'Raw' ? '\n採購進貨會同時送財務對帳。' : ''))) return null;
-            }
+            // 批號沒填、交給堆高機：不再跳確認（只是發任務、不動庫存；完成訊息會寫清楚）
             var now = new Date();
             var docNo = await window.nextDocNo('IN');
 
@@ -411,9 +391,9 @@
                     await createExternalStock(order);
                     alert('✅ 外倉入庫成功！\n單號：' + docNo + '\n' + locationInfo + expiryWarningText);
                 } else if (needsApproval) {
-                    alert('✅ 已發到手機「入庫任務」\n單號：' + docNo + '\n' + locationInfo + expiryWarningText + '\n\n堆高機上架掃儲位後就會入帳。\n採購進貨已送財務對帳（不影響入帳）。');
+                    alert('✅ 已發到手機「入庫任務」\n單號：' + docNo + '\n' + name + (spec ? ' ' + spec : '') + '　' + qty + ' 件（' + company + '）' + (batch ? '' : '　批號沒填') + '\n' + locationInfo + expiryWarningText + '\n\n堆高機上架掃儲位後就會入帳。\n採購進貨已送財務對帳（不影響入帳）。');
                 } else {
-                    alert('✅ 已發到手機「入庫任務」\n單號：' + docNo + '\n' + locationInfo + expiryWarningText + '\n\n堆高機上架掃儲位後就會入帳。');
+                    alert('✅ 已發到手機「入庫任務」\n單號：' + docNo + '\n' + name + (spec ? ' ' + spec : '') + '　' + qty + ' 件（' + company + '）' + (batch ? '' : '　批號沒填') + '\n' + locationInfo + expiryWarningText + '\n\n堆高機上架掃儲位後就會入帳。');
                 }
 
                 clearInboundForm();

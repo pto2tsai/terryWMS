@@ -38,6 +38,10 @@
             </div>
         </header>
         <div class="main-menu">
+            <div class="menu-card wide" style="--c:#22c55e" onclick="openPage('scan')">
+                <div class="menu-icon"><i class="fa-solid fa-qrcode"></i></div>
+                <div><h3>掃一下</h3><p>掃板號或儲位，直接選要做什麼（不用先想要進哪一頁）</p></div>
+            </div>
             <div class="menu-section">工作單</div>
             <div class="menu-card" style="--c:#3b82f6" onclick="openPage('picking')"><span class="badge" id="badge-picking"></span>
                 <div class="menu-icon"><i class="fa-solid fa-barcode"></i></div>
@@ -167,6 +171,23 @@
             <div class="list-header"><h4>待入庫</h4><span class="list-progress" id="inbound-count">0 筆</span></div>
             <div id="inbound-list"></div>
         </div>
+    </div>
+
+    <!-- 掃一下：掃板號 → 這板可以做什麼；掃儲位 → 這裡有哪些板 -->
+    <div id="page-scan" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">掃一下</span>
+        </header>
+        <div class="scan-section">
+            <div class="scan-input-wrap">
+                <input type="text" id="qs-input" class="scan-input" placeholder="掃板號或儲位（或打 IA011）" data-enter="quickScan" data-cam-title="掃一下" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <button class="cam-btn" onclick="openCameraScan('qs-input')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                <button class="scan-btn" onclick="quickScan()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+            </div>
+        </div>
+        <div style="padding:0 16px"><div id="qs-result" class="scan-result"></div></div>
+        <div id="qs-body" style="padding:0 16px 16px"></div>
     </div>
 
     <!-- 上架 -->
@@ -396,5 +417,6 @@
     <script src="js/scan-ops.js"></script>
     <script src="js/stocktake.js"></script>
     <script src="js/query.js"></script>
+    <script src="js/quick-scan.js"></script>
 </body>
 </html>

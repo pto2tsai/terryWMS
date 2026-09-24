@@ -1466,12 +1466,7 @@ window.completeWave = async function() {
         return;
     }
 
-    if (completed < total) {
-        if (!confirm(`尚有 ${total - completed} 項未完成，確定要結束波次嗎？`)) {
-            return;
-        }
-    }
-
+    // 未揀的項目併在下面同一個確認裡說明（原本要按兩次）
     const shortN = list.filter(i => i.shortage || !i.completed).length;
     if (!confirm(`確定完成波次 ${wave.waveNo}？\n\n已揀：${completed}/${total} 項` + (shortN ? `\n缺貨／未揀 ${shortN} 項：相關訂單會標為「部分出貨」，缺的貨之後可以再排波次` : ''))) {
         return;
