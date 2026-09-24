@@ -89,7 +89,14 @@ window.runStockTransaction = async function(opts) {
                 tx.delete(c.ref);
                 r.deleted = true;
             } else {
-                tx.update(c.ref, Object.assign({ quantity: r.after }, c.extra));
+                var upd = { quantity: r.after };
+                // 不定重品：數量變動時總重量照比例調整（揀出一半就扣一半重量）
+                var w = parseFloat(r.data.totalWeight) || 0;
+                if (w > 0 && r.before > 0 && r.after !== r.before && !('totalWeight' in c.extra)) {
+                    upd.totalWeight = Math.round(w * r.after / r.before * 10) / 10;
+                    r.weightAfter = upd.totalWeight;
+                }
+                tx.update(c.ref, Object.assign(upd, c.extra));
             }
         });
 
@@ -105,6 +112,13 @@ window.runStockTransaction = async function(opts) {
 
         return results;
     });
+};
+
+// 數量從 before 變成 after 時，不定重品的總重量照比例調整（沒有重量的回傳 {}）
+window.scaledWeight = function(data, before, after) {
+    var w = parseFloat(data && data.totalWeight) || 0;
+    if (w <= 0 || !(before > 0) || before === after) return {};
+    return { totalWeight: Math.round(w * after / before * 10) / 10 };
 };
 
 // 找出棧板的文件參照：優先用文件 ID；只有板號時必須剛好找到一筆

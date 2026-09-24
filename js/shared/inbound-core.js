@@ -36,6 +36,11 @@ window.postInboundOrderTx = async function(orderId, loc, opts) {
             dup.order = order;
             throw dup;
         }
+        if (order.isExternal) {
+            var ext = new Error('這是外倉入庫單，建立時已加到外倉庫存，不能再入帳到本倉');
+            ext.code = 'EXTERNAL_ORDER';
+            throw ext;
+        }
         var palletId = order.docNo || order.orderNo || palletRef.id;
         var exp = window.normalizeDateValue(order.expiryDate || order.expDate);
         var pallet = {

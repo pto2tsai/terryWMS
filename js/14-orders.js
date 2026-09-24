@@ -1203,8 +1203,9 @@ function renderPickingListV2() {
         html += `<tr class="hover:bg-slate-800/50 border-b border-slate-700/50 ${rowClass}">`;
         html += `<td class="p-2 text-center">${statusIcon}</td>`;
         html += `<td class="p-2 ${textClass}"><span class="text-cyan-400 font-mono">${item.locationId}</span></td>`;
-        html += `<td class="p-2 ${textClass}"><span class="text-purple-400 font-mono text-xs">${item.palletId}</span></td>`;
-        html += `<td class="p-2 ${textClass} text-white">${item.productName}</td>`;
+        const companyTag = item.company ? ` <span class="text-[10px] px-1 rounded ${item.company === '八方' ? 'bg-purple-900/60 text-purple-300' : 'bg-blue-900/60 text-blue-300'}">${item.company}</span>` : '';
+        html += `<td class="p-2 ${textClass}"><span class="text-purple-400 font-mono text-xs">${item.palletId}</span>${companyTag}</td>`;
+        html += `<td class="p-2 ${textClass} text-white">${item.productName}${item.shortage && item.note ? `<div class="text-[10px] text-amber-400">${item.note}</div>` : ''}</td>`;
         html += `<td class="p-2 ${textClass} text-slate-400 text-xs">${item.spec}</td>`;
         html += `<td class="p-2 text-right ${textClass}">
             ${qtyDisplay}

@@ -95,7 +95,9 @@ function renderPickingList() {
             '<span class="item-status pending">待揀</span>';
         return '<div class="list-item ' + cls + '">' +
             '<div class="item-row"><span class="item-location">' + esc(item.locationId) + '</span>' + status + '</div>' +
-            '<div class="item-product">' + esc(item.productName) + ' ' + esc(item.spec || '') + '</div>' +
+            '<div class="item-product">' + esc(item.productName) + ' ' + esc(item.spec || '') +
+                (item.company ? ' <span style="font-size:11px;padding:1px 6px;border-radius:4px;background:' + (item.company === '八方' ? '#581c87' : '#1e3a8a') + '">' + esc(item.company) + '</span>' : '') + '</div>' +
+            (item.shortage && item.note ? '<div class="item-detail" style="color:#fbbf24">' + esc(item.note) + '</div>' : '') +
             '<div class="item-row"><span class="item-detail">' + esc(item.palletId || '-') + ' | ' + esc(item.batchNo || '') + ' ' + esc(item.expDate || '') + '</span>' +
             '<span class="item-qty">' + esc(item.pickQty) + '</span></div></div>';
     }).join('');
