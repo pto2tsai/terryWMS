@@ -78,9 +78,12 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
     const reserve = window.consignReserve(pallets, consigns.map(c => own[c.id] ? Object.assign({}, c, { remainingQty: (parseFloat(c.remainingQty) || 0) - own[c.id] }) : c));
 
     (wave.summary || []).forEach(item => {
+        // 冷藏、包材、費用等不從倉庫揀（沒有庫存），不列入揀貨也不算缺貨
+        if (typeof window.isExcludedFromPickingList === 'function' && window.isExcludedFromPickingList(item.productName)) return;
         let needed = item.totalQty;
         const productName = item.productName;
         const spec = item.spec || '';
+        const key = productName + '|||' + spec;
 
         let expiredQty = 0, heldQty = 0, consignQty = 0;
         const matchingPallets = pallets.filter(p => {
@@ -120,6 +123,7 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
                     spec: pallet.spec || '',
                     batchNo: pallet.batchNo || '',
                     expDate: pallet.expDate || '',
+                    key: key,
                     pickQty: pick,
                     availableQty: available,
                     orders: item.orders,  // 需要這個品項的訂單列表
@@ -138,6 +142,7 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
                 productName: item.productName,
                 spec: item.spec || '',
                 batchNo: '',
+                key: key,
                 pickQty: needed,
                 availableQty: 0,
                 orders: item.orders,
@@ -184,6 +189,8 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
 // 完成波次（桌機與手機共用）：扣庫存、訂單標記出貨、波次標記完成、寫異動記錄，
 // 全部在同一筆交易裡。任何一板庫存不足或波次已被別人完成，就整筆取消。
 // 未揀的項目（含缺貨）記在 wave.shortages，留下缺貨記錄。
+// 每張訂單依實際揀到的件數判斷：全部出齊＝已出貨；只出一部分＝部分出貨（欠貨記在 backorderItems，可以再排波次）；
+// 完全沒出到＝回到待處理。結果放在 wave.orderResults { 訂單 ID: 狀態 }。
 // 回傳完成時間；失敗時丟出錯誤（庫存與訂單都不會變動）。
 // ============================================================
 window.completeWaveTx = async function(wave, pickingList, pallets) {
@@ -216,10 +223,50 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
 
     const waveRef = wave.id ? db.collection('waves').doc(wave.id) : null;
     const orderIds = [];
+    const orderEntry = {};
     (wave.orders || []).forEach(order => {
         const oid = order.id || order.orderId;
-        if (oid && orderIds.indexOf(oid) === -1) orderIds.push(oid);
+        if (oid && orderIds.indexOf(oid) === -1) { orderIds.push(oid); orderEntry[oid] = order; }
     });
+
+    // 每個品項實際揀到的件數，依彙總裡的訂單順序分給各訂單
+    const keyOf = (name, spec) => (name || '') + '|||' + (spec || '');
+    const excluded = name => typeof window.isExcludedFromPickingList === 'function' && window.isExcludedFromPickingList(name);
+    const pickedByKey = {};
+    pickedItems.forEach(i => { const k = i.key || keyOf(i.productName, i.spec); pickedByKey[k] = (pickedByKey[k] || 0) + (parseFloat(i.pickQty) || 0); });
+    const shippedTo = {};  // 訂單 ID 或單號 → { 品項 key: 件數 }
+    (wave.summary || []).forEach(sm => {
+        const k = keyOf(sm.productName, sm.spec);
+        let avail = pickedByKey[k] || 0;
+        (sm.orders || []).forEach(o => {
+            const want = parseFloat(o.quantity) || 0;
+            const q = excluded(sm.productName) ? want : Math.min(avail, want);
+            if (!excluded(sm.productName)) avail -= q;
+            const ok = o.orderId || o.orderNo;
+            shippedTo[ok] = shippedTo[ok] || {};
+            shippedTo[ok][k] = (shippedTo[ok][k] || 0) + q;
+        });
+    });
+    const orderOutcome = oid => {
+        const entry = orderEntry[oid];
+        const got = Object.assign({}, shippedTo[oid] || shippedTo[entry.orderNo] || {});
+        const back = [];
+        let any = false;
+        (entry.items || []).forEach(it => {
+            const k = keyOf(it.productName, it.spec);
+            const need = parseFloat(it.packageQty) || 1;
+            const g = Math.min(need, got[k] || 0);
+            got[k] = (got[k] || 0) - g;
+            if (g > 0) any = true;
+            if (need - g > 0) {
+                const b = Object.assign({}, it, { packageQty: need - g });
+                if (parseFloat(it.quantity) > 0) b.quantity = Math.round(parseFloat(it.quantity) * (need - g) / need * 100) / 100;
+                back.push(JSON.parse(JSON.stringify(b)));
+            }
+        });
+        return { back: back, any: any };
+    };
+    wave.orderResults = {};
     const orderRefs = orderIds.map(oid => db.collection('salesOrders').doc(oid));
     const completedAt = new Date().toISOString();
 
@@ -244,7 +291,10 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
         changes: changes,
         reads: (waveRef ? [waveRef] : []).concat(orderRefs, consRefs),
         validate: function(results, readSnaps) {
-            if (waveRef && readSnaps[0].exists && readSnaps[0].data().status === 'done') {
+            if (waveRef && !readSnaps[0].exists) {
+                throw new Error('此波次已被刪除（訂單可能已排進其他波次），請重新整理');
+            }
+            if (waveRef && readSnaps[0].data().status === 'done') {
                 throw new Error('此波次已經完成過，不能重複扣庫存');
             }
         },
@@ -268,10 +318,24 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
                 if (remaining <= 0) data.completedAt = completedAt;
                 ups.push({ ref: consRefs[idx], data: data });
             });
+            const FV = firebase.firestore.FieldValue;
             orderSnaps.forEach((snap, idx) => {
-                if (snap.exists) {
-                    ups.push({ ref: orderRefs[idx], data: { status: 'shipped', shippedAt: completedAt, waveNo: wave.waveNo } });
+                if (!snap.exists) return;
+                const oid = orderIds[idx];
+                const cur = snap.data();
+                const r = orderOutcome(oid);
+                let data;
+                if (r.back.length === 0) {
+                    data = { status: 'shipped', shippedAt: completedAt, waveNo: wave.waveNo, backorderItems: FV.delete() };
+                } else if (!r.any && !Array.isArray(cur.backorderItems)) {
+                    // 一件都沒出到：回到待處理，可以重新排波次
+                    data = { status: 'pending', waveNo: null, lastWaveNo: wave.waveNo };
+                } else {
+                    data = { status: 'partial', waveNo: null, lastWaveNo: wave.waveNo, backorderItems: r.back };
+                    if (r.any) { data.shippedAt = completedAt; data.shippedWaves = FV.arrayUnion(wave.waveNo); }
                 }
+                wave.orderResults[oid] = { status: data.status, backorderItems: r.back.length ? r.back : null };
+                ups.push({ ref: orderRefs[idx], data: data });
             });
             if (waveRef && readSnaps[0].exists) {
                 ups.push({ ref: waveRef, data: { status: 'done', completedAt: completedAt, shortages: shortages } });

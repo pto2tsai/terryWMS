@@ -405,11 +405,26 @@
             var tempCount = 0;
             var doneCount = 0;
 
+            // 外倉同一批：同倉、同公司、同品名／規格／批號／效期（不看規格會扣到別的規格、效期會被合併掉）
             function findExt(whId, t) {
+                // 來源就是畫面上選的那一筆外倉庫存時，直接用它
+                var src = t.sourceItem;
+                if (src && src.id && src.warehouseId === whId && window.externalStock.some(function(s) { return s.id === src.id; })) {
+                    return window.externalStock.find(function(s) { return s.id === src.id; });
+                }
                 return window.externalStock.find(function(s) {
-                    return s.warehouseId === whId && s.productName === t.productName &&
-                           s.batchNo === t.batchNo && s.company === t.company;
+                    return window.sameExternalLot(s, { warehouseId: whId, company: t.company, productName: t.productName, spec: t.spec, batchNo: t.batchNo, expDate: t.expDate });
                 });
+            }
+            // 這次搬的重量：來源的總重量依件數比例（不定重品來回調撥重量不會變 0）
+            function movingWeight(src, qty) {
+                var w = parseFloat(src && src.totalWeight) || 0, q = parseFloat(src && src.quantity) || 0;
+                return (w > 0 && q > 0) ? Math.round(w * qty / q * 10) / 10 : 0;
+            }
+            function weightFields(src, qty) {
+                var w = movingWeight(src, qty);
+                if (!w) return {};
+                return { totalWeight: w, unitWeight: parseFloat(src.unitWeight) || Math.round(w / qty * 1000) / 1000, productType: src.productType || 'variable' };
             }
             function extRefOf(item) { return window.doc(window.db, 'externalStock', item.id); }
             function newExtRef() { return window.db.collection('externalStock').doc(); }
@@ -420,6 +435,7 @@
                     var i = doneCount;
                     var changes = [];
                     var creates = [];
+                    var addWeight = [];  // 目的地已有的外倉庫存：總重量加上這次搬的重量
                     var logData;
 
                     if (t.mode === 'in') {
@@ -427,6 +443,7 @@
                         var extItem = findExt(t.fromWh, t);
                         if (!extItem) throw new Error('找不到來源外倉庫存：' + t.fromName + ' ' + t.productName + ' 批號 ' + (t.batchNo || '-'));
                         changes.push({ ref: extRefOf(extItem), delta: -t.quantity, deleteWhenEmpty: true, label: t.fromName + ' ' + t.productName });
+                        var wIn = weightFields(extItem, t.quantity);
 
                         if (transferInMethod === 'pending') {
                             // ===== 方式A：產生待執行工單 =====
@@ -436,11 +453,11 @@
                             creates.push({ ref: window.db.collection('inboundTasks').doc(), data: {
                                 orderId: inRef.id, orderNo: orderNo, palletId: orderNo,
                                 productName: t.productName, spec: t.spec || '', batchNo: t.batchNo || '',
-                                expDate: t.expDate || '', company: t.company, quantity: t.quantity,
+                                expDate: t.expDate || '', company: t.company, quantity: t.quantity, totalWeight: wIn.totalWeight || 0,
                                 locationId: '待指定', status: 'pending', createdAt: new Date().toISOString(),
                                 createdBy: window.getOperatorName ? window.getOperatorName() : 'system'
                             }});
-                            creates.push({ ref: inRef, data: {
+                            creates.push({ ref: inRef, data: Object.assign({
                                 docNo: orderNo,          // 單據編號
                                 orderNo: orderNo,
                                 productName: t.productName,
@@ -459,14 +476,14 @@
                                 sourceWarehouse: t.fromWh,
                                 sourceWarehouseName: t.fromName,
                                 createdAt: new Date().toISOString()
-                            }});
+                            }, wIn) });
                             logData = {
                                 type: 'transfer-in', toLocation: '待執行工單',
                                 note: '調撥入庫(工單): ' + t.fromName + ' → 待入庫'
                             };
                         } else {
                             // ===== 方式B：直接入暫存區 =====
-                            creates.push({ ref: window.db.collection('pallets').doc(), data: {
+                            creates.push({ ref: window.db.collection('pallets').doc(), data: Object.assign({
                                 palletId: 'TRI-' + Date.now() + '-' + i,
                                 productName: t.productName,
                                 spec: t.spec || '',
@@ -479,7 +496,7 @@
                                 source: '調撥入庫',
                                 sourceWarehouse: t.fromName,
                                 createdAt: new Date().toISOString()
-                            }});
+                            }, wIn) });
                             logData = {
                                 type: 'transfer-in', toLocation: 'TEMP-IN',
                                 note: '調撥入庫: ' + t.fromName + ' → 進貨暫存區'
@@ -494,11 +511,15 @@
                         if (!srcItem || !srcItem.id) throw new Error('找不到來源棧板：' + t.productName);
                         changes.push({ ref: window.doc(window.db, 'pallets', srcItem.id), delta: -t.quantity, deleteWhenEmpty: true, label: srcItem.palletId || t.productName });
 
-                        var existExt = findExt(t.toWh, t);
+                        var wOut = weightFields(srcItem, t.quantity);
+                        var existExt = window.externalStock.find(function(s) {
+                            return window.sameExternalLot(s, { warehouseId: t.toWh, company: t.company, productName: t.productName, spec: t.spec, batchNo: t.batchNo, expDate: t.expDate });
+                        });
                         if (existExt) {
                             changes.push({ ref: extRefOf(existExt), delta: t.quantity, label: t.toName + ' ' + t.productName });
+                            if (wOut.totalWeight) addWeight.push({ ref: extRefOf(existExt), w: wOut.totalWeight });
                         } else {
-                            creates.push({ ref: newExtRef(), data: {
+                            creates.push({ ref: newExtRef(), data: Object.assign({
                                 warehouseId: t.toWh,
                                 productName: t.productName,
                                 spec: t.spec || '',
@@ -508,7 +529,7 @@
                                 company: t.company,
                                 source: '調撥出庫',
                                 createdAt: new Date().toISOString()
-                            }});
+                            }, wOut) });
                         }
                         logData = {
                             type: 'transfer-out', toLocation: t.toWh,
@@ -521,11 +542,15 @@
                         if (!srcExt) throw new Error('找不到來源外倉庫存：' + t.fromName + ' ' + t.productName + ' 批號 ' + (t.batchNo || '-'));
                         changes.push({ ref: extRefOf(srcExt), delta: -t.quantity, deleteWhenEmpty: true, label: t.fromName + ' ' + t.productName });
 
-                        var dstExt = findExt(t.toWh, t);
+                        var wExt = weightFields(srcExt, t.quantity);
+                        var dstExt = window.externalStock.find(function(s) {
+                            return window.sameExternalLot(s, { warehouseId: t.toWh, company: t.company, productName: t.productName, spec: t.spec, batchNo: t.batchNo, expDate: t.expDate });
+                        });
                         if (dstExt) {
                             changes.push({ ref: extRefOf(dstExt), delta: t.quantity, label: t.toName + ' ' + t.productName });
+                            if (wExt.totalWeight) addWeight.push({ ref: extRefOf(dstExt), w: wExt.totalWeight });
                         } else {
-                            creates.push({ ref: newExtRef(), data: {
+                            creates.push({ ref: newExtRef(), data: Object.assign({
                                 warehouseId: t.toWh,
                                 productName: t.productName,
                                 spec: t.spec || '',
@@ -535,7 +560,7 @@
                                 company: t.company,
                                 source: '外庫調撥',
                                 createdAt: new Date().toISOString()
-                            }});
+                            }, wExt) });
                         }
                         logData = {
                             type: 'transfer-ext', toLocation: t.toWh,
@@ -546,6 +571,12 @@
                     await window.runStockTransaction({
                         changes: changes,
                         creates: creates,
+                        updates: function(results) {
+                            return addWeight.map(function(a) {
+                                var r = results[a.ref.path];
+                                return { ref: a.ref, data: { totalWeight: Math.round(((parseFloat(r.data.totalWeight) || 0) + a.w) * 10) / 10 } };
+                            });
+                        },
                         logs: function() {
                             return [Object.assign({
                                 productName: t.productName,

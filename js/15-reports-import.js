@@ -666,7 +666,7 @@ window.generateTodayReport = function() {
 function generateOrderStatus(dateFrom, dateTo) {
     var orders = window._orderData.orders || [];
 
-    var stats = { pending: 0, inWave: 0, shipped: 0, confirmed: 0 };
+    var stats = { pending: 0, inWave: 0, shipped: 0, confirmed: 0, partial: 0 };
     orders.forEach(function(o) {
         var status = o.status || 'pending';
         if (stats[status] !== undefined) stats[status]++;
@@ -678,6 +678,7 @@ function generateOrderStatus(dateFrom, dateTo) {
         { '狀態': '待處理', '數量': stats.pending, '佔比': (stats.pending / total * 100).toFixed(1) + '%' },
         { '狀態': '已建波次', '數量': stats.inWave, '佔比': (stats.inWave / total * 100).toFixed(1) + '%' },
         { '狀態': '已出貨', '數量': stats.shipped, '佔比': (stats.shipped / total * 100).toFixed(1) + '%' },
+        { '狀態': '部分出貨（欠貨）', '數量': stats.partial, '佔比': (stats.partial / total * 100).toFixed(1) + '%' },
         { '狀態': '已確認', '數量': stats.confirmed, '佔比': (stats.confirmed / total * 100).toFixed(1) + '%' }
     ];
 
@@ -688,13 +689,11 @@ function generateOrderStatus(dateFrom, dateTo) {
 }
 
 function generatePendingOrders() {
-    var orders = (window._orderData.orders || []).filter(function(o) {
-        return o.status === 'pending' && !o.waveNo;
-    });
+    var orders = (window._orderData.orders || []).filter(window.orderWaveable);
 
     var data = orders.map(function(o) {
-        var itemCount = (o.items || []).length;
-        var totalQty = (o.items || []).reduce(function(sum, item) {
+        var itemCount = window.orderOpenItems(o).length;
+        var totalQty = window.orderOpenItems(o).reduce(function(sum, item) {
             return sum + (item.packageQty || item.quantity || 0);
         }, 0);
         return {

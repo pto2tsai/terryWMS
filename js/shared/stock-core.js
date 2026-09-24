@@ -135,11 +135,11 @@ window.resolvePalletRef = async function(docId, palletId, locationId) {
     return docs[0].ref;
 };
 
-// 合併前檢查：品名、規格、公司、批號、效期必須相同，且不能是同一板
-// 合併前檢查：品名、規格、公司不同 → 不能合併（丟錯）
+// 合併前檢查：品名、規格、公司、批號不同 → 不能合併（丟錯）
+// 批號不同不能合併：合併後只剩一個批號，另一批就追溯不到（召回時找不到貨）
 window.checkMergeCompatible = function(source, target) {
     if (!source || !target) throw new Error('找不到要合併的棧板');
-    var fields = [['productName', '品名'], ['spec', '規格'], ['company', '公司']];
+    var fields = [['productName', '品名'], ['spec', '規格'], ['company', '公司'], ['batchNo', '批號']];
     fields.forEach(function(f) {
         if (String(source[f[0]] || '') !== String(target[f[0]] || '')) {
             throw new Error('無法合併：' + f[1] + '不同（' + (source[f[0]] || '-') + ' / ' + (target[f[0]] || '-') + '）');
@@ -147,12 +147,9 @@ window.checkMergeCompatible = function(source, target) {
     });
 };
 
-// 批號、效期不同 → 可以合併，但要提醒（回傳提醒文字陣列）
+// 效期不同 → 可以合併，但要提醒（回傳提醒文字陣列）
 window.mergeWarnings = function(source, target) {
     var warnings = [];
-    if (String(source.batchNo || '') !== String(target.batchNo || '')) {
-        warnings.push('批號不同（' + (source.batchNo || '-') + ' / ' + (target.batchNo || '-') + '）');
-    }
     var expA = normalizeDateKey(source.expiryDate || source.expDate);
     var expB = normalizeDateKey(target.expiryDate || target.expDate);
     if (expA !== expB) {
@@ -169,7 +166,7 @@ function normalizeDateKey(v) {
 }
 
 // 把 source 整板併入 target（同一交易：target 加上 source 的實際數量、刪除 source、寫記錄）
-// opts.allowMixed：批號/效期不同時仍合併（否則丟出 code = 'MERGE_MIXED' 的錯誤，讓畫面詢問使用者）
+// opts.allowMixed：效期不同時仍合併（否則丟出 code = 'MERGE_MIXED' 的錯誤，讓畫面詢問使用者）；批號不同一律不能合併
 window.mergePalletsTx = async function(sourceRef, targetRef, logExtra, opts) {
     if (sourceRef.path === targetRef.path) throw new Error('來源與目標是同一板，不能合併');
     return window.db.runTransaction(async function(tx) {
@@ -231,8 +228,24 @@ window.mergePalletsTx = async function(sourceRef, targetRef, logExtra, opts) {
 };
 
 // 移動整板到新儲位（同一交易：確認棧板還在、更新儲位、寫記錄）
-window.movePalletTx = async function(palletRef, toLocation, logExtra) {
+// 儲位一律大寫、去空白；只能搬到本倉貨架、暫存區、虛擬儲位（業務保留／臨時暫存／品管留置）
+// 目標那一層已經滿了會先詢問（現場常有臨時堆放，按確定就照搬）；opts.skipCapacityCheck 可略過
+window.movePalletTx = async function(palletRef, toLocation, logExtra, opts) {
+    toLocation = String(toLocation || '').trim().toUpperCase().replace(/\s+/g, '');
     if (!toLocation) throw new Error('請輸入目標儲位');
+    if (!(window.isValidStorageLocation(toLocation) || /^V-(SALES|TEMP|QC)$/.test(toLocation))) {
+        throw new Error('儲位格式不正確：' + toLocation + '（例如 I-A-01-1F）');
+    }
+    if (!(opts && opts.skipCapacityCheck) && typeof window.locationFullWarning === 'function') {
+        var all = window.currentPallets ? window.currentPallets() : (window.pallets || []);
+        var me = all.find(function(x) { return x.id === palletRef.id; });
+        var warn = window.locationFullWarning(toLocation, me, all);
+        if (warn && !confirm(warn + '\n\n確定還是要放到 ' + toLocation + ' 嗎？')) {
+            var cancel = new Error('已取消移板');
+            cancel.code = 'CANCELLED';
+            throw cancel;
+        }
+    }
     return window.db.runTransaction(async function(tx) {
         var snap = await tx.get(palletRef);
         if (!snap.exists) throw new Error('棧板已不存在（可能已被其他人處理）');
@@ -260,7 +273,7 @@ window.movePalletTx = async function(palletRef, toLocation, logExtra) {
     });
 };
 
-// 合併並在需要時詢問：批號/效期不同會跳 confirm，按確定才合併；按取消丟出「已取消」
+// 合併並在需要時詢問：效期不同會跳 confirm，按確定才合併；按取消丟出「已取消」
 window.mergePalletsConfirm = async function(sourceRef, targetRef, logExtra) {
     try {
         return await window.mergePalletsTx(sourceRef, targetRef, logExtra);
@@ -302,4 +315,12 @@ window.recordDailyStockSnapshot = async function(pallets) {
             });
         });
     } catch (e) { console.warn('每日板數快照未記錄：', e.message); }
+};
+
+// 外倉庫存是否同一批：同倉、同公司、同品名／規格／批號／效期才能合併或扣減
+window.sameExternalLot = function(s, d) {
+    var exp = function(x) { return window.normalizeDateValue(x.expiryDate || x.expDate) || ''; };
+    return (s.warehouseId || '') === (d.warehouseId || '') && (s.company || '') === (d.company || '') &&
+        (s.productName || '') === (d.productName || '') && (s.spec || '') === (d.spec || '') &&
+        (s.batchNo || '') === (d.batchNo || '') && exp(s) === exp(d);
 };

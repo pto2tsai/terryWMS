@@ -99,10 +99,15 @@ await scan('move-loc', 'K-A-09-2F');
 P1 = await pal();
 H.check('移板完成且只動選到的那板', [P1['M-06'].locationId, P1['M-07'].locationId].sort().join() === 'K-A-01-1F,K-A-09-2F', JSON.stringify([P1['M-06'].locationId, P1['M-07'].locationId]));
 
-// ---------- 併板：批號不同 → 提醒後可併，效期取較早 ----------
+// ---------- 併板：批號不同 → 擋下；同批號但效期不同 → 提醒後可併，效期取較早 ----------
 await go('merge');
 await scan('merge-src', 'M-03'); await scan('merge-tgt', 'M-02');
-H.check('批號不同顯示提醒', (await txt('merge-preview')).includes('批號不同'), await txt('merge-preview'));
+H.check('批號不同擋下（不能合併）', (await txt('merge-result')).includes('批號不同'), await txt('merge-result'));
+await H.admin(async d => { const { updateDoc } = await import('firebase/firestore'); await updateDoc(H.doc(d, 'pallets', 'M-03'), { batchNo: (await pal())['M-02'].batchNo || '' }); });
+await page.waitForTimeout(800);
+await go('merge');
+await scan('merge-src', 'M-03'); await scan('merge-tgt', 'M-02');
+H.check('同批號、效期不同顯示提醒', (await txt('merge-preview')).includes('效期不同'), await txt('merge-preview'));
 await page.click('#merge-step3 button.success'); await page.waitForTimeout(800);
 P1 = await pal();
 H.check('併板：M-02 = 16 件、效期取較早 2027-01-01、M-03 刪除', P1['M-02'].quantity === 16 && P1['M-02'].expiryDate === '2027-01-01' && !P1['M-03'], JSON.stringify(P1['M-02']));

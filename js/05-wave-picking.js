@@ -1326,9 +1326,7 @@
             document.getElementById('wave-stat-picking').innerText = picking.length;
             document.getElementById('wave-stat-done').innerText = done.length;
 
-            var orders = (window._orderData && window._orderData.orders) ? window._orderData.orders.filter(function(o) {
-                return o.status === 'pending' || o.status === 'confirmed';
-            }) : [];
+            var orders = (window._orderData && window._orderData.orders) ? window._orderData.orders.filter(window.orderWaveable) : [];
             document.getElementById('wave-stat-orders').innerText = orders.length;
 
             if (waves.length === 0) {

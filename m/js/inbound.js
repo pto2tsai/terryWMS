@@ -106,6 +106,13 @@ window.confirmInboundLocation = async function() {
         }
     }
 
+    // 這一層已經滿了先提醒（按確定就照放）
+    const fullWarn = window.locationFullWarning(loc, { id: '', quantity: task.quantity, palletCapacity: task.palletCapacity }, window.pallets);
+    if (fullWarn) {
+        if (camScanner) await closeCameraScan();
+        if (!confirm(fullWarn + '\n\n確定還是要放到 ' + loc + ' 嗎？')) { input.value = ''; return; }
+    }
+
     const taskRef = db.collection('inboundTasks').doc(task.id);
     const who = window.currentUser ? window.currentUser.email : '';
     try {
@@ -121,7 +128,7 @@ window.confirmInboundLocation = async function() {
             try {
                 const pid = (e.order && e.order.docNo) || task.palletId;
                 const p = window.pallets.find(function(x) { return codeKey(x.palletId) === codeKey(pid); });
-                if (p && p.locationId !== loc) await window.movePalletTx(palletRef(p), loc, { note: '手機上架（已入帳，更新儲位）' });
+                if (p && p.locationId !== loc) await window.movePalletTx(palletRef(p), loc, { note: '手機上架（已入帳，更新儲位）' }, { skipCapacityCheck: true });
                 await taskRef.update({ status: 'done', confirmedAt: new Date().toISOString(), confirmedBy: who, confirmedLocation: loc });
                 setResult('inbound-result', true, '✅ 已上架 @ ' + loc + '（此單電腦已入帳' + (p && p.locationId !== loc ? '，儲位已更新' : '') + '）');
             } catch (e2) {

@@ -114,7 +114,7 @@ async function loadOrdersFromFirebase() {
 }
 
 function renderOrderList() {
-    const pendingOrders = window._orderData.orders.filter(o => o.status === 'pending');
+    const pendingOrders = window._orderData.orders.filter(window.orderWaveable);
     const statEl = document.getElementById('wave-stat-orders');
     if (statEl) {
         statEl.innerText = pendingOrders.length;
@@ -262,7 +262,7 @@ window.closeOrderChangesModal = function() {
 };
 
 window.updateChangedWaves = async function() {
-    var changedWaves = (window._waveData.waves || []).filter(function(w) { return w.hasOrderChanges; });
+    var changedWaves = (window._waveData.waves || []).filter(function(w) { return w.hasOrderChanges && w.status !== 'done'; });
 
     if (changedWaves.length === 0) {
         alert('沒有需要更新的波次');
@@ -301,14 +301,16 @@ window.updateChangedWaves = async function() {
 
             if (latestOrder) {
                 updatedOrders.push({
+                    id: latestOrder.id || orderRef.id || orderRef.orderId,
+                    orderId: latestOrder.id || orderRef.id || orderRef.orderId,
                     orderNo: latestOrder.orderNo,
                     customer: latestOrder.customer,
                     address: latestOrder.address,
                     logistics: latestOrder.logistics,
-                    items: latestOrder.items
+                    items: window.orderOpenItems(latestOrder)
                 });
 
-                (latestOrder.items || []).forEach(function(item) {
+                window.orderOpenItems(latestOrder).forEach(function(item) {
                     var key = item.productName + '|||' + (item.spec || '');
                     if (!summary[key]) {
                         var oldItem = (wave.summary || []).find(function(s) {
@@ -325,7 +327,7 @@ window.updateChangedWaves = async function() {
                     }
                     var pkgQty = item.packageQty || 1;
                     summary[key].totalQty += pkgQty;
-                    summary[key].orders.push({ orderNo: latestOrder.orderNo, customer: latestOrder.customer, quantity: pkgQty });
+                    summary[key].orders.push({ orderNo: latestOrder.orderNo, orderId: latestOrder.id || orderRef.id || orderRef.orderId, customer: latestOrder.customer, quantity: pkgQty });
                     totalQty += pkgQty;
                 });
             }
@@ -563,6 +565,38 @@ function showUpdateCompleteAlert(waveNos) {
     } catch (e) {}
 }
 
+// 匯入時換算不出件數的品項：列出來請人工填件數（全部填好才能匯入）
+function askPackageQty(lines) {
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    return new Promise(resolve => {
+        let rows = '';
+        lines.forEach((l, i) => {
+            rows += '<tr class="border-b border-slate-700"><td class="p-2 text-cyan-400 font-mono text-xs">' + esc(l.order.orderNo) + '</td>' +
+                '<td class="p-2 text-white">' + esc(l.order.customer) + '</td>' +
+                '<td class="p-2 text-slate-200">' + esc(l.item.productName) + ' ' + esc(l.item.spec) + '</td>' +
+                '<td class="p-2 text-right text-yellow-400">' + esc(l.item.quantity) + ' ' + esc(l.item.unit) + '</td>' +
+                '<td class="p-2"><input type="number" min="0.01" step="any" class="pkg-ask-input scan-input w-24" data-i="' + i + '"></td></tr>';
+        });
+        const content = '<div class="text-sm text-amber-300 mb-3">以下品項的「包裝數量」是空的，品名也沒有「*N盒」可以換算，請填入要揀幾<b>件</b>：</div>' +
+            '<div class="max-h-[50vh] overflow-y-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-xs"><th class="p-2 text-left">單號</th><th class="p-2 text-left">客戶</th><th class="p-2 text-left">品名</th><th class="p-2 text-right">銷貨數量</th><th class="p-2 text-left">件數</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+            '<div id="pkg-ask-msg" class="text-red-400 text-sm mt-2"></div>' +
+            '<div class="flex gap-2 mt-4"><button id="pkg-ask-ok" class="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">填好了，繼續匯入</button>' +
+            '<button id="pkg-ask-cancel" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">取消匯入</button></div>';
+        WMS.createModal('modal-pkg-ask', { title: '請確認件數（' + lines.length + ' 項）', icon: 'fa-solid fa-boxes-stacked text-amber-400', content: content, width: '760px', closeOnBackdrop: false });
+        const done = ok => { WMS.closeModal('modal-pkg-ask'); resolve(ok); };
+        document.querySelector('#modal-pkg-ask button[onclick*="closeModal"]').onclick = () => done(false);
+        document.getElementById('pkg-ask-cancel').onclick = () => done(false);
+        document.getElementById('pkg-ask-ok').onclick = () => {
+            const inputs = document.querySelectorAll('.pkg-ask-input');
+            let missing = 0;
+            inputs.forEach(inp => { const v = parseFloat(inp.value); if (!(v > 0)) { missing++; inp.classList.add('border-red-500'); } else inp.classList.remove('border-red-500'); });
+            if (missing) { document.getElementById('pkg-ask-msg').innerText = '還有 ' + missing + ' 項沒填件數'; return; }
+            inputs.forEach(inp => { lines[parseInt(inp.dataset.i, 10)].item.packageQty = parseFloat(inp.value); });
+            done(true);
+        };
+    });
+}
+
 window.importERPExcel = async function(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -597,28 +631,22 @@ window.importERPExcel = async function(event) {
 
             const orderMap = new Map();
             let lastOrderNo = null;
-            let lastLogistics = null;
+            // 數字欄：去掉千分位，保留小數（2.5 公斤不會變 2）
+            const num = v => parseFloat(String(v == null ? '' : v).replace(/,/g, '')) || 0;
+            const needPkg = [];  // 換算不出件數、要人工填的品項
 
             for (const row of dataRows) {
                 if (!row[COL.PRODUCT]) continue;
                 if (String(row[COL.DATE]).includes('小計') || String(row[COL.DATE]).includes('合計')) continue;
 
                 let orderNo = row[COL.ORDER_NO] ? String(row[COL.ORDER_NO]).trim() : lastOrderNo;
-                let logistics = parseLogistics(row[COL.REMARK]);
+                if (!orderNo) continue;
+                const logistics = parseLogistics(row[COL.REMARK]);
+                if (row[COL.ORDER_NO]) lastOrderNo = orderNo;
 
-                if (logistics === '未指定' && lastLogistics) {
-                    logistics = lastLogistics;
-                }
-
-                if (row[COL.ORDER_NO]) {
-                    lastOrderNo = orderNo;
-                    lastLogistics = logistics;
-                }
-
-                const orderKey = orderNo + '|||' + logistics;
-
-                if (!orderMap.has(orderKey)) {
-                    orderMap.set(orderKey, {
+                // 同一張單號就是同一張訂單（不再依物流商拆成兩張，避免後面那張蓋掉前面的品項）
+                if (!orderMap.has(orderNo)) {
+                    orderMap.set(orderNo, {
                         orderNo: orderNo,
                         orderDate: row[COL.DATE] ? String(row[COL.DATE]).trim() : '',
                         customerCode: row[COL.CUST_CODE] ? String(row[COL.CUST_CODE]).trim() : '',
@@ -634,7 +662,9 @@ window.importERPExcel = async function(event) {
                     });
                 }
 
-                let currentOrder = orderMap.get(orderKey);
+                let currentOrder = orderMap.get(orderNo);
+                if (currentOrder.logistics === '未指定' && logistics !== '未指定') currentOrder.logistics = logistics;
+                if (!currentOrder.remark && row[COL.REMARK]) currentOrder.remark = String(row[COL.REMARK]).trim();
 
                 if (row[COL.PRODUCT]) {
                     var productName = String(row[COL.PRODUCT]).trim();
@@ -649,26 +679,38 @@ window.importERPExcel = async function(event) {
                     var isFee = feeKeywords.some(function(kw) { return productName.includes(kw); });
                     if (isFee) continue;
 
-                    var qty = parseInt(row[COL.QTY]) || 0;
+                    var qty = num(row[COL.QTY]);
                     if (!productName || qty <= 0) continue;
 
-                    // === 正常品項處理 ===
-
+                    // === 件數：品名有「*N盒」就換算；否則用包裝數量欄；單位本來就是件／箱就等於數量；都沒有就要人工填 ===
+                    var unit = row[COL.UNIT] ? String(row[COL.UNIT]).trim() : '';
                     var boxPerPkg = parseBoxPerPackage(productName);
-                    var pkgQty = boxPerPkg > 0 ? Math.ceil(qty / boxPerPkg) : (parseInt(row[COL.PKG_QTY]) || qty);
+                    var pkgCell = num(row[COL.PKG_QTY]);
+                    var pkgQty = null;
+                    if (boxPerPkg > 0) pkgQty = Math.ceil(qty / boxPerPkg);
+                    else if (pkgCell > 0) pkgQty = pkgCell;
+                    else if (/^(件|箱|CTN|CS)$/i.test(unit) || window.isExcludedFromPickingList(productName)) pkgQty = qty;
 
-                    currentOrder.items.push({
+                    var item = {
                         productName: productName,
                         spec: row[COL.SPEC] ? String(row[COL.SPEC]).trim() : '',
                         quantity: qty,                    // 最小單位數量（盒）
-                        unit: row[COL.UNIT] ? String(row[COL.UNIT]).trim() : '',
+                        unit: unit,
                         packageQty: pkgQty,               // 件數
                         packageUnit: '件',                // 固定為件
                         boxPerPackage: boxPerPkg,         // 每件盒數
                         batchNo: row[COL.BATCH] ? String(row[COL.BATCH]).trim() : '',
-                        price: parseFloat(row[COL.PRICE]) || 0
-                    });
+                        price: num(row[COL.PRICE])
+                    };
+                    currentOrder.items.push(item);
+                    if (pkgQty === null) needPkg.push({ order: currentOrder, item: item });
                 }
+            }
+
+            // 換算不出件數的品項：列出來請人工填，全部填好才匯入
+            if (needPkg.length > 0) {
+                const ok = await askPackageQty(needPkg);
+                if (!ok) { alert('已取消匯入，資料沒有變動。'); return; }
             }
 
             const orders = Array.from(orderMap.values());
@@ -679,10 +721,25 @@ window.importERPExcel = async function(event) {
             let skipCount = 0;
             let modifiedCount = 0;
             var orderChanges = [];
+            var shippedChanged = [];
 
             for (const order of orders) {
                 const existing = window._orderData.orders.find(o => o.orderNo === order.orderNo);
                 if (existing) {
+                    // 有異動時先讀資料庫最新狀態（畫面上的可能是舊的：別台電腦或手機已經出貨）
+                    if (existing.id && detectOrderChanges(existing, order).length > 0) {
+                        try {
+                            var freshSnap = await window.db.collection('salesOrders').doc(existing.id).get();
+                            if (freshSnap.exists) Object.assign(existing, freshSnap.data());
+                        } catch (err) { console.warn('讀取訂單最新狀態失敗', err); }
+                    }
+                    // 已出貨（含部分出貨）或所在波次已完成的訂單不再改品項
+                    var exWave = existing.waveNo && window._waveData.waves.find(function(w) { return w.waveNo === existing.waveNo; });
+                    if (existing.status === 'shipped' || existing.status === 'partial' || Array.isArray(existing.backorderItems) || (exWave && exWave.status === 'done')) {
+                        if (detectOrderChanges(existing, order).length > 0) shippedChanged.push(order.orderNo);
+                        skipCount++;
+                        continue;
+                    }
                     var changes = detectOrderChanges(existing, order);
                     if (changes.length > 0) {
                         orderChanges.push({
@@ -739,14 +796,15 @@ window.importERPExcel = async function(event) {
             if (modifiedCount > 0) {
                 showOrderChangesAlert(orderChanges);
             }
+            if (shippedChanged.length > 0) {
+                alert('⚠️ 以下訂單已經出貨，Excel 裡的品項有變動但沒有套用（請在 ERP 另外處理）：\n\n' + shippedChanged.join('\n'));
+            }
 
             renderOrderList();
             refreshWaveList();
 
             if (savedCount > 0) {
-                var pendingOrders = window._orderData.orders.filter(function(o) {
-                    return o.status === 'pending' && !o.waveNo;
-                });
+                var pendingOrders = window._orderData.orders.filter(window.orderWaveable);
 
                 var autoCreate = confirm(
                     '✅ 匯入完成！\n\n' +
@@ -845,9 +903,7 @@ function getLogisticsColor(logistics) {
 }
 
 window.autoCreateWavesByLogistics = async function() {
-    var pendingOrders = window._orderData.orders.filter(function(o) {
-        return o.status === 'pending' && !o.waveNo;
-    });
+    var pendingOrders = window._orderData.orders.filter(window.orderWaveable);
 
     if (pendingOrders.length === 0) {
         alert('沒有待處理的訂單');
@@ -870,12 +926,7 @@ window.autoCreateWavesByLogistics = async function() {
         var orders = logisticsGroups[logistics];
         var totalQty = 0;
         orders.forEach(function(o) {
-            (o.items || []).forEach(function(item) {
-                var qty = item.quantity || 0;
-                var boxPerPkg = parseBoxPerPackage(item.productName);
-                var pkgQty = (boxPerPkg > 0 && qty > 0) ? Math.ceil(qty / boxPerPkg) : (item.packageQty || 1);
-                totalQty += pkgQty;
-            });
+            window.orderOpenItems(o).forEach(function(item) { totalQty += item.packageQty || 1; });
         });
         previewText += '• ' + logistics + '：' + orders.length + ' 單 / ' + totalQty + ' 件\n';
     });
@@ -894,115 +945,34 @@ window.autoCreateWavesByLogistics = async function() {
     document.body.appendChild(progressDiv);
 
     var createdWaves = [];
+    var failed = [];
+    var skippedAll = [];
     var totalOrders = 0;
     var totalItems = 0;
-    var idx = 0;
     var logisticsKeys = Object.keys(logisticsGroups);
 
     for (var i = 0; i < logisticsKeys.length; i++) {
         var logistics = logisticsKeys[i];
-        var orders = logisticsGroups[logistics];
-
         document.getElementById('progress-text').innerText = '建立 ' + logistics + ' 波次...';
         document.getElementById('progress-detail').innerText = (i + 1) + ' / ' + logisticsKeys.length;
-
-        var summary = {};
-        var waveTotalQty = 0;
-
-        orders.forEach(function(order) {
-            (order.items || []).forEach(function(item) {
-                var key = item.productName + '|||' + (item.spec || '');
-
-                var qty = item.quantity || 0;
-                var boxPerPkg = parseBoxPerPackage(item.productName);
-                var pkgQty = (boxPerPkg > 0 && qty > 0) ? Math.ceil(qty / boxPerPkg) : (item.packageQty || 1);
-
-                if (!summary[key]) {
-                    summary[key] = {
-                        productName: item.productName,
-                        spec: item.spec || '',
-                        unit: '件',                      // 固定使用件
-                        smallUnit: item.unit || '',      // 最小單位
-                        totalQty: 0,                     // 件數
-                        totalSmallQty: 0,                // 最小單位數量
-                        orders: []
-                    };
-                }
-                summary[key].totalQty += pkgQty;
-                summary[key].totalSmallQty += qty;
-                summary[key].orders.push({
-                    orderNo: order.orderNo,
-                    customer: order.customer,
-                    quantity: pkgQty
-                });
-                waveTotalQty += pkgQty;
-            });
-        });
-
-        var summaryList = Object.values(summary);
-
-        var waveNo = generateWaveNo();
-        var wave = {
-            waveNo: waveNo,
-            logistics: logistics,
-            status: 'pending',
-            orders: orders.map(function(o) {
-                return {
-                    orderNo: o.orderNo,
-                    orderId: o.id,
-                    customer: o.customer,
-                    address: o.address,
-                    logistics: o.logistics,
-                    items: o.items
-                };
-            }),
-            summary: summaryList,
-            orderCount: orders.length,
-            itemCount: summaryList.length,
-            totalQty: waveTotalQty,
-            createdAt: new Date().toISOString(),
-            autoCreated: true
-        };
-
         try {
-            var docRef = await window.addDoc(window.collection(window.db, 'waves'), wave);
-            wave.id = docRef.id;
+            var res = await window.createWaveFromOrders(logisticsGroups[logistics], logistics, { autoCreated: true });
+            createdWaves.push({ waveNo: res.wave.waveNo, logistics: logistics, orderCount: res.wave.orderCount, totalQty: res.wave.totalQty });
+            totalOrders += res.wave.orderCount;
+            totalItems += res.wave.totalQty;
+            skippedAll = skippedAll.concat(res.skipped);
         } catch (err) {
             console.error('建立波次失敗:', logistics, err);
+            failed.push(logistics + '：' + err.message);
         }
-
-        window._waveData.waves.push(wave);
-        createdWaves.push({ waveNo: waveNo, logistics: logistics, orderCount: orders.length, totalQty: waveTotalQty });
-
-        for (var j = 0; j < orders.length; j++) {
-            var order = orders[j];
-            order.status = 'inWave';
-            order.waveNo = waveNo;
-
-            if (order.id) {
-                try {
-                    await window.updateDoc(window.doc(window.db, 'salesOrders', order.id), {
-                        status: 'inWave',
-                        waveNo: waveNo
-                    });
-                } catch (err) {
-                    console.error('更新訂單失敗:', order.orderNo, err);
-                }
-            }
-        }
-
-        totalOrders += orders.length;
-        totalItems += waveTotalQty;
-
-        await new Promise(function(resolve) { setTimeout(resolve, 100); });
     }
 
     document.getElementById('auto-wave-progress').remove();
 
-    saveWaves();
     refreshWaveList();
+    renderOrderList();
 
-    var resultText = '✅ 自動建立完成！\n\n' +
+    var resultText = (failed.length ? '⚠️ 部分波次建立失敗' : '✅ 自動建立完成！') + '\n\n' +
         '建立波次：' + createdWaves.length + ' 個\n' +
         '總訂單數：' + totalOrders + ' 筆\n' +
         '總件數：' + totalItems + ' 件\n\n' +
@@ -1011,6 +981,8 @@ window.autoCreateWavesByLogistics = async function() {
     createdWaves.forEach(function(w) {
         resultText += '• ' + w.waveNo + ' (' + w.logistics + ')：' + w.orderCount + '單 ' + w.totalQty + '件\n';
     });
+    if (skippedAll.length) resultText += '\n已被其他人排走、略過：\n' + skippedAll.join('\n') + '\n';
+    if (failed.length) resultText += '\n❌ 失敗（訂單沒有變動）：\n' + failed.join('\n');
 
     alert(resultText);
 };
@@ -1052,6 +1024,118 @@ function buildWaveSummary(orders) {
     return { summaryList: Object.values(summary), totalQty: totalQty, totalSmallQty: totalSmallQty };
 }
 
+// ========== 建立波次（手動、依物流自動、追加訂單共用）==========
+// 可以排波次的訂單：待處理／已確認／部分出貨（欠貨），而且不在任何波次中
+window.orderWaveable = function(o) {
+    return !!o && ['pending', 'confirmed', 'partial'].indexOf(o.status) >= 0 && !o.waveNo;
+};
+// 還沒出貨的品項：部分出貨過的訂單只剩欠貨（backorderItems）
+window.orderOpenItems = function(o) {
+    return (o && Array.isArray(o.backorderItems)) ? o.backorderItems : ((o && o.items) || []);
+};
+
+// 今天的下一個波次編號（看資料庫裡今天最大的號碼，刪掉中間的波次也不會重號）
+window.nextWaveNo = async function(offset) {
+    var t = new Date();
+    var prefix = 'W' + String(t.getFullYear()).slice(2) + String(t.getMonth() + 1).padStart(2, '0') + String(t.getDate()).padStart(2, '0') + '-';
+    var max = 0;
+    var scan = function(no) { if (no && String(no).indexOf(prefix) === 0) max = Math.max(max, parseInt(String(no).slice(prefix.length), 10) || 0); };
+    ((window._waveData && window._waveData.waves) || []).forEach(function(w) { scan(w.waveNo); });
+    try {
+        var snap = await window.db.collection('waves').where('waveNo', '>=', prefix).where('waveNo', '<=', prefix + '').get();
+        snap.forEach(function(d) { scan(d.data().waveNo); });
+    } catch (e) { console.warn('讀取今日波次編號失敗，改用本機資料', e); }
+    return prefix + String(max + 1 + (offset || 0)).padStart(3, '0');
+};
+
+function waveOrderEntry(o) {
+    return { id: o.id, orderId: o.id, orderNo: o.orderNo, customer: o.customer || '', address: o.address || '',
+        logistics: o.logistics || '', items: window.orderOpenItems(o), backorder: o.status === 'partial' };
+}
+function waveTotals(entries) {
+    var t = buildWaveSummary(entries);
+    return { summary: t.summaryList, orderCount: entries.length, itemCount: t.summaryList.length, totalQty: t.totalQty, totalSmallQty: t.totalSmallQty };
+}
+function stripUndefined(o) { return JSON.parse(JSON.stringify(o)); }
+
+// 在同一筆交易裡：確認每張訂單還沒被別的波次排走、建立波次、訂單標記「波次中」
+// 已經被排走或已出貨的訂單會略過（回傳 skipped）；全部都不能排時丟出錯誤
+window.createWaveFromOrders = async function(orders, logistics, extra) {
+    var db = window.db;
+    var withId = orders.filter(function(o) { return o.id; });
+    if (withId.length === 0) throw new Error('沒有可以排波次的訂單');
+    for (var attempt = 0; attempt < 5; attempt++) {
+        var waveNo = await window.nextWaveNo(attempt);
+        var waveRef = db.collection('waves').doc(waveNo);
+        try {
+            var res = await db.runTransaction(async function(tx) {
+                var ws = await tx.get(waveRef);
+                if (ws.exists) { var dup = new Error('dup'); dup.retry = true; throw dup; }
+                var snaps = await Promise.all(withId.map(function(o) { return tx.get(db.collection('salesOrders').doc(o.id)); }));
+                var ok = [], skipped = [];
+                snaps.forEach(function(s, i) {
+                    if (s.exists && window.orderWaveable(s.data())) ok.push(Object.assign({}, withId[i], s.data(), { id: s.id }));
+                    else skipped.push(withId[i].orderNo + (s.exists && s.data().waveNo ? '（已在 ' + s.data().waveNo + '）' : '（已出貨或不存在）'));
+                });
+                if (ok.length === 0) throw new Error('選的訂單都已經排進其他波次或已出貨：\n' + skipped.join('\n'));
+                var entries = ok.map(waveOrderEntry);
+                var wave = stripUndefined(Object.assign({
+                    waveNo: waveNo, logistics: logistics || '', status: 'pending', orders: entries
+                }, waveTotals(entries), {
+                    createdAt: new Date().toISOString(),
+                    createdBy: window.getOperatorName ? window.getOperatorName() : ''
+                }, extra || {}));
+                tx.set(waveRef, wave);
+                ok.forEach(function(o) { tx.update(db.collection('salesOrders').doc(o.id), { status: 'inWave', waveNo: waveNo }); });
+                return { wave: wave, ok: ok, skipped: skipped };
+            });
+            res.wave.id = waveRef.id;
+            res.ok.forEach(function(o) {
+                var local = window._orderData.orders.find(function(x) { return x.id === o.id; });
+                if (local) { local.status = 'inWave'; local.waveNo = waveNo; }
+            });
+            window._waveData.waves.push(res.wave);
+            if (typeof saveWaves === 'function') saveWaves();
+            return res;
+        } catch (e) {
+            if (e && e.retry) continue;
+            throw e;
+        }
+    }
+    throw new Error('波次編號一直重複，請稍後再試');
+};
+
+// 追加訂單到還沒完成的波次（同樣在交易裡確認訂單沒被排走、波次還沒完成）
+window.addOrdersToWaveTx = async function(wave, orders) {
+    var db = window.db;
+    var waveRef = db.collection('waves').doc(wave.id);
+    var withId = orders.filter(function(o) { return o.id; });
+    var res = await db.runTransaction(async function(tx) {
+        var ws = await tx.get(waveRef);
+        if (!ws.exists) throw new Error('波次已被刪除');
+        var cur = ws.data();
+        if (cur.status === 'done') throw new Error('波次已完成，不能追加訂單');
+        var snaps = await Promise.all(withId.map(function(o) { return tx.get(db.collection('salesOrders').doc(o.id)); }));
+        var ok = [], skipped = [];
+        snaps.forEach(function(s, i) {
+            if (s.exists && window.orderWaveable(s.data())) ok.push(Object.assign({}, withId[i], s.data(), { id: s.id }));
+            else skipped.push(withId[i].orderNo);
+        });
+        if (ok.length === 0) throw new Error('選的訂單都已經排進其他波次或已出貨');
+        var entries = (cur.orders || []).concat(ok.map(waveOrderEntry));
+        var data = stripUndefined(Object.assign({ orders: entries }, waveTotals(entries), { updatedAt: new Date().toISOString() }));
+        tx.update(waveRef, data);
+        ok.forEach(function(o) { tx.update(db.collection('salesOrders').doc(o.id), { status: 'inWave', waveNo: cur.waveNo }); });
+        return { data: data, ok: ok, skipped: skipped };
+    });
+    Object.assign(wave, res.data);
+    res.ok.forEach(function(o) {
+        var local = window._orderData.orders.find(function(x) { return x.id === o.id; });
+        if (local) { local.status = 'inWave'; local.waveNo = wave.waveNo; }
+    });
+    return res;
+};
+
 window.createWave = async function() {
     const checked = document.querySelectorAll('.wave-order-check:checked');
     if (checked.length === 0) {
@@ -1059,66 +1143,38 @@ window.createWave = async function() {
         return;
     }
 
-    const selectedOrderNos = new Set();
-    checked.forEach(cb => selectedOrderNos.add(cb.dataset.orderNo));
-
-    const selectedOrders = window._orderData.orders.filter(o => selectedOrderNos.has(o.orderNo));
+    // 勾選框帶的是訂單文件 ID（data-id；舊畫面是 data-order-id）
+    const ids = new Set();
+    checked.forEach(cb => ids.add(cb.dataset.id || cb.dataset.orderId));
+    const selectedOrders = window._orderData.orders.filter(o => o.id && ids.has(o.id));
+    if (selectedOrders.length === 0) {
+        alert('找不到勾選的訂單，請重新整理後再試');
+        return;
+    }
 
     const logisticsSet = new Set();
     selectedOrders.forEach(o => logisticsSet.add(o.logistics || '未指定'));
-    const logisticsStr = Array.from(logisticsSet).join(', ');
 
-    const { summaryList, totalQty, totalSmallQty } = buildWaveSummary(selectedOrders);
-
-    const wave = {
-        waveNo: generateWaveNo(),
-        logistics: logisticsStr,
-        status: 'pending',
-        orders: selectedOrders.map(o => ({
-            id: o.id,
-            orderNo: o.orderNo,
-            customer: o.customer,
-            logistics: o.logistics,
-            address: o.address,
-            items: o.items
-        })),
-        summary: summaryList,  // 彙總揀貨清單
-        orderCount: selectedOrders.length,
-        itemCount: summaryList.length,
-        totalQty: totalQty,            // 包裝數量
-        totalSmallQty: totalSmallQty,  // 最小單位數量
-        createdAt: new Date().toISOString(),
-        createdBy: window.getOperatorName ? window.getOperatorName() : 'system'
-    };
-
+    let res;
     try {
-        const docRef = await window.addDoc(window.collection(window.db, 'waves'), wave);
-        wave.id = docRef.id;
-
-        for (const order of selectedOrders) {
-            if (order.id) {
-                await window.updateDoc(window.doc(window.db, 'salesOrders', order.id), {
-                    status: 'inWave',
-                    waveNo: wave.waveNo
-                });
-            }
-        }
-
+        res = await window.createWaveFromOrders(selectedOrders, Array.from(logisticsSet).join(', '));
     } catch (err) {
-        console.error('儲存波次失敗:', err);
+        console.error('建立波次失敗:', err);
+        alert('❌ 建立波次失敗：' + err.message + '\n\n波次沒有建立，訂單狀態沒有變動。');
+        return;
     }
-
-    window._waveData.waves.push(wave);
-    saveWaves();
+    const wave = res.wave;
 
     closeCreateWaveModal();
     refreshWaveList();
+    renderOrderList();
 
     alert('✅ 波次 ' + wave.waveNo + ' 建立成功！\n\n' +
-          '訂單數：' + selectedOrders.length + ' 筆\n' +
-          '品項數：' + summaryList.length + ' 項\n' +
-          '總件數：' + totalQty + ' 件\n\n' +
-          '📱 手機版已同步');
+          '訂單數：' + wave.orderCount + ' 筆\n' +
+          '品項數：' + wave.itemCount + ' 項\n' +
+          '總件數：' + wave.totalQty + ' 件' +
+          (res.skipped.length ? '\n\n⚠️ 以下訂單已被排進其他波次或已出貨，沒有加入：\n' + res.skipped.join('\n') : '') +
+          '\n\n📱 手機版已同步');
 };
 
 window.openWaveExecute = function(waveNo) {
@@ -1384,6 +1440,24 @@ window.completeWave = async function() {
         return;
     }
 
+    // 先取最新進度：手機掃過的項目也要算進來（不然會被當成未揀、庫存不扣）
+    if (wave && wave.id) {
+        try {
+            const snap = await window.db.collection('waves').doc(wave.id).get();
+            if (!snap.exists) { alert('此波次已被刪除（訂單可能已排進其他波次），請重新整理'); return; }
+            const fresh = snap.data();
+            if (fresh.status === 'done') { wave.status = 'done'; alert('此波次已經在其他裝置完成'); closeWaveExecuteModal(); return; }
+            const doneIds = fresh.completedItems || [];
+            wave.completedItems = doneIds;
+            list.forEach(i => { if (doneIds.indexOf(i.id) >= 0) i.completed = true; });
+            renderPickingListV2();
+            updateWaveProgress();
+        } catch (err) {
+            alert('❌ 讀取波次最新進度失敗：' + err.message);
+            return;
+        }
+    }
+
     const completed = list.filter(i => i.completed).length;
     const total = list.filter(i => !i.shortage).length;
 
@@ -1398,7 +1472,8 @@ window.completeWave = async function() {
         }
     }
 
-    if (!confirm(`確定完成波次 ${wave.waveNo}？\n\n已揀：${completed}/${total} 項`)) {
+    const shortN = list.filter(i => i.shortage || !i.completed).length;
+    if (!confirm(`確定完成波次 ${wave.waveNo}？\n\n已揀：${completed}/${total} 項` + (shortN ? `\n缺貨／未揀 ${shortN} 項：相關訂單會標為「部分出貨」，缺的貨之後可以再排波次` : ''))) {
         return;
     }
 
@@ -1413,14 +1488,26 @@ window.completeWave = async function() {
 
     wave.status = 'done';
     wave.completedAt = completedAt;
+    let nShip = 0, nPart = 0, nBack = 0;
     (wave.orders || []).forEach(order => {
-        const local = (window._orderData && window._orderData.orders || []).find(o => o.id && o.id === (order.id || order.orderId));
-        if (local) local.status = 'shipped';
+        const oid = order.id || order.orderId;
+        const r = (wave.orderResults || {})[oid];
+        const local = (window._orderData && window._orderData.orders || []).find(o => o.id && o.id === oid);
+        if (!r) return;
+        if (r.status === 'shipped') nShip++; else if (r.status === 'partial') nPart++; else nBack++;
+        if (local) {
+            local.status = r.status;
+            if (r.status === 'shipped') { local.waveNo = wave.waveNo; delete local.backorderItems; }
+            else { local.waveNo = null; local.lastWaveNo = wave.waveNo; if (r.backorderItems && r.status === 'partial') local.backorderItems = r.backorderItems; }
+        }
     });
 
     saveWaves();
+    renderOrderList();
 
-    alert('✅ 波次 ' + wave.waveNo + ' 已完成！');
+    alert('✅ 波次 ' + wave.waveNo + ' 已完成！\n\n全部出貨：' + nShip + ' 單' +
+        (nPart ? '\n部分出貨：' + nPart + ' 單（缺的貨可以再排波次）' : '') +
+        (nBack ? '\n完全沒出到：' + nBack + ' 單（回到待處理）' : ''));
 
     closeWaveExecuteModal();
     refreshWaveList();

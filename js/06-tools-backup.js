@@ -349,32 +349,42 @@ window.deleteWave = async function(waveNo) {
         return;
     }
 
-    for (var i = 0; i < (wave.orders || []).length; i++) {
-        var order = wave.orders[i];
-        var orderInData = window._orderData.orders.find(function(o) { return o.orderNo === order.orderNo; });
-        if (orderInData) {
-            orderInData.status = 'pending';
-            orderInData.waveNo = null;
-        }
-        if (order.id) {
-            try {
-                await window.updateDoc(window.doc(window.db, 'salesOrders', order.id), {
-                    status: 'pending',
-                    waveNo: null
+    // 同一筆交易：確認資料庫裡的波次還是「待揀貨」、沒有人開始揀（手機可能已經在揀），才刪除並把訂單放回去
+    try {
+        if (wave.id) {
+            var db = window.db;
+            var waveRef = db.collection('waves').doc(wave.id);
+            await db.runTransaction(async function(tx) {
+                var ws = await tx.get(waveRef);
+                if (!ws.exists) throw new Error('波次已經被刪除');
+                var cur = ws.data();
+                if (cur.status !== 'pending' || (cur.completedItems || []).length > 0) {
+                    throw new Error('波次已經開始揀貨或已完成（可能是手機正在揀），不能刪除');
+                }
+                var ids = [];
+                (cur.orders || []).forEach(function(o) { var id = o.id || o.orderId; if (id && ids.indexOf(id) < 0) ids.push(id); });
+                var refs = ids.map(function(id) { return db.collection('salesOrders').doc(id); });
+                var snaps = await Promise.all(refs.map(function(r) { return tx.get(r); }));
+                snaps.forEach(function(sn, i) {
+                    // 只放回還掛在這個波次的訂單（部分出貨過的保留部分出貨狀態）
+                    if (sn.exists && sn.data().waveNo === cur.waveNo) {
+                        tx.update(refs[i], { status: Array.isArray(sn.data().backorderItems) ? 'partial' : 'pending', waveNo: null });
+                    }
                 });
-            } catch (err) {
-                console.error('恢復訂單狀態失敗:', err);
-            }
+                tx.delete(waveRef);
+            });
         }
+    } catch (err) {
+        console.error('刪除波次失敗:', err);
+        alert('❌ 刪除失敗：' + err.message);
+        return;
     }
 
-    if (wave.id) {
-        try {
-            await window.deleteDoc(window.doc(window.db, 'waves', wave.id));
-        } catch (err) {
-            console.error('刪除波次失敗:', err);
-        }
-    }
+    (wave.orders || []).forEach(function(order) {
+        var o = window._orderData.orders.find(function(x) { return x.id && x.id === (order.id || order.orderId); }) ||
+            window._orderData.orders.find(function(x) { return x.orderNo === order.orderNo; });
+        if (o && o.waveNo === waveNo) { o.status = Array.isArray(o.backorderItems) ? 'partial' : 'pending'; o.waveNo = null; }
+    });
 
     var idx = window._waveData.waves.findIndex(function(w) { return w.waveNo === waveNo; });
     if (idx >= 0) window._waveData.waves.splice(idx, 1);
@@ -382,6 +392,7 @@ window.deleteWave = async function(waveNo) {
 
     alert('✅ 波次 ' + waveNo + ' 已刪除');
     refreshWaveList();
+    if (typeof renderOrderList === 'function') renderOrderList();
 };
 
 window.printWaveLabels = function(waveNo) {
@@ -1448,7 +1459,7 @@ window.openClearDataModal = function() {
 
     var waveCount = (window._waveData.waves || []).length;
     var orderCount = (window._orderData.orders || []).length;
-    var pendingOrders = window._orderData.orders.filter(function(o) { return o.status === 'pending'; }).length;
+    var pendingOrders = window._orderData.orders.filter(window.orderWaveable).length;
     var inWaveOrders = window._orderData.orders.filter(function(o) { return o.waveNo; }).length;
 
     modal.innerHTML = '<div class="bg-slate-900 border border-slate-700 rounded-2xl w-[500px] shadow-2xl">' +
@@ -1485,45 +1496,60 @@ window.closeClearDataModal = function() {
 };
 
 window.clearAllWaves = async function() {
-    var waveCount = (window._waveData.waves || []).length;
-    if (waveCount === 0) {
-        alert('目前沒有波次資料');
+    // 已完成（已出貨）的波次是出貨記錄，不清除；也不能把已出貨的訂單改回待處理（會被重排、重複扣庫存）
+    var open = (window._waveData.waves || []).filter(function(w) { return w.status !== 'done'; });
+    var doneCount = (window._waveData.waves || []).length - open.length;
+    if (open.length === 0) {
+        alert('目前沒有未完成的波次' + (doneCount ? '（已完成的 ' + doneCount + ' 個波次是出貨記錄，不會清除）' : ''));
         return;
     }
 
-    if (!confirm('確定要清除所有 ' + waveCount + ' 個波次嗎？\n\n訂單會保留，狀態恢復為待處理\n此操作無法復原')) {
+    if (!confirm('確定要清除 ' + open.length + ' 個未完成的波次嗎？\n\n波次中的訂單恢復為待處理' +
+        (doneCount ? '\n已完成的 ' + doneCount + ' 個波次（出貨記錄）會保留' : '') + '\n此操作無法復原')) {
         return;
     }
 
-    for (var i = 0; i < window._waveData.waves.length; i++) {
-        var wave = window._waveData.waves[i];
-        (wave.orders || []).forEach(function(order) {
-            var o = window._orderData.orders.find(function(x) { return x.orderNo === order.orderNo; });
-            if (o) {
-                o.status = 'pending';
-                o.waveNo = null;
-                if (o.id) {
-                    window.updateDoc(window.doc(window.db, 'salesOrders', o.id), {
-                        status: 'pending', waveNo: null
-                    }).catch(function(err) { console.error(err); });
-                }
+    var db = window.db, cleared = 0, failed = [];
+    for (var i = 0; i < open.length; i++) {
+        var wave = open[i];
+        try {
+            if (wave.id) {
+                var waveRef = db.collection('waves').doc(wave.id);
+                await db.runTransaction(async function(tx) {
+                    var ws = await tx.get(waveRef);
+                    if (!ws.exists) return;
+                    var cur = ws.data();
+                    if (cur.status === 'done') throw new Error('已在其他裝置完成');
+                    var ids = [];
+                    (cur.orders || []).forEach(function(o) { var id = o.id || o.orderId; if (id && ids.indexOf(id) < 0) ids.push(id); });
+                    var refs = ids.map(function(id) { return db.collection('salesOrders').doc(id); });
+                    var snaps = await Promise.all(refs.map(function(r) { return tx.get(r); }));
+                    snaps.forEach(function(sn, k) {
+                        if (sn.exists && sn.data().waveNo === cur.waveNo && sn.data().status === 'inWave') {
+                            tx.update(refs[k], { status: Array.isArray(sn.data().backorderItems) ? 'partial' : 'pending', waveNo: null });
+                        }
+                    });
+                    tx.delete(waveRef);
+                });
             }
-        });
-
-        if (wave.id) {
-            window.deleteDoc(window.doc(window.db, 'waves', wave.id)).catch(function(err) {
-                console.error(err);
+            (wave.orders || []).forEach(function(order) {
+                var o = window._orderData.orders.find(function(x) { return x.orderNo === order.orderNo; });
+                if (o && o.waveNo === wave.waveNo && o.status === 'inWave') { o.status = Array.isArray(o.backorderItems) ? 'partial' : 'pending'; o.waveNo = null; }
             });
+            window._waveData.waves = window._waveData.waves.filter(function(w) { return w !== wave; });
+            cleared++;
+        } catch (err) {
+            console.error(err);
+            failed.push(wave.waveNo + '：' + err.message);
         }
     }
 
-    window._waveData.waves = [];
     saveWaves();
     refreshWaveList();
     renderOrderList();
     closeClearDataModal();
 
-    alert('已清除 ' + waveCount + ' 個波次！');
+    alert('已清除 ' + cleared + ' 個波次！' + (failed.length ? '\n\n❌ 沒有清除：\n' + failed.join('\n') : ''));
 };
 
 window.clearAllOrders = async function() {
@@ -1585,9 +1611,7 @@ window.clearLocalStorage = function() {
 };
 
         window.openCreateWaveModal = function() {
-            var orders = (window._orderData && window._orderData.orders) ? window._orderData.orders.filter(function(o) {
-                return o.status === 'pending' || o.status === 'confirmed';
-            }) : [];
+            var orders = (window._orderData && window._orderData.orders) ? window._orderData.orders.filter(window.orderWaveable) : [];
 
             if (orders.length === 0) {
                 alert('目前沒有待出貨訂單');
@@ -1634,9 +1658,13 @@ window.clearLocalStorage = function() {
                 html += '<td class="p-2 font-mono text-cyan-400">' + (o.orderNo || o.id) + '</td>';
                 html += '<td class="p-2 text-white">' + (o.customer || '-') + '</td>';
                 html += '<td class="p-2 text-purple-400">' + (o.logistics || '-') + '</td>';
-                html += '<td class="p-2 text-slate-300">' + (o.productName || '-') + '</td>';
-                html += '<td class="p-2 text-right text-yellow-400 font-bold">' + (o.quantity || 0) + '</td>';
-                html += '<td class="p-2 text-slate-400 text-xs">' + (o.shipDate || '-') + '</td>';
+                var its = window.orderOpenItems(o);
+                var pk = its.reduce(function(t, it) { return t + (parseFloat(it.packageQty) || 1); }, 0);
+                var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+                html += '<td class="p-2 text-slate-300">' + esc(its.map(function(it) { return it.productName; }).slice(0, 2).join('、') + (its.length > 2 ? ' 等 ' + its.length + ' 項' : '')) +
+                    (Array.isArray(o.backorderItems) ? ' <span class="text-[10px] px-1 rounded bg-amber-900/60 text-amber-300">欠貨</span>' : '') + '</td>';
+                html += '<td class="p-2 text-right text-yellow-400 font-bold">' + pk + '</td>';
+                html += '<td class="p-2 text-slate-400 text-xs">' + esc(o.shipDate || o.orderDate || '-') + '</td>';
                 html += '</tr>';
             });
 
@@ -1653,7 +1681,7 @@ window.clearLocalStorage = function() {
 
             var filtered = (window._waveCreateOrders || []).filter(function(o) {
                 if (logisticsFilter && o.logistics !== logisticsFilter) return false;
-                if (dateFilter && o.shipDate !== dateFilter) return false;
+                if (dateFilter && window.normalizeDateValue(o.shipDate || o.orderDate) !== dateFilter) return false;
                 return true;
             });
 
@@ -1782,14 +1810,8 @@ window.clearLocalStorage = function() {
                 return;
             }
 
-            // 與建立波次相同：可追加的是「待處理 / 已確認」且尚未在任何波次中的銷貨訂單
-            var inWaveNos = {};
-            window._waveData.waves.forEach(function(w) {
-                (w.orders || []).forEach(function(o) { inWaveNos[o.orderNo] = true; });
-            });
-            var availableOrders = ((window._orderData && window._orderData.orders) || []).filter(function(o) {
-                return (o.status === 'pending' || o.status === 'confirmed') && !inWaveNos[o.orderNo];
-            });
+            // 與建立波次相同：可追加的是「待處理 / 已確認 / 部分出貨」且尚未在任何波次中的銷貨訂單
+            var availableOrders = ((window._orderData && window._orderData.orders) || []).filter(window.orderWaveable);
 
             if (availableOrders.length === 0) {
                 alert('目前沒有可追加的訂單\n\n所有待出貨訂單都已加入波次中');
@@ -1798,7 +1820,7 @@ window.clearLocalStorage = function() {
 
             var msg = '可追加到波次 ' + waveNo + ' 的訂單：\n\n';
             availableOrders.forEach(function(o, idx) {
-                msg += (idx + 1) + '. ' + o.orderNo + ' - ' + (o.customer || '') + ' (' + (o.items || []).length + ' 項)\n';
+                msg += (idx + 1) + '. ' + o.orderNo + ' - ' + (o.customer || '') + ' (' + window.orderOpenItems(o).length + ' 項)\n';
             });
             msg += '\n請輸入要追加的序號或訂單編號（多筆用逗號分隔）：';
 
@@ -1815,36 +1837,15 @@ window.clearLocalStorage = function() {
                 return;
             }
 
-            wave.orders = (wave.orders || []).concat(addedOrders.map(function(o) {
-                return { id: o.id, orderNo: o.orderNo, customer: o.customer, logistics: o.logistics, address: o.address, items: o.items };
-            }));
-            var totals = buildWaveSummary(wave.orders);
-            wave.summary = totals.summaryList;
-            wave.orderCount = wave.orders.length;
-            wave.itemCount = totals.summaryList.length;
-            wave.totalQty = totals.totalQty;
-            wave.totalSmallQty = totals.totalSmallQty;
-            wave.updatedAt = new Date().toISOString();
-
+            var res;
             try {
-                if (wave.id) {
-                    await window.updateDoc(window.doc(window.db, 'waves', wave.id), {
-                        orders: wave.orders, summary: wave.summary, orderCount: wave.orderCount,
-                        itemCount: wave.itemCount, totalQty: wave.totalQty, totalSmallQty: wave.totalSmallQty,
-                        updatedAt: wave.updatedAt
-                    });
-                }
-                for (var k = 0; k < addedOrders.length; k++) {
-                    if (addedOrders[k].id) {
-                        await window.updateDoc(window.doc(window.db, 'salesOrders', addedOrders[k].id), { status: 'inWave', waveNo: wave.waveNo });
-                    }
-                    addedOrders[k].status = 'inWave';
-                }
+                res = await window.addOrdersToWaveTx(wave, addedOrders);
             } catch (err) {
                 console.error('追加訂單失敗:', err);
                 alert('❌ 追加訂單失敗：' + err.message);
                 return;
             }
+            addedOrders = res.ok;
 
             if (wave.status === 'picking' && window._waveData.currentWave &&
                 window._waveData.currentWave.waveNo === waveNo) {
