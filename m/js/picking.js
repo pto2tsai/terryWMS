@@ -77,6 +77,7 @@ function renderPickingList() {
     const total = pickingItems.filter(function(i) { return !i.shortage; }).length;
     $('picking-progress').innerText = completed + '/' + total;
     if (!currentWave) {
+        $('picking-next').innerHTML = '';
         list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-clipboard-list"></i><p>請先選擇波次</p></div>';
         return;
     }
@@ -84,6 +85,7 @@ function renderPickingList() {
         list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-clipboard-list"></i><p>無揀貨項目</p></div>';
         return;
     }
+    renderNextStop();
     // 未揀的排前面（依動線），已揀的排後面
     const ordered = pickingItems.filter(function(i) { return !i.completed && !i.shortage; })
         .concat(pickingItems.filter(function(i) { return i.shortage; }))
@@ -101,6 +103,32 @@ function renderPickingList() {
             '<div class="item-row"><span class="item-detail">' + esc(item.palletId || '-') + ' | ' + esc(item.batchNo || '') + ' ' + esc(item.expDate || '') + '</span>' +
             '<span class="item-qty">' + esc(item.pickQty) + '</span></div></div>';
     }).join('');
+}
+
+// 下一站：依動線的第一個待揀項目，大字顯示儲位簡碼、品項、件數；後面幾站的儲位
+function renderNextStop() {
+    const box = $('picking-next');
+    const pending = pickingItems.filter(function(i) { return !i.completed && !i.shortage; });
+    if (pending.length === 0) {
+        box.innerHTML = pickingItems.length ? '<div class="next-stop done">🎉 全部揀完，按下面「完成波次」</div>' : '';
+        return;
+    }
+    const n = pending[0];
+    const code = window.locationShortCode(n.locationId) || n.locationId;
+    const sameLoc = pending.filter(function(i) { return i.locationId === n.locationId; }).length;
+    const stops = [];
+    pending.forEach(function(i) {
+        const c = window.locationShortCode(i.locationId) || i.locationId;
+        if (i.locationId !== n.locationId && stops.indexOf(c) < 0) stops.push(c);
+    });
+    box.innerHTML = '<div class="next-stop">' +
+        '<div class="ns-label">下一站（還剩 ' + pending.length + ' 項）</div>' +
+        '<div class="ns-code">' + esc(code) + '</div>' +
+        (code !== n.locationId ? '<div class="ns-loc">' + esc(n.locationId) + '</div>' : '') +
+        '<div class="ns-item"><span>' + esc(n.productName) + ' ' + esc(n.spec || '') + '</span><span class="ns-qty">拿 ' + esc(n.pickQty) + ' 件</span></div>' +
+        '<div class="ns-sub">板號 ' + esc(n.palletId || '-') + (n.expDate ? '　效期 ' + esc(n.expDate) : '') + (sameLoc > 1 ? '　（這個儲位要揀 ' + sameLoc + ' 板）' : '') + '</div>' +
+        (stops.length ? '<div class="ns-after">接著：' + stops.slice(0, 4).map(esc).join(' → ') + (stops.length > 4 ? ' …' : '') + '</div>' : '') +
+        '</div>';
 }
 
 // 掃板號（或尾碼）或儲位標籤都可以
