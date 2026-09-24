@@ -395,33 +395,33 @@ window.printWaveLabels = function(waveNo) {
 
 // 所有可選的功能定義
 window._allFunctions = [
-    { id: 'visual-map', name: '倉庫地圖', icon: 'fa-map', color: 'text-cyan-400', group: '數位倉庫' },
-    { id: 'inventory-query', name: '庫存查詢', icon: 'fa-magnifying-glass', color: 'text-cyan-400', group: '數位倉庫' },
-    { id: 'dashboard', name: '戰情分析', icon: 'fa-chart-pie', color: 'text-white', group: '數位倉庫' },
-    { id: 'work-board', name: '工單看板', icon: 'fa-tv', color: 'text-yellow-400', group: '數位倉庫' },
-    { id: 'unified-inbound', name: '智能入庫中心', icon: 'fa-bolt', color: 'text-emerald-400', group: '入庫管理' },
-    { id: 'pre-inbound', name: '貨櫃入庫作業', icon: 'fa-ship', color: 'text-cyan-400', group: '入庫管理' },
-    { id: 'approval', name: '待財務核准', icon: 'fa-clipboard-check', color: 'text-yellow-400', group: '入庫管理' },
-    { id: 'wave-picking', name: '波次揀貨', icon: 'fa-layer-group', color: 'text-orange-400', group: '出庫管理' },
-    { id: 'picking-rm', name: '原料領用', icon: 'fa-fish', color: 'text-red-400', group: '出庫管理' },
-    { id: 'move', name: '智能調度', icon: 'fa-layer-group', color: 'text-blue-400', group: '庫存異動' },
-    { id: 'merge', name: '板號異動', icon: 'fa-arrows-turn-to-dots', color: 'text-blue-400', group: '庫存異動' },
-    { id: 'transfer', name: '倉庫調撥', icon: 'fa-right-left', color: 'text-blue-400', group: '庫存異動' },
-    { id: 'stocktake', name: '庫存盤點', icon: 'fa-clipboard-check', color: 'text-blue-400', group: '庫存異動' },
-    { id: 'external-warehouse', name: '外倉管理', icon: 'fa-building', color: 'text-purple-400', group: '外部倉庫' },
-    { id: 'picking-reports', name: '報表中心', icon: 'fa-chart-pie', color: 'text-green-400', group: '理貨報表' },
-    { id: 'expiry-management', name: '效期管理', icon: 'fa-calendar-xmark', color: 'text-red-400', group: '理貨報表' },
-    { id: 'inventory-log', name: '異動查詢', icon: 'fa-clock-rotate-left', color: 'text-orange-400', group: '理貨報表' },
-    { id: 'product-analysis', name: '出貨分析', icon: 'fa-chart-bar', color: 'text-orange-400', group: '理貨報表' },
-    { id: 'warehouse-heatmap', name: '熱力圖', icon: 'fa-fire', color: 'text-orange-400', group: '理貨報表' },
-    { id: 'consignment', name: '寄倉管理', icon: 'fa-box-archive', color: 'text-amber-400', group: '倉租管理' },
-    { id: 'rental-report', name: '倉租報表', icon: 'fa-file-invoice-dollar', color: 'text-emerald-400', group: '倉租管理' },
-    { id: 'rental-settings', name: '費率設定', icon: 'fa-sliders', color: 'text-blue-400', group: '倉租管理' },
-    { id: 'user-management', name: '使用者管理', icon: 'fa-users-gear', color: 'text-blue-400', group: '系統設定' },
-    { id: 'product-master', name: '品項主檔', icon: 'fa-box', color: 'text-slate-400', group: '系統設定' },
-    { id: 'label-print', name: '標籤列印', icon: 'fa-print', color: 'text-purple-400', group: '系統設定' },
-    { id: 'data-import', name: '資料匯入', icon: 'fa-file-import', color: 'text-amber-400', group: '系統設定' },
-    { id: 'dev-tools', name: '備份與維護', icon: 'fa-wrench', color: 'text-orange-400', group: '系統設定' }
+    { id: 'visual-map', name: '倉庫地圖', icon: 'fa-map', color: 'text-cyan-400', group: '查詢與報表' },
+    { id: 'inventory-query', name: '庫存查詢', icon: 'fa-magnifying-glass', color: 'text-cyan-400', group: '查詢與報表' },
+    { id: 'dashboard', name: '戰情分析', icon: 'fa-chart-pie', color: 'text-white', group: '其他分析' },
+    { id: 'work-board', name: '工單看板', icon: 'fa-tv', color: 'text-yellow-400', group: '其他分析' },
+    { id: 'unified-inbound', name: '智能入庫中心', icon: 'fa-bolt', color: 'text-emerald-400', group: '入庫' },
+    { id: 'pre-inbound', name: '貨櫃入庫作業', icon: 'fa-ship', color: 'text-cyan-400', group: '入庫' },
+    { id: 'approval', name: '待財務核准', icon: 'fa-clipboard-check', color: 'text-yellow-400', group: '入庫' },
+    { id: 'wave-picking', name: '波次揀貨', icon: 'fa-layer-group', color: 'text-orange-400', group: '出貨' },
+    { id: 'picking-rm', name: '原料領用', icon: 'fa-fish', color: 'text-red-400', group: '出貨' },
+    { id: 'move', name: '智能調度', icon: 'fa-layer-group', color: 'text-blue-400', group: '庫內作業' },
+    { id: 'merge', name: '板號異動', icon: 'fa-arrows-turn-to-dots', color: 'text-blue-400', group: '庫內作業' },
+    { id: 'transfer', name: '倉庫調撥', icon: 'fa-right-left', color: 'text-blue-400', group: '庫內作業' },
+    { id: 'stocktake', name: '庫存盤點', icon: 'fa-clipboard-check', color: 'text-blue-400', group: '庫內作業' },
+    { id: 'external-warehouse', name: '外倉管理', icon: 'fa-building', color: 'text-purple-400', group: '庫內作業' },
+    { id: 'picking-reports', name: '報表中心', icon: 'fa-chart-pie', color: 'text-green-400', group: '查詢與報表' },
+    { id: 'expiry-management', name: '效期管理', icon: 'fa-calendar-xmark', color: 'text-red-400', group: '查詢與報表' },
+    { id: 'inventory-log', name: '異動查詢', icon: 'fa-clock-rotate-left', color: 'text-orange-400', group: '查詢與報表' },
+    { id: 'product-analysis', name: '出貨分析', icon: 'fa-chart-bar', color: 'text-orange-400', group: '其他分析' },
+    { id: 'warehouse-heatmap', name: '熱力圖', icon: 'fa-fire', color: 'text-orange-400', group: '其他分析' },
+    { id: 'consignment', name: '寄倉管理', icon: 'fa-box-archive', color: 'text-amber-400', group: '倉租' },
+    { id: 'rental-report', name: '倉租報表', icon: 'fa-file-invoice-dollar', color: 'text-emerald-400', group: '倉租' },
+    { id: 'rental-settings', name: '費率設定', icon: 'fa-sliders', color: 'text-blue-400', group: '倉租' },
+    { id: 'user-management', name: '使用者管理', icon: 'fa-users-gear', color: 'text-blue-400', group: '設定' },
+    { id: 'product-master', name: '品項主檔', icon: 'fa-box', color: 'text-slate-400', group: '設定' },
+    { id: 'label-print', name: '標籤列印', icon: 'fa-print', color: 'text-purple-400', group: '設定' },
+    { id: 'data-import', name: '資料匯入', icon: 'fa-file-import', color: 'text-amber-400', group: '設定' },
+    { id: 'dev-tools', name: '備份與維護', icon: 'fa-wrench', color: 'text-orange-400', group: '設定' }
 ];
 
 // 暫存選取的功能（編輯中）
@@ -704,17 +704,22 @@ window.checkBackupReminder = function() {
 };
 
 window.showBackupReminder = function(message) {
+    // 只有管理員能備份，其他人看到也沒辦法處理
+    if (!window.currentUser || window.currentUser.role !== 'admin') return;
+    if (document.getElementById('backup-reminder')) return;
     var reminder = document.createElement('div');
     reminder.id = 'backup-reminder';
-    reminder.className = 'fixed bottom-4 right-4 bg-orange-600 text-white p-4 rounded-lg shadow-lg z-50 max-w-sm';
+    // 放在左下角（選單底部）：不要蓋住各畫面右下角的主要按鈕（送出盤點、確認執行調撥…）
+    reminder.className = 'fixed bg-orange-600 text-white p-3 rounded-lg shadow-lg z-50 text-sm';
+    reminder.style.cssText = 'left:8px;bottom:8px;width:208px';
     reminder.innerHTML =
         '<div class="flex items-start gap-3">' +
-        '<i class="fa-solid fa-database text-2xl"></i>' +
+        '<i class="fa-solid fa-database text-lg"></i>' +
         '<div class="flex-1">' +
         '<div class="font-bold">備份提醒</div>' +
         '<div class="text-sm mt-1">' + message + '</div>' +
         '<div class="flex gap-2 mt-3">' +
-        '<button onclick="switchTab(\'dev-tools\'); closeBackupReminder();" class="bg-white text-orange-600 px-3 py-1 rounded text-sm font-bold">立即備份</button>' +
+        '<button onclick="goTab(\'dev-tools\'); closeBackupReminder();" class="bg-white text-orange-600 px-3 py-1 rounded text-sm font-bold">立即備份</button>' +
         '<button onclick="closeBackupReminder()" class="text-white/80 hover:text-white text-sm">稍後提醒</button>' +
         '</div></div>' +
         '<button onclick="closeBackupReminder()" class="text-white/60 hover:text-white"><i class="fa-solid fa-xmark"></i></button>' +

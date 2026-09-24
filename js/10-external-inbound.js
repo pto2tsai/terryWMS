@@ -289,7 +289,12 @@
             var batch = document.getElementById('in-batch').value.trim();
             var exp = document.getElementById('in-exp').value;
             var vendor = document.getElementById('in-vendor').value.trim();
-            var category = document.getElementById('in-category').value || 'Raw';
+            var category = document.getElementById('in-category').value;
+            if (!category && window.requireInboundType && !window.requireInboundType()) return null;
+            category = category || 'Raw';
+            var companyRadio = document.querySelector('input[name="in-company"]:checked');
+            var company = companyRadio ? companyRadio.value : '崇文';
+            var productCode = (document.getElementById('in-product-code') || {}).value || '';
 
             var productType = 'fixed';
             var radio = document.querySelector('input[name="in-product-type"]:checked');
@@ -346,6 +351,14 @@
                 }
             }
 
+            if (!isExternal) {
+                var typeNames = { Raw: '採購', FG: '成品', WIP: '半成品', RM: '原料', Return: '退庫' };
+                if (!confirm('🚜 交給堆高機\n\n' + name + (spec ? ' ' + spec : '') + '　' + qty + ' 件' +
+                    '\n指定儲位：' + loc + '　公司：' + company + '\n批號：' + (batch || '-') + '　效期：' + exp +
+                    '\n類型：' + (typeNames[category] || category) +
+                    '\n\n按「確定」會建立入庫單並發到手機「入庫任務」。\n堆高機上架後掃儲位才會入帳（放別的儲位也可以，以實際儲位為準）。' +
+                    (category === 'Raw' ? '\n採購進貨會同時送財務對帳。' : ''))) return null;
+            }
             var now = new Date();
             var docNo = await window.nextDocNo('IN');
 
@@ -355,6 +368,8 @@
 
             var order = {
                 docNo: docNo,
+                company: company,
+                productCode: productCode,
                 type: category,
                 typeName: inboundTypeNames[category] || category,
                 isExternal: isExternal,
@@ -399,9 +414,9 @@
                     await createExternalStock(order);
                     alert('✅ 外倉入庫成功！\n單號：' + docNo + '\n' + locationInfo + expiryWarningText);
                 } else if (needsApproval) {
-                    alert('✅ 入庫單建立成功！\n單號：' + docNo + '\n' + locationInfo + expiryWarningText + '\n\n⚠️ 採購進貨已通知財務審核');
+                    alert('✅ 已發到手機「入庫任務」\n單號：' + docNo + '\n' + locationInfo + expiryWarningText + '\n\n堆高機上架掃儲位後就會入帳。\n採購進貨已送財務對帳（不影響入帳）。');
                 } else {
-                    alert('✅ 入庫單建立成功！\n單號：' + docNo + '\n' + locationInfo + expiryWarningText + '\n');
+                    alert('✅ 已發到手機「入庫任務」\n單號：' + docNo + '\n' + locationInfo + expiryWarningText + '\n\n堆高機上架掃儲位後就會入帳。');
                 }
 
                 clearInboundForm();

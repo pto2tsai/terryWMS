@@ -13,18 +13,6 @@
     
     // ========== 1. 智能入庫核心邏輯 ==========
     
-    window.toggleAdvancedOptions = function() {
-        var options = document.getElementById('advanced-options');
-        var icon = document.getElementById('advanced-icon');
-        if (!options) return;
-        if (options.classList.contains('hidden')) {
-            options.classList.remove('hidden');
-            if (icon) { icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-up'); }
-        } else {
-            options.classList.add('hidden');
-            if (icon) { icon.classList.remove('fa-chevron-up'); icon.classList.add('fa-chevron-down'); }
-        }
-    };
     
     window.smartInbound = async function(mode) {
         var formData = getInboundFormData();
@@ -32,6 +20,7 @@
         
         // 先驗證基本資料
         if (!formData.productName) { alert('❌ 請選擇品項'); return; }
+        if (!formData.isExternal && mode !== 'external' && !window.requireInboundType()) return;
         if (!formData.quantity || formData.quantity <= 0) { alert('❌ 請填寫數量'); return; }
         if (!formData.expDate) { alert('❌ 請填寫效期'); return; }
         if (formData.productType === 'variable' && (!formData.totalWeight || formData.totalWeight <= 0)) {
@@ -60,10 +49,14 @@
         
         if (formData.isExternal || mode === 'external') {
             await executeExternalInbound(formData, formData.warehouseId);
+        } else if (mode === 'forklift') {
+            // 交給堆高機：建立待執行入庫單並發到手機入庫任務（createInboundOrder 會確認、驗證）
+            var order = await window.createInboundOrder();
+            if (order && wantPrintSlip() && typeof window.printInboundSlip === 'function') window.printInboundSlip(order);
         } else if (mode === 'print') {
-            await executeMainInboundWithPrint(formData);
+            await executeMainInbound(formData, true);
         } else if (mode === 'direct') {
-            await executeMainInboundDirect(formData);
+            await executeMainInbound(formData, wantPrintSlip());
         }
     };
     
@@ -150,46 +143,41 @@
         } catch (e) { alert('❌ 入庫失敗：' + e.message); }
     }
     
-    async function executeMainInboundDirect(data) {
-        if (!confirm('確定入庫到 ' + data.locationId + '？\n\n品名：' + data.productName + '\n數量：' + data.quantity)) return;
-        
-        try {
-            var now = new Date();
-            var docNo = await window.nextDocNo('IN');
-            
-            await window.addDoc(window.collection(window.db, 'pallets'), { palletId: docNo, company: data.company, productCode: data.productCode || '', productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight, locationId: data.locationId, vendor: data.vendor, category: data.category, productType: data.productType, source: 'SmartInbound', createdAt: now.toISOString() });
-            
-            if (typeof window.logInventoryChange === 'function') {
-                await window.logInventoryChange({ type: 'inbound', company: data.company, productName: data.productName, spec: data.spec, quantity: data.quantity, totalWeight: data.totalWeight, quantityChange: data.quantity, locationId: data.locationId, batchNo: data.batchNo, palletId: docNo, expDate: data.expDate, note: '入庫' });
-            }
-            
-            alert('✅ 入庫成功！\n\n儲位：' + data.locationId + '\n品名：' + data.productName + '\n數量：' + data.quantity);
-            if (typeof clearInboundForm === 'function') clearInboundForm();
-        } catch (e) { alert('❌ 入庫失敗：' + e.message); }
+    function wantPrintSlip() {
+        var cb = document.getElementById('in-print-slip');
+        return !!(cb && cb.checked);
     }
-    
-    async function executeMainInboundWithPrint(data) {
-        if (!confirm('確定入庫並列印棧板插單？\n\n儲位：' + data.locationId + '\n品名：' + data.productName + '\n數量：' + data.quantity)) return;
-        
+
+    function inboundSummary(data) {
+        var typeNames = { Raw: '採購', FG: '成品', WIP: '半成品', RM: '原料', Return: '退庫' };
+        return data.productName + (data.spec ? ' ' + data.spec : '') + '　' + data.quantity + ' 件' +
+            (data.totalWeight ? '（' + data.totalWeight + ' kg）' : '') +
+            '\n儲位：' + data.locationId + '　公司：' + data.company +
+            '\n批號：' + (data.batchNo || '-') + '　效期：' + (data.expDate || '-') +
+            '\n類型：' + (typeNames[data.category] || data.category || '-');
+    }
+
+    // 馬上入帳：棧板與異動記錄在同一批寫入（不會只寫一半）
+    async function executeMainInbound(data, print) {
+        if (!confirm('📦 馬上入帳\n\n' + inboundSummary(data) +
+            '\n\n按「確定」會建立 1 板庫存並寫入異動記錄' + (print ? '，然後開啟棧板單列印' : '') + '。')) return;
         try {
             var now = new Date();
             var docNo = await window.nextDocNo('IN');
-            
-            await window.addDoc(window.collection(window.db, 'pallets'), { palletId: docNo, company: data.company, productCode: data.productCode || '', productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight, locationId: data.locationId, vendor: data.vendor, category: data.category, productType: data.productType, source: 'SmartInbound', createdAt: now.toISOString() });
-            
-            if (typeof window.logInventoryChange === 'function') {
-                await window.logInventoryChange({ type: 'inbound', company: data.company, productName: data.productName, spec: data.spec, quantity: data.quantity, totalWeight: data.totalWeight, quantityChange: data.quantity, locationId: data.locationId, batchNo: data.batchNo, palletId: docNo, expDate: data.expDate, note: '入庫' });
-            }
-            
-            if (typeof window.printInboundSlip === 'function') {
+            var batch = window.db.batch();
+            var palletDoc = window.db.collection('pallets').doc();
+            batch.set(palletDoc, normalizeForWrite(palletDoc, { palletId: docNo, company: data.company, productCode: data.productCode || '', productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight, locationId: data.locationId, vendor: data.vendor, category: data.category, productType: data.productType, source: 'SmartInbound', createdAt: now.toISOString() }));
+            batch.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({ type: 'inbound', company: data.company, productName: data.productName, spec: data.spec, quantity: data.quantity, quantityChange: data.quantity, weight: data.totalWeight || 0, weightChange: data.totalWeight || 0, locationId: data.locationId, batchNo: data.batchNo, palletId: docNo, expDate: data.expDate, note: '入庫' }));
+            await batch.commit();
+            if (print && typeof window.printInboundSlip === 'function') {
                 window.printInboundSlip({ docNo, productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, quantity: data.quantity, locationId: data.locationId, vendor: data.vendor });
             }
-            
-            alert('✅ 入庫成功！已開啟列印視窗\n\n儲位：' + data.locationId + '\n品名：' + data.productName);
+            alert('✅ 已入帳\n\n板號：' + docNo + '\n' + data.productName + ' ' + data.quantity + ' 件 @ ' + data.locationId +
+                (data.locationId === 'TEMP-IN' ? '\n\n貨在進貨暫存區，堆高機可以用手機「上架」放到儲位。' : ''));
             if (typeof clearInboundForm === 'function') clearInboundForm();
-        } catch (e) { alert('❌ 入庫失敗：' + e.message); }
+        } catch (e) { alert('❌ 入帳失敗：' + e.message + '\n\n庫存沒有變動。'); }
     }
-    
+
     // ========== 2. 倉庫切換 ==========
     
     var originalOnWarehouseChange = window.onWarehouseChange;
@@ -247,10 +235,10 @@
         // 只檢查基本資料（品名、效期、數量），儲位改為提交時檢查
         var hasBasicData = name && exp && qty > 0;
         
-        var btnPrint = document.getElementById('btn-inbound-print');
-        var btnDirect = document.getElementById('btn-inbound-direct');
-        if (btnPrint) btnPrint.disabled = !hasBasicData;
-        if (btnDirect) btnDirect.disabled = !hasBasicData;
+        ['btn-inbound-direct', 'btn-inbound-forklift'].forEach(function(id) {
+            var b = document.getElementById(id);
+            if (b) b.disabled = !hasBasicData;
+        });
         
         var btnExternal = document.getElementById('btn-inbound-external');
         if (btnExternal) btnExternal.disabled = !hasBasicData;

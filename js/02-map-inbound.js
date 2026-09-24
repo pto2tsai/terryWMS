@@ -844,12 +844,27 @@
             document.getElementById('prev-qty').innerText = document.getElementById('in-qty').value || '0';
         }
 
+        // 入庫類型必選（選過之後下一筆沿用）；沒選時提示並閃一下
+        window.requireInboundType = function() {
+            var cat = document.getElementById('in-category');
+            if (cat && cat.value) return true;
+            alert('請先選「入庫類型」：採購／成品／半成品／原料\n\n（在左邊公司別下面；採購進貨會送財務對帳）');
+            var hint = document.getElementById('in-type-hint');
+            if (hint) { hint.innerText = '← 請選一個'; hint.className = 'ml-auto text-[10px] text-red-400 font-bold animate-pulse'; }
+            return false;
+        };
+
         window.selectInboundType = function(type) {
             var typeSelect = document.getElementById('in-type-select');
             if (typeSelect) typeSelect.value = type;
             // 入庫單與直接入庫都讀 in-category（之前按鈕沒寫入，所有入庫都被當成「採購」）
             var cat = document.getElementById('in-category');
             if (cat) cat.value = type;
+            var hint = document.getElementById('in-type-hint');
+            if (hint) {
+                hint.innerText = type === 'Raw' ? '採購會送財務對帳（不影響入帳）' : '';
+                hint.className = 'ml-auto text-[10px] text-slate-500';
+            }
 
             document.querySelectorAll('.inbound-type-btn').forEach(function(btn) {
                 btn.classList.remove('active', 'border-blue-500', 'bg-blue-900/50', 'text-white');

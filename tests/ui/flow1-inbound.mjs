@@ -10,7 +10,7 @@ await page.click("#modal-product-select [onclick^=\"selectProductFromModal('P001
 H.note('選品後：' + JSON.stringify(await page.evaluate(()=>['in-name','in-product-code','in-spec'].map(i=>document.getElementById(i).value))));
 await page.fill('#in-batch', 'B240901'); await page.fill('#in-exp-year', '2027'); await page.fill('#in-exp-month', '03'); await page.fill('#in-exp-day', '15');
 await page.fill('#in-qty', '40');
-await page.click('#btn-type-Raw').catch(e=>H.note('type btn: '+e.message));
+await page.click('#btn-type-Raw'); await page.uncheck('#in-print-slip');
 await page.fill('#in-loc', 'I-A-01-3F');
 await page.dispatchEvent('#in-loc', 'input');
 const btnVisible = await page.isVisible('#btn-inbound-direct'); H.note('確認入庫按鈕可見: ' + btnVisible);

@@ -1289,6 +1289,7 @@
             if (typeof window.loadConsignmentsFromFirebase === 'function') window.loadConsignmentsFromFirebase();
         });
 
-        setInboundMode('Raw');
-        switchTab('visual-map', null);
+        // 列印棧板單勾選：記住上次的選擇
+        try { var ps = localStorage.getItem('wms_print_slip'); if (ps !== null && document.getElementById('in-print-slip')) document.getElementById('in-print-slip').checked = ps === '1'; } catch (e) {}
+        switchTab('home', null);
 

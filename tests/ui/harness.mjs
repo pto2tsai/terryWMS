@@ -69,7 +69,8 @@ export async function openApp(base, email, { mobile = false, fakeVideo = null } 
     const u = r.request().url();
     const m = u.match(/firebasejs\/10\.7\.1\/(firebase-[a-z]+-compat\.js)/);
     if (m) return r.fulfill({ body: fs.readFileSync(path.join(NM, 'firebase10', m[1])), contentType: 'text/javascript' });
-    if (u.includes('cdn.tailwindcss.com')) return r.fulfill({ body: TAILWIND_STUB, contentType: 'text/javascript' });
+    // 截圖看版面時可用 TW_CSS=編好的 tailwind.css 換成真正的樣式（平常測試用簡化版即可）
+    if (u.includes('cdn.tailwindcss.com')) return r.fulfill({ body: process.env.TW_CSS ? "window.tailwind={};(function(){var s=document.createElement('style');s.textContent=" + JSON.stringify(fs.readFileSync(process.env.TW_CSS, 'utf8')) + ";document.head.appendChild(s);})();" : TAILWIND_STUB, contentType: 'text/javascript' });
     for (const k in LIBS) if (u.includes(k)) return r.fulfill({ body: fs.readFileSync(path.join(NM, LIBS[k])), contentType: 'text/javascript' });
     return r.fulfill({ body: '', contentType: u.endsWith('.css') ? 'text/css' : 'text/javascript' });
   });

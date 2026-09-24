@@ -22,8 +22,8 @@ async function fillInbound(qty, loc) {
   await H.nav(D.page, 'unified-inbound');
   await D.page.click("button[onclick=\"openProductSelectModal('inbound')\"]"); await D.page.waitForTimeout(600);
   await D.page.click("#modal-product-select [onclick^=\"selectProductFromModal('TEST001'\"]"); await D.page.waitForTimeout(600);
-  if (!(await D.page.isVisible('#btn-type-FG'))) await D.page.click('#btn-more-options');
   await D.page.click('#btn-type-FG');
+  if (await D.page.isChecked('#in-print-slip')) await D.page.uncheck('#in-print-slip');
   await D.page.fill('#in-batch', 'TEST01'); await D.page.fill('#in-exp-year', '2027'); await D.page.fill('#in-exp-month', '12'); await D.page.fill('#in-exp-day', '31');
   await D.page.fill('#in-qty', String(qty));
   await D.page.fill('#in-loc', loc); await D.page.dispatchEvent('#in-loc', 'input');
@@ -31,8 +31,7 @@ async function fillInbound(qty, loc) {
 
 // ===== 1a. 入庫（排程）：電腦建立待執行入庫單 → 手機入庫任務掃儲位 → 入帳 =====
 await fillInbound(50, 'I-A-01-1F');
-await D.page.click("button[onclick=\"toggleAdvancedOptions()\"]"); await D.page.waitForTimeout(300);
-await D.page.click("button[onclick=\"createInboundOrder()\"]"); await D.page.waitForTimeout(2500);
+await D.page.click('#btn-inbound-forklift'); await D.page.waitForTimeout(2500);   // 🚜 交給堆高機
 const io = (await H.all('inboundOrders')).filter(TEST);
 const tk = await H.all('inboundTasks');
 H.check('1a 電腦：建立待執行入庫單（類型＝成品、不需財務核准）並發布手機任務', io.length === 1 && io[0].status === 'pending' && io[0].type === 'FG' && io[0].approvalStatus === 'not_required' && tk.length === 1 && tk[0].orderId === io[0]._id, JSON.stringify({ io: io.map(o => o.status), tk }));
