@@ -155,16 +155,22 @@
             var infoDiv = document.getElementById('reprint-pallet-info');
             infoDiv.innerHTML = '<div class="text-center py-4"><i class="fa-solid fa-spinner fa-spin text-2xl text-blue-400"></i><div class="text-slate-400 mt-2">搜尋中...</div></div>';
 
-            var pallet = (window.pallets || []).find(function(p) {
-                return p.palletId === palletId || p.id === palletId;
+            // 大部分棧板的文件 ID 是自動產生的，要用板號（palletId）找
+            var key = String(palletId).trim().toUpperCase();
+            var local = window.currentPallets ? window.currentPallets() : (window.pallets || []);
+            var pallet = local.find(function(p) {
+                return String(p.palletId || '').toUpperCase() === key || p.id === palletId;
             });
 
             if (!pallet && window.db) {
                 try {
-                    var docRef = window.doc(window.db, 'pallets', palletId);
-                    var docSnap = await window.getDoc(docRef);
+                    var docSnap = await window.db.collection('pallets').doc(palletId).get();
                     if (docSnap.exists) {
                         pallet = { id: docSnap.id, ...docSnap.data() };
+                    } else {
+                        var q = await window.db.collection('pallets').where('palletId', '==', palletId).limit(1).get();
+                        if (q.empty && key !== palletId) q = await window.db.collection('pallets').where('palletId', '==', key).limit(1).get();
+                        if (!q.empty) pallet = { id: q.docs[0].id, ...q.docs[0].data() };
                     }
                 } catch(e) {
                     console.log('Firebase 搜尋失敗:', e);
@@ -1029,19 +1035,18 @@
 
                 await window.addDoc(window.collection(window.db, 'externalStock'), stockData);
 
-                await window.addDoc(window.collection(window.db, 'inventoryLogs'), {
+                // 經過共用格式（timestamp 是字串，異動記錄查詢才查得到）
+                await window.addDoc(window.collection(window.db, 'inventoryLogs'), window.buildInventoryLogEntry({
                     type: 'external_inbound',
-                    warehouseId: order.warehouseId,
-                    warehouseName: order.warehouseName,
                     productName: order.productName,
-                    spec: order.spec,
-                    batchNo: order.batchNo,
+                    spec: order.spec || '',
+                    batchNo: order.batchNo || '',
                     quantity: order.quantity,
                     quantityChange: order.quantity,
-                    note: order.warehouseName + '入庫',
-                    operator: window.currentUser ? window.currentUser.email : 'system',
-                    timestamp: new Date()
-                });
+                    locationId: order.warehouseId,
+                    vendor: order.vendor || '',
+                    note: order.warehouseName + '入庫'
+                }));
 
                 console.log('外倉庫存已建立:', stockData);
                 return true;

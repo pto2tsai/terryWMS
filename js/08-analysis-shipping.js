@@ -49,7 +49,7 @@
                     var data = doc.data();
                     var docType = data.type || '';
 
-                    if (docType !== 'outbound' && docType !== 'picking') return;
+                    if (docType !== 'outbound' && docType !== 'picking' && docType !== 'picking-rm') return;
 
                     var ts = data.timestamp || '';
                     if (typeof ts === 'object' && ts.toDate) {
@@ -513,21 +513,8 @@
             }
 
             try {
-                await window.updateDoc(window.doc(window.db, "pallets", pallet.id), { locationId: loc });
-
-                await window.addDoc(window.collection(window.db, 'inventoryLogs'), {
-                    type: 'inbound',
-                    productName: pallet.productName,
-                    spec: pallet.spec || '',
-                    quantity: pallet.quantity,
-                    quantityChange: pallet.quantity,
-                    locationId: loc,
-                    batchNo: pallet.batchNo || '',
-                    palletId: palletId,
-                    note: '現場掃描入庫',
-                    operator: window.getOperatorName ? window.getOperatorName() : 'field',
-                    timestamp: new Date()
-                });
+                // 棧板已經入帳過，這裡只是綁定實際儲位＝移板（記成 move，不能再記一筆入庫，否則入庫報表會重複計算）
+                await window.movePalletTx(window.doc(window.db, 'pallets', pallet.id), loc, { note: '現場掃描上架' });
 
                 document.getElementById('field-in-step2-status').innerHTML = '<span class="text-emerald-400">✅ 已綁定</span>';
                 document.getElementById('field-in-result').innerHTML =

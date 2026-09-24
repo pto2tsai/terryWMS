@@ -5,14 +5,18 @@
         // ========== 庫存異動記錄系統 ==========
 
         window.rebuildHistoryLogs = async function() {
-            if (!confirm('此功能會將目前所有庫存補建為「期初入庫」記錄。\n\n確定要執行嗎？')) {
+            if (!confirm('此功能會替「還沒有任何異動記錄」的庫存補建一筆期初記錄。\n（已經有記錄的板會略過，執行幾次都不會重複）\n\n確定要執行嗎？')) {
                 return;
             }
 
             try {
-                var pallets = window.currentPallets ? window.currentPallets() : [];
+                var all = window.currentPallets ? window.currentPallets() : [];
+                // 已經有異動記錄的板不再補（原本每執行一次就多一筆，入庫統計、熱度圖會被灌水）
+                var hasLog = {};
+                (await window.db.collection('inventoryLogs').get()).forEach(function(d) { var pid = d.data().palletId; if (pid) hasLog[pid] = true; });
+                var pallets = all.filter(function(p) { return !hasLog[p.palletId]; });
                 if (pallets.length === 0) {
-                    alert('目前沒有庫存資料');
+                    alert(all.length ? '所有庫存都已經有異動記錄，不用補建' : '目前沒有庫存資料');
                     return;
                 }
 
@@ -30,7 +34,7 @@
 
                     try {
                         await window.logInventoryChange({
-                            type: 'inbound',
+                            type: 'import',   // 期初（不是當天入庫，不列入入庫統計）
                             productName: p.productName || '',
                             spec: p.spec || '',
                             quantity: p.quantity || 0,

@@ -1177,6 +1177,8 @@
                 await window.addDoc(window.collection(window.db, 'dispatchOrders'), order);
             } catch (err) {
                 console.error('存到 Firebase 失敗:', err);
+                alert('❌ 調度單沒有存進資料庫：' + err.message + '\n\n手機收不到這張工單，請檢查網路後再試一次。');
+                return;
             }
 
             if (!window.dispatchOrders) window.dispatchOrders = [];
@@ -1495,6 +1497,9 @@
                             if (used.has(j)) continue;
 
                             var sourcePallet = partialPallets[j];
+                            // 公司、批號不同不能合併（批號不同合併後會追溯不到）
+                            if ((sourcePallet.company || '') !== (keepPallet.company || '') ||
+                                (sourcePallet.batchNo || '') !== (keepPallet.batchNo || '')) continue;
                             var newTotal = currentTotal + (sourcePallet.quantity || 0);
 
                             if (newTotal <= palletCapacity) {
@@ -1524,9 +1529,11 @@
                 // ========== 第二步：孤立板移位建議 ==========
                 var isolatedMoves = [];
 
-                // 已經排進「合併」的來源板，合併後就不存在了，不能再排「移位」
+                // 已經排進「合併」的板不能再排「移位」：來源板合併後就不存在了；
+                // 保留板如果被移走，合併工單的目標儲位就會是舊的位置
                 var mergedSourceKeys = {};
                 partialMerges.forEach(function(g) {
+                    mergedSourceKeys[g.keep.docId || g.keep.palletId] = true;
                     g.sources.forEach(function(src) { mergedSourceKeys[src.docId || src.palletId] = true; });
                 });
 
@@ -2264,7 +2271,21 @@
             renderDispatchExecList();
         };
 
-        window.loadDispatchExecOrder = function() {
+        // 這個品項的調度是否已經發布到手機、還沒結束（發布後只能在手機執行，電腦只看進度）
+        async function findPublishedDispatch(item) {
+            var ids = {};
+            (item.partialMerges || []).forEach(function(g) { g.sources.forEach(function(s) { ids[s.docId || s.palletId] = true; }); });
+            (item.isolatedMoves || []).forEach(function(m) { ids[m.docId || m.palletId] = true; });
+            var snap = await window.db.collection('dispatchOrders').where('status', 'in', ['pending', 'in_progress']).get();
+            var hit = null;
+            snap.forEach(function(d) {
+                var o = d.data();
+                if (!hit && (o.operations || []).some(function(op) { return ids[op.docId || op.palletId]; })) hit = Object.assign({ id: d.id }, o);
+            });
+            return hit;
+        }
+
+        window.loadDispatchExecOrder = async function() {
             var select = document.getElementById('dispatch-exec-order-select');
             var idx = parseInt(select.value);
 
@@ -2276,6 +2297,21 @@
 
             var item = window._dispatchAnalysis[idx];
             if (!item) return;
+
+            try {
+                var pub = await findPublishedDispatch(item);
+                if (pub) {
+                    var doneN = (pub.completedOps || []).length, allN = (pub.operations || []).length;
+                    window._dispatchExecData = { currentOrderIdx: idx, currentItem: item, operations: [], completedIds: [], published: pub };
+                    document.getElementById('dispatch-exec-list').innerHTML = '<tr><td colspan="9" class="text-center py-8">' +
+                        '<div class="text-amber-300 font-bold mb-1"><i class="fa-solid fa-mobile-screen mr-1"></i>這張已經發布到手機（工單 ' + (pub.orderNo || '') + '）</div>' +
+                        '<div class="text-slate-400 text-sm">請用手機「調度工單」執行；目前手機完成 ' + doneN + '/' + allN + ' 項。<br>電腦這邊不能再執行，避免同一板搬兩次。</div></td></tr>';
+                    document.getElementById('dispatch-exec-progress').innerText = doneN + '/' + allN;
+                    return;
+                }
+            } catch (err) {
+                console.warn('查詢已發布工單失敗', err);
+            }
 
             var operations = [];
             var opIdx = 0;
@@ -2380,7 +2416,8 @@
             document.getElementById('dispatch-exec-progress').innerText = completed + '/' + ops.length;
         }
 
-        window.confirmDispatchScan = function() {
+        var _dispatchBusy = false;
+        window.confirmDispatchScan = async function() {
             var input = document.getElementById('dispatch-scan-input');
             var scanned = input.value.trim();
             var resultEl = document.getElementById('dispatch-scan-result');
@@ -2410,7 +2447,11 @@
                 return;
             }
 
-            executeDispatchOperation(found);
+            if (_dispatchBusy) return;   // 上一板還在處理中，避免連掃兩次執行兩次
+            _dispatchBusy = true;
+            var ok;
+            try { ok = await executeDispatchOperation(found); } finally { _dispatchBusy = false; }
+            if (!ok) { input.select(); return; }
 
             resultEl.innerHTML = '<span class="text-emerald-400"><i class="fa-solid fa-check-circle mr-1"></i>已確認：' + found.from + ' → ' + found.to + '</span>';
             resultEl.classList.remove('hidden');
@@ -2441,26 +2482,29 @@
             var ids = [];
             checkboxes.forEach(function(cb) { ids.push(cb.dataset.id); });
 
+            var okN = 0, failed = [];
             for (var i = 0; i < ops.length; i++) {
                 if (ids.indexOf(ops[i].id) >= 0 && !ops[i].completed) {
-                    await executeDispatchOperation(ops[i]);
+                    if (await executeDispatchOperation(ops[i], true)) okN++;
+                    else failed.push(ops[i].from + ' → ' + ops[i].to + '：' + (ops[i].lastError || ''));
                 }
             }
 
-            alert('✅ 已執行 ' + ids.length + ' 項操作');
+            alert((failed.length ? '⚠️' : '✅') + ' 已執行 ' + okN + ' 項操作' + (failed.length ? '\n\n❌ 失敗 ' + failed.length + ' 項（沒有變動）：\n' + failed.join('\n') : ''));
         };
 
-        async function executeDispatchOperation(op) {
+        // 回傳 true＝成功；quiet＝批次執行時不逐筆跳錯誤（最後一起列出）
+        async function executeDispatchOperation(op, quiet) {
             try {
                 if (op.type === 'merge') {
                     var keep = op.keepPallet || {};
                     var sourceRef = await window.resolvePalletRef(op.docId, op.palletId, op.from);
                     var targetRef = await window.resolvePalletRef(keep.docId, keep.palletId, keep.location);
-                    await window.mergePalletsConfirm(sourceRef, targetRef, { note: op.note || ('合併至 ' + op.to) });
+                    await window.mergePalletsConfirm(sourceRef, targetRef, { note: op.note || ('合併至 ' + op.to) }, { expectFrom: op.from });
 
                 } else if (op.type === 'move') {
                     var palletRef = await window.resolvePalletRef(op.docId, op.palletId, op.from);
-                    await window.movePalletTx(palletRef, op.to, { note: op.note || '' });
+                    await window.movePalletTx(palletRef, op.to, { note: op.note || '' }, { expectFrom: op.from });
                 }
 
                 op.completed = true;
@@ -2468,10 +2512,12 @@
 
                 renderDispatchExecList();
                 updateDispatchProgress();
-
+                return true;
             } catch (err) {
                 console.error('執行操作失敗:', err);
-                alert('操作失敗: ' + err.message);
+                op.lastError = err.message;
+                if (!quiet) alert('操作失敗: ' + err.message);
+                return false;
             }
         }
 

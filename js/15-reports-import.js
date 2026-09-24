@@ -165,20 +165,39 @@ window.generateReport = function(reportType) {
     }, 200);
 };
 
-function generateShippingByLogistics(dateFrom, dateTo) {
-    var waves = (window._waveData.waves || []).filter(function(w) {
+// 報表日期一律用本地日期（completedAt／inboundDate 是 UTC 時間，台灣早上 8 點前直接切字串會變成前一天）
+function repDay(v) { return window.normalizeDateValue(v) || ''; }
+
+// 期間內已完成的波次（依完成日）
+function doneWavesIn(dateFrom, dateTo) {
+    return (window._waveData.waves || []).filter(function(w) {
         if (w.status !== 'done') return false;
-        var date = (w.completedAt || w.createdAt || '').split('T')[0];
+        var date = repDay(w.completedAt || w.createdAt);
         return date >= dateFrom && date <= dateTo;
     });
+}
+
+// 波次實際出貨的明細：新波次完成時記在 shipped（已扣掉缺貨）；舊波次沒有就用規劃的件數
+function waveShippedOrders(w) {
+    if (Array.isArray(w.shipped)) return w.shipped;
+    return (w.orders || []).map(function(o) {
+        return { orderNo: o.orderNo, customer: o.customer, logistics: o.logistics, items: (o.items || []).map(function(i) {
+            return { productName: i.productName, spec: i.spec || '', qty: i.packageQty || i.quantity || 0 };
+        }) };
+    });
+}
+
+function generateShippingByLogistics(dateFrom, dateTo) {
+    var waves = doneWavesIn(dateFrom, dateTo);
 
     var stats = {};
     waves.forEach(function(w) {
         var logistics = w.logistics || '未指定';
         if (!stats[logistics]) stats[logistics] = { waveCount: 0, orderCount: 0, totalQty: 0 };
+        var sh = waveShippedOrders(w);
         stats[logistics].waveCount++;
-        stats[logistics].orderCount += (w.orders || []).length;
-        stats[logistics].totalQty += w.totalQty || 0;
+        stats[logistics].orderCount += sh.length;
+        sh.forEach(function(o) { o.items.forEach(function(i) { stats[logistics].totalQty += i.qty || 0; }); });
     });
 
     var data = Object.keys(stats).map(function(logistics) {
@@ -191,21 +210,15 @@ function generateShippingByLogistics(dateFrom, dateTo) {
 }
 
 function generateShippingByCustomer(dateFrom, dateTo) {
-    var waves = (window._waveData.waves || []).filter(function(w) {
-        if (w.status !== 'done') return false;
-        var date = (w.completedAt || w.createdAt || '').split('T')[0];
-        return date >= dateFrom && date <= dateTo;
-    });
+    var waves = doneWavesIn(dateFrom, dateTo);
 
     var stats = {};
     waves.forEach(function(w) {
-        (w.orders || []).forEach(function(order) {
+        waveShippedOrders(w).forEach(function(order) {
             var customer = order.customer || '未知';
             if (!stats[customer]) stats[customer] = { orderCount: 0, totalQty: 0 };
             stats[customer].orderCount++;
-            (order.items || []).forEach(function(item) {
-                stats[customer].totalQty += item.packageQty || item.quantity || 0;
-            });
+            order.items.forEach(function(item) { stats[customer].totalQty += item.qty || 0; });
         });
     });
 
@@ -219,20 +232,16 @@ function generateShippingByCustomer(dateFrom, dateTo) {
 }
 
 function generateShippingByProduct(dateFrom, dateTo) {
-    var waves = (window._waveData.waves || []).filter(function(w) {
-        if (w.status !== 'done') return false;
-        var date = (w.completedAt || w.createdAt || '').split('T')[0];
-        return date >= dateFrom && date <= dateTo;
-    });
+    var waves = doneWavesIn(dateFrom, dateTo);
 
     var stats = {};
     waves.forEach(function(w) {
-        (w.orders || []).forEach(function(order) {
-            (order.items || []).forEach(function(item) {
+        waveShippedOrders(w).forEach(function(order) {
+            order.items.forEach(function(item) {
                 var key = item.productName + '|||' + (item.spec || '');
                 if (!stats[key]) stats[key] = { productName: item.productName, spec: item.spec || '', count: 0, totalQty: 0 };
                 stats[key].count++;
-                stats[key].totalQty += item.packageQty || item.quantity || 0;
+                stats[key].totalQty += item.qty || 0;
             });
         });
     });
@@ -251,168 +260,78 @@ function generateShippingByProduct(dateFrom, dateTo) {
 }
 
 // ========== 入庫報表函數 ==========
+// 依「入庫異動記錄」統計（不是看目前的庫存：出完貨、合併掉的板也要算；數量是當時入庫的數量）
+async function inboundLogsBetween(dateFrom, dateTo) {
+    var logs = await fetchLogsBetween(['inbound'], dateFrom, dateTo);
+    // 舊記錄沒有廠商：用目前還在的棧板補
+    var byPallet = {};
+    (window.currentPallets ? window.currentPallets() : []).forEach(function(p) { if (p.palletId) byPallet[p.palletId] = p; });
+    return logs.map(function(l) {
+        var p = byPallet[l.palletId] || {};
+        return { date: logDay(l), productName: l.productName || '', spec: l.spec || '', batchNo: l.batchNo || '',
+            qty: parseFloat(l.quantityChange) || parseFloat(l.quantity) || 0, weight: parseFloat(l.weightChange) || parseFloat(l.weight) || 0,
+            locationId: l.locationId || '', vendor: l.vendor || p.vendor || '', palletId: l.palletId || '' };
+    });
+}
 
-function generateInboundSummary(dateFrom, dateTo) {
-    var pallets = window.currentPallets ? window.currentPallets() : [];
-    
-    // 按日期過濾入庫記錄
-    var filtered = pallets.filter(function(p) {
-        var date = p.inboundDate || p.createdAt;
-        if (!date) return false;
-        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
-        return dateStr >= dateFrom && dateStr <= dateTo;
-    });
-    
-    // 按日期統計
+async function generateInboundSummary(dateFrom, dateTo) {
+    var rows = await inboundLogsBetween(dateFrom, dateTo);
     var stats = {};
-    filtered.forEach(function(p) {
-        var date = p.inboundDate || p.createdAt;
-        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
-        if (!stats[dateStr]) stats[dateStr] = { date: dateStr, palletCount: 0, totalQty: 0, totalWeight: 0 };
-        stats[dateStr].palletCount++;
-        stats[dateStr].totalQty += parseInt(p.quantity) || 0;
-        stats[dateStr].totalWeight += parseFloat(p.totalWeight) || 0;
+    rows.forEach(function(r) {
+        if (!stats[r.date]) stats[r.date] = { date: r.date, palletCount: 0, totalQty: 0, totalWeight: 0 };
+        stats[r.date].palletCount++;
+        stats[r.date].totalQty += r.qty;
+        stats[r.date].totalWeight += r.weight;
     });
-    
-    var data = Object.values(stats).sort(function(a, b) {
-        return b.date.localeCompare(a.date);
-    }).map(function(s) {
-        return { 
-            '日期': s.date, 
-            '板數': s.palletCount, 
-            '總件數': s.totalQty, 
-            '總重量(kg)': Math.round(s.totalWeight * 10) / 10 
-        };
+    var data = Object.values(stats).sort(function(a, b) { return b.date.localeCompare(a.date); }).map(function(s) {
+        return { '日期': s.date, '板數': s.palletCount, '總件數': s.totalQty, '總重量(kg)': Math.round(s.totalWeight * 10) / 10 };
     });
-    
     window._reportData.currentData = data;
     renderReportTable('入庫統計 - 按日期', ['日期', '板數', '總件數', '總重量(kg)'], data);
 }
 
-function generateInboundDetail(dateFrom, dateTo) {
-    var pallets = window.currentPallets ? window.currentPallets() : [];
-    
-    // 按日期過濾入庫記錄
-    var filtered = pallets.filter(function(p) {
-        var date = p.inboundDate || p.createdAt;
-        if (!date) return false;
-        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
-        return dateStr >= dateFrom && dateStr <= dateTo;
+async function generateInboundDetail(dateFrom, dateTo) {
+    var rows = await inboundLogsBetween(dateFrom, dateTo);
+    var data = rows.sort(function(a, b) { return b.date.localeCompare(a.date); }).map(function(r) {
+        return { '入庫日期': r.date, '品名': r.productName, '規格': r.spec, '批號': r.batchNo, '數量': r.qty, '儲位': r.locationId, '廠商': r.vendor };
     });
-    
-    var data = filtered.sort(function(a, b) {
-        var dateA = a.inboundDate || a.createdAt || '';
-        var dateB = b.inboundDate || b.createdAt || '';
-        return dateB.toString().localeCompare(dateA.toString());
-    }).map(function(p) {
-        var date = p.inboundDate || p.createdAt;
-        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
-        return {
-            '入庫日期': dateStr,
-            '品名': p.productName || '',
-            '規格': p.spec || '',
-            '批號': p.batchNo || '',
-            '數量': p.quantity || 0,
-            '儲位': p.locationId || '',
-            '廠商': p.vendor || ''
-        };
-    });
-    
     window._reportData.currentData = data;
     renderReportTable('入庫明細', ['入庫日期', '品名', '規格', '批號', '數量', '儲位', '廠商'], data);
 }
 
-function generateInboundByProduct(dateFrom, dateTo) {
-    var pallets = window.currentPallets ? window.currentPallets() : [];
-    
-    // 按日期過濾入庫記錄
-    var filtered = pallets.filter(function(p) {
-        var date = p.inboundDate || p.createdAt;
-        if (!date) return false;
-        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
-        return dateStr >= dateFrom && dateStr <= dateTo;
-    });
-    
-    // 按品項統計
+async function generateInboundByProduct(dateFrom, dateTo) {
+    var rows = await inboundLogsBetween(dateFrom, dateTo);
     var stats = {};
-    filtered.forEach(function(p) {
-        var key = (p.productName || '') + '|||' + (p.spec || '');
-        if (!stats[key]) stats[key] = { 
-            productName: p.productName || '', 
-            spec: p.spec || '', 
-            palletCount: 0, 
-            totalQty: 0,
-            totalWeight: 0
-        };
+    rows.forEach(function(r) {
+        var key = r.productName + '|||' + r.spec;
+        if (!stats[key]) stats[key] = { productName: r.productName, spec: r.spec, palletCount: 0, totalQty: 0, totalWeight: 0 };
         stats[key].palletCount++;
-        stats[key].totalQty += parseInt(p.quantity) || 0;
-        stats[key].totalWeight += parseFloat(p.totalWeight) || 0;
+        stats[key].totalQty += r.qty;
+        stats[key].totalWeight += r.weight;
     });
-    
     var data = Object.values(stats).sort(function(a, b) {
-        var nameCompare = a.productName.localeCompare(b.productName, 'zh-TW');
-        if (nameCompare !== 0) return nameCompare;
-        return a.spec.localeCompare(b.spec, 'zh-TW');
+        return a.productName.localeCompare(b.productName, 'zh-TW') || a.spec.localeCompare(b.spec, 'zh-TW');
     }).map(function(s) {
-        return {
-            '品名': s.productName,
-            '規格': s.spec,
-            '板數': s.palletCount,
-            '總件數': s.totalQty,
-            '總重量(kg)': Math.round(s.totalWeight * 10) / 10
-        };
+        return { '品名': s.productName, '規格': s.spec, '板數': s.palletCount, '總件數': s.totalQty, '總重量(kg)': Math.round(s.totalWeight * 10) / 10 };
     });
-    
     window._reportData.currentData = data;
     renderReportTable('入庫統計 - 依品項', ['品名', '規格', '板數', '總件數', '總重量(kg)'], data);
 }
 
-function generateInboundByVendor(dateFrom, dateTo) {
-    var pallets = window.currentPallets ? window.currentPallets() : [];
-    
-    // 按日期過濾入庫記錄
-    var filtered = pallets.filter(function(p) {
-        var date = p.inboundDate || p.createdAt;
-        if (!date) return false;
-        var dateStr = typeof date === 'string' ? date.split('T')[0] : 
-            (date.toDate ? date.toDate().toLocalYMD() : new Date(date).toLocalYMD());
-        return dateStr >= dateFrom && dateStr <= dateTo;
-    });
-    
-    // 按廠商統計
+async function generateInboundByVendor(dateFrom, dateTo) {
+    var rows = await inboundLogsBetween(dateFrom, dateTo);
     var stats = {};
-    filtered.forEach(function(p) {
-        var vendor = p.vendor || '未指定';
-        if (!stats[vendor]) stats[vendor] = { 
-            vendor: vendor, 
-            palletCount: 0, 
-            totalQty: 0,
-            totalWeight: 0,
-            productCount: {}
-        };
+    rows.forEach(function(r) {
+        var vendor = r.vendor || '未指定';
+        if (!stats[vendor]) stats[vendor] = { vendor: vendor, palletCount: 0, totalQty: 0, totalWeight: 0, productCount: {} };
         stats[vendor].palletCount++;
-        stats[vendor].totalQty += parseInt(p.quantity) || 0;
-        stats[vendor].totalWeight += parseFloat(p.totalWeight) || 0;
-        stats[vendor].productCount[p.productName] = true;
+        stats[vendor].totalQty += r.qty;
+        stats[vendor].totalWeight += r.weight;
+        stats[vendor].productCount[r.productName] = true;
     });
-    
-    var data = Object.values(stats).sort(function(a, b) {
-        return b.totalQty - a.totalQty;
-    }).map(function(s) {
-        return {
-            '廠商': s.vendor,
-            '品項種類': Object.keys(s.productCount).length,
-            '板數': s.palletCount,
-            '總件數': s.totalQty,
-            '總重量(kg)': Math.round(s.totalWeight * 10) / 10
-        };
+    var data = Object.values(stats).sort(function(a, b) { return b.totalQty - a.totalQty; }).map(function(s) {
+        return { '廠商': s.vendor, '品項種類': Object.keys(s.productCount).length, '板數': s.palletCount, '總件數': s.totalQty, '總重量(kg)': Math.round(s.totalWeight * 10) / 10 };
     });
-    
     window._reportData.currentData = data;
     renderReportTable('入庫統計 - 依廠商', ['廠商', '品項種類', '板數', '總件數', '總重量(kg)'], data);
 }
@@ -447,10 +366,10 @@ function generateExpiryReport() {
     var pallets = window.currentPallets ? window.currentPallets() : [];
     var today = new Date();
 
-    var data = pallets.filter(function(p) { return p.expDate; }).map(function(p) {
-        var expDate = new Date(p.expDate);
-        var daysLeft = Math.ceil((expDate - today) / (24 * 60 * 60 * 1000));
-        var status = daysLeft <= 0 ? '已過期' : daysLeft <= 30 ? '30天內' : daysLeft <= 60 ? '60天內' : '正常';
+    var data = pallets.filter(function(p) { return p.expDate || p.expiryDate; }).map(function(p) {
+        // 與效期管理、首頁同一個算法：今天到期＝0 天（還沒過期），昨天到期＝-1
+        var daysLeft = window.daysUntil(p.expiryDate || p.expDate);
+        var status = daysLeft < 0 ? '已過期' : daysLeft <= 30 ? '30天內' : daysLeft <= 60 ? '60天內' : '正常';
         return { '品名': p.productName, '規格': p.spec || '', '效期': p.expDate, '剩餘天數': daysLeft, '狀態': status, '數量': p.quantity };
     }).filter(function(p) { return p['剩餘天數'] <= 60; }).sort(function(a, b) {
         // 先按剩餘天數排序，再按品名/規格分組
@@ -503,7 +422,7 @@ function generateInventoryLocation() {
 
 function generateWaveSummary(dateFrom, dateTo) {
     var waves = (window._waveData.waves || []).filter(function(w) {
-        var date = (w.createdAt || '').split('T')[0];
+        var date = repDay(w.createdAt);
         return date >= dateFrom && date <= dateTo;
     });
 
@@ -532,7 +451,7 @@ function generateWaveSummary(dateFrom, dateTo) {
 function generateWaveEfficiency(dateFrom, dateTo) {
     var waves = (window._waveData.waves || []).filter(function(w) {
         if (w.status !== 'done') return false;
-        var date = (w.completedAt || '').split('T')[0];
+        var date = repDay(w.completedAt);
         return date >= dateFrom && date <= dateTo;
     });
 
@@ -730,14 +649,7 @@ async function generatePickingSummary(dateFrom, dateTo) {
     var byDate = {};
     
     logs.forEach(function(log) {
-        var date = '';
-        if (log.createdAt) {
-            if (typeof log.createdAt === 'string') {
-                date = log.createdAt.split('T')[0];
-            } else if (log.createdAt.toDate) {
-                date = log.createdAt.toDate().toLocalYMD();
-            }
-        }
+        var date = logDay(log);
         if (!date) return;
         
         if (!byDate[date]) byDate[date] = { count: 0, qty: 0 };
@@ -754,14 +666,7 @@ async function generatePickingSummary(dateFrom, dateTo) {
         };
     });
     
-    // 加上合計行
-    if (data.length > 0) {
-        data.push({
-            '日期': '【合計】',
-            '領用次數': totalCount,
-            '領用數量': totalQty
-        });
-    }
+    // 合計列由報表共用功能自動加（不要自己再加一列，否則合計會變兩倍）
     
     window._reportData.currentData = data;
     renderReportTable('領料統計', ['日期', '領用次數', '領用數量'], data);
@@ -884,23 +789,28 @@ async function generatePickingByProduct(dateFrom, dateTo) {
     renderReportTable('領料統計 - 依品項', ['品名', '規格', '領用次數', '領用數量'], data);
 }
 
+// 領料的異動類型：領用出庫頁（picking-rm）與作業看板領料（picking）都算
+window.PICKING_LOG_TYPES = ['picking-rm', 'picking'];
+function logDay(log) { return repDay(log.timestamp || log.createdAt); }
+
 function getPickingLogs(dateFrom, dateTo) {
     // 優先使用已載入的資料
     var logs = window.inventoryLogs || [];
     return logs.filter(function(log) {
-        if (log.type !== 'picking-rm') return false;
-        var date = '';
-        if (log.createdAt) {
-            if (typeof log.createdAt === 'string') {
-                date = log.createdAt.split('T')[0];
-            } else if (log.createdAt.toDate) {
-                date = log.createdAt.toDate().toLocalYMD();
-            } else if (log.createdAt instanceof Date) {
-                date = log.createdAt.toLocalYMD();
-            }
-        }
+        if (window.PICKING_LOG_TYPES.indexOf(log.type) < 0) return false;
+        var date = logDay(log);
         return date >= dateFrom && date <= dateTo;
     });
+}
+
+// 依時間區間讀異動記錄（timestamp 單一欄位範圍查詢，不需要複合索引），類型在前端篩選
+async function fetchLogsBetween(types, dateFrom, dateTo) {
+    var snap = await window.db.collection('inventoryLogs')
+        .where('timestamp', '>=', window.localDayStartISO(dateFrom))
+        .where('timestamp', '<=', window.localDayEndISO(dateTo)).get();
+    var logs = [];
+    snap.forEach(function(d) { var x = d.data(); if (types.indexOf(x.type) >= 0) { x.id = d.id; logs.push(x); } });
+    return logs;
 }
 
 // 從 Firebase 載入領料記錄
@@ -913,7 +823,7 @@ async function loadPickingLogsFromFirebase(dateFrom, dateTo) {
     try {
         var logsRef = window.collection(window.db, 'inventoryLogs');
         // 只用 type 過濾（type + orderBy createdAt 需要複合索引）；日期由 getPickingLogs 在前端篩選
-        var q = window.query(logsRef, window.where('type', '==', 'picking-rm'));
+        var q = window.query(logsRef, window.where('type', 'in', window.PICKING_LOG_TYPES));
         
         var snapshot = await window.getDocs(q);
         var logs = [];
@@ -1087,7 +997,7 @@ function renderVirtualLocTooltipContent(items, locationId) {
             if (item.expiryDate) {
                 const expDate = item.expiryDate.toDate ? item.expiryDate.toDate() : new Date(item.expiryDate);
                 expiryStr = expDate.toLocaleDateString('zh-TW');
-                const daysLeft = Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24));
+                const daysLeft = window.daysUntil(expDate);
                 if (daysLeft < 0) {
                     expiryStr = '<span class="text-red-400">' + expiryStr + '</span>';
                 } else if (daysLeft <= 30) {
@@ -1252,6 +1162,11 @@ async function processImportFile(file) {
     reader.readAsArrayBuffer(file);
 }
 
+// 判斷重複：同儲位、公司、品名、規格、批號、效期、數量都一樣才算（只看儲位＋品名＋數量會把不同批號的板當成重複而漏匯）
+function importDupKey(loc, company, name, spec, batch, exp, qty) {
+    return [String(loc || '').toUpperCase(), company || '', name || '', spec || '', batch || '', exp || '', parseFloat(qty) || 0].join('|');
+}
+
 async function validateAndPreviewData(jsonData) {
     importPreviewData = [];
     importStats = { total: 0, valid: 0, invalid: 0, duplicate: 0 };
@@ -1266,7 +1181,7 @@ async function validateAndPreviewData(jsonData) {
         const palletSnap = await db.collection('pallets').get();
         palletSnap.forEach(doc => {
             const d = doc.data();
-            existingPallets.add(`${d.locationId}|${d.productName}|${d.spec || ''}|${d.quantity}`);
+            existingPallets.add(importDupKey(d.locationId, d.company, d.productName, d.spec, d.batchNo, window.normalizeDateValue(d.expiryDate || d.expDate), d.quantity));
         });
     } catch (err) {
         console.error('載入現有資料錯誤:', err);
@@ -1294,18 +1209,24 @@ async function validateAndPreviewData(jsonData) {
     jsonData.forEach((row, index) => {
         const record = {
             rowNum: index + 2,
-            location: String(findField(row, fieldMappings.location)).trim(),
+            location: String(findField(row, fieldMappings.location)).trim().toUpperCase(),
             company: String(findField(row, fieldMappings.company)).trim(),
             productId: String(findField(row, fieldMappings.productId)).trim(),
             productName: String(findField(row, fieldMappings.productName)).trim(),
             spec: String(findField(row, fieldMappings.spec)).trim(),
-            quantity: parseFloat(findField(row, fieldMappings.quantity)) || 0,
+            quantity: parseFloat(String(findField(row, fieldMappings.quantity)).replace(/,/g, '')) || 0,
             unit: String(findField(row, fieldMappings.unit)).trim() || '件',
             batchNo: String(findField(row, fieldMappings.batchNo)).trim(),
-            expiryDate: String(findField(row, fieldMappings.expiryDate)).trim(),
+            // Excel 的日期格子讀進來是數字（例如 45838），要換成日期；看不懂的格式列為錯誤，不能默默變成沒有效期
+            expiryRaw: findField(row, fieldMappings.expiryDate),
+            expiryDate: '',
             errors: [],
             status: 'valid'
         };
+        if (record.expiryRaw !== '' && record.expiryRaw !== null && record.expiryRaw !== undefined) {
+            record.expiryDate = window.normalizeDateValue(typeof record.expiryRaw === 'string' ? record.expiryRaw.trim() : record.expiryRaw);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(record.expiryDate)) record.errors.push('效期看不懂：' + record.expiryRaw + '（請用 2027/06/30 這種格式）');
+        }
 
         if (!record.location) record.errors.push('儲位必填');
         if (!record.company) record.errors.push('公司必填');
@@ -1321,7 +1242,7 @@ async function validateAndPreviewData(jsonData) {
             else record.errors.push('儲位不存在');
         }
 
-        const duplicateKey = `${record.location}|${record.productName}|${record.spec}|${record.quantity}`;
+        const duplicateKey = importDupKey(record.location, record.company, record.productName, record.spec, record.batchNo, record.expiryDate, record.quantity);
         if (existingPallets.has(duplicateKey)) {
             record.isDuplicate = true;
             const skipDuplicate = document.getElementById('import-opt-skip-duplicate')?.checked ?? true;
@@ -1418,7 +1339,8 @@ async function executeImport() {
     }
 
     let successCount = 0;
-    const batch = db.batch();
+    const writes = [];   // Firestore 一批最多 500 筆，最後分批寫入
+    const batch = { set: function(ref, data) { writes.push({ ref: ref, data: data }); } };
     const newLocations = new Set();
     const timestamp = firebase.firestore.FieldValue.serverTimestamp();
 
@@ -1444,13 +1366,7 @@ async function executeImport() {
             const palletId = await window.nextDocNo('IN');
             const palletRef = db.collection('pallets').doc(palletId);
 
-            let expiryDate = null;
-            if (record.expiryDate) {
-                const dateParts = record.expiryDate.replace(/\//g, '-').split('-');
-                if (dateParts.length === 3) {
-                    expiryDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-                }
-            }
+            const expiryDate = record.expiryDate || '';
 
             batch.set(palletRef, {
                 palletId: palletId,
@@ -1462,30 +1378,38 @@ async function executeImport() {
                 unit: record.unit,
                 locationId: record.location,
                 batchNo: record.batchNo,
-                expiryDate: expiryDate ? firebase.firestore.Timestamp.fromDate(expiryDate) : null,
+                expiryDate: expiryDate,
+                expDate: expiryDate,
                 status: 'stored',
                 createdAt: timestamp,
                 source: 'excel-import'
             });
 
+            // 經過共用格式（有 timestamp，異動記錄查詢才查得到）
             const logRef = db.collection('inventoryLogs').doc();
-            batch.set(logRef, {
+            batch.set(logRef, window.buildInventoryLogEntry({
                 type: 'import',
                 palletId: palletId,
                 company: record.company,
-                productId: record.productId,
                 productName: record.productName,
+                spec: record.spec,
+                batchNo: record.batchNo,
+                expDate: expiryDate,
                 quantity: record.quantity,
+                quantityChange: record.quantity,
                 locationId: record.location,
-                operator: window.currentUser?.email || 'system',
-                remark: 'Excel 批次匯入',
-                createdAt: timestamp
-            });
+                note: 'Excel 期初匯入'
+            }));
 
             successCount++;
         }
 
-        await batch.commit();
+        // 分批寫入（每批 400 筆）；每板的棧板和記錄在同一批
+        for (let w = 0; w < writes.length; w += 400) {
+            const chunk = db.batch();
+            writes.slice(w, w + 400).forEach(x => chunk.set(x.ref, x.data));
+            await chunk.commit();
+        }
         showNotification(`✅ 成功匯入 ${successCount} 筆資料`, 'success');
 
         importPreviewData = [];

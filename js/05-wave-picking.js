@@ -176,6 +176,8 @@
             var sourceData = inventory.filter(function(item) {
                 if (!item.productName || (item.quantity || 0) <= 0) return false;
                 if (filter !== 'all' && item.company !== filter) return false;
+                // 品管留置、業務保留的貨不能領用（過期的可以，領去報廢；加入時會提醒）
+                if (window.isHoldLocation && window.isHoldLocation(item.locationId)) return false;
                 return true;
             });
             
@@ -580,11 +582,14 @@
             var maxQty = parseInt(qtyInput.max) || 0;
             
             if (qty <= 0) { alert('請輸入有效數量'); return; }
-            if (qty > maxQty) { alert('數量不能超過 ' + maxQty); return; }
+            // 同一板已經加過的件數也要算進去（分兩次加同一板，不能超過這板的數量）
+            var already = window.rmModalCart.concat(window.rmPickingCart || []).filter(function(c) { return c.id === item.id; })
+                .reduce(function(t, c) { return t + (parseFloat(c.quantity) || 0); }, 0);
+            if (qty + already > maxQty) { alert('這板只有 ' + maxQty + ' 件' + (already ? '，已經選了 ' + already + ' 件，最多再加 ' + Math.max(0, maxQty - already) + ' 件' : '，數量不能超過 ' + maxQty)); return; }
             
-            var expDate = item.expiryDate;
-            if (expDate && expDate.toDate) expDate = expDate.toDate();
-            if (expDate && typeof expDate === 'object') expDate = expDate.toLocalYMD();
+            var expDate = window.normalizeDateValue(item.expiryDate || item.expDate);
+            if (expDate && expDate < new Date().toLocalYMD() &&
+                !confirm('⚠️ 這板已經過期（' + expDate + '）\n\n確定要領用嗎？（例如領去報廢）')) return;
             
             window.rmModalCart.push({
                 id: item.id,
@@ -742,8 +747,15 @@
             
             // 轉換為舊格式，複用既有的確認邏輯
             window.rmStockSelected = {};
+            var over = [];
             window.rmPickingCart.forEach(function(item) {
                 var key = 'rm_' + item.id;
+                // 同一板分兩次加入：數量加總（不能只留最後一筆，否則印出來 15 件、實際只扣 5 件）
+                if (window.rmStockSelected[key]) {
+                    window.rmStockSelected[key].qty += item.quantity;
+                    if (window.rmStockSelected[key].qty > item.maxQty) over.push(item.locationId + ' ' + item.productName);
+                    return;
+                }
                 window.rmStockSelected[key] = {
                     item: {
                         id: item.id,
@@ -761,6 +773,7 @@
                 };
             });
             
+            if (over.length) { alert('以下棧板領用數量超過庫存，請調整：\n' + over.join('\n')); return; }
             // 呼叫既有的確認函數
             confirmRmPickingNew();
         };
@@ -774,8 +787,15 @@
             
             // 轉換為舊格式
             window.rmStockSelected = {};
+            var over = [];
             window.rmPickingCart.forEach(function(item) {
                 var key = 'rm_' + item.id;
+                // 同一板分兩次加入：數量加總（不能只留最後一筆，否則印出來 15 件、實際只扣 5 件）
+                if (window.rmStockSelected[key]) {
+                    window.rmStockSelected[key].qty += item.quantity;
+                    if (window.rmStockSelected[key].qty > item.maxQty) over.push(item.locationId + ' ' + item.productName);
+                    return;
+                }
                 window.rmStockSelected[key] = {
                     item: {
                         id: item.id,
@@ -1122,6 +1142,9 @@
                 html += '<span class="' + companyClass + ' text-xs font-bold mr-2">[' + item.company + ']</span>';
                 html += '<span class="text-white font-bold">' + item.productName + '</span>';
                 html += '<div class="text-slate-400 text-sm">' + (item.spec || '-') + ' | ' + (item.batchNo || '-') + '</div>';
+                if (item.expDate && item.expDate < new Date().toLocalYMD()) {
+                    html += '<div class="text-red-400 text-xs mt-1 font-bold">⚠️ 已過期（' + item.expDate + '）</div>';
+                }
                 if (hasConsign) {
                     html += '<div class="text-amber-400 text-xs mt-1">⚠️ 寄庫 ' + item.consignedQty + ' 件（' + item.consignCustomers.join(',') + '）</div>';
                 }
@@ -1166,7 +1189,13 @@
         };
 
         // 執行原料領用出庫
+        var _rmPosting = false;
         window.executeRmPicking = async function() {
+            if (_rmPosting) return;   // 連按兩次「確認出庫」不會扣兩次
+            _rmPosting = true;
+            try { await doExecuteRmPicking(); } finally { _rmPosting = false; }
+        };
+        async function doExecuteRmPicking() {
             // 使用保存的領用資訊
             var info = window.rmPickingInfo || {};
             var user = info.user || '';

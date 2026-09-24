@@ -77,6 +77,7 @@ window.postInboundOrderTx = async function(orderId, loc, opts) {
             quantityChange: pallet.quantity,
             weight: pallet.totalWeight || 0,
             weightChange: pallet.totalWeight || 0,
+            vendor: pallet.vendor || '',
             locationId: loc,
             batchNo: order.batchNo || '',
             palletId: palletId,

@@ -20,6 +20,10 @@ window.migrateDataFormats = async function(dryRun) {
 
     var palletIds = {};
     var orderFixes = 0;
+    // 已經入帳過的單：看入庫異動記錄（棧板可能已經出完貨被刪掉，只看現有棧板會誤判成沒入帳，又被放回待入帳）
+    var logSnap = await window.db.collection('inventoryLogs').get();
+    var postedIds = {};
+    logSnap.forEach(function(d) { var l = d.data(); if (l.type === 'inbound' && l.palletId) postedIds[l.palletId] = true; });
     for (var coll of ['pallets', 'externalStock', 'inboundOrders']) {
         var snap = await window.db.collection(coll).get();
         var changed = 0;
@@ -35,7 +39,7 @@ window.migrateDataFormats = async function(dryRun) {
                 // 舊版「重新送審」把狀態改成 pending_approval：單子從待核准、待入帳兩邊都消失
                 if (orig.status === 'pending_approval') {
                     update.approvalStatus = 'pending';
-                    update.status = palletIds[orig.docNo] ? 'completed' : 'pending';
+                    update.status = (palletIds[orig.docNo] || postedIds[orig.docNo]) ? 'completed' : 'pending';
                 }
                 // 舊版外倉入庫單停在「待執行」：建立時已加到外倉庫存，不能再入帳到本倉
                 if (orig.isExternal && orig.status === 'pending') update.status = 'completed';
@@ -49,11 +53,13 @@ window.migrateDataFormats = async function(dryRun) {
         report[coll] = { total: snap.size, changed: changed };
     }
 
-    var logSnap = await window.db.collection('inventoryLogs').get();
     var logChanged = 0;
     logSnap.forEach(function(d) {
         var ts = d.data().timestamp;
-        if (ts && typeof ts !== 'string') {
+        // 沒有 timestamp 的舊記錄（期初匯入等）：用 createdAt 補上，異動記錄查詢才查得到
+        if (!ts && d.data().createdAt) ts = d.data().createdAt;
+        else if (!ts) return;
+        if (typeof ts !== 'string' || !d.data().timestamp) {
             var date = typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
             if (!isNaN(date.getTime())) {
                 logChanged++;
