@@ -46,7 +46,7 @@ function qsShowPallet(p) {
             ' onclick="qsDo(\'' + action + '\', \'' + esc(p.id) + '\')"><i class="fa-solid ' + icon + '"></i> ' + text + '</button>';
     };
     $('qs-body').innerHTML = '<div class="step-card">' + palletInfoHtml(p) +
-        (hold ? '<div style="color:#fbbf24;font-size:13px;margin-top:8px">⚠️ 這板在留置區（' + esc(p.locationId) + '），不能出庫</div>' : '') +
+        (hold ? '<div class="warn-line">⚠️ 這板在留置區（' + esc(p.locationId) + '），不能出庫</div>' : '') +
         '<div style="margin-top:12px">' +
         btn('move', 'fa-right-left', '搬到別的儲位', '#6366f1') +
         btn('out', 'fa-dolly', '出庫', '#ea580c', hold) +

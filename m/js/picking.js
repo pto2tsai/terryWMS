@@ -98,9 +98,9 @@ function renderPickingList() {
         return '<div class="list-item ' + cls + '">' +
             '<div class="item-row"><span class="item-location">' + esc(item.locationId) + '</span>' + status + '</div>' +
             '<div class="item-product">' + esc(item.productName) + ' ' + esc(item.spec || '') +
-                (item.company ? ' <span style="font-size:11px;padding:1px 6px;border-radius:4px;background:' + (item.company === '八方' ? '#581c87' : '#1e3a8a') + '">' + esc(item.company) + '</span>' : '') + '</div>' +
+                ' ' + companyTag(item.company) + '</div>' +
             (item.shortage && item.note ? '<div class="item-detail" style="color:#fbbf24">' + esc(item.note) + '</div>' : '') +
-            '<div class="item-row"><span class="item-detail">' + esc(item.palletId || '-') + ' | ' + esc(item.batchNo || '') + ' ' + esc(item.expDate || '') + '</span>' +
+            '<div class="item-row"><span class="item-detail"><span class="pid">' + pidHtml(item.palletId) + '</span> | ' + esc(item.batchNo || '') + ' ' + esc(item.expDate || '') + '</span>' +
             '<span class="item-qty">' + esc(item.pickQty) + '</span></div></div>';
     }).join('');
 }
@@ -125,8 +125,8 @@ function renderNextStop() {
         '<div class="ns-label">下一站（還剩 ' + pending.length + ' 項）</div>' +
         '<div class="ns-code">' + esc(code) + '</div>' +
         (code !== n.locationId ? '<div class="ns-loc">' + esc(n.locationId) + '</div>' : '') +
-        '<div class="ns-item"><span>' + esc(n.productName) + ' ' + esc(n.spec || '') + '</span><span class="ns-qty">拿 ' + esc(n.pickQty) + ' 件</span></div>' +
-        '<div class="ns-sub">板號 ' + esc(n.palletId || '-') + (n.expDate ? '　效期 ' + esc(n.expDate) : '') + (sameLoc > 1 ? '　（這個儲位要揀 ' + sameLoc + ' 板）' : '') + '</div>' +
+        '<div class="ns-item"><span>' + esc(n.productName) + ' ' + esc(n.spec || '') + ' ' + companyTag(n.company) + '</span><span class="ns-qty">拿 ' + esc(n.pickQty) + ' 件</span></div>' +
+        '<div class="ns-sub">板號 <span class="pid">' + pidHtml(n.palletId) + '</span>' + (n.expDate ? '　效期 ' + esc(n.expDate) : '') + (sameLoc > 1 ? '　（這個儲位要揀 ' + sameLoc + ' 板）' : '') + '</div>' +
         (stops.length ? '<div class="ns-after">接著：' + stops.slice(0, 4).map(esc).join(' → ') + (stops.length > 4 ? ' …' : '') + '</div>' : '') +
         '</div>';
 }
