@@ -94,6 +94,7 @@
             <select id="picking-wave-select" class="selector-input" onchange="loadPickingWave()"></select>
         </div>
         <div class="scan-section" id="picking-scan-area" style="display:none">
+            <div id="picking-next"></div>
             <div class="scan-input-wrap">
                 <input type="text" id="picking-scan" class="scan-input" placeholder="掃板號或儲位" data-enter="confirmPickingScan" data-cam-title="揀貨（可連續掃）" data-continuous="1" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
                 <button class="cam-btn" onclick="openCameraScan('picking-scan')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
