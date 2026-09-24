@@ -262,7 +262,7 @@ window.confirmMerge = async function() {
     const s = merge.src, t = merge.tgt;
     if (!s || !t) return;
     try {
-        // 批號／效期不同已在畫面上提醒過，直接合併（效期取較早的）
+        // 效期不同已在畫面上提醒過，直接合併（效期取較早的）；批號不同在上一步就擋下
         const r = await window.mergePalletsTx(palletRef(s), palletRef(t), { note: '手機掃描併板' }, { allowMixed: true });
         setResult('merge-result', true, '✅ 已合併：' + t.productName + ' 共 ' + r.total + ' 件 @ ' + t.locationId + '，' + s.locationId + ' 已空出');
         merge.src = null; merge.tgt = null;

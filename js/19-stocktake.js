@@ -133,7 +133,7 @@ window.submitStocktake = async function() {
     if (todo.length > 15) msg += '\n…另有 ' + (todo.length - 15) + ' 板';
     if (!confirm(msg)) return;
 
-    var done = 0, changed = [], failed = [];
+    var done = 0, changed = [], failed = [], changedIds = {};
     for (var i = 0; i < todo.length; i++) {
         var r = todo[i];
         var counted = parseFloat(r.counted);
@@ -143,6 +143,12 @@ window.submitStocktake = async function() {
                 var snap = await tx.get(ref);
                 if (!snap.exists) throw new Error('此板已不存在');
                 var cur = parseFloat(snap.data().quantity) || 0;
+                var curLoc = String(snap.data().locationId || '');
+                if (curLoc !== r.locationId) {
+                    var em = new Error('盤點期間此板已移到 ' + curLoc + '，請到新儲位重新盤點');
+                    em.changed = true;
+                    throw em;
+                }
                 if (cur !== r.book) {
                     var e = new Error('盤點期間有異動（帳面 ' + r.book + ' → 現在 ' + cur + '），請重新盤點此板');
                     e.changed = true;
@@ -165,18 +171,20 @@ window.submitStocktake = async function() {
             });
             done++;
         } catch (e) {
+            if (e.changed) changedIds[r.id] = true;
             (e.changed ? changed : failed).push(r.locationId + ' ' + r.productName + '：' + e.message);
         }
     }
 
     var result = '✅ 已調整 ' + done + ' 板';
-    if (changed.length) result += '\n\n⚠️ 以下 ' + changed.length + ' 板盤點期間有異動，未調整：\n' + changed.join('\n');
+    if (changed.length) result += '\n\n⚠️ 以下 ' + changed.length + ' 板盤點期間有異動，未調整（實盤數已清空，請重新數）：\n' + changed.join('\n');
     if (failed.length) result += '\n\n❌ 失敗 ' + failed.length + ' 板：\n' + failed.join('\n');
     alert(result);
 
-    // 重新載入最新帳面，未調整的板保留已輸入的實盤數以便重盤
+    // 重新載入最新帳面：盤點期間有異動的板清空實盤數，一定要重新數過（不能直接再送出舊的數字蓋掉揀貨）；
+    // 其他失敗的板保留已輸入的實盤數
     var keep = {};
-    st.rows.forEach(function(r) { keep[r.id] = r.counted; });
+    st.rows.forEach(function(r) { if (!changedIds[r.id]) keep[r.id] = r.counted; });
     setTimeout(function() {
         window.loadStocktake();
         window._stocktake.rows.forEach(function(r) {

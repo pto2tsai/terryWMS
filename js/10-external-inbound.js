@@ -182,7 +182,7 @@
 
             try {
                 var existing = window.externalStock.find(function(s) {
-                    return s.warehouseId === wh && s.productName === name && s.batchNo === batch && s.company === company;
+                    return window.sameExternalLot(s, { warehouseId: wh, company: company, productName: name, spec: spec, batchNo: batch, expDate: exp });
                 });
                 var reasonText = (document.getElementById('ext-adj-reason').selectedOptions[0] || {}).text || reason || '';
                 var logData = {
@@ -1164,10 +1164,11 @@
                     quantity: qty,
                     batchNo: document.getElementById('edit-batch').value.trim(),
                     expDate: exp || '',
+                    expiryDate: exp || '',   // 入帳時讀 expiryDate，兩個欄位都要改，不然會用舊效期
                     vendor: document.getElementById('edit-vendor').value.trim()
                 };
                 var posted = cur.status === 'completed';
-                if (!posted) fields.locationId = document.getElementById('edit-loc').value.trim();
+                if (!posted) fields.locationId = document.getElementById('edit-loc').value.trim().toUpperCase();
                 // 重新送審：回到財務待核准清單（入帳狀態不變；之前改成 pending_approval 會讓單子從兩邊清單都消失）
                 await window.updateDoc(ref, Object.assign({}, fields, {
                     approvalStatus: 'pending',

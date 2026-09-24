@@ -165,6 +165,7 @@ window.completePickingWave = async function() {
     let msg = '完成波次並出貨？\n\n已揀：' + completed + '/' + total;
     if (completed < total) msg += '\n未揀 ' + (total - completed) + ' 項會記為缺貨';
     if (shortage > 0) msg += '\n庫存不足 ' + shortage + ' 項';
+    if (completed < total || shortage > 0) msg += '\n（相關訂單標為部分出貨，缺的貨之後可以再排波次）';
     if (!confirm(msg)) return;
 
     try {

@@ -110,7 +110,7 @@ ok('logs written in same tx (2)', await logCount()-logs0===2, await logCount()-l
 
 // T3 merge
 const m1 = await A.page.evaluate(async()=>{ try{ await mergePalletsTx(db.collection('pallets').doc('PC'), db.collection('pallets').doc('PB')); return 'ok'; }catch(e){return 'ERR '+e.message;} });
-ok('merge with different batch needs confirmation (not silently merged)', m1.includes('批號不同') && m1.startsWith('ERR'), m1);
+ok('merge with different batch is blocked', m1.includes('批號不同') && m1.startsWith('ERR'), m1);
 const m2 = await A.page.evaluate(async()=>{ try{ const r=await mergePalletsTx(db.collection('pallets').doc('PB'), db.collection('pallets').doc('PA')); return r.total; }catch(e){return 'ERR '+e.message;} });
 ok('merge adds actual qty (2+5=7)', m2===7 && await qty('PA')===7 && await qty('PB')===null, m2);
 const m3 = await A.page.evaluate(async()=>{ try{ await mergePalletsTx(db.collection('pallets').doc('PA'), db.collection('pallets').doc('PA')); return 'ok'; }catch(e){return 'ERR '+e.message;} });
@@ -146,7 +146,7 @@ const w1 = await wave();
 const wv = await admin(async d=>[(await getDoc(doc(d,'waves','WV'))).data().status,(await getDoc(doc(d,'salesOrders','SO1'))).data().status]);
 ok('wave completed: stock 7-2=5, wave done, order shipped', await qty('PA')===5 && wv[0]==='done' && wv[1]==='shipped', w1+' '+wv);
 const w2 = await wave();
-ok('wave cannot be completed twice', w2.includes('已經完成過') && await qty('PA')===5, w2);
+ok('wave cannot be completed twice', /已經完成過|已經在其他裝置完成/.test(w2) && await qty('PA')===5, w2);
 
 // T7 query wrapper + clearLane only clears that lane
 await A.page.evaluate(async()=>{ await clearLane('I-B', 1); });
@@ -195,8 +195,8 @@ const pc = await A.page.evaluate(async()=>{
   await new Promise(r=>setTimeout(r,500));
   document.getElementById('merge-keep-id').value='PG'; document.getElementById('merge-remove-id').value='PI';
   window._keepPalletData=null; window._removePalletData=null;
-  let askedMsg=''; window.confirm=(m)=>{ askedMsg=m; return false; };   // 批號不同 → 使用者按「取消」
-  await executePalletMerge(); const a2 = askedMsg;
+  window.confirm=()=>true;   // 批號不同 → 直接擋下（不能合併）
+  await executePalletMerge(); const a2 = window.__alerts.slice(-1)[0];
   window.confirm=()=>true;
   document.getElementById('merge-keep-id').value='PG'; document.getElementById('merge-remove-id').value='PH';
   window._keepPalletData=null; window._removePalletData=null;
@@ -204,14 +204,13 @@ const pc = await A.page.evaluate(async()=>{
   return [a1,a2,a3]; });
 const pg = await admin(async d=>(await getDoc(doc(d,'pallets','PG'))).data());
 ok('pallet change: moved the scanned pallet (not stale cache)', pg.locationId==='J-D-09-1F' && (await admin(async d=>(await getDoc(doc(d,'pallets','PI'))).data().locationId))==='J-C-03-3F', pc[0]);
-ok('pallet change: different batch asks for confirmation; cancel keeps both pallets', pc[1].includes('批號不同') && await qty('PI')===2, pc[1]);
+ok('pallet change: different batch is blocked; both pallets kept', pc[1].includes('批號不同') && await qty('PI')===2, pc[1]);
 ok('pallet change: merge 6+3=9', await qty('PG')===9 && await qty('PH')===null, pc[2]);
 
 const mixed = await A.page.evaluate(async()=>{ window.confirm=()=>true;
-  const r = await mergePalletsConfirm(db.collection('pallets').doc('PI'), db.collection('pallets').doc('PG')); return r.total; });
+  try { await mergePalletsConfirm(db.collection('pallets').doc('PI'), db.collection('pallets').doc('PG')); return 'ok'; } catch(e) { return 'ERR '+e.message; } });
 const pgMix = await admin(async d=>(await getDoc(doc(d,'pallets','PG'))).data());
-const mixLog = await admin(async d=>(await getDocs(collection(d,'inventoryLogs'))).docs.map(x=>x.data()).find(l=>String(l.note).includes('批號不同')));
-ok('mixed-batch merge after confirm: 9+2=11, logged with warning', mixed===11 && pgMix.quantity===11 && await qty('PI')===null && !!mixLog, JSON.stringify(mixLog && mixLog.note));
+ok('mixed-batch merge is blocked even after confirm (batch traceability)', mixed.startsWith('ERR') && mixed.includes('批號不同') && pgMix.quantity===9 && await qty('PI')===2, mixed);
 
 
 // ===== 第 3 步：資料格式、容量、重複函數 =====

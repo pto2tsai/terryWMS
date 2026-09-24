@@ -47,6 +47,27 @@
             }
         }
         
+        // 馬上入帳／外倉入庫也要檢查儲位格式與效期（交給堆高機的 createInboundOrder 會自己檢查）
+        if (mode !== 'forklift') {
+            if (!formData.isExternal && mode !== 'external') {
+                formData.locationId = String(formData.locationId || '').trim().toUpperCase().replace(/\s+/g, '');
+                if (window.isValidStorageLocation && !window.isValidStorageLocation(formData.locationId)) {
+                    alert('❌ 儲位格式不正確：' + formData.locationId + '\n\n正確格式例如 I-A-01-1F，或 TEMP-IN（進貨暫存區）');
+                    return;
+                }
+            }
+            var ec = typeof window.checkExpiryStatus === 'function' ? window.checkExpiryStatus(formData.productName, formData.spec, formData.expDate) : { status: 'ok' };
+            if (ec.status === 'expired') {
+                alert('❌ 無法入庫！\n\n此商品已過期（' + formData.expDate + '）\n\n請退回供應商或進行報廢處理');
+                return;
+            } else if (ec.status === 'critical' && typeof window.showExpiryApprovalModal === 'function') {
+                var r = await window.showExpiryApprovalModal(ec);
+                if (r !== 'approve') return;
+            } else if (ec.status === 'warning') {
+                if (!confirm('⚠️ 效期警示\n\n' + ec.message + '\n\n剩餘天數：' + ec.remainingDays + ' 天\n\n確定要允收此批貨物嗎？')) return;
+            }
+        }
+
         if (formData.isExternal || mode === 'external') {
             await executeExternalInbound(formData, formData.warehouseId);
         } else if (mode === 'forklift') {
@@ -125,17 +146,22 @@
         if (!confirm('確定入庫到外倉？\n\n倉庫：' + whName + '\n品名：' + data.productName + '\n數量：' + data.quantity)) return;
         
         try {
-            var existing = (window.externalStock || []).find(s => s.warehouseId === warehouseId && s.productName === data.productName && s.batchNo === data.batchNo && s.company === data.company);
-            
-            if (existing) {
-                await window.updateDoc(window.doc(window.db, 'externalStock', existing.id), { quantity: existing.quantity + data.quantity, totalWeight: (existing.totalWeight || 0) + data.totalWeight, updatedAt: new Date().toISOString() });
-            } else {
-                await window.addDoc(window.collection(window.db, 'externalStock'), { company: data.company, warehouseId, productCode: data.productCode || '', productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, vendor: data.vendor, productType: data.productType, createdAt: new Date().toISOString() });
-            }
-            
-            if (typeof window.logInventoryChange === 'function') {
-                await window.logInventoryChange({ type: 'inbound', company: data.company, productName: data.productName, spec: data.spec, quantity: data.quantity, totalWeight: data.totalWeight, quantityChange: data.quantity, locationId: warehouseId, batchNo: data.batchNo, note: '外倉入庫 - ' + whName });
-            }
+            // 同倉、同公司、同品名／規格／批號／效期才合併；以交易讀最新數量再加（不用畫面上的舊數字）
+            var existing = (window.externalStock || []).find(s => window.sameExternalLot(s, Object.assign({ warehouseId: warehouseId }, data)));
+            var db = window.db;
+            var ref = existing ? db.collection('externalStock').doc(existing.id) : db.collection('externalStock').doc();
+            await window.runStockTransaction({
+                changes: existing ? [{ ref: ref, delta: data.quantity, label: data.productName, extra: { updatedAt: new Date().toISOString() } }] : [],
+                creates: existing ? [] : [{ ref: ref, data: { company: data.company, warehouseId, productCode: data.productCode || '', productName: data.productName, spec: data.spec, batchNo: data.batchNo, expDate: data.expDate, expiryDate: data.expDate, quantity: data.quantity, totalWeight: data.totalWeight, unitWeight: data.unitWeight || 0, vendor: data.vendor, productType: data.productType, createdAt: new Date().toISOString() } }],
+                updates: function(results) {
+                    if (!existing || !data.totalWeight) return [];
+                    var r = results[ref.path];
+                    return [{ ref: ref, data: { totalWeight: Math.round(((parseFloat(r.data.totalWeight) || 0) + data.totalWeight) * 10) / 10 } }];
+                },
+                logs: function() {
+                    return [{ type: 'inbound', company: data.company, productName: data.productName, spec: data.spec, quantity: data.quantity, weight: data.totalWeight || 0, weightChange: data.totalWeight || 0, quantityChange: data.quantity, locationId: warehouseId, batchNo: data.batchNo, expDate: data.expDate, note: '外倉入庫 - ' + whName }];
+                }
+            });
             
             alert('✅ 外倉入庫成功！\n\n倉庫：' + whName + '\n品名：' + data.productName + '\n數量：' + data.quantity);
             if (typeof clearInboundForm === 'function') clearInboundForm();
@@ -704,7 +730,23 @@
                 updateData.expiryDate = window.normalizeDateValue(expiryStr);
                 updateData.expDate = updateData.expiryDate;
             }
-            updateData.locationId = updateData.locationId.toUpperCase();
+            updateData.locationId = updateData.locationId.toUpperCase().replace(/\s+/g, '');
+            if (window.isValidStorageLocation && !window.isValidStorageLocation(updateData.locationId) && updateData.locationId !== String(item.locationId || '').toUpperCase()) {
+                alert('❌ 儲位格式不正確：' + updateData.locationId + '\n\n正確格式例如 I-A-01-1F'); return;
+            }
+
+            // 只寫入使用者真的改過的欄位：開啟視窗後別人（例如波次揀貨）改了數量，沒動數量就不會把舊數字蓋回去
+            var opened = {
+                company: item.company || '崇文', locationId: String(item.locationId || '').toUpperCase(), productName: item.productName || '',
+                spec: item.spec || '', batchNo: item.batchNo || '', quantity: parseFloat(item.quantity) || 0,
+                totalWeight: parseFloat(item.totalWeight) || 0, expiryDate: window.normalizeDateValue(item.expiryDate || item.expDate) || ''
+            };
+            var same = function(a, b) { return String(a === undefined || a === null ? '' : a) === String(b === undefined || b === null ? '' : b); };
+            Object.keys(opened).forEach(function(k) {
+                if (k === 'expiryDate') { if (!expiryStr || same(updateData.expiryDate, opened.expiryDate)) { delete updateData.expiryDate; delete updateData.expDate; } return; }
+                if (same(updateData[k], opened[k])) delete updateData[k];
+            });
+            if (Object.keys(updateData).length <= 1) { modal.remove(); return; }
 
             try {
                 // 以交易讀最新資料、更新，並把改了什麼寫進異動記錄（原本直接覆寫、沒有記錄）
@@ -713,6 +755,15 @@
                     var snap = await tx.get(ref);
                     if (!snap.exists) throw new Error('此板已不存在（可能已被其他人處理）');
                     var before = snap.data();
+                    // 使用者改的欄位，資料庫裡也在這段時間被別人改了 → 不覆蓋，請重新開啟
+                    var conflicts = [];
+                    Object.keys(updateData).forEach(function(k) {
+                        if (!(k in opened)) return;
+                        var now = k === 'expiryDate' ? (window.normalizeDateValue(before.expiryDate || before.expDate) || '') :
+                            (k === 'quantity' || k === 'totalWeight') ? (parseFloat(before[k]) || 0) : (k === 'locationId' ? String(before[k] || '').toUpperCase() : (before[k] || (k === 'company' ? '崇文' : '')));
+                        if (!same(now, opened[k])) conflicts.push(k + '（開啟時 ' + opened[k] + '，現在 ' + now + '）');
+                    });
+                    if (conflicts.length) throw new Error('這板在你編輯時已被其他作業改過：' + conflicts.join('、') + '\n請關閉後重新開啟再改');
                     var labels = { company: '公司', locationId: '儲位', productName: '品名', spec: '規格', batchNo: '批號', quantity: '數量', totalWeight: '重量', expiryDate: '效期' };
                     var diffs = [];
                     Object.keys(labels).forEach(function(k) {
@@ -726,15 +777,15 @@
                     if (diffs.length > 0) {
                         tx.set(window.db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
                             type: 'adjust',
-                            company: updateData.company,
-                            productName: updateData.productName,
-                            spec: updateData.spec,
-                            batchNo: updateData.batchNo,
-                            quantity: updateData.quantity,
-                            quantityChange: updateData.quantity - (parseFloat(before.quantity) || 0),
-                            locationId: updateData.locationId,
+                            company: updateData.company || before.company || '',
+                            productName: updateData.productName || before.productName,
+                            spec: updateData.spec !== undefined ? updateData.spec : (before.spec || ''),
+                            batchNo: updateData.batchNo !== undefined ? updateData.batchNo : (before.batchNo || ''),
+                            quantity: updateData.quantity !== undefined ? updateData.quantity : (parseFloat(before.quantity) || 0),
+                            quantityChange: updateData.quantity !== undefined ? updateData.quantity - (parseFloat(before.quantity) || 0) : 0,
+                            locationId: updateData.locationId || before.locationId || '',
                             fromLocation: before.locationId || '',
-                            toLocation: updateData.locationId,
+                            toLocation: updateData.locationId || before.locationId || '',
                             palletId: before.palletId || id,
                             note: '庫存編輯：' + diffs.join('、')
                         }));
