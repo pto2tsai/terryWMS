@@ -60,8 +60,8 @@ window.selectInboundTask = function(id) {
         '<span class="k">批號</span><span class="v">' + esc(t.batchNo || '-') + '</span>' +
         '<span class="k">數量</span><span class="v qty">' + esc(t.quantity) + ' 件</span>' +
         '<span class="k">放到</span><span class="v loc">' + esc(t.locationId || '待指定') + '</span></div>' +
-        (t.expiryApproval === 'pending' ? '<div style="color:#f87171;font-size:13px;margin-top:8px">🔴 即期品還沒經主管核准，不能入帳；貨先放暫存區，等主管在電腦同意</div>' :
-         t.approvalStatus === 'pending' ? '<div style="color:#fbbf24;font-size:13px;margin-top:8px">⚠️ 此單財務還沒對帳（不影響上架）</div>' : '');
+        (t.expiryApproval === 'pending' ? '<div class="err-line">🔴 即期品還沒經主管核准，不能入帳；貨先放暫存區，等主管在電腦同意</div>' :
+         t.approvalStatus === 'pending' ? '<div class="warn-line">⚠️ 此單財務還沒對帳（不影響上架）</div>' : '');
     show('inbound-step1', false);
     show('inbound-step2', true);
     setResult('inbound-result', 'info', '📍 放到儲位後，掃描儲位標籤確認');

@@ -273,8 +273,8 @@ function mergeSetTgt(p) {
     const total = (parseFloat(s.quantity) || 0) + (parseFloat(p.quantity) || 0);
     $('merge-preview').innerHTML = palletInfoHtml(p) +
         '<div style="margin-top:12px;font-size:18px;text-align:center">' + esc(s.quantity) + ' + ' + esc(p.quantity) + ' = <b style="color:#fbbf24;font-size:24px">' + total + '</b> 件</div>' +
-        '<div style="text-align:center;color:#94a3b8;font-size:13px">' + esc(s.locationId) + ' 的板會併到 ' + esc(p.locationId) + '，原儲位空出</div>' +
-        (warns.length ? '<div style="color:#fbbf24;font-size:13px;margin-top:8px">⚠️ ' + warns.map(esc).join('<br>⚠️ ') + '</div>' : '');
+        '<div style="text-align:center;color:#cbd5e1;font-size:16px">' + esc(s.locationId) + ' 的板會併到 ' + esc(p.locationId) + '，原儲位空出</div>' +
+        (warns.length ? '<div class="warn-line">⚠️ ' + warns.map(esc).join('<br>⚠️ ') + '</div>' : '');
     show('merge-step2', false); show('merge-step3', true);
     setResult('merge-result', true, '✓ 請確認合併');
 }

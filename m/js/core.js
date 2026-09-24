@@ -75,6 +75,14 @@ function clearResult(id) { const el = $(id); if (el) { el.className = 'scan-resu
 
 // ---------- 掃描比對 ----------
 // 比對用的鍵：大寫、去掉 - 空白等符號（IN-20260923-001 與 IN20260923001 視為相同）
+// 公司標籤（崇文藍、八方紫，大字）
+function companyTag(c) { return c ? '<span class="co-tag ' + (c === '八方' ? 'co-bf' : 'co-cw') + '">' + esc(c) + '</span>' : ''; }
+// 板號：最後 4 碼放大加粗（手打、核對都看尾碼）
+function pidHtml(id) {
+    const s = String(id || '');
+    if (!s) return '-';
+    return s.length > 4 ? esc(s.slice(0, -4)) + '<b>' + esc(s.slice(-4)) + '</b>' : '<b>' + esc(s) + '</b>';
+}
 function codeKey(v) { return String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 function normCode(v) { return String(v || '').trim().toUpperCase(); }
 
