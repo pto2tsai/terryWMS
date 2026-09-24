@@ -10,7 +10,8 @@ async function fillForm(qty, loc) {
 }
 await H.nav(page, 'unified-inbound');
 await fillForm(30, 'I-B-02-2F');
-await page.click("button[onclick=\"toggleAdvancedOptions()\"]"); await page.waitForTimeout(400); await page.click("button[onclick=\"createInboundOrder()\"]");
+await page.click('#btn-type-Raw'); await page.uncheck('#in-print-slip');
+await page.click('#btn-inbound-forklift');
 await page.waitForTimeout(2500);
 H.note('dialogs: ' + JSON.stringify(log.dialogs.map(d => d.msg.slice(0, 150))));
 const orders = await H.all('inboundOrders');
