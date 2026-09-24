@@ -31,7 +31,12 @@
         .stat { background: #111827; border-radius: 1vw; padding: .8vw 1vw; border-top: .35vw solid var(--c); }
         .stat .n { font-size: 3.6vw; font-weight: 900; color: #fff; line-height: 1.1; }
         .stat .l { font-size: 1.3vw; color: #94a3b8; }
-        .cols { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vw; min-height: 0; }
+        .cols { flex: 1; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1vw; min-height: 0; }
+        .col.main h2 { font-size: 2.3vw; }
+        .col.main .card .name { font-size: 2.3vw; }
+        .col.main .card .qty { font-size: 2.6vw; }
+        .col.main .card .sub { font-size: 1.6vw; }
+        .col.main .bar { height: 1vw; }
         .col { background: #111827; border-radius: 1vw; display: flex; flex-direction: column; min-height: 0; border: .2vw solid var(--c); }
         .col h2 { background: var(--c); color: #fff; font-size: 1.9vw; padding: .6vw 1vw; display: flex; justify-content: space-between; }
         .list { flex: 1; overflow: hidden; padding: .8vw; display: flex; flex-direction: column; gap: .7vw; }
@@ -77,15 +82,16 @@
             </div>
         </header>
         <div class="stats">
-            <div class="stat" style="--c:#22c55e"><div class="n" id="s-in">0</div><div class="l">今天入庫（板）</div></div>
             <div class="stat" style="--c:#f97316"><div class="n" id="s-wave">0</div><div class="l">今天完成波次</div></div>
             <div class="stat" style="--c:#fb923c"><div class="n" id="s-out">0</div><div class="l">今天出貨（件）</div></div>
+            <div class="stat" style="--c:#22c55e"><div class="n" id="s-in">0</div><div class="l">今天入庫（板）</div></div>
             <div class="stat" style="--c:#6366f1"><div class="n" id="s-move">0</div><div class="l">今天搬板</div></div>
             <div class="stat" style="--c:#ef4444"><div class="n" id="s-exp">0</div><div class="l">7 天內到期／已過期（板）</div></div>
         </div>
+        <!-- 波次出貨是現場最主要的工作：放最左邊、佔一半畫面、字最大 -->
         <div class="cols">
+            <div class="col main" style="--c:#ea580c"><h2><span>📦 揀貨波次（出貨）</span><span id="c-waves">0</span></h2><div class="list" id="l-waves"></div></div>
             <div class="col" style="--c:#16a34a"><h2><span>🚚 待上架</span><span id="c-tasks">0</span></h2><div class="list" id="l-tasks"></div></div>
-            <div class="col" style="--c:#ea580c"><h2><span>📦 揀貨波次</span><span id="c-waves">0</span></h2><div class="list" id="l-waves"></div></div>
             <div class="col" style="--c:#7c3aed"><h2><span>🔁 調度工單</span><span id="c-dispatch">0</span></h2><div class="list" id="l-dispatch"></div></div>
         </div>
     </div>
@@ -168,7 +174,9 @@
         });
         // 揀貨波次：待揀、揀貨中、待分貨
         listen(db.collection('waves').where('status', 'in', ['pending', 'picking', 'sorting']), function(rows) {
-            rows.sort(function(a, b) { return String(a.waveNo || '').localeCompare(String(b.waveNo || '')); });
+            // 揀貨中的排最前面，其次待揀貨、待分貨；同狀態依波次編號
+            var rank = { picking: 0, pending: 1, sorting: 2 };
+            rows.sort(function(a, b) { return (rank[a.status] - rank[b.status]) || String(a.waveNo || '').localeCompare(String(b.waveNo || '')); });
             render('l-waves', 'c-waves', rows, function(w) {
                 var done = (w.completedItems || []).length, all = w.itemCount || (w.summary || []).length || 0;
                 var pct = all ? Math.min(100, Math.round(done / all * 100)) : 0;
