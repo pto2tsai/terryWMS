@@ -54,6 +54,15 @@
         .bar { height: .7vw; background: #334155; border-radius: 99px; margin-top: .5vw; overflow: hidden; }
         .bar > div { height: 100%; background: var(--c); }
         .empty { margin: auto; text-align: center; color: #4ade80; font-size: 2vw; font-weight: 800; }
+        /* 像速食店出餐螢幕：每張單顯示等了多久，超時變黃、變紅；新進來的單閃一下 */
+        .card .age { font-weight: 800; color: #94a3b8; white-space: nowrap; }
+        .card.warn { border-left-color: #eab308; background: #3a3413; }
+        .card.warn .age { color: #fde047; }
+        .card.late { border-left-color: #ef4444; background: #3b1219; }
+        .card.late .age { color: #fca5a5; animation: blink 1.2s step-end infinite; }
+        .card.fresh { animation: fresh 2.5s ease-out; }
+        @keyframes blink { 50% { opacity: .35; } }
+        @keyframes fresh { 0% { box-shadow: 0 0 0 .4vw #fff; } 100% { box-shadow: 0 0 0 0 transparent; } }
         .more { text-align: center; color: #94a3b8; font-size: 1.3vw; }
         #login { position: fixed; inset: 0; background: #0b1120; display: flex; align-items: center; justify-content: center; z-index: 10; }
         #login form { background: #111827; padding: 32px; border-radius: 16px; width: 380px; display: flex; flex-direction: column; gap: 12px; }
@@ -105,6 +114,24 @@
     var db = firebase.firestore(), auth = firebase.auth();
     window.db = db;
     var unsubs = [];
+    // 等待時間超過幾分鐘變黃、變紅（揀貨波次、待上架、調度工單）
+    var AGE_LIMIT = { waves: [30, 60], tasks: [60, 120], dispatch: [120, 240] };
+    var seen = {}, lastDraw = {};
+    function minsSince(v) {
+        if (!v) return null;
+        var t = v.toDate ? v.toDate().getTime() : (v.seconds ? v.seconds * 1000 : new Date(v).getTime());
+        return isNaN(t) ? null : Math.max(0, Math.floor((Date.now() - t) / 60000));
+    }
+    function ageText(m) { return m == null ? '' : m < 60 ? '⏱ ' + m + ' 分' : '⏱ ' + Math.floor(m / 60) + ' 時 ' + (m % 60) + ' 分'; }
+    // 卡片共用：等待時間、超時顏色、新單閃一下
+    function ageClass(kind, row, extra) {
+        var m = minsSince(row.createdAt), lim = AGE_LIMIT[kind];
+        var cls = extra ? ' ' + extra : (m != null && m >= lim[1] ? ' late' : m != null && m >= lim[0] ? ' warn' : '');
+        var key = kind + ':' + row.id;
+        if (seen[kind] && !seen[kind][key + '#']) cls += ' fresh';
+        return { cls: cls, age: '<span class="age">' + ageText(m) + '</span>' };
+    }
+    function remember(kind, rows) { seen[kind] = {}; rows.forEach(function(r) { seen[kind][kind + ':' + r.id + '#'] = true; }); }
     var MAX = 30;   // 每欄最多畫幾張卡片（實際依螢幕放得下的數量，其他顯示「還有 N 筆」）
 
     function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -154,7 +181,8 @@
     }
 
     // 依螢幕實際放得下幾張卡片顯示，放不下的寫「還有 N 筆」（不同尺寸的電視都不會被切掉）
-    function render(listId, countId, rows, cardFn, emptyText) {
+    function render(listId, countId, rows, cardFn, emptyText, kind) {
+        if (kind) lastDraw[kind] = function() { render(listId, countId, rows, cardFn, emptyText); };
         $(countId).textContent = rows.length;
         var el = $(listId);
         if (rows.length === 0) { el.innerHTML = '<div class="empty">✅ ' + emptyText + '</div>'; return; }
@@ -164,41 +192,46 @@
         };
         draw();
         while (n > 1 && el.scrollHeight > el.clientHeight + 1) { n--; draw(); }
+        if (kind) remember(kind, rows);
     }
+    // 每分鐘更新等待時間（不用等資料變動）
+    setInterval(function() { Object.keys(lastDraw).forEach(function(k) { lastDraw[k](); }); }, 60000);
 
     function startListeners() {
         // 待上架：手機「入庫任務」（即期品待主管核准用紅色）
         listen(db.collection('inboundTasks').where('status', '==', 'pending'), function(rows) {
             rows.sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
             render('l-tasks', 'c-tasks', rows, function(t) {
-                var hold = t.expiryApproval === 'pending';
-                return '<div class="card' + (hold ? ' red' : '') + '" style="--c:#16a34a"><div class="t"><span class="name">' + esc(t.productName) + ' ' + esc(t.spec || '') + '</span><span class="qty">' + esc(t.quantity) + ' 件</span></div>' +
-                    '<div class="sub"><span>' + (hold ? '🔴 即期品待主管核准' : esc(t.orderNo || t.palletId || '')) + '</span><span class="loc">→ ' + esc(t.locationId || '待指定') + '</span></div></div>';
-            }, '目前沒有待上架的貨');
+                var hold = t.expiryApproval === 'pending', a = ageClass('tasks', t, hold ? 'red' : '');
+                return '<div class="card' + a.cls + '" style="--c:#16a34a"><div class="t"><span class="name">' + esc(t.productName) + ' ' + esc(t.spec || '') + '</span><span class="qty">' + esc(t.quantity) + ' 件</span></div>' +
+                    '<div class="sub"><span>' + (hold ? '🔴 即期品待主管核准' : esc(t.orderNo || t.palletId || '')) + '　' + a.age + '</span><span class="loc">→ ' + esc(t.locationId || '待指定') + '</span></div></div>';
+            }, '目前沒有待上架的貨', 'tasks');
         });
         // 揀貨波次：待揀、揀貨中、待分貨
         listen(db.collection('waves').where('status', 'in', ['pending', 'picking', 'sorting']), function(rows) {
-            // 揀貨中的排最前面，其次待揀貨、待分貨；同狀態依波次編號
+            // 揀貨中的排最前面，其次待揀貨、待分貨；同狀態先來先做（等最久的在上面）
             var rank = { picking: 0, pending: 1, sorting: 2 };
-            rows.sort(function(a, b) { return (rank[a.status] - rank[b.status]) || String(a.waveNo || '').localeCompare(String(b.waveNo || '')); });
+            rows.sort(function(a, b) { return (rank[a.status] - rank[b.status]) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.waveNo || '').localeCompare(String(b.waveNo || '')); });
             render('l-waves', 'c-waves', rows, function(w) {
                 var done = (w.completedItems || []).length, all = w.itemCount || (w.summary || []).length || 0;
                 var pct = all ? Math.min(100, Math.round(done / all * 100)) : 0;
                 var st = w.status === 'picking' ? '揀貨中' : w.status === 'sorting' ? '待分貨' : '待揀貨';
-                return '<div class="card" style="--c:#ea580c"><div class="t"><span class="name">' + esc(w.waveNo) + '　' + esc(w.logistics || '') + '</span><span class="qty">' + esc(w.totalQty || 0) + ' 件</span></div>' +
-                    '<div class="sub"><span>' + st + '　' + (w.orderCount || (w.orders || []).length) + ' 單</span><span>' + done + '/' + all + ' 項</span></div>' +
+                var a = ageClass('waves', w);
+                return '<div class="card' + a.cls + '" style="--c:#ea580c"><div class="t"><span class="name">' + esc(w.waveNo) + '　' + esc(w.logistics || '') + '</span><span class="qty">' + esc(w.totalQty || 0) + ' 件</span></div>' +
+                    '<div class="sub"><span>' + st + '　' + (w.orderCount || (w.orders || []).length) + ' 單　' + a.age + '</span><span>' + done + '/' + all + ' 項</span></div>' +
                     '<div class="bar"><div style="width:' + pct + '%"></div></div></div>';
-            }, '目前沒有要揀的波次');
+            }, '目前沒有要揀的波次', 'waves');
         });
         // 調度工單（手機「調度工單」）
         listen(db.collection('dispatchOrders').where('status', 'in', ['pending', 'in_progress']), function(rows) {
             $('cols').classList.toggle('with-dispatch', rows.length > 0);
+            rows.sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
             render('l-dispatch', 'c-dispatch', rows, function(o) {
-                var done = (o.completedOps || []).length, all = (o.operations || []).length;
-                return '<div class="card" style="--c:#7c3aed"><div class="t"><span class="name">' + esc(o.productName || '') + ' ' + esc(o.spec || '') + '</span><span class="qty">' + done + '/' + all + '</span></div>' +
-                    '<div class="sub"><span>' + esc(o.orderNo || '') + '</span><span>' + (done ? '進行中' : '待執行') + '</span></div>' +
+                var done = (o.completedOps || []).length, all = (o.operations || []).length, a = ageClass('dispatch', o);
+                return '<div class="card' + a.cls + '" style="--c:#7c3aed"><div class="t"><span class="name">' + esc(o.productName || '') + ' ' + esc(o.spec || '') + '</span><span class="qty">' + done + '/' + all + '</span></div>' +
+                    '<div class="sub"><span>' + esc(o.orderNo || '') + '　' + a.age + '</span><span>' + (done ? '進行中' : '待執行') + '</span></div>' +
                     '<div class="bar"><div style="width:' + (all ? Math.round(done / all * 100) : 0) + '%"></div></div></div>';
-            }, '目前沒有調度工單');
+            }, '目前沒有調度工單', 'dispatch');
         });
         // 今天完成：今天的異動記錄
         var today = new Date().toLocalYMD();
