@@ -22,6 +22,7 @@ export function startServer(port = 8766) {
     fs.readFile(p, (e, b) => {
       if (e) { res.writeHead(404); return res.end(); }
       if (p.endsWith(path.join('m', 'js', 'core.js'))) b = Buffer.from(String(b).replace("const auth = firebase.auth();", "const auth = firebase.auth(); db.useEmulator('127.0.0.1',8080); auth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true});"));
+      if (p.endsWith('board.html')) b = Buffer.from(String(b).replace("var db = firebase.firestore(), auth = firebase.auth();", "var db = firebase.firestore(), auth = firebase.auth(); db.useEmulator('127.0.0.1',8080); auth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true});"));
       if (p.endsWith('firebase-init.js')) b = Buffer.from(String(b).replace("window.secondaryAuth = secondaryAuth;", "window.secondaryAuth = secondaryAuth; db.useEmulator('127.0.0.1',8080); auth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true}); secondaryAuth.useEmulator('http://127.0.0.1:9099',{disableWarnings:true});"));
       res.writeHead(200, { 'content-type': p.endsWith('.js') ? 'text/javascript' : p.endsWith('.css') ? 'text/css' : p.endsWith('.json') ? 'application/json' : p.endsWith('.svg') ? 'image/svg+xml' : 'text/html; charset=utf-8' }); res.end(b);
     });

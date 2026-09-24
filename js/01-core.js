@@ -673,3 +673,27 @@ console.log('✅ WMS 工具函數庫已載入');
     // 按 Enter 送出前先換成標準格式（捕獲階段，比欄位自己的 Enter 處理先執行）
     document.addEventListener('keydown', function(e) { if (e.key === 'Enter' && isLocInput(e.target)) commit(e.target); }, true);
 })();
+
+// ========== 用手機打開電腦版：提示切換到手機版（不強制；按「留在電腦版」就記住不再提示）==========
+(function() {
+    var isPhone = /Android.+Mobile|iPhone|iPod|Windows Phone/i.test(navigator.userAgent) ||
+        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600);
+    var stay = false;
+    try { stay = localStorage.getItem('wms_stay_desktop') === '1'; } catch (e) {}
+    if (!isPhone || stay || /[?&]desktop=1/.test(location.search)) return;
+    function show() {
+        if (document.getElementById('switch-mobile-bar')) return;
+        var bar = document.createElement('div');
+        bar.id = 'switch-mobile-bar';
+        bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:100000;background:#16a34a;color:#fff;padding:12px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+        bar.innerHTML = '<span style="flex:1 1 100%">📱 你用的是手機，手機版按鈕大、可以用相機掃描</span>' +
+            '<a href="m/" style="background:#fff;color:#166534;font-weight:bold;padding:8px 12px;border-radius:8px;text-decoration:none;white-space:nowrap">切換到手機版</a>' +
+            '<button id="stay-desktop-btn" style="background:transparent;border:1px solid #bbf7d0;color:#fff;padding:7px 10px;border-radius:8px;white-space:nowrap">留在電腦版</button>';
+        document.body.appendChild(bar);
+        document.getElementById('stay-desktop-btn').onclick = function() {
+            try { localStorage.setItem('wms_stay_desktop', '1'); } catch (e) {}
+            bar.remove();
+        };
+    }
+    if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
+})();
