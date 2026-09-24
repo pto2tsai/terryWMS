@@ -1448,6 +1448,9 @@ window.openPickupModal = function(consignmentId) {
                 <div class="text-sm text-slate-400">${c.productName} | ${c.spec || '-'}</div>
                 <div class="text-sm text-slate-400">剩餘：<span class="text-emerald-400 font-bold">${c.remainingQty}</span> 件</div>
             </div>
+            <div class="text-xs text-amber-300 bg-amber-900/30 rounded-lg p-2 leading-relaxed">
+                ${(!c.source || c.source === 'internal') ? '客戶提貨請在 ERP 開訂單、走波次出貨：出貨完成會自動扣庫存和寄倉件數。這裡只在沒自動扣到時補記，不扣庫存。' : '外倉寄倉：這裡只更新寄倉剩餘件數，外倉庫存請在外倉管理調整。'}
+            </div>
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="text-sm text-slate-400 mb-1 block">提貨日期</label>
@@ -1460,7 +1463,7 @@ window.openPickupModal = function(consignmentId) {
             </div>
             <div class="flex gap-2">
                 <button onclick="savePickup('${consignmentId}')" class="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">
-                    <i class="fa-solid fa-truck-ramp-box mr-1"></i>確認提貨
+                    <i class="fa-solid fa-truck-ramp-box mr-1"></i>記錄提貨
                 </button>
                 <button onclick="WMS.closeModal('pickup-modal')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">
                     取消
@@ -1470,14 +1473,14 @@ window.openPickupModal = function(consignmentId) {
     `;
 
     WMS.createModal('pickup-modal', {
-        title: '客戶提貨',
+        title: '記錄客戶提貨',
         icon: 'fa-solid fa-truck-ramp-box text-blue-400',
         content: content,
         width: '400px'
     });
 };
 
-// 寄倉提貨＝出倉：從保留這批寄倉的板扣庫存、寫出庫記錄，寄倉剩餘件數一起更新（同一筆交易）
+// 補記寄倉提貨：只更新寄倉剩餘件數（庫存由 ERP 訂單的波次出貨扣）
 window.savePickup = async function(consignmentId) {
     const pickupDate = document.getElementById('pickup-date')?.value || new Date().toLocalYMD();
     const pickupQty = parseInt(document.getElementById('pickup-qty')?.value) || 0;
@@ -1487,36 +1490,19 @@ window.savePickup = async function(consignmentId) {
     if (pickupQty <= 0) { alert('請輸入提貨件數'); return; }
     if (pickupQty > c.remainingQty) { alert(`提貨件數不能超過剩餘 ${c.remainingQty} 件`); return; }
 
+    // 提貨都會在 ERP 開訂單、走波次出貨，庫存由波次扣；內倉寄倉在波次完成時也會自動扣寄倉件數。
+    // 這裡只補記寄倉件數（例如客戶名稱對不上沒有自動扣到），不動庫存。
     const internal = !c.source || c.source === 'internal';
-    const changes = [];
-    if (internal) {
-        // 與揀貨保留相同的板：登記的儲位優先，其次同品名／規格／批號的板（效期晚的先扣）
-        const pallets = window.currentPallets ? window.currentPallets() : [];
-        const exp = p => window.normalizeDateValue(p.expiryDate || p.expDate) || '9999-12-31';
-        const cands = pallets.filter(p => (p.productName || '') === (c.productName || '') && (p.spec || '') === (c.spec || '') &&
-            (!c.batchNo || (p.batchNo || '') === c.batchNo)).sort((a, b) => {
-            const la = c.locationId && a.locationId === c.locationId ? 0 : 1, lb = c.locationId && b.locationId === c.locationId ? 0 : 1;
-            return la - lb || exp(b).localeCompare(exp(a));
-        });
-        let left = pickupQty;
-        cands.forEach(p => {
-            if (left <= 0) return;
-            const take = Math.min(parseFloat(p.quantity) || 0, left);
-            if (take > 0) { changes.push({ ref: window.db.collection('pallets').doc(p.id), delta: -take, deleteWhenEmpty: true, label: p.palletId, _p: p, _take: take }); left -= take; }
-        });
-        if (left > 0) {
-            alert('❌ 倉庫裡找不到足夠的「' + c.productName + ' ' + (c.spec || '') + (c.batchNo ? ' 批號 ' + c.batchNo : '') + '」\n\n還差 ' + left + ' 件，請先確認庫存（可能已被出貨或移到別的品項）。');
-            return;
-        }
-        const where = changes.map(ch => ch._p.locationId + ' ' + ch._take + ' 件').join('、');
-        if (!confirm('確認提貨出倉？\n\n客戶：' + c.customer + '\n' + c.productName + ' ' + (c.spec || '') + '　' + pickupQty + ' 件\n從：' + where +
-            '\n\n按「確定」會扣庫存、寫出庫記錄，並更新寄倉剩餘件數。')) return;
-    } else if (!confirm('確認提貨？\n\n客戶：' + c.customer + '\n' + c.productName + '　' + pickupQty + ' 件\n\n（外倉寄倉：只更新寄倉剩餘件數，外倉庫存請在外倉管理調整）')) return;
+    const auto = (c.pickups || []).filter(pk => pk.auto);
+    if (!confirm('確認補記提貨？\n\n客戶：' + c.customer + '\n' + c.productName + ' ' + (c.spec || '') + '　' + pickupQty + ' 件\n\n' +
+        (internal ? '只更新寄倉剩餘件數，不扣庫存（庫存由波次出貨扣）。\n內倉寄倉走波次出貨時會自動扣寄倉件數，一般不用再補記。' +
+            (auto.length ? '\n\n已經自動扣過：' + auto.map(pk => pk.date + ' ' + pk.qty + ' 件（' + (pk.waveNo || '') + '）').join('、') : '')
+            : '外倉寄倉：只更新寄倉剩餘件數，外倉庫存請在外倉管理調整。'))) return;
 
     const consRef = window.db.collection('consignments').doc(consignmentId);
     try {
         await window.runStockTransaction({
-            changes: changes.map(ch => ({ ref: ch.ref, delta: ch.delta, deleteWhenEmpty: true, label: ch.label })),
+            changes: [],
             reads: [consRef],
             validate: function(results, readSnaps) {
                 const cur = readSnaps[0].exists ? readSnaps[0].data() : null;
@@ -1533,17 +1519,10 @@ window.savePickup = async function(consignmentId) {
                 };
                 if (remaining <= 0) data.completedAt = new Date().toISOString();
                 return [{ ref: consRef, data: data }];
-            },
-            logs: function() {
-                return changes.map(ch => ({
-                    type: 'outbound', company: ch._p.company || '', productName: ch._p.productName, spec: ch._p.spec || '',
-                    batchNo: ch._p.batchNo || '', palletId: ch._p.palletId, locationId: ch._p.locationId,
-                    quantity: ch._take, quantityChange: -ch._take, note: '寄倉提貨：' + c.customer
-                }));
             }
         });
         WMS.closeModal('pickup-modal');
-        showNotification(`✅ 已提貨 ${pickupQty} 件` + (internal ? '，庫存已扣除' : ''), 'success');
+        showNotification(`✅ 已記錄提貨 ${pickupQty} 件`, 'success');
         if (typeof window.loadConsignmentsFromFirebase === 'function') await window.loadConsignmentsFromFirebase();
         else loadConsignmentList();
     } catch (e) {

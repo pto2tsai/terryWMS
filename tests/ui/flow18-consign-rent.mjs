@@ -1,4 +1,4 @@
-// 寄倉：波次保留、提貨＝出倉；倉租：寄倉依每天實際件數、自有庫存依每日板數快照
+// 寄倉：波次保留、客戶自己的訂單可揀寄倉貨並自動扣寄倉件數、手動提貨只補記；倉租：寄倉依每天實際件數、自有庫存依每日板數快照
 import * as H from './harness.mjs'; import { baseSeed, USERS } from './seed.mjs';
 
 const base = H.startServer(); await H.initEnv(); await H.ensureUsers(Object.values(USERS));
@@ -14,6 +14,9 @@ await H.resetData(async d => { await baseSeed(d);
   await H.setDoc(H.doc(d, 'consignments', 'K1'), { customer: '海霸王', source: 'internal', locationId: 'I-A-01-1F', productName: '白蝦', spec: '50/60', batchNo: 'B1',
     originalQty: 15, remainingQty: 15, status: 'active', pickups: [], freeUntil: '2020-01-01', chargeStartDate: '2020-01-02', ratePerUnit: 1, consignmentDate: '2019-12-01' });
   await H.setDoc(H.doc(d, 'waves', 'W1'), { waveNo: 'W1', status: 'pending', summary: [{ productName: '白蝦', spec: '50/60', totalQty: 10, orders: [] }] });
+  // 寄倉客戶（ERP 名稱較長）來提 8 件，另一個客戶要 6 件
+  await H.setDoc(H.doc(d, 'waves', 'W2'), { waveNo: 'W2', status: 'pending', orders: [], summary: [{ productName: '白蝦', spec: '50/60', totalQty: 14,
+    orders: [{ orderNo: 'SO-1', customer: '海霸王股份有限公司', quantity: 8 }, { orderNo: 'SO-2', customer: '別的客戶', quantity: 6 }] }] });
   // 每日板數：期間內除了今天，每天崇文 5 板、八方 2 板
   for (let t = new Date(pStart); ymd(t) < ymd(today) && t <= pEnd; t.setDate(t.getDate() + 1))
     await H.setDoc(H.doc(d, 'stockSnapshots', ymd(t)), { date: ymd(t), pallets: { '崇文': 5, '八方': 2 } });
@@ -33,23 +36,35 @@ const list = await page.evaluate(async () => {
 H.note('揀貨清單: ' + JSON.stringify(list));
 H.check('20 件中 15 件寄倉保留 → 只揀 5 件，缺 5 件並註明寄倉保留', list.some(i => i.p === 'C1' && i.q === 5) && list.some(i => i.s && i.q === 5 && i.n.includes('寄倉保留 15')), JSON.stringify(list));
 
-// ---------- 提貨＝出倉 ----------
-await page.evaluate(() => { window.consignmentData = window.consignmentData || []; });
+// ---------- 寄倉客戶自己的訂單：可以揀自己的寄倉貨，出貨完成自動扣寄倉件數 ----------
+const list2 = await page.evaluate(async () => {
+  const w = (await db.collection('waves').doc('W2').get()).data(); w.id = 'W2';
+  const l = buildWavePickingList(w, currentPallets());
+  l.forEach(i => { i.completed = true; });
+  await completeWaveTx(w, l, currentPallets());
+  return l.map(i => ({ p: i.palletId, q: i.pickQty, s: !!i.shortage, n: i.note || '' }));
+});
+H.note('W2 揀貨清單: ' + JSON.stringify(list2));
+H.check('寄倉客戶的 8 件不保留：20 件可揀 13（保留給寄倉剩下的 7 件），別的客戶缺 1 件', list2.some(i => i.p === 'C1' && i.q === 13) && list2.some(i => i.s && i.q === 1 && i.n.includes('寄倉保留 7')), JSON.stringify(list2));
+let c1 = await H.one('pallets', 'C1'), k1 = await H.one('consignments', 'K1');
+H.check('波次完成：C1 20 → 7，寄倉自動扣 8 件（剩 7，記錄波次與訂單）', c1.quantity === 7 && k1.remainingQty === 7 && k1.pickups.length === 1 && k1.pickups[0].auto && k1.pickups[0].waveNo === 'W2' && k1.pickups[0].orderNo === 'SO-1', JSON.stringify([c1.quantity, k1]));
+
+// ---------- 手動提貨只補記寄倉件數，不扣庫存 ----------
 await page.evaluate(async () => { await loadConsignmentsFromFirebase(); });
 await page.evaluate(() => {
-  const div = document.createElement('div'); div.innerHTML = '<input id="pickup-date" value="' + new Date().toLocalYMD() + '"><input id="pickup-qty" value="8">'; document.body.appendChild(div);
+  const div = document.createElement('div'); div.innerHTML = '<input id="pickup-date" value="' + new Date().toLocalYMD() + '"><input id="pickup-qty" value="2">'; document.body.appendChild(div);
 });
 const nD = log.dialogs.length;
 await page.evaluate(async () => { await savePickup('K1'); });
 await page.waitForTimeout(800);
-const c1 = await H.one('pallets', 'C1'), k1 = await H.one('consignments', 'K1');
+c1 = await H.one('pallets', 'C1'); k1 = await H.one('consignments', 'K1');
 const lg = (await H.all('inventoryLogs')).find(l => String(l.note).includes('寄倉提貨'));
-H.check('提貨確認訊息寫出從哪一板扣幾件', log.dialogs.slice(nD).some(d => d.msg.includes('I-A-01-1F 8 件') && d.msg.includes('扣庫存')), JSON.stringify(log.dialogs.slice(nD).map(d => d.msg.slice(0, 120))));
-H.check('提貨 8 件：C1 20 → 12、寄倉剩 7、寫出庫記錄', c1.quantity === 12 && k1.remainingQty === 7 && (k1.pickups || []).length === 1 && lg && lg.quantityChange === -8, JSON.stringify([c1.quantity, k1.remainingQty, lg && lg.quantityChange]));
+H.check('補記確認訊息說明不扣庫存，並列出已自動扣過的波次', log.dialogs.slice(nD).some(d => d.msg.includes('不扣庫存') && d.msg.includes('W2')), JSON.stringify(log.dialogs.slice(nD).map(d => d.msg.slice(0, 200))));
+H.check('補記 2 件：寄倉剩 5、庫存不變（C1 仍 7）、沒有另外寫出庫記錄', c1.quantity === 7 && k1.remainingQty === 5 && k1.pickups.length === 2 && !lg, JSON.stringify([c1.quantity, k1.remainingQty, !!lg]));
 const nD2 = log.dialogs.length;
 await page.evaluate(() => { document.getElementById('pickup-qty').value = '9'; });
 await page.evaluate(async () => { await savePickup('K1'); });
-H.check('提貨超過寄倉剩餘件數會擋下', log.dialogs.slice(nD2).some(d => d.msg.includes('不能超過剩餘 7')) && (await H.one('pallets', 'C1')).quantity === 12);
+H.check('提貨超過寄倉剩餘件數會擋下', log.dialogs.slice(nD2).some(d => d.msg.includes('不能超過剩餘 5')) && (await H.one('consignments', 'K1')).remainingQty === 5);
 
 // ---------- 寄倉倉租：每天依當天剩餘件數 ----------
 const ud = await page.evaluate(() => [

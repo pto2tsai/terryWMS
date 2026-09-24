@@ -3,7 +3,8 @@
 // 先進先出（效期早的先揀），同品項依效期排序；庫存不足的項目標記 shortage
 // 不揀：已過期的板、品管留置（V-QC）與業務保留（V-SALES）儲位的板
 // 崇文／八方的庫存可以互相調用，揀貨項目帶 company 讓現場看得出是哪家的貨
-// 寄倉（已賣給客戶、寄放在倉庫）的件數保留，不分給波次
+// 寄倉（已賣給客戶、寄放在倉庫）的件數保留，不分給別人的訂單；
+// 寄倉客戶自己的訂單（ERP 開單提貨）可以揀自己的寄倉貨，波次完成時自動扣寄倉件數
 // ============================================================
 
 // 寄倉保留：每板保留幾件 { 棧板文件 ID: 件數 }
@@ -32,13 +33,49 @@ window.consignReserve = function(pallets, consignments) {
     return reserve;
 };
 
+// 客戶名稱比對：去空白後相同，或一方包含另一方（「海霸王」／「海霸王股份有限公司」）
+window.consignCustomerMatch = function(a, b) {
+    a = String(a || '').replace(/\s+/g, ''); b = String(b || '').replace(/\s+/g, '');
+    return !!a && !!b && (a === b || a.includes(b) || b.includes(a));
+};
+
+// 波次裡哪些訂單是寄倉客戶來提自己的貨：[{ id, customer, orderNo, productName, spec, qty }]
+window.consignWaveUse = function(wave, consignments) {
+    const left = {};
+    const list = (consignments || []).filter(c => (!c.status || c.status === 'active') && (!c.source || c.source === 'internal') &&
+        (parseFloat(c.remainingQty) || 0) > 0);
+    list.forEach(c => { left[c.id] = parseFloat(c.remainingQty) || 0; });
+    const uses = [];
+    (wave.summary || []).forEach(item => {
+        const spec = item.spec || '';
+        (item.orders || []).forEach(o => {
+            let need = parseFloat(o.quantity) || 0;
+            list.forEach(c => {
+                if (need <= 0 || !(left[c.id] > 0)) return;
+                const cs = c.spec || '';
+                if ((c.productName || '') !== item.productName) return;
+                if (spec !== '' && cs !== '' && !cs.includes(spec) && !spec.includes(cs)) return;
+                if (!window.consignCustomerMatch(o.customer, c.customer)) return;
+                const take = Math.min(need, left[c.id]);
+                left[c.id] -= take; need -= take;
+                uses.push({ id: c.id, customer: c.customer, orderNo: o.orderNo || '', productName: item.productName, spec: spec, qty: take });
+            });
+        });
+    });
+    return uses;
+};
+
 // 這些儲位的貨不能拿去出貨
 window.isHoldLocation = function(loc) { return /^V-(QC|SALES)/.test(String(loc || '').toUpperCase()); };
 
 window.buildWavePickingList = function(wave, pallets, consignments) {
     const pickingList = [];
     const today = new Date().toLocalYMD();
-    const reserve = window.consignReserve(pallets, consignments || window.consignmentData || []);
+    // 寄倉客戶自己的訂單要提的件數不保留（讓他的訂單揀得到）
+    const consigns = consignments || window.consignmentData || [];
+    const own = {};
+    window.consignWaveUse(wave, consigns).forEach(u => { own[u.id] = (own[u.id] || 0) + u.qty; });
+    const reserve = window.consignReserve(pallets, consigns.map(c => own[c.id] ? Object.assign({}, c, { remainingQty: (parseFloat(c.remainingQty) || 0) - own[c.id] }) : c));
 
     (wave.summary || []).forEach(item => {
         let needed = item.totalQty;
@@ -186,9 +223,26 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
     const orderRefs = orderIds.map(oid => db.collection('salesOrders').doc(oid));
     const completedAt = new Date().toISOString();
 
+    // 寄倉客戶自己的訂單：出貨的件數同時扣寄倉剩餘件數（以實際揀到的件數為上限）
+    let consUses = [];
+    try {
+        const snap = await db.collection('consignments').where('status', '==', 'active').get();
+        const active = []; snap.forEach(d => active.push(Object.assign({ id: d.id }, d.data())));
+        const pickedBy = {};
+        pickedItems.forEach(i => { pickedBy[i.productName] = (pickedBy[i.productName] || 0) + (parseInt(i.pickQty) || 0); });
+        window.consignWaveUse(wave, active).forEach(u => {
+            const q = Math.min(u.qty, pickedBy[u.productName] || 0);
+            if (q > 0) { pickedBy[u.productName] -= q; consUses.push(Object.assign({}, u, { qty: q })); }
+        });
+    } catch (e) { console.warn('讀取寄倉資料失敗，這次出貨不扣寄倉件數', e); consUses = []; }
+    const consIds = [];
+    consUses.forEach(u => { if (consIds.indexOf(u.id) === -1) consIds.push(u.id); });
+    const consRefs = consIds.map(id => db.collection('consignments').doc(id));
+    const by = window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : '';
+
     await window.runStockTransaction({
         changes: changes,
-        reads: (waveRef ? [waveRef] : []).concat(orderRefs),
+        reads: (waveRef ? [waveRef] : []).concat(orderRefs, consRefs),
         validate: function(results, readSnaps) {
             if (waveRef && readSnaps[0].exists && readSnaps[0].data().status === 'done') {
                 throw new Error('此波次已經完成過，不能重複扣庫存');
@@ -196,7 +250,24 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
         },
         updates: function(results, readSnaps) {
             const ups = [];
-            const orderSnaps = waveRef ? readSnaps.slice(1) : readSnaps;
+            const orderSnaps = (waveRef ? readSnaps.slice(1) : readSnaps).slice(0, orderRefs.length);
+            const consSnaps = readSnaps.slice(readSnaps.length - consRefs.length);
+            consSnaps.forEach((snap, idx) => {
+                if (!snap.exists) return;
+                const cur = snap.data();
+                let remaining = parseFloat(cur.remainingQty) || 0;
+                const pickups = (cur.pickups || []).slice();
+                consUses.filter(u => u.id === consIds[idx]).forEach(u => {
+                    const q = Math.min(u.qty, remaining);
+                    if (q <= 0) return;
+                    remaining -= q;
+                    pickups.push({ date: new Date().toLocalYMD(), qty: q, by: by, waveNo: wave.waveNo || '', orderNo: u.orderNo, auto: true });
+                });
+                if (pickups.length === (cur.pickups || []).length) return;
+                const data = { pickups: pickups, remainingQty: remaining, status: remaining <= 0 ? 'completed' : 'active' };
+                if (remaining <= 0) data.completedAt = completedAt;
+                ups.push({ ref: consRefs[idx], data: data });
+            });
             orderSnaps.forEach((snap, idx) => {
                 if (snap.exists) {
                     ups.push({ ref: orderRefs[idx], data: { status: 'shipped', shippedAt: completedAt, waveNo: wave.waveNo } });
