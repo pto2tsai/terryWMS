@@ -192,68 +192,29 @@ function detectOrderChanges(existingOrder, newOrder) {
     return changes;
 }
 
+// 鼎新改了已匯入的訂單：一行一張單，例如「SO-1（波次 W260925-001）白蝦 50/60 8→10、透抽 L 刪除」
+window.describeOrderChanges = function(orderChanges) {
+    return (orderChanges || []).map(function(c) {
+        var what = (c.changes || []).map(function(x) {
+            var name = x.productName + (x.spec ? ' ' + x.spec : '');
+            return x.type === 'add' ? name + ' 新增 ' + x.newQty : x.type === 'remove' ? name + ' 刪除' : name + ' ' + x.oldQty + '→' + x.newQty;
+        }).join('、');
+        return c.orderNo + (c.waveNo ? '（波次 ' + c.waveNo + '）' : '') + ' ' + what;
+    });
+};
+
+// 人工匯入時的提醒：哪些單改了、波次有沒有跟著更新
 function showOrderChangesAlert(orderChanges) {
     if (!orderChanges || orderChanges.length === 0) return;
-
-    var modal = document.createElement('div');
-    modal.id = 'modal-order-changes';
-    modal.className = 'fixed inset-0 z-[100] bg-black/90 flex items-center justify-center';
-
-    var inWaveChanges = orderChanges.filter(function(o) { return o.waveNo; });
-    var pendingChanges = orderChanges.filter(function(o) { return !o.waveNo; });
-
-    var changesHtml = '';
-
-    if (inWaveChanges.length > 0) {
-        changesHtml += '<div class="mb-4">';
-        changesHtml += '<div class="text-red-400 font-bold mb-2"><i class="fa-solid fa-triangle-exclamation mr-2"></i>以下訂單已在波次中，請更新揀貨單！</div>';
-        changesHtml += '<div class="space-y-2 max-h-[200px] overflow-auto">';
-
-        inWaveChanges.forEach(function(order) {
-            var changesText = order.changes.map(function(c) {
-                return c.icon + ' ' + c.productName + ': ' + c.oldQty + '→' + c.newQty + ' (' + c.diff + ')';
-            }).join('<br>');
-
-            changesHtml += '<div class="bg-red-900/30 border border-red-600 rounded p-3">';
-            changesHtml += '<div class="flex justify-between"><span class="text-white font-bold">' + order.customer + '</span>';
-            changesHtml += '<span class="text-red-400 text-sm">波次: ' + order.waveNo + '</span></div>';
-            changesHtml += '<div class="text-xs text-slate-400">' + order.orderNo + '</div>';
-            changesHtml += '<div class="text-sm text-yellow-300 mt-2">' + changesText + '</div></div>';
-        });
-
-        changesHtml += '</div></div>';
-    }
-
-    if (pendingChanges.length > 0) {
-        changesHtml += '<div class="mb-4">';
-        changesHtml += '<div class="text-yellow-400 font-bold mb-2"><i class="fa-solid fa-info-circle mr-2"></i>以下待處理訂單有異動</div>';
-        changesHtml += '<div class="space-y-2 max-h-[150px] overflow-auto">';
-
-        pendingChanges.forEach(function(order) {
-            var changesText = order.changes.map(function(c) { return c.icon + ' ' + c.productName + ': ' + c.diff; }).join(', ');
-            changesHtml += '<div class="bg-yellow-900/30 border border-yellow-600 rounded p-2 text-sm">';
-            changesHtml += '<span class="text-white">' + order.customer + '</span>';
-            changesHtml += '<span class="text-yellow-300 ml-2">' + changesText + '</span></div>';
-        });
-
-        changesHtml += '</div></div>';
-    }
-
-    var buttonHtml = '';
-    if (inWaveChanges.length > 0) {
-        buttonHtml = '<button onclick="updateChangedWaves()" class="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold animate-pulse"><i class="fa-solid fa-print mr-2"></i>更新並列印新揀貨單</button>';
-    }
-
-    modal.innerHTML = '<div class="bg-slate-900 border border-slate-600 rounded-xl w-[600px] max-h-[80vh] shadow-2xl">' +
-        '<div class="bg-gradient-to-r from-red-900 to-orange-900 p-4 rounded-t-xl border-b border-slate-700">' +
-        '<h3 class="text-white font-bold text-lg"><i class="fa-solid fa-triangle-exclamation mr-2 text-red-400 animate-pulse"></i>⚠️ 訂單異動警示</h3>' +
-        '<p class="text-orange-200 text-sm mt-1">偵測到 ' + orderChanges.length + ' 筆訂單有品項或數量異動</p></div>' +
-        '<div class="p-4 overflow-auto max-h-[50vh]">' + changesHtml + '</div>' +
-        '<div class="p-4 border-t border-slate-700 flex gap-3">' + buttonHtml +
-        '<button onclick="closeOrderChangesModal()" class="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">知道了</button>' +
-        '</div></div>';
-
-    document.body.appendChild(modal);
+    var lines = window.describeOrderChanges(orderChanges);
+    var upd = [], started = [];
+    orderChanges.forEach(function(c, i) {
+        if (c.waveState === 'updated') upd.push(lines[i]);
+        else if (c.waveState === 'started') started.push(lines[i]);
+    });
+    alert('⚠️ 鼎新改了 ' + orderChanges.length + ' 張已匯入的訂單：\n\n' + lines.join('\n') +
+        (upd.length ? '\n\n✅ 這些還沒開始揀，波次已經自動更新（已印的揀貨單要重印）：\n' + upd.join('\n') : '') +
+        (started.length ? '\n\n❗ 這些的波次已經開始揀，沒有自動改，請到現場處理：\n' + started.join('\n') : ''));
 }
 
 window.closeOrderChangesModal = function() {
@@ -835,17 +796,6 @@ window.saveErpOrders = async function(orders) {
                 existing.modifiedAt = new Date().toISOString();
                 existing.hasChanges = true;
 
-                if (existing.waveNo) {
-                    var wave = window._waveData.waves.find(function(w) { return w.waveNo === existing.waveNo; });
-                    if (wave) {
-                        wave.hasOrderChanges = true;
-                        wave.changedOrders = wave.changedOrders || [];
-                        if (wave.changedOrders.indexOf(order.orderNo) === -1) {
-                            wave.changedOrders.push(order.orderNo);
-                        }
-                    }
-                }
-
                 if (existing.id) {
                     try {
                         await window.updateDoc(window.doc(window.db, 'salesOrders', existing.id), {
@@ -854,6 +804,16 @@ window.saveErpOrders = async function(orders) {
                             hasChanges: true
                         });
                     } catch (err) { console.error('更新訂單失敗:', err); }
+                }
+
+                // 已排波次：還沒開始揀就把新數量更新進波次；已經開始揀就不動，標記要現場處理
+                if (existing.waveNo && existing.id) {
+                    try {
+                        orderChanges[orderChanges.length - 1].waveState = await window.syncOrderIntoWave(existing);
+                    } catch (err) {
+                        console.error('更新波次失敗:', err);
+                        orderChanges[orderChanges.length - 1].waveState = 'error';
+                    }
                 }
                 modifiedCount++;
             } else {
@@ -1298,6 +1258,39 @@ window.cancelSalesOrders = async function(orderIds, reason) {
         }
     }
     return out;
+};
+
+// 訂單在鼎新被改了，波次跟著處理（同一筆交易）：
+//   還沒開始揀（待揀、沒有打勾的項目）→ 用新的品項重算波次，標記要重印 → 'updated'
+//   已經開始揀或分貨 → 不改數量（免得揀到一半變了），在波次上記下哪幾張單被改 → 'started'
+//   波次已完成或不存在 → 'done' / 'none'
+window.syncOrderIntoWave = async function(order) {
+    var db = window.db;
+    var wref = db.collection('waves').doc(order.waveNo);
+    var state = await db.runTransaction(async function(tx) {
+        var ws = await tx.get(wref);
+        if (!ws.exists) return 'none';
+        var w = ws.data();
+        if (w.status === 'done') return 'done';
+        if (w.status !== 'pending' || (w.completedItems || []).length) {
+            var co = (w.changedOrders || []).slice();
+            if (co.indexOf(order.orderNo) < 0) co.push(order.orderNo);
+            tx.update(wref, { hasOrderChanges: true, changedOrders: co });
+            return 'started';
+        }
+        var entries = (w.orders || []).map(function(e) {
+            return ((e.id || e.orderId) === order.id || e.orderNo === order.orderNo) ? waveOrderEntry(order) : e;
+        });
+        tx.update(wref, stripUndefined(Object.assign({ orders: entries }, waveTotals(entries), { updatedAt: new Date().toISOString(), reprintRequired: true })));
+        return 'updated';
+    });
+    var local = (window._waveData.waves || []).find(function(w) { return w.waveNo === order.waveNo; });
+    if (local && state === 'started') {
+        local.hasOrderChanges = true;
+        local.changedOrders = local.changedOrders || [];
+        if (local.changedOrders.indexOf(order.orderNo) < 0) local.changedOrders.push(order.orderNo);
+    }
+    return state;
 };
 
 window.createWave = async function() {

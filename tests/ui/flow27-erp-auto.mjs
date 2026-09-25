@@ -121,6 +121,27 @@ H.check('SO-2 的波次已經開始揀：不取消，並說明請到現場處理
 const in7b = await H.one('erpInbox', r7.id);
 H.check('收件紀錄：取消的提醒拿掉，記下取消了幾張', (in7b.missingOrders || []).length === 0 && !in7b.issues.some(x => x.includes('可能已在鼎新取消')) && in7b.result.includes('已取消 2 張'), JSON.stringify(in7b));
 
+// ---------- 鼎新改了已經排波次的單 ----------
+const bw = Object.fromEntries((await H.all('salesOrders')).map(o => [o.orderNo, o]));
+const w5before = await H.one('waves', bw['SO-5'].waveNo);
+const r8 = await pushReport('每日客戶銷貨明細表_1500b.xlsx', [HEAD,
+  ['2026/09/25', 'SO-2', 'C2', '好市多', '透抽', 'L', 3, '件', 3, '件', 200, '新竹', '', '新北市', ''],
+  ['2026/09/25', 'SO-4', 'C4', '客戶四', '鮭魚', '切片', '', '', 24, '盒', 90, '大榮', '', '台中市', ''],
+  ['2026/09/25', 'SO-5', 'C5', '客戶五', '白蝦', '50/60', 6, '件', 6, '件', 100, '黑貓', '', '', ''],
+  ['2026/09/25', 'SO-6', 'C6', '客戶六', '透抽', 'L', 2, '件', 2, '件', 200, '新竹', '', '', '']]);
+let in8;
+for (let i = 0; i < 20; i++) { await page.waitForTimeout(500); in8 = await H.one('erpInbox', r8.id); if (in8 && ['done', 'attention', 'error'].includes(in8.status)) break; }
+const w5 = await H.one('waves', bw['SO-5'].waveNo), wv2 = await H.one('waves', bw['SO-2'].waveNo);
+H.check('鼎新把 SO-5 白蝦 3→6（波次還沒開始揀）：波次自動更新成 6 件、標記要重印', w5.totalQty === w5before.totalQty + 3 && w5.reprintRequired === true && in8.issues.some(x => x.includes('波次已自動更新') && x.includes('SO-5') && x.includes('3→6')), JSON.stringify([w5before.totalQty, w5.totalQty, in8.issues]));
+H.check('鼎新把 SO-2 透抽 5→3（波次已經開始揀）：波次數量不動，記下要現場處理', wv2.totalQty === 5 && wv2.hasOrderChanges === true && (wv2.changedOrders || []).includes('SO-2') && in8.issues.some(x => x.includes('請到現場處理') && x.includes('SO-2') && x.includes('5→3')), JSON.stringify([wv2.totalQty, wv2.changedOrders, in8.issues]));
+H.check('沒有跳出全黑關不掉的視窗', !(await page.$('#modal-order-changes')));
+const MB = await H.openApp(base, USERS.op, { mobile: true });
+await MB.page.waitForTimeout(1500);
+await MB.page.evaluate(() => openPage('picking')); await MB.page.waitForTimeout(400);
+await MB.page.selectOption('#picking-wave-select', bw['SO-2'].waveNo); await MB.page.waitForTimeout(1000);
+const mw = await MB.page.innerText('#picking-next');
+H.check('手機揀這個波次時，最上面提醒：鼎新改了 SO-2，數量沒跟著改，請找主管確認', mw.includes('鼎新改了這個波次的單') && mw.includes('SO-2'), mw.slice(0, 200));
+
 // ---------- 訂單檔該到沒到 ----------
 const slot = await page.evaluate(() => {
   const at = (h, m) => { const d = new Date(2026, 8, 25, h, m); return d; };   // 2026/9/25 星期五

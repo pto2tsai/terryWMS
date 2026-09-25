@@ -108,9 +108,13 @@ function renderPickingList() {
 // 下一站：依動線的第一個待揀項目，大字顯示儲位簡碼、品項、件數；後面幾站的儲位
 function renderNextStop() {
     const box = $('picking-next');
+    // 揀到一半，鼎新改了這個波次裡的單：數量沒有自動改，提醒找主管確認
+    const warn = currentWave && currentWave.hasOrderChanges && (currentWave.changedOrders || []).length
+        ? '<div class="err-line" style="margin:0 0 10px;padding:10px;border:2px solid #ef4444;border-radius:10px;background:#7f1d1d">⚠️ 鼎新改了這個波次的單：' + currentWave.changedOrders.map(esc).join('、') + '<br>清單上的數量沒有跟著改，請找主管確認再揀</div>'
+        : '';
     const pending = pickingItems.filter(function(i) { return !i.completed && !i.shortage; });
     if (pending.length === 0) {
-        box.innerHTML = pickingItems.length ? '<div class="next-stop done">🎉 全部揀完，按下面「完成波次」</div>' : '';
+        box.innerHTML = warn + (pickingItems.length ? '<div class="next-stop done">🎉 全部揀完，按下面「完成波次」</div>' : '');
         return;
     }
     const n = pending[0];
@@ -121,7 +125,7 @@ function renderNextStop() {
         const c = window.locationShortCode(i.locationId) || i.locationId;
         if (i.locationId !== n.locationId && stops.indexOf(c) < 0) stops.push(c);
     });
-    box.innerHTML = '<div class="next-stop">' +
+    box.innerHTML = warn + '<div class="next-stop">' +
         '<div class="ns-label">下一站（還剩 ' + pending.length + ' 項）</div>' +
         '<div class="ns-code">' + esc(code) + '</div>' +
         (code !== n.locationId ? '<div class="ns-loc">' + esc(n.locationId) + '</div>' : '') +
