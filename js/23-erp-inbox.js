@@ -66,21 +66,28 @@ window.autoImportErpOrderRows = async function(rows) {
     if (badNew.length) issues.push('件數換算不出來，還沒匯入（' + badNew.length + ' 張）：' + badNew.map(function(o) { return o.orderNo; }).join('、') + '。請按「手動匯入」填件數');
     var noLg = window._orderData.orders.filter(function(o) { return window.orderWaveable(o) && (!o.logistics || o.logistics === '未指定'); });
     if (noLg.length) issues.push('沒有物流商，還沒排波次（' + noLg.length + ' 張）：' + noLg.map(function(o) { return o.orderNo; }).join('、') + '。請到「波次揀貨 → 建立波次」指定物流商');
-    if (r.shippedChanged.length) issues.push('已出貨的單在鼎新有修改，沒有套用：' + r.shippedChanged.join('、') + '。請在鼎新處理');
+    var notes = [];
+    var shipMore = r.shippedChanged.filter(function(x) { return x.kind === 'more'; }), shipOver = r.shippedChanged.filter(function(x) { return x.kind === 'over'; });
+    if (shipMore.length) notes.push('已出貨的單在鼎新加量，已自動變成補出貨：' + shipMore.map(function(x) { return x.text; }).join('；'));
+    if (shipOver.length) issues.push('已出貨的單在鼎新減量，已經多出貨了，請在鼎新開銷退：' + shipOver.map(function(x) { return x.text; }).join('；'));
     if (w.failed && w.failed.length) issues.push('波次建立失敗：' + w.failed.join('；'));
     // 鼎新改了已匯入的單：沒排波次的直接改好；還沒開始揀的波次自動更新；已經開始揀的要現場處理
     var desc = window.describeOrderChanges(r.orderChanges);
-    var updated = [], started = [];
+    var updated = [], adjusted = [], started = [];
     r.orderChanges.forEach(function(c, i) {
         if (c.waveState === 'updated') updated.push(desc[i]);
+        else if (c.waveState === 'adjusted') adjusted.push(desc[i]);
         else if (c.waveState === 'started' || c.waveState === 'error') started.push(desc[i]);
     });
-    if (updated.length) issues.push('鼎新改了已排波次的單，還沒開始揀，波次已自動更新（已印的揀貨單要重印）：' + updated.join('；'));
-    if (started.length) issues.push('鼎新改了已經開始揀貨的單，沒有自動改，請到現場處理：' + started.join('；'));
+    // 自動處理好的，只記在結果裡（不用人處理）；要重印的揀貨單在「波次揀貨」清單上會標出來
+    if (updated.length) notes.push('鼎新改單，波次已自動更新：' + updated.join('；'));
+    if (adjusted.length) notes.push('鼎新改單，揀貨中的清單已自動調整：' + adjusted.join('；'));
+    if (started.length) issues.push('鼎新改了已經開始揀貨的單（舊波次，沒辦法自動調整），請到現場處理：' + started.join('；'));
     if (missing.length) issues.push(ERP_MISSING_PREFIX + '（' + missing.length + ' 張）：' + missing.map(function(o) { return o.orderNo; }).join('、') + '。確定鼎新已取消，請按「在 WMS 也取消」');
 
     var result = '新增 ' + r.savedCount + ' 張訂單' + (r.modifiedCount ? '、異動 ' + r.modifiedCount + ' 張' : '') + (r.skipCount ? '、' + r.skipCount + ' 張沒變' : '') +
-        '；建立 ' + w.created.length + ' 個波次' + (w.created.length ? '（' + w.created.map(function(x) { return x.logistics + ' ' + x.orderCount + ' 單'; }).join('、') + '）' : '');
+        '；建立 ' + w.created.length + ' 個波次' + (w.created.length ? '（' + w.created.map(function(x) { return x.logistics + ' ' + x.orderCount + ' 單'; }).join('、') + '）' : '') +
+        (notes.length ? '。' + notes.join('。') : '');
     return { result: result, issues: issues, missingOrders: missing.map(function(o) { return { id: o.id, orderNo: o.orderNo }; }) };
 };
 var ERP_MISSING_PREFIX = '鼎新的最新檔案裡沒有這些單（可能已在鼎新取消），還沒出貨';

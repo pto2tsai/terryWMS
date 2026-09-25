@@ -132,8 +132,8 @@ const r8 = await pushReport('每日客戶銷貨明細表_1500b.xlsx', [HEAD,
 let in8;
 for (let i = 0; i < 20; i++) { await page.waitForTimeout(500); in8 = await H.one('erpInbox', r8.id); if (in8 && ['done', 'attention', 'error'].includes(in8.status)) break; }
 const w5 = await H.one('waves', bw['SO-5'].waveNo), wv2 = await H.one('waves', bw['SO-2'].waveNo);
-H.check('鼎新把 SO-5 白蝦 3→6（波次還沒開始揀）：波次自動更新成 6 件、標記要重印', w5.totalQty === w5before.totalQty + 3 && w5.reprintRequired === true && in8.issues.some(x => x.includes('波次已自動更新') && x.includes('SO-5') && x.includes('3→6')), JSON.stringify([w5before.totalQty, w5.totalQty, in8.issues]));
-H.check('鼎新把 SO-2 透抽 5→3（波次已經開始揀）：波次數量不動，記下要現場處理', wv2.totalQty === 5 && wv2.hasOrderChanges === true && (wv2.changedOrders || []).includes('SO-2') && in8.issues.some(x => x.includes('請到現場處理') && x.includes('SO-2') && x.includes('5→3')), JSON.stringify([wv2.totalQty, wv2.changedOrders, in8.issues]));
+H.check('鼎新把 SO-5 白蝦 3→6（波次還沒開始揀）：波次自動更新成 6 件、標記要重印', w5.totalQty === w5before.totalQty + 3 && w5.reprintRequired === true && in8.result.includes('波次已自動更新') && in8.result.includes('SO-5') && in8.result.includes('3→6'), JSON.stringify([w5before.totalQty, w5.totalQty, in8.issues]));
+H.check('鼎新把 SO-2 透抽 5→3（改版前就開始揀的舊波次，沒有揀貨記錄）：波次數量不動，記下要現場處理', wv2.totalQty === 5 && wv2.hasOrderChanges === true && (wv2.changedOrders || []).includes('SO-2') && in8.issues.some(x => x.includes('請到現場處理') && x.includes('SO-2') && x.includes('5→3')), JSON.stringify([wv2.totalQty, wv2.changedOrders, in8.issues]));
 H.check('沒有跳出全黑關不掉的視窗', !(await page.$('#modal-order-changes')));
 const MB = await H.openApp(base, USERS.op, { mobile: true });
 await MB.page.waitForTimeout(1500);

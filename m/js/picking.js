@@ -66,8 +66,8 @@ window.dataHooks.waves.push(function() {
         return;
     }
     currentWave = w;
-    const done = w.completedItems || [];
-    pickingItems.forEach(function(i) { if (done.indexOf(i.id) >= 0) i.completed = true; });
+    // 重算整份清單（鼎新改單時數量會跟著變；已經揀的照記錄，不會被改）
+    pickingItems = window.buildWavePickingList(currentWave, window.pallets);
     renderPickingList();
 });
 
@@ -92,8 +92,9 @@ function renderPickingList() {
         .concat(pickingItems.filter(function(i) { return i.completed; }));
     list.innerHTML = ordered.map(function(item) {
         const cls = item.completed ? 'completed' : item.shortage ? 'shortage' : '';
-        const status = item.completed ? '<span class="item-status done">✓ 完成</span>' :
+        const status = item.completed ? '<span class="item-status done">' + (item.type === 'return' ? '↩️ 已放回' : '✓ 完成') + '</span>' :
             item.shortage ? '<span class="item-status shortage">缺貨</span>' :
+            item.type === 'return' ? '<span class="item-status shortage">↩️ 要放回</span>' :
             '<span class="item-status pending">待揀</span>';
         return '<div class="list-item ' + cls + '">' +
             '<div class="item-row"><span class="item-location">' + esc(item.locationId) + '</span>' + status + '</div>' +
@@ -109,9 +110,14 @@ function renderPickingList() {
 function renderNextStop() {
     const box = $('picking-next');
     // 揀到一半，鼎新改了這個波次裡的單：數量沒有自動改，提醒找主管確認
-    const warn = currentWave && currentWave.hasOrderChanges && (currentWave.changedOrders || []).length
-        ? '<div class="err-line" style="margin:0 0 10px;padding:10px;border:2px solid #ef4444;border-radius:10px;background:#7f1d1d">⚠️ 鼎新改了這個波次的單：' + currentWave.changedOrders.map(esc).join('、') + '<br>清單上的數量沒有跟著改，請找主管確認再揀</div>'
-        : '';
+    let warn = '';
+    if (currentWave && (currentWave.changeNotes || []).length) {
+        // 已經自動調整好：照清單做就好
+        warn = '<div class="warn-line" style="margin:0 0 10px;padding:10px;border:2px solid #3b82f6;border-radius:10px;background:#1e3a8a;color:#fff">🔄 鼎新改了：' + currentWave.changeNotes.map(esc).join('；') + '<br>清單已經自動調整，照清單做就好</div>';
+    } else if (currentWave && currentWave.hasOrderChanges && (currentWave.changedOrders || []).length) {
+        // 改版前就開始揀的舊波次，沒辦法自動調整
+        warn = '<div class="err-line" style="margin:0 0 10px;padding:10px;border:2px solid #ef4444;border-radius:10px;background:#7f1d1d">⚠️ 鼎新改了這個波次的單：' + currentWave.changedOrders.map(esc).join('、') + '<br>清單上的數量沒有跟著改，請找主管確認再揀</div>';
+    }
     const pending = pickingItems.filter(function(i) { return !i.completed && !i.shortage; });
     if (pending.length === 0) {
         box.innerHTML = warn + (pickingItems.length ? '<div class="next-stop done">🎉 全部揀完，按下面「完成波次」</div>' : '');
@@ -126,10 +132,10 @@ function renderNextStop() {
         if (i.locationId !== n.locationId && stops.indexOf(c) < 0) stops.push(c);
     });
     box.innerHTML = warn + '<div class="next-stop">' +
-        '<div class="ns-label">下一站（還剩 ' + pending.length + ' 項）</div>' +
+        '<div class="ns-label">' + (n.type === 'return' ? '↩️ 先放回（鼎新減量，多拿的貨）' : '下一站') + '（還剩 ' + pending.length + ' 項）</div>' +
         '<div class="ns-code">' + esc(code) + '</div>' +
         (code !== n.locationId ? '<div class="ns-loc">' + esc(n.locationId) + '</div>' : '') +
-        '<div class="ns-item"><span>' + esc(n.productName) + ' ' + esc(n.spec || '') + ' ' + companyTag(n.company) + '</span><span class="ns-qty">拿 ' + esc(n.pickQty) + ' 件</span></div>' +
+        '<div class="ns-item"><span>' + esc(n.productName) + ' ' + esc(n.spec || '') + ' ' + companyTag(n.company) + '</span><span class="ns-qty">' + (n.type === 'return' ? '放回 ' : '拿 ') + esc(n.pickQty) + ' 件</span></div>' +
         '<div class="ns-sub">板號 <span class="pid">' + pidHtml(n.palletId) + '</span>' + (n.expDate ? '　效期 ' + esc(n.expDate) : '') + (sameLoc > 1 ? '　（這個儲位要揀 ' + sameLoc + ' 板）' : '') + '</div>' +
         (stops.length ? '<div class="ns-after">接著：' + stops.slice(0, 4).map(esc).join(' → ') + (stops.length > 4 ? ' …' : '') + '</div>' : '') +
         '</div>';
@@ -159,8 +165,10 @@ window.confirmPickingScan = async function() {
     }
 
     try {
+        // 記下這一項實際揀（或放回）了幾件、哪一板：鼎新改單重算時，已經揀的不會被改掉
         await db.collection('waves').doc(currentWave.id).update({
             completedItems: FieldValue.arrayUnion(found.id),
+            pickLog: FieldValue.arrayUnion(window.pickLogEntry(found)),
             status: currentWave.status === 'sorting' ? 'sorting' : 'picking'
         });
     } catch (e) {
@@ -169,7 +177,7 @@ window.confirmPickingScan = async function() {
     }
     found.completed = true;
     const left = pickingItems.filter(function(i) { return !i.completed && !i.shortage; }).length;
-    setResult('picking-scan-result', true, '✓ ' + found.productName + ' x ' + found.pickQty + '（' + found.locationId + '）' + (left ? '　還剩 ' + left + ' 項' : '　🎉 全部揀完'));
+    setResult('picking-scan-result', true, (found.type === 'return' ? '↩️ 已放回 ' : '✓ ') + found.productName + ' x ' + found.pickQty + '（' + found.locationId + '）' + (left ? '　還剩 ' + left + ' 項' : '　🎉 全部揀完'));
     renderPickingList();
     input.value = '';
     focusIfNoCamera('picking-scan');
@@ -182,8 +190,7 @@ window.completePickingWave = async function() {
         const snap = await db.collection('waves').doc(currentWave.id).get();
         if (!snap.exists) { alert('波次已不存在'); return; }
         currentWave = Object.assign({ id: snap.id }, snap.data());
-        const done = currentWave.completedItems || [];
-        pickingItems.forEach(function(i) { if (done.indexOf(i.id) >= 0) i.completed = true; });
+        pickingItems = window.buildWavePickingList(currentWave, window.pallets);
     } catch (e) {
         alert('❌ 讀取波次失敗：' + e.message);
         return;
@@ -194,6 +201,8 @@ window.completePickingWave = async function() {
     const total = pickingItems.filter(function(i) { return !i.shortage; }).length;
     const shortage = pickingItems.filter(function(i) { return i.shortage; }).length;
     if (completed === 0) { alert('尚未揀貨任何項目'); return; }
+    const toReturn = pickingItems.filter(function(i) { return i.type === 'return' && !i.completed; });
+    if (toReturn.length) { alert('↩️ 還有 ' + toReturn.length + ' 項要放回（鼎新減量，多拿的貨），請先放回再完成波次：\n\n' + toReturn.map(function(i) { return i.productName + ' ' + (i.spec || '') + ' ' + i.pickQty + ' 件 → ' + i.locationId; }).join('\n')); return; }
     let msg = '完成波次並出貨？\n\n已揀：' + completed + '/' + total;
     if (completed < total) msg += '\n未揀 ' + (total - completed) + ' 項會記為缺貨';
     if (shortage > 0) msg += '\n庫存不足 ' + shortage + ' 項';

@@ -68,8 +68,31 @@ window.consignWaveUse = function(wave, consignments) {
 // 這些儲位的貨不能拿去出貨
 window.isHoldLocation = function(loc) { return /^V-(QC|SALES)/.test(String(loc || '').toUpperCase()); };
 
+// 揀貨記錄：每揀一項（或放回一項）就記下實際件數和哪一板，之後鼎新改單重算清單時，已經揀的不會被改掉
+// wave.pickLog = [{ id, qty, key, type: 'pick'|'return', palletId, docId, locationId, productName, spec, batchNo, expDate, company }]
+window.pickLogEntry = function(item) {
+    return JSON.parse(JSON.stringify({
+        id: item.id, qty: parseFloat(item.pickQty) || 0, key: item.key, type: item.type === 'return' ? 'return' : 'pick',
+        palletId: item.palletId || '', docId: item.docId || '', locationId: item.locationId || '',
+        productName: item.productName || '', spec: item.spec || '', batchNo: item.batchNo || '', expDate: item.expDate || '', company: item.company || ''
+    }));
+};
+// 這個波次有沒有完整的揀貨記錄（新波次都有；改版前就開始揀的舊波次沒有，照舊方式算）
+window.waveHasPickLog = function(wave) {
+    const log = wave.pickLog;
+    if (!Array.isArray(log)) return !(wave.completedItems || []).length;
+    return (wave.completedItems || []).every(id => log.some(e => e.id === id));
+};
+
 window.buildWavePickingList = function(wave, pallets, consignments) {
     const pickingList = [];
+    const useLog = window.waveHasPickLog(wave);
+    const log = useLog ? (wave.pickLog || []) : [];
+    const takenOn = {};   // 每一板已經被這個波次揀走（還沒扣庫存）的件數
+    log.forEach(e => { const k = e.docId || e.palletId; takenOn[k] = (takenOn[k] || 0) + (e.type === 'return' ? -e.qty : e.qty); });
+    const usedIds = {};
+    log.forEach(e => { usedIds[e.id] = true; });
+    const uniqueId = base => { let id = base, n = 2; while (usedIds[id]) id = base + '#' + (n++); usedIds[id] = true; return id; };
     const today = new Date().toLocalYMD();
     // 寄倉客戶自己的訂單要提的件數不保留（讓他的訂單揀得到）
     const consigns = consignments || window.consignmentData || [];
@@ -77,13 +100,53 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
     window.consignWaveUse(wave, consigns).forEach(u => { own[u.id] = (own[u.id] || 0) + u.qty; });
     const reserve = window.consignReserve(pallets, consigns.map(c => own[c.id] ? Object.assign({}, c, { remainingQty: (parseFloat(c.remainingQty) || 0) - own[c.id] }) : c));
 
-    (wave.summary || []).forEach(item => {
+    // 鼎新把某個品項整個刪掉，但已經揀了：也要列出來（需要 0 件 → 全部放回）
+    const summaryItems = (wave.summary || []).slice();
+    log.forEach(e => {
+        if (!summaryItems.some(sm => (sm.productName + '|||' + (sm.spec || '')) === e.key)) {
+            summaryItems.push({ productName: e.productName, spec: e.spec, totalQty: 0, orders: [] });
+        }
+    });
+
+    summaryItems.forEach(item => {
         // 冷藏、包材、費用等不從倉庫揀（沒有庫存），不列入揀貨也不算缺貨
         if (typeof window.isExcludedFromPickingList === 'function' && window.isExcludedFromPickingList(item.productName)) return;
         let needed = item.totalQty;
         const productName = item.productName;
         const spec = item.spec || '';
         const key = productName + '|||' + spec;
+
+        // 已經揀的（有記錄）：照記錄列出來、打勾，件數不會因為重算而改變
+        if (useLog) {
+            const mine = log.filter(e => e.key === key);
+            let net = 0;
+            const netOn = {};
+            mine.forEach(e => {
+                const q = e.type === 'return' ? -e.qty : e.qty;
+                net += q;
+                netOn[e.docId || e.palletId] = (netOn[e.docId || e.palletId] || 0) + q;
+                pickingList.push(Object.assign({}, e, { pickQty: e.qty, orders: item.orders, completed: true }));
+            });
+            needed = item.totalQty - net;
+            // 揀多了（鼎新減量）：放回，從最後揀的那幾板放回去
+            if (needed < 0) {
+                let extra = -needed;
+                mine.filter(e => e.type !== 'return').reverse().forEach(e => {
+                    const k = e.docId || e.palletId;
+                    const q = Math.min(extra, netOn[k] || 0);
+                    if (q <= 0) return;
+                    netOn[k] -= q; extra -= q;
+                    pickingList.push({
+                        id: uniqueId('return-' + e.palletId + '-' + productName), type: 'return',
+                        docId: e.docId, palletId: e.palletId, company: e.company, locationId: e.locationId,
+                        productName: e.productName, spec: e.spec, batchNo: e.batchNo, expDate: e.expDate,
+                        key: key, pickQty: q, orders: item.orders, completed: false
+                    });
+                });
+                return;
+            }
+            if (needed === 0) return;
+        }
 
         let expiredQty = 0, heldQty = 0, consignQty = 0;
         const matchingPallets = pallets.filter(p => {
@@ -108,12 +171,12 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
             if (needed <= 0) return;
             consignQty += reserved;
 
-            const available = (parseInt(pallet.quantity) || 0) - reserved;
+            const available = (parseInt(pallet.quantity) || 0) - reserved - (takenOn[pallet.id] || takenOn[pallet.palletId] || 0);
             const pick = Math.min(available, needed);
 
             if (pick > 0) {
                 pickingList.push({
-                    id: pallet.palletId + '-' + item.productName,
+                    id: useLog ? uniqueId(pallet.palletId + '-' + item.productName) : pallet.palletId + '-' + item.productName,
                     docId: pallet.id || '',
                     palletId: pallet.palletId,
                     company: pallet.company || '',
@@ -152,12 +215,17 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
         }
     });
 
-    (wave.completedItems || []).forEach(itemId => {
-        const item = pickingList.find(p => p.id === itemId);
-        if (item) item.completed = true;
-    });
+    if (!useLog) {
+        (wave.completedItems || []).forEach(itemId => {
+            const item = pickingList.find(p => p.id === itemId);
+            if (item) item.completed = true;
+        });
+    }
 
     pickingList.sort(function(a, b) {
+        // 要放回的排最前面（先把多拿的放回去）
+        if (a.type === 'return' && b.type !== 'return') return -1;
+        if (a.type !== 'return' && b.type === 'return') return 1;
         if (a.shortage && !b.shortage) return 1;
         if (!a.shortage && b.shortage) return -1;
 
@@ -198,26 +266,36 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
 // ============================================================
 window.completeWaveTx = async function(wave, pickingList, pallets) {
     const db = window.db;
-    const pickedItems = pickingList.filter(i => i.completed && !i.shortage);
+    const notReturned = pickingList.filter(i => i.type === 'return' && !i.completed);
+    if (notReturned.length) {
+        throw new Error('還有 ' + notReturned.length + ' 項要放回（鼎新減量，多拿的貨）：\n' +
+            notReturned.map(i => i.productName + ' ' + (i.spec || '') + ' ' + i.pickQty + ' 件 → ' + i.locationId).join('\n') + '\n\n請先放回再完成波次');
+    }
+    const pickedItems = pickingList.filter(i => i.completed && !i.shortage && i.type !== 'return');
+    const returnedItems = pickingList.filter(i => i.completed && i.type === 'return');
     if (pickedItems.length === 0) throw new Error('尚未揀貨任何項目');
 
+    // 每一板實際扣掉的件數＝揀的－放回的（同一板可能揀兩次或放回，合併成一筆）
     const missing = [];
     const changes = [];
-    pickedItems.forEach(item => {
+    const netByPallet = {};
+    pickedItems.concat(returnedItems).forEach(item => {
         const pallet = (item.docId && pallets.find(p => p.id === item.docId)) || pallets.find(p => p.palletId === item.palletId);
         if (!pallet || !pallet.id) { missing.push(item.palletId || item.productName); return; }
-        changes.push({
-            ref: db.collection('pallets').doc(pallet.id),
-            delta: -(parseInt(item.pickQty) || 0),
-            deleteWhenEmpty: true,
-            label: item.palletId
-        });
+        const q = (parseInt(item.pickQty) || 0) * (item.type === 'return' ? -1 : 1);
+        if (!netByPallet[pallet.id]) netByPallet[pallet.id] = { qty: 0, item: item };
+        netByPallet[pallet.id].qty += q;
+    });
+    Object.keys(netByPallet).forEach(pid => {
+        const n = netByPallet[pid];
+        if (n.qty <= 0) return;
+        changes.push({ ref: db.collection('pallets').doc(pid), delta: -n.qty, deleteWhenEmpty: true, label: n.item.palletId });
     });
     if (missing.length > 0) {
         throw new Error('找不到以下棧板（可能已被移動或出庫）：' + missing.slice(0, 10).join('、'));
     }
 
-    const shortages = pickingList.filter(i => !i.completed || i.shortage).map(i => ({
+    const shortages = pickingList.filter(i => (!i.completed || i.shortage) && i.type !== 'return').map(i => ({
         productName: i.productName || '',
         spec: i.spec || '',
         qty: parseInt(i.pickQty) || 0,
@@ -237,6 +315,7 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
     const excluded = name => typeof window.isExcludedFromPickingList === 'function' && window.isExcludedFromPickingList(name);
     const pickedByKey = {};
     pickedItems.forEach(i => { const k = i.key || keyOf(i.productName, i.spec); pickedByKey[k] = (pickedByKey[k] || 0) + (parseFloat(i.pickQty) || 0); });
+    returnedItems.forEach(i => { const k = i.key || keyOf(i.productName, i.spec); pickedByKey[k] = (pickedByKey[k] || 0) - (parseFloat(i.pickQty) || 0); });
     const shippedTo = {};  // 訂單 ID 或單號 → { 品項 key: 件數 }
     (wave.summary || []).forEach(sm => {
         const k = keyOf(sm.productName, sm.spec);
@@ -353,18 +432,21 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
             return ups;
         },
         logs: function() {
-            return pickedItems.map(item => ({
-                type: 'outbound',
-                company: item.company || '',
-                productName: item.productName,
-                spec: item.spec,
-                quantity: item.pickQty,
-                quantityChange: -item.pickQty,
-                locationId: item.locationId,
-                batchNo: item.batchNo,
-                palletId: item.palletId,
-                note: '波次揀貨 ' + wave.waveNo
-            }));
+            return Object.keys(netByPallet).filter(pid => netByPallet[pid].qty > 0).map(pid => {
+                const item = netByPallet[pid].item, q = netByPallet[pid].qty;
+                return {
+                    type: 'outbound',
+                    company: item.company || '',
+                    productName: item.productName,
+                    spec: item.spec,
+                    quantity: q,
+                    quantityChange: -q,
+                    locationId: item.locationId,
+                    batchNo: item.batchNo,
+                    palletId: item.palletId,
+                    note: '波次揀貨 ' + wave.waveNo
+                };
+            });
         }
     });
     wave.shipped = shipped;
