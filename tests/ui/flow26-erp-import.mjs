@@ -38,6 +38,21 @@ H.check('匯入後只問一次：預覽要建哪些波次（黑貓、新竹）�
 const waves = await H.all('waves');
 H.check('按一次確定就建好 2 個波次（黑貓 1 單、新竹 2 單），沒物流商的 SO-4 還在待排', waves.length === 2 && waves.some(w => w.logistics === '新竹物流' && w.orderCount === 2) && so['SO-4'].logistics === '未指定' && so['SO-4'].status === 'pending', JSON.stringify(waves.map(w => [w.logistics, w.orderCount])));
 
+// ---------- 鼎新報表的真實特性：每頁重複抬頭、品名空白沿用上一列、「銷貨包裝數量」欄 ----------
+const parsed = await page.evaluate(() => {
+  const H = ['銷貨日期', '銷貨單號', '客戶全名', '品名', '規格', '銷貨數量', '單位', '銷貨包裝數量', '備註'];
+  const rows = [['每日客戶銷貨明細表'], ['製表日期：2026/09/25'], H,
+    ['2026/09/25', 'SO-P1', '客戶甲', '白蝦', '50/60', 10, '件', 10, '黑貓'],
+    ['', '', '', '', '', 4, '件', 4, ''],
+    ['', '', '', '', '', '', '銷貨:', '', ''],
+    ['第 2 頁'], ['製表日期：2026/09/25'], ['期間 2026/09/25 ~ 2026/09/25'], H,
+    ['', '', '', '透抽', 'L', 3, '件', 3, ''],
+    ['2026/09/25', 'SO-P2', '客戶乙', '', '', 5, '件', 5, '新竹']];
+  const r = parseErpOrderRows(rows);
+  return r.error ? r.error : r.orders.map(o => [o.orderNo, o.logistics, o.items.map(i => i.productName + ' ' + i.spec + ' x' + i.packageQty)]);
+});
+H.check('鼎新報表換頁：跳過每頁抬頭和重複的標題列；品名空白沿用上一列；讀得到「銷貨包裝數量」；換了單號就不沿用（SO-P2 沒有品名，不建空單）', JSON.stringify(parsed) === JSON.stringify([['SO-P1', '黑貓宅急便', ['白蝦 50/60 x10', '白蝦 50/60 x4', '透抽 L x3']]]), JSON.stringify(parsed));
+
 // ---------- 在建立波次清單指定物流商 ----------
 await page.click("button[onclick=\"openCreateWaveModal()\"]"); await page.waitForTimeout(1000);
 const sel = await page.$('#modal-create-wave select[onchange^="setOrderLogistics"]');
