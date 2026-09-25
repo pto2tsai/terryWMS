@@ -1671,10 +1671,19 @@ window.completeWave = async function() {
             if (!snap.exists) { alert('此波次已被刪除（訂單可能已排進其他波次），請重新整理'); return; }
             const fresh = snap.data();
             if (fresh.status === 'done') { wave.status = 'done'; alert('此波次已經在其他裝置完成'); closeWaveExecuteModal(); return; }
-            // 用最新的波次重算清單（手機掃過的、鼎新改單自動調整的都算進來）
-            Object.assign(wave, fresh);
-            generatePickingListV2(wave);
-            list = window._waveData.pickingList;
+            if (Array.isArray(fresh.pickLog) && fresh.pickLog.length) {
+                // 有揀貨記錄：用最新的波次重算清單（手機掃過的、鼎新改單自動調整的都算進來）
+                Object.assign(wave, fresh);
+                generatePickingListV2(wave);
+                list = window._waveData.pickingList;
+            } else {
+                // 舊波次：照舊，把其他裝置打勾的項目併進來
+                const doneIds = fresh.completedItems || [];
+                wave.completedItems = doneIds;
+                list.forEach(i => { if (doneIds.indexOf(i.id) >= 0) i.completed = true; });
+                renderPickingListV2();
+                updateWaveProgress();
+            }
         } catch (err) {
             alert('❌ 讀取波次最新進度失敗：' + err.message);
             return;
