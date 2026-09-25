@@ -83,6 +83,23 @@ await page.waitForTimeout(1500);
 const so5 = (await H.all('salesOrders')).filter(o => o.orderNo === 'SO-5');
 H.check('兩台電腦都開著：SO-5 只匯入一次、只建一個新波次', so5.length === 1 && (await H.all('waves')).length === nW + 1 && so5[0].waveNo, JSON.stringify([so5.length, (await H.all('waves')).length, nW, in4 && in4.status]));
 
+// ---------- 鼎新檔名只有代碼和數字：用子資料夾、代碼對照表、報表標題認 ----------
+const gs = (await import('./erp-gs.mjs')).loadGs();
+const idr = (n, f, rows, map) => { const x = gs.identifyReport(n, f, rows, map || {}); return x.report ? x.report.type + '/' + x.by : 'null'; };
+const got = [
+  idr('INVR05_20260925.xls', '庫存明細表', []),
+  idr('INVR05_20260925.xls', '', [], { INVR05: '庫存明細表' }),
+  idr('INVR051_20260925.xls', '', [], { INVR05: '庫存明細表', INVR051: '批號明細表' }),
+  idr('COPR11_0925.xls', '', [['崇文食品股份有限公司'], ['每日客戶銷貨明細表'], ['日期：2026/09/25']]),
+  idr('ACRR02_202609.xls', '', [['應收帳款明細表']]),
+  idr('XYZ01.xls', '', [['123']])
+];
+H.check('檔名只有代碼：放在「庫存明細表」子資料夾、代碼對照表、長代碼優先、報表標題，都認得出；都認不出就不收', JSON.stringify(got) === JSON.stringify(['stock_daily/資料夾', 'stock_daily/代碼', 'batch_daily/代碼', 'sales_daily/內容', 'ar_monthly/內容', 'null']), JSON.stringify(got));
+const r6 = await pushReport('COPR11_20260925_1300.xls', [['崇文食品'], ['每日客戶銷貨明細表'], HEAD, ['2026/09/25', 'SO-6', 'C6', '客戶六', '透抽', 'L', 2, '件', 2, '件', 200, '新竹', '', '', '']]);
+let in6;
+for (let i = 0; i < 20; i++) { await page.waitForTimeout(500); in6 = await H.one('erpInbox', r6.id); if (in6 && ['done', 'attention', 'error'].includes(in6.status)) break; }
+H.check('代碼檔名的訂單檔（看標題認出）也自動匯入、建波次，並記下公司', in6.type === 'sales_daily' && in6.detectedBy === '內容' && in6.company === '崇文' && (await H.all('salesOrders')).some(o => o.orderNo === 'SO-6' && o.waveNo), JSON.stringify(in6 && [in6.type, in6.detectedBy, in6.company, in6.status, in6.result]));
+
 // ---------- 同一個檔案再送一次（例如程式重跑）：不會重複 ----------
 const r5 = await pushReport('每日客戶銷貨明細表_1100.xlsx', [HEAD], { fileId: r4.fileId, modified: r4.modified });
 H.check('同一個檔案重送：資料庫拒絕（不會重複匯入）', r5.status === 409, String(r5.status));

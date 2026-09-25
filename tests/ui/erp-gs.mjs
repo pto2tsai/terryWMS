@@ -12,11 +12,13 @@ export function loadGs() {
 }
 
 // 把一份報表（檔名＋表格）送進測試資料庫；回傳收件編號與 HTTP 狀態
-export async function pushReport(fileName, rows, { projectId = 'terrywms-2345f', fileId = 'FILE' + Math.random().toString(36).slice(2, 12), modified = new Date().toISOString() } = {}) {
+// folder：放在哪個子資料夾；codeMap：檔名代碼對照表（跟 Code.gs 的 CONFIG.CODE_MAP 一樣）
+export async function pushReport(fileName, rows, { projectId = 'terrywms-2345f', fileId = 'FILE' + Math.random().toString(36).slice(2, 12), modified = new Date().toISOString(), folder = '', codeMap = {} } = {}) {
   const gs = loadGs();
-  const report = gs.detectReport(fileName);
-  if (!report) throw new Error('看不出報表種類：' + fileName);
-  const built = gs.buildInboxWrites(projectId, report, { id: fileId, name: fileName, modified }, gs.normalizeRows(rows, d => d.toISOString().slice(0, 10)), new Date().toISOString());
+  const norm = gs.normalizeRows(rows, d => d.toISOString().slice(0, 10));
+  const idr = gs.identifyReport(fileName, folder, norm, codeMap);
+  if (!idr.report) throw new Error('看不出報表種類：' + fileName);
+  const built = gs.buildInboxWrites(projectId, idr.report, { id: fileId, name: fileName, modified }, norm, new Date().toISOString(), idr.by);
   const res = await fetch(`http://127.0.0.1:8080/v1/projects/${projectId}/databases/(default)/documents:commit`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
     body: JSON.stringify({ writes: built.writes })
