@@ -135,11 +135,29 @@ service cloud.firestore {
     // 備份：限管理員
     match /backups/{id}       { allow read, write: if isAdmin(); }
 
+    // 鼎新報表收件匣：由 Google 雲端的自動程式寫入（用專案擁有者權限，不經過這些規則）
+    // 含金額／帳款的報表（sensitive）只有主管、財務、管理員看得到
+    // 作業人員只能更新處理狀態（WMS 接手匯入訂單時用），不能改報表內容
+    function canSeeErp(data) { return (isActiveUser() && data.get('sensitive', true) == false) || isSupervisor(); }
+    match /erpInbox/{id} {
+      allow read: if canSeeErp(resource.data);
+      allow create: if false;
+      allow update: if canOperate() && resource.data.get('sensitive', true) == false
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'processingBy', 'processingAt', 'processedAt', 'processedBy', 'result', 'issues']);
+      allow delete: if isAdmin();
+      match /chunks/{c} {
+        allow read: if canSeeErp(resource.data);
+        allow create, update: if false;
+        allow delete: if isAdmin();
+      }
+    }
+
     // 其他未列出的 collection：可讀，只有管理員能寫
-    // （規則是「任一條允許即可」，所以這裡要排除 backups，否則會蓋過上面的限制）
+    // （規則是「任一條允許即可」，所以這裡要排除 backups、erpInbox，否則會蓋過上面的限制）
     match /{collection}/{id} {
-      allow read: if isActiveUser() && collection != 'backups';
-      allow write: if isAdmin();
+      allow read: if isActiveUser() && collection != 'backups' && collection != 'erpInbox';
+      allow write: if isAdmin() && collection != 'erpInbox';
     }
   }
 }

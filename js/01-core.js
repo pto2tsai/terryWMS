@@ -425,6 +425,7 @@ console.log('✅ WMS 工具函數庫已載入');
             if(viewId === 'expiry-management') { refreshExpiryReport(); }
             if(viewId === 'user-management') { loadUserList(); }
             if(viewId === 'wave-picking') { loadWavesFromFirebase(); }
+            if(viewId === 'erp-inbox' && window.initErpInboxPage) { window.initErpInboxPage(); }
             if(viewId === 'product-master') { loadProductMasterFromFirebase(); }
             if(viewId === 'external-warehouse') { loadExternalStock(); updateExtWarehouseFilter(); }
             if(viewId === 'stocktake' && window.initStocktakePage) { window.initStocktakePage(); }

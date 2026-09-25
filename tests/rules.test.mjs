@@ -1,5 +1,5 @@
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, writeBatch, runTransaction, setLogLevel } from 'firebase/firestore';
+import { doc, getDoc, getDocs, query, where, setDoc, updateDoc, deleteDoc, addDoc, collection, writeBatch, runTransaction, setLogLevel } from 'firebase/firestore';
 import fs from 'fs';
 setLogLevel('error');
 const env = await initializeTestEnvironment({ projectId: 'demo-wms-rules', firestore: { rules: fs.readFileSync(new URL('../firestore.rules', import.meta.url),'utf8'), host:'127.0.0.1', port:8080 } });
@@ -13,6 +13,10 @@ await env.withSecurityRulesDisabled(async c => {
   await setDoc(doc(d,'inventoryLogs','L1'), { type:'in' });
   await setDoc(doc(d,'inboundOrders','O1'), { approvalStatus:'pending', status:'pending' });
   await setDoc(doc(d,'counters','IN-20260923'), { seq: 5 });
+  await setDoc(doc(d,'erpInbox','E1'), { type:'sales_daily', sensitive:false, status:'pending' });
+  await setDoc(doc(d,'erpInbox','E1','chunks','0000'), { i:0, data:'[]', sensitive:false });
+  await setDoc(doc(d,'erpInbox','AR1'), { type:'ar_monthly', sensitive:true, status:'stored' });
+  await setDoc(doc(d,'erpInbox','AR1','chunks','0000'), { i:0, data:'[]', sensitive:true });
 });
 const as = e => env.authenticatedContext(e.split('@')[0], { email: e }).firestore();
 const anon = env.unauthenticatedContext().firestore();
@@ -74,5 +78,23 @@ await t('mixed-case token email matches lowercase operatorEmail', assertSucceeds
 await t('operator can record today stock snapshot', assertSucceeds(setDoc(doc(O,'stockSnapshots','2026-01-01'),{date:'2026-01-01',pallets:{'崇文':3}})));
 await t('operator cannot change a past stock snapshot', assertFails(setDoc(doc(O,'stockSnapshots','2026-01-01'),{date:'2026-01-01',pallets:{'崇文':99}})));
 await t('readonly cannot record stock snapshot', assertFails(setDoc(doc(R,'stockSnapshots','2026-01-02'),{date:'2026-01-02',pallets:{}})));
+// 鼎新報表收件匣
+await t('operator can read normal ERP report', assertSucceeds(getDoc(doc(O,'erpInbox','E1'))));
+await t('readonly can read normal ERP report (board)', assertSucceeds(getDoc(doc(R,'erpInbox','E1'))));
+await t('operator can read normal ERP chunks', assertSucceeds(getDoc(doc(O,'erpInbox','E1','chunks','0000'))));
+await t('operator cannot read AR report', assertFails(getDoc(doc(O,'erpInbox','AR1'))));
+await t('operator cannot read AR chunks', assertFails(getDoc(doc(O,'erpInbox','AR1','chunks','0000'))));
+await t('supervisor can read AR report', assertSucceeds(getDoc(doc(S,'erpInbox','AR1'))));
+await t('supervisor can read AR chunks', assertSucceeds(getDoc(doc(S,'erpInbox','AR1','chunks','0000'))));
+await t('operator can list only non-sensitive', assertSucceeds(getDocs(query(collection(O,'erpInbox'), where('sensitive','==',false)))));
+await t('operator cannot list everything', assertFails(getDocs(collection(O,'erpInbox'))));
+await t('nobody can create ERP report from app', assertFails(setDoc(doc(A,'erpInbox','X1'),{ type:'sales_daily', sensitive:false })));
+await t('operator can claim report', assertSucceeds(updateDoc(doc(O,'erpInbox','E1'),{ status:'processing', processingBy:'op@x.com', processingAt:'2026' })));
+await t('operator cannot change report contents', assertFails(updateDoc(doc(O,'erpInbox','E1'),{ type:'ar_monthly' })));
+await t('operator cannot make report non-sensitive', assertFails(updateDoc(doc(O,'erpInbox','AR1'),{ status:'done' })));
+await t('readonly cannot claim report', assertFails(updateDoc(doc(R,'erpInbox','E1'),{ status:'done' })));
+await t('operator cannot write chunks', assertFails(setDoc(doc(O,'erpInbox','E1','chunks','0001'),{ data:'[]', sensitive:false })));
+await t('operator cannot delete report', assertFails(deleteDoc(doc(O,'erpInbox','E1'))));
+
 console.log(`pass ${pass} fail ${fail}`);
 await env.cleanup(); process.exit(fail?1:0);
