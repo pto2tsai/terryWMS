@@ -176,6 +176,7 @@
                 <div class="nav-item" onclick="switchTab('inventory-log', event)"><i class="fa-solid fa-clock-rotate-left w-4 text-center mr-2 text-orange-400"></i>異動查詢</div>
                 <div class="nav-item" onclick="switchTab('expiry-management', event)"><i class="fa-solid fa-calendar-xmark w-4 text-center mr-2 text-red-400"></i>效期管理</div>
                 <div class="nav-item" onclick="switchTab('picking-reports', event)"><i class="fa-solid fa-chart-pie w-4 text-center mr-2 text-green-400"></i>報表中心</div>
+                <div class="nav-item" onclick="switchTab('erp-inbox', event)"><i class="fa-solid fa-cloud-arrow-down w-4 text-center mr-2 text-sky-400"></i>ERP 報表（鼎新）</div>
             </div>
 
             <div class="nav-group-header" onclick="toggleNavGroup('grp-rental')">
@@ -2800,6 +2801,31 @@
             </div>
 
             <!-- 標籤列印頁面 -->
+            <!-- 鼎新報表收件匣：Google 雲端自動程式送進來的報表；訂單會自動匯入並建好波次 -->
+            <div id="view-erp-inbox" class="view-panel h-full hidden flex flex-col p-4 overflow-y-auto">
+                <div class="glass-panel p-4 mb-3">
+                    <div class="text-white text-lg font-bold mb-1"><i class="fa-solid fa-cloud-arrow-down text-sky-400 mr-2"></i>鼎新報表自動匯入</div>
+                    <div class="text-slate-400 text-sm">鼎新定時匯出到 Google 雲端硬碟的報表，會自動送到這裡（大約 10 分鐘內）。
+                        「每日客戶銷貨明細表」會自動匯入訂單、依物流商建好波次；其他報表存檔，可以檢視、下載 Excel。
+                        黃色「要處理」表示有單需要人補資料，看右邊說明。</div>
+                </div>
+                <div id="erp-summary" class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3"></div>
+                <div class="flex items-center gap-2 mb-2">
+                    <label class="text-slate-300 text-sm">月份</label>
+                    <input type="month" id="erp-month" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" onchange="loadErpInbox()">
+                    <select id="erp-type" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" onchange="renderErpInbox()"><option value="">全部報表</option></select>
+                    <button onclick="loadErpInbox()" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm"><i class="fa-solid fa-rotate mr-1"></i>重新整理</button>
+                </div>
+                <div class="glass-panel overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead><tr class="text-slate-400 text-xs border-b border-slate-700">
+                            <th class="p-2 text-left">收到時間</th><th class="p-2 text-left">報表</th><th class="p-2 text-left">檔名</th><th class="p-2 text-right">列數</th>
+                            <th class="p-2 text-left">狀態</th><th class="p-2 text-left">結果</th><th class="p-2 text-left">操作</th></tr></thead>
+                        <tbody id="erp-inbox-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <div id="view-label-print" class="view-panel h-full hidden flex flex-col p-4">
                 <div class="bg-gradient-to-r from-purple-900 to-purple-800 border border-purple-600 p-3 rounded-lg mb-4">
                     <h2 class="text-white font-bold text-xl"><i class="fa-solid fa-print mr-2 text-purple-400"></i>標籤列印</h2>
@@ -4783,5 +4809,6 @@
     <script src="js/20-home.js"></script>
     <script src="js/21-step-bars.js"></script>
     <script src="js/22-report-print.js"></script>
+    <script src="js/23-erp-inbox.js"></script>
 </body>
 </html>

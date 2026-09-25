@@ -687,233 +687,254 @@ window.setOrderLogistics = async function(orderId, logistics) {
     } catch (e) { alert('❌ 更新物流商失敗：' + e.message); }
 };
 
+// 解析鼎新銷貨明細（表格 → 訂單）；回傳 { orders, needPkg } 或 { error }
+// needPkg：換算不出件數、要人工填的品項
+window.parseErpOrderRows = function(rows) {
+    // 欄位依「標題」找（鼎新報表多一欄、換順序也讀得對）；缺必要欄位就擋下，不會整批讀錯
+    const hdr = findErpHeader(rows);
+    if (hdr.error) return { error: hdr.error };
+    const COL = hdr.col;
+    const dataRows = rows.slice(hdr.row + 1);
+
+    const orderMap = new Map();
+    let lastOrderNo = null;
+    // 數字欄：去掉千分位，保留小數（2.5 公斤不會變 2）
+    const num = v => parseFloat(String(v == null ? '' : v).replace(/,/g, '')) || 0;
+    const needPkg = [];  // 換算不出件數、要人工填的品項
+
+    for (const row of dataRows) {
+        if (!row[COL.PRODUCT]) continue;
+        if (String(row[COL.DATE]).includes('小計') || String(row[COL.DATE]).includes('合計')) continue;
+
+        let orderNo = row[COL.ORDER_NO] ? String(row[COL.ORDER_NO]).trim() : lastOrderNo;
+        if (!orderNo) continue;
+        const logistics = parseLogistics(row[COL.REMARK]);
+        if (row[COL.ORDER_NO]) lastOrderNo = orderNo;
+
+        // 同一張單號就是同一張訂單（不再依物流商拆成兩張，避免後面那張蓋掉前面的品項）
+        if (!orderMap.has(orderNo)) {
+            orderMap.set(orderNo, {
+                orderNo: orderNo,
+                orderDate: row[COL.DATE] ? String(row[COL.DATE]).trim() : '',
+                customerCode: row[COL.CUST_CODE] ? String(row[COL.CUST_CODE]).trim() : '',
+                customer: row[COL.CUST_NAME] ? String(row[COL.CUST_NAME]).trim() : '',
+                logistics: logistics,
+                address: row[COL.ADDR1] ? String(row[COL.ADDR1]).trim() : '',
+                address2: row[COL.ADDR2] ? String(row[COL.ADDR2]).trim() : '',
+                remark: row[COL.REMARK] ? String(row[COL.REMARK]).trim() : '',
+                status: 'pending',
+                items: [],
+                createdAt: new Date().toISOString(),
+                importedAt: new Date().toISOString()
+            });
+        }
+
+        let currentOrder = orderMap.get(orderNo);
+        if (currentOrder.logistics === '未指定' && logistics !== '未指定') currentOrder.logistics = logistics;
+        if (!currentOrder.remark && row[COL.REMARK]) currentOrder.remark = String(row[COL.REMARK]).trim();
+
+        if (row[COL.PRODUCT]) {
+            var productName = String(row[COL.PRODUCT]).trim();
+
+            // === 過濾不需要的項目 ===
+
+            var headerKeywords = ['品名', '規格', '包裝數量', '包裝單位', '銷貨數量', '單位', '單價', '備註', '批號', '送貨地址'];
+            var isHeader = headerKeywords.some(function(kw) { return productName === kw || productName.includes(kw + ' '); });
+            if (isHeader) continue;
+
+            var feeKeywords = ['運費', '費用', '保力龍', '保麗龍', '代收', '代墊', '手續費', '服務費', '包材', '紙箱費', '冰袋', '冰塊'];
+            var isFee = feeKeywords.some(function(kw) { return productName.includes(kw); });
+            if (isFee) continue;
+
+            var qty = num(row[COL.QTY]);
+            if (!productName || qty <= 0) continue;
+
+            // === 件數：品名有「*N盒」就換算；否則用包裝數量欄；單位本來就是件／箱就等於數量；都沒有就要人工填 ===
+            var unit = row[COL.UNIT] ? String(row[COL.UNIT]).trim() : '';
+            var boxPerPkg = parseBoxPerPackage(productName);
+            var pkgCell = num(row[COL.PKG_QTY]);
+            var pkgQty = null;
+            if (boxPerPkg > 0) pkgQty = Math.ceil(qty / boxPerPkg);
+            else if (pkgCell > 0) pkgQty = pkgCell;
+            else if (/^(件|箱|CTN|CS)$/i.test(unit) || window.isExcludedFromPickingList(productName)) pkgQty = qty;
+
+            var item = {
+                productName: productName,
+                spec: row[COL.SPEC] ? String(row[COL.SPEC]).trim() : '',
+                quantity: qty,                    // 最小單位數量（盒）
+                unit: unit,
+                packageQty: pkgQty,               // 件數
+                packageUnit: '件',                // 固定為件
+                boxPerPackage: boxPerPkg,         // 每件盒數
+                batchNo: row[COL.BATCH] ? String(row[COL.BATCH]).trim() : '',
+                price: num(row[COL.PRICE])
+            };
+            currentOrder.items.push(item);
+            if (pkgQty === null) needPkg.push({ order: currentOrder, item: item });
+        }
+    }
+
+    return { orders: Array.from(orderMap.values()), needPkg: needPkg };
+};
+
+// 存訂單：新單新增；已有的單比對異動（已出貨的不改）；回傳各種筆數
+window.saveErpOrders = async function(orders) {
+    let savedCount = 0;
+    let skipCount = 0;
+    let modifiedCount = 0;
+    var orderChanges = [];
+    var shippedChanged = [];
+
+    for (const order of orders) {
+        const existing = window._orderData.orders.find(o => o.orderNo === order.orderNo);
+        if (existing) {
+            // 有異動時先讀資料庫最新狀態（畫面上的可能是舊的：別台電腦或手機已經出貨）
+            if (existing.id && detectOrderChanges(existing, order).length > 0) {
+                try {
+                    var freshSnap = await window.db.collection('salesOrders').doc(existing.id).get();
+                    if (freshSnap.exists) Object.assign(existing, freshSnap.data());
+                } catch (err) { console.warn('讀取訂單最新狀態失敗', err); }
+            }
+            // 已出貨（含部分出貨）或所在波次已完成的訂單不再改品項
+            var exWave = existing.waveNo && window._waveData.waves.find(function(w) { return w.waveNo === existing.waveNo; });
+            if (existing.status === 'shipped' || existing.status === 'partial' || Array.isArray(existing.backorderItems) || (exWave && exWave.status === 'done')) {
+                if (detectOrderChanges(existing, order).length > 0) shippedChanged.push(order.orderNo);
+                skipCount++;
+                continue;
+            }
+            var changes = detectOrderChanges(existing, order);
+            if (changes.length > 0) {
+                orderChanges.push({
+                    orderNo: order.orderNo,
+                    customer: order.customer,
+                    waveNo: existing.waveNo,
+                    changes: changes
+                });
+
+                existing.items = order.items;
+                existing.modifiedAt = new Date().toISOString();
+                existing.hasChanges = true;
+
+                if (existing.waveNo) {
+                    var wave = window._waveData.waves.find(function(w) { return w.waveNo === existing.waveNo; });
+                    if (wave) {
+                        wave.hasOrderChanges = true;
+                        wave.changedOrders = wave.changedOrders || [];
+                        if (wave.changedOrders.indexOf(order.orderNo) === -1) {
+                            wave.changedOrders.push(order.orderNo);
+                        }
+                    }
+                }
+
+                if (existing.id) {
+                    try {
+                        await window.updateDoc(window.doc(window.db, 'salesOrders', existing.id), {
+                            items: order.items,
+                            modifiedAt: existing.modifiedAt,
+                            hasChanges: true
+                        });
+                    } catch (err) { console.error('更新訂單失敗:', err); }
+                }
+                modifiedCount++;
+            } else {
+                skipCount++;
+            }
+            continue;
+        }
+
+        try {
+            // 記下文件 ID：之後排波次、出貨要靠它更新訂單狀態（沒有 ID 時狀態不會存回資料庫，重新整理後可能被重複排波次）
+            const orderRef = await window.addDoc(window.collection(window.db, 'salesOrders'), order);
+            order.id = orderRef.id;
+            window._orderData.orders.push(order);
+            savedCount++;
+        } catch (err) {
+            console.error('儲存訂單失敗:', order.orderNo, err);
+        }
+    }
+
+    window._orderData.lastImportTime = new Date().toISOString();
+    return { savedCount: savedCount, skipCount: skipCount, modifiedCount: modifiedCount, orderChanges: orderChanges, shippedChanged: shippedChanged };
+};
+
+// 人工匯入（按按鈕選檔、或在 ERP 報表頁按「手動匯入」）：會跳視窗問件數、物流商、要不要建波次
+window.importErpOrderRows = async function(rows) {
+    try {
+        const parsed = window.parseErpOrderRows(rows);
+        if (parsed.error) { alert('❌ 無法匯入：' + parsed.error); return false; }
+        const needPkg = parsed.needPkg;
+        // 換算不出件數的品項：列出來請人工填，全部填好才匯入
+        if (needPkg.length > 0) {
+            const ok = await askPackageQty(needPkg);
+            if (!ok) { alert('已取消匯入，資料沒有變動。'); return false; }
+        }
+
+        const orders = parsed.orders;
+
+        // 新訂單認不出物流商：列出來請人工選（已經匯入過的單不再問）
+        const noLogistics = orders.filter(o => o.logistics === '未指定' && !window._orderData.orders.some(x => x.orderNo === o.orderNo));
+        if (noLogistics.length > 0) {
+            const ok = await askLogistics(noLogistics);
+            if (!ok) { alert('已取消匯入，資料沒有變動。'); return false; }
+        }
+
+        console.log('解析訂單:', orders.length, '筆');
+
+        const r = await window.saveErpOrders(orders);
+        const savedCount = r.savedCount, skipCount = r.skipCount, modifiedCount = r.modifiedCount, orderChanges = r.orderChanges, shippedChanged = r.shippedChanged;
+
+        if (modifiedCount > 0) {
+            showOrderChangesAlert(orderChanges);
+        }
+        if (shippedChanged.length > 0) {
+            alert('⚠️ 以下訂單已經出貨，Excel 裡的品項有變動但沒有套用（請在 ERP 另外處理）：\n\n' + shippedChanged.join('\n'));
+        }
+
+        renderOrderList();
+        refreshWaveList();
+
+        if (savedCount > 0) {
+            var plan = planWavesByLogistics();
+            var autoCreate = plan.count > 0 && confirm(
+                '✅ 匯入完成！新增 ' + savedCount + ' 筆' +
+                (modifiedCount > 0 ? '、⚠️ 異動 ' + modifiedCount + ' 筆' : '') +
+                (skipCount > 0 ? '、略過（沒變）' + skipCount + ' 筆' : '') + '\n\n' +
+                '━━━━━━━━━━━━━━━━━━━━━━\n' +
+                plan.text + '\n按「確定」就建立波次，按「取消」先不建'
+            );
+            if (!autoCreate && plan.count === 0) alert('✅ 匯入完成！新增 ' + savedCount + ' 筆\n\n' + plan.text);
+            if (autoCreate) {
+                await autoCreateWavesByLogistics({ skipConfirm: true });
+            }
+        } else {
+            var resultMsg = '✅ 匯入完成！\n\n' +
+                  '新增：' + savedCount + ' 筆\n';
+            if (modifiedCount > 0) {
+                resultMsg += '⚠️ 異動：' + modifiedCount + ' 筆\n';
+            }
+            resultMsg += '略過（無變更）：' + skipCount + ' 筆\n' +
+                  '總訂單數：' + window._orderData.orders.length + ' 筆';
+            alert(resultMsg);
+        }
+
+        return true;
+    } catch (err) {
+        console.error('匯入失敗:', err);
+        alert('❌ 匯入失敗：' + err.message);
+        return false;
+    }
+};
+
 window.importERPExcel = async function(event) {
     const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = async function(e) {
-        try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-            // 欄位依「標題」找（鼎新報表多一欄、換順序也讀得對）；缺必要欄位就擋下，不會整批讀錯
-            const hdr = findErpHeader(rows);
-            if (hdr.error) { alert('❌ 無法匯入：' + hdr.error); return; }
-            const COL = hdr.col;
-            const dataRows = rows.slice(hdr.row + 1);
-
-            const orderMap = new Map();
-            let lastOrderNo = null;
-            // 數字欄：去掉千分位，保留小數（2.5 公斤不會變 2）
-            const num = v => parseFloat(String(v == null ? '' : v).replace(/,/g, '')) || 0;
-            const needPkg = [];  // 換算不出件數、要人工填的品項
-
-            for (const row of dataRows) {
-                if (!row[COL.PRODUCT]) continue;
-                if (String(row[COL.DATE]).includes('小計') || String(row[COL.DATE]).includes('合計')) continue;
-
-                let orderNo = row[COL.ORDER_NO] ? String(row[COL.ORDER_NO]).trim() : lastOrderNo;
-                if (!orderNo) continue;
-                const logistics = parseLogistics(row[COL.REMARK]);
-                if (row[COL.ORDER_NO]) lastOrderNo = orderNo;
-
-                // 同一張單號就是同一張訂單（不再依物流商拆成兩張，避免後面那張蓋掉前面的品項）
-                if (!orderMap.has(orderNo)) {
-                    orderMap.set(orderNo, {
-                        orderNo: orderNo,
-                        orderDate: row[COL.DATE] ? String(row[COL.DATE]).trim() : '',
-                        customerCode: row[COL.CUST_CODE] ? String(row[COL.CUST_CODE]).trim() : '',
-                        customer: row[COL.CUST_NAME] ? String(row[COL.CUST_NAME]).trim() : '',
-                        logistics: logistics,
-                        address: row[COL.ADDR1] ? String(row[COL.ADDR1]).trim() : '',
-                        address2: row[COL.ADDR2] ? String(row[COL.ADDR2]).trim() : '',
-                        remark: row[COL.REMARK] ? String(row[COL.REMARK]).trim() : '',
-                        status: 'pending',
-                        items: [],
-                        createdAt: new Date().toISOString(),
-                        importedAt: new Date().toISOString()
-                    });
-                }
-
-                let currentOrder = orderMap.get(orderNo);
-                if (currentOrder.logistics === '未指定' && logistics !== '未指定') currentOrder.logistics = logistics;
-                if (!currentOrder.remark && row[COL.REMARK]) currentOrder.remark = String(row[COL.REMARK]).trim();
-
-                if (row[COL.PRODUCT]) {
-                    var productName = String(row[COL.PRODUCT]).trim();
-
-                    // === 過濾不需要的項目 ===
-
-                    var headerKeywords = ['品名', '規格', '包裝數量', '包裝單位', '銷貨數量', '單位', '單價', '備註', '批號', '送貨地址'];
-                    var isHeader = headerKeywords.some(function(kw) { return productName === kw || productName.includes(kw + ' '); });
-                    if (isHeader) continue;
-
-                    var feeKeywords = ['運費', '費用', '保力龍', '保麗龍', '代收', '代墊', '手續費', '服務費', '包材', '紙箱費', '冰袋', '冰塊'];
-                    var isFee = feeKeywords.some(function(kw) { return productName.includes(kw); });
-                    if (isFee) continue;
-
-                    var qty = num(row[COL.QTY]);
-                    if (!productName || qty <= 0) continue;
-
-                    // === 件數：品名有「*N盒」就換算；否則用包裝數量欄；單位本來就是件／箱就等於數量；都沒有就要人工填 ===
-                    var unit = row[COL.UNIT] ? String(row[COL.UNIT]).trim() : '';
-                    var boxPerPkg = parseBoxPerPackage(productName);
-                    var pkgCell = num(row[COL.PKG_QTY]);
-                    var pkgQty = null;
-                    if (boxPerPkg > 0) pkgQty = Math.ceil(qty / boxPerPkg);
-                    else if (pkgCell > 0) pkgQty = pkgCell;
-                    else if (/^(件|箱|CTN|CS)$/i.test(unit) || window.isExcludedFromPickingList(productName)) pkgQty = qty;
-
-                    var item = {
-                        productName: productName,
-                        spec: row[COL.SPEC] ? String(row[COL.SPEC]).trim() : '',
-                        quantity: qty,                    // 最小單位數量（盒）
-                        unit: unit,
-                        packageQty: pkgQty,               // 件數
-                        packageUnit: '件',                // 固定為件
-                        boxPerPackage: boxPerPkg,         // 每件盒數
-                        batchNo: row[COL.BATCH] ? String(row[COL.BATCH]).trim() : '',
-                        price: num(row[COL.PRICE])
-                    };
-                    currentOrder.items.push(item);
-                    if (pkgQty === null) needPkg.push({ order: currentOrder, item: item });
-                }
-            }
-
-            // 換算不出件數的品項：列出來請人工填，全部填好才匯入
-            if (needPkg.length > 0) {
-                const ok = await askPackageQty(needPkg);
-                if (!ok) { alert('已取消匯入，資料沒有變動。'); return; }
-            }
-
-            const orders = Array.from(orderMap.values());
-
-            // 新訂單認不出物流商：列出來請人工選（已經匯入過的單不再問）
-            const noLogistics = orders.filter(o => o.logistics === '未指定' && !window._orderData.orders.some(x => x.orderNo === o.orderNo));
-            if (noLogistics.length > 0) {
-                const ok = await askLogistics(noLogistics);
-                if (!ok) { alert('已取消匯入，資料沒有變動。'); return; }
-            }
-
-            console.log('解析訂單:', orders.length, '筆');
-
-            let savedCount = 0;
-            let skipCount = 0;
-            let modifiedCount = 0;
-            var orderChanges = [];
-            var shippedChanged = [];
-
-            for (const order of orders) {
-                const existing = window._orderData.orders.find(o => o.orderNo === order.orderNo);
-                if (existing) {
-                    // 有異動時先讀資料庫最新狀態（畫面上的可能是舊的：別台電腦或手機已經出貨）
-                    if (existing.id && detectOrderChanges(existing, order).length > 0) {
-                        try {
-                            var freshSnap = await window.db.collection('salesOrders').doc(existing.id).get();
-                            if (freshSnap.exists) Object.assign(existing, freshSnap.data());
-                        } catch (err) { console.warn('讀取訂單最新狀態失敗', err); }
-                    }
-                    // 已出貨（含部分出貨）或所在波次已完成的訂單不再改品項
-                    var exWave = existing.waveNo && window._waveData.waves.find(function(w) { return w.waveNo === existing.waveNo; });
-                    if (existing.status === 'shipped' || existing.status === 'partial' || Array.isArray(existing.backorderItems) || (exWave && exWave.status === 'done')) {
-                        if (detectOrderChanges(existing, order).length > 0) shippedChanged.push(order.orderNo);
-                        skipCount++;
-                        continue;
-                    }
-                    var changes = detectOrderChanges(existing, order);
-                    if (changes.length > 0) {
-                        orderChanges.push({
-                            orderNo: order.orderNo,
-                            customer: order.customer,
-                            waveNo: existing.waveNo,
-                            changes: changes
-                        });
-
-                        existing.items = order.items;
-                        existing.modifiedAt = new Date().toISOString();
-                        existing.hasChanges = true;
-
-                        if (existing.waveNo) {
-                            var wave = window._waveData.waves.find(function(w) { return w.waveNo === existing.waveNo; });
-                            if (wave) {
-                                wave.hasOrderChanges = true;
-                                wave.changedOrders = wave.changedOrders || [];
-                                if (wave.changedOrders.indexOf(order.orderNo) === -1) {
-                                    wave.changedOrders.push(order.orderNo);
-                                }
-                            }
-                        }
-
-                        if (existing.id) {
-                            try {
-                                await window.updateDoc(window.doc(window.db, 'salesOrders', existing.id), {
-                                    items: order.items,
-                                    modifiedAt: existing.modifiedAt,
-                                    hasChanges: true
-                                });
-                            } catch (err) { console.error('更新訂單失敗:', err); }
-                        }
-                        modifiedCount++;
-                    } else {
-                        skipCount++;
-                    }
-                    continue;
-                }
-
-                try {
-                    // 記下文件 ID：之後排波次、出貨要靠它更新訂單狀態（沒有 ID 時狀態不會存回資料庫，重新整理後可能被重複排波次）
-                    const orderRef = await window.addDoc(window.collection(window.db, 'salesOrders'), order);
-                    order.id = orderRef.id;
-                    window._orderData.orders.push(order);
-                    savedCount++;
-                } catch (err) {
-                    console.error('儲存訂單失敗:', order.orderNo, err);
-                }
-            }
-
-            window._orderData.lastImportTime = new Date().toISOString();
-
-            if (modifiedCount > 0) {
-                showOrderChangesAlert(orderChanges);
-            }
-            if (shippedChanged.length > 0) {
-                alert('⚠️ 以下訂單已經出貨，Excel 裡的品項有變動但沒有套用（請在 ERP 另外處理）：\n\n' + shippedChanged.join('\n'));
-            }
-
-            renderOrderList();
-            refreshWaveList();
-
-            if (savedCount > 0) {
-                var plan = planWavesByLogistics();
-                var autoCreate = plan.count > 0 && confirm(
-                    '✅ 匯入完成！新增 ' + savedCount + ' 筆' +
-                    (modifiedCount > 0 ? '、⚠️ 異動 ' + modifiedCount + ' 筆' : '') +
-                    (skipCount > 0 ? '、略過（沒變）' + skipCount + ' 筆' : '') + '\n\n' +
-                    '━━━━━━━━━━━━━━━━━━━━━━\n' +
-                    plan.text + '\n按「確定」就建立波次，按「取消」先不建'
-                );
-                if (!autoCreate && plan.count === 0) alert('✅ 匯入完成！新增 ' + savedCount + ' 筆\n\n' + plan.text);
-                if (autoCreate) {
-                    await autoCreateWavesByLogistics({ skipConfirm: true });
-                }
-            } else {
-                var resultMsg = '✅ 匯入完成！\n\n' +
-                      '新增：' + savedCount + ' 筆\n';
-                if (modifiedCount > 0) {
-                    resultMsg += '⚠️ 異動：' + modifiedCount + ' 筆\n';
-                }
-                resultMsg += '略過（無變更）：' + skipCount + ' 筆\n' +
-                      '總訂單數：' + window._orderData.orders.length + ' 筆';
-                alert(resultMsg);
-            }
-
-        } catch (err) {
-            console.error('匯入失敗:', err);
-            alert('❌ 匯入失敗：' + err.message);
-        }
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        await window.importErpOrderRows(XLSX.utils.sheet_to_json(sheet, { header: 1 }));
     };
 
     reader.readAsArrayBuffer(file);
@@ -1004,8 +1025,8 @@ function planWavesByLogistics() {
 window.autoCreateWavesByLogistics = async function(opts) {
     var plan = planWavesByLogistics();
     if (plan.count === 0) {
-        alert(plan.text);
-        return;
+        if (!(opts && opts.silent)) alert(plan.text);
+        return { created: [], failed: [], skipped: [], unassignedText: plan.text };
     }
     var logisticsGroups = plan.groups;
 
@@ -1020,7 +1041,7 @@ window.autoCreateWavesByLogistics = async function(opts) {
         '<i class="fa-solid fa-spinner fa-spin text-4xl text-blue-400 mb-4"></i>' +
         '<div class="text-white text-lg" id="progress-text">建立波次中...</div>' +
         '<div class="text-slate-400 text-sm mt-2" id="progress-detail"></div></div>';
-    document.body.appendChild(progressDiv);
+    if (!(opts && opts.silent)) document.body.appendChild(progressDiv);
 
     var createdWaves = [];
     var failed = [];
@@ -1031,8 +1052,10 @@ window.autoCreateWavesByLogistics = async function(opts) {
 
     for (var i = 0; i < logisticsKeys.length; i++) {
         var logistics = logisticsKeys[i];
-        document.getElementById('progress-text').innerText = '建立 ' + logistics + ' 波次...';
-        document.getElementById('progress-detail').innerText = (i + 1) + ' / ' + logisticsKeys.length;
+        if (!(opts && opts.silent)) {
+            document.getElementById('progress-text').innerText = '建立 ' + logistics + ' 波次...';
+            document.getElementById('progress-detail').innerText = (i + 1) + ' / ' + logisticsKeys.length;
+        }
         try {
             var res = await window.createWaveFromOrders(logisticsGroups[logistics], logistics, { autoCreated: true });
             createdWaves.push({ waveNo: res.wave.waveNo, logistics: logistics, orderCount: res.wave.orderCount, totalQty: res.wave.totalQty });
@@ -1045,7 +1068,7 @@ window.autoCreateWavesByLogistics = async function(opts) {
         }
     }
 
-    document.getElementById('auto-wave-progress').remove();
+    if (!(opts && opts.silent)) document.getElementById('auto-wave-progress').remove();
 
     refreshWaveList();
     renderOrderList();
@@ -1062,7 +1085,8 @@ window.autoCreateWavesByLogistics = async function(opts) {
     if (skippedAll.length) resultText += '\n已被其他人排走、略過：\n' + skippedAll.join('\n') + '\n';
     if (failed.length) resultText += '\n❌ 失敗（訂單沒有變動）：\n' + failed.join('\n');
 
-    alert(resultText);
+    if (!(opts && opts.silent)) alert(resultText);
+    return { created: createdWaves, failed: failed, skipped: skippedAll };
 };
 
 // 依訂單彙總揀貨清單（建立波次、追加訂單共用）

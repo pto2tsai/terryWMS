@@ -103,9 +103,9 @@ function normalizeForWrite(ref, data) {
 // 畫面大量以 innerHTML / onclick 字串拼接資料。為了不必逐處修改，在資料層統一處理：
 // 從 Firestore 讀出（以及寫入）的文字，把 < > " ' ` \ 換成全形字元。
 // 畫面上看起來幾乎一樣，但無法再組成 HTML 標籤或跳出 onclick 的字串。
-// backups 內容是 JSON 字串，轉換會破壞還原，所以排除。
+// backups、鼎新報表的分段（chunks）內容是 JSON 字串，轉換會破壞格式，所以排除（報表內容解開後再轉換）。
 var SANITIZE_MAP = { '<': '＜', '>': '＞', '"': '＂', "'": '＇', '`': '｀', '\\': '＼' };
-var SANITIZE_SKIP = { backups: true };
+var SANITIZE_SKIP = { backups: true, chunks: true };
 
 window.sanitizeText = function(s) {
     return typeof s === 'string' ? s.replace(/[<>"'`\\]/g, function(c) { return SANITIZE_MAP[c]; }) : s;

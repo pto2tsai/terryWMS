@@ -27,6 +27,9 @@
         #date { font-size: 1.4vw; color: #94a3b8; }
         #conn { font-size: 1.2vw; padding: .3vw .8vw; border-radius: 99px; background: #14532d; color: #bbf7d0; }
         #conn.bad { background: #7f1d1d; color: #fecaca; }
+        /* 鼎新匯入有狀況：看板上方紅條（沒事就不顯示） */
+        #erp-alert { display: none; background: #7f1d1d; border: .2vw solid #ef4444; color: #fff; border-radius: .8vw; padding: .6vw 1vw; font-size: 1.6vw; font-weight: 800; margin-bottom: 1vw; }
+        #erp-alert.show { display: block; }
         .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1vw; }
         .stat { background: #111827; border-radius: 1vw; padding: .8vw 1vw; border-top: .35vw solid var(--c); }
         .stat .n { font-size: 3.6vw; font-weight: 900; color: #fff; line-height: 1.1; }
@@ -94,6 +97,7 @@
                 <div id="date"></div>
             </div>
         </header>
+        <div id="erp-alert"></div>
         <div class="stats">
             <div class="stat" style="--c:#f97316"><div class="n" id="s-wave">0</div><div class="l">今天完成波次</div></div>
             <div class="stat" style="--c:#fb923c"><div class="n" id="s-out">0</div><div class="l">今天出貨（件）</div></div>
@@ -197,7 +201,27 @@
     // 每分鐘更新等待時間（不用等資料變動）
     setInterval(function() { Object.keys(lastDraw).forEach(function(k) { lastDraw[k](); }); }, 60000);
 
+    // 鼎新匯入的狀況：匯入失敗／要處理、訂單檔等太久沒人處理、訂單沒有物流商
+    var erpDocs = [], noLogistics = 0;
+    function drawErpAlert() {
+        var msgs = [];
+        var bad = erpDocs.filter(function(r) { return r.status === 'attention' || r.status === 'error'; }).length;
+        var waiting = erpDocs.filter(function(r) { return r.status === 'pending' && Date.now() - Date.parse(r.receivedAt) > 15 * 60000; }).length;
+        if (waiting) msgs.push('⏳ 鼎新訂單檔等了超過 15 分鐘還沒匯入：請打開電腦版 WMS');
+        if (bad) msgs.push('⚠️ 鼎新匯入有 ' + bad + ' 份要處理：請到電腦版「ERP 報表」');
+        if (noLogistics) msgs.push('🚚 ' + noLogistics + ' 張訂單沒有物流商，還沒排波次');
+        $('erp-alert').innerHTML = msgs.map(esc).join('<br>');
+        $('erp-alert').classList.toggle('show', msgs.length > 0);
+    }
+    lastDraw.erpAlert = drawErpAlert;
+
     function startListeners() {
+        var ym = new Date(); ym = ym.getFullYear() + '-' + String(ym.getMonth() + 1).padStart(2, '0');
+        listen(db.collection('erpInbox').where('month', '==', ym).where('sensitive', '==', false), function(rows) { erpDocs = rows; drawErpAlert(); });
+        listen(db.collection('salesOrders').where('logistics', '==', '未指定'), function(rows) {
+            noLogistics = rows.filter(function(o) { return ['pending', 'confirmed', 'partial'].indexOf(o.status) >= 0 && !o.waveNo; }).length;
+            drawErpAlert();
+        });
         // 待上架：手機「入庫任務」（即期品待主管核准用紅色）
         listen(db.collection('inboundTasks').where('status', '==', 'pending'), function(rows) {
             rows.sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });

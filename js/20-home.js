@@ -97,7 +97,9 @@ window.refreshHome = async function() {
         { icon: 'fa-arrows-rotate', color: '#3b82f6', label: '調度工單未完成', hint: '已發布到手機「調度工單」',
           action: "goTab('move')" },
         { icon: 'fa-calendar-xmark', color: '#ef4444', label: '過期／30 天內到期', hint: '', count: expired + expiring,
-          action: "goTab('expiry-management')" }
+          action: "goTab('expiry-management')" },
+        { icon: 'fa-cloud-arrow-down', color: '#0ea5e9', label: '鼎新匯入要處理', hint: '匯入失敗、件數待確認、沒有物流商的訂單',
+          action: "goTab('erp-inbox')" }
     ];
     todos[7].hint = '已過期 ' + expired + ' 板（不會被揀貨）、即將到期 ' + expiring + ' 板';
     renderHomeTodos(todos);
@@ -108,10 +110,11 @@ window.refreshHome = async function() {
         countWhere('inboundOrders', 'approvalStatus', '==', 'pending'),
         countWhere('salesOrders', 'status', 'in', ['pending', 'confirmed', 'partial'], function(o) { return !o.waveNo; }),
         countWhere('waves', 'status', 'in', ['pending', 'picking', 'sorting']),
-        countWhere('dispatchOrders', 'status', 'in', ['pending', 'in_progress'])
+        countWhere('dispatchOrders', 'status', 'in', ['pending', 'in_progress']),
+        window.countErpAttention ? window.countErpAttention() : null
     ]);
     todos[0].count = r[0]; todos[1].count = r[1]; todos[3].count = r[2];
-    todos[4].count = r[3]; todos[5].count = r[4]; todos[6].count = r[5];
+    todos[4].count = r[3]; todos[5].count = r[4]; todos[6].count = r[5]; todos[8].count = r[6];
     renderHomeTodos(todos);
 };
 
