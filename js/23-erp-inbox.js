@@ -7,12 +7,10 @@
 // 月報與應收帳款由八方 ERP 自己接收，不進 WMS；萬一有含金額的報表進來（sensitive），只有主管、財務、管理員看得到
 // ============================================================
 
-// WMS 只收這 4 種；月報（商品銷貨期、每月客戶銷貨明細、應收帳款、領料）由八方 ERP 自己接收
+// WMS 目前只用「每日客戶銷貨明細表」（匯入訂單、建波次）。
+// 庫存明細、批號明細、外倉庫存之後做對帳時才需要：鼎新開始輸出就會收進來存檔，這裡先不列。
 window.ERP_REPORT_TYPES = [
-    { type: 'sales_daily', label: '每日客戶銷貨明細表', freq: '每天 4 次' },
-    { type: 'stock_daily', label: '庫存明細表', freq: '每天' },
-    { type: 'batch_daily', label: '批號明細表', freq: '每天' },
-    { type: 'external_stock', label: '外倉庫存表', freq: '每月' }
+    { type: 'sales_daily', label: '每日客戶銷貨明細表', freq: '每天 4 次' }
 ];
 
 var ERP_STATUS = {
