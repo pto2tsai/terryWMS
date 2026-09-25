@@ -2810,6 +2810,15 @@
                         黃色「要處理」表示有單需要人補資料，看右邊說明。</div>
                 </div>
                 <div id="erp-summary" class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3"></div>
+                <div class="glass-panel p-3 mb-3 text-sm">
+                    <div class="text-slate-300 mb-1">預計收到訂單檔的時間（過了 25 分鐘還沒收到，看板和首頁會提醒）</div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input id="erp-sched-times" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white w-64" placeholder="09:00, 11:00, 13:00, 15:00">
+                        <span id="erp-sched-days" class="flex gap-1"></span>
+                        <button id="erp-sched-save" onclick="saveErpSchedule()" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded">儲存</button>
+                        <span id="erp-sched-msg" class="text-slate-400"></span>
+                    </div>
+                </div>
                 <div class="flex items-center gap-2 mb-2">
                     <label class="text-slate-300 text-sm">月份</label>
                     <input type="month" id="erp-month" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" onchange="loadErpInbox()">
@@ -4784,6 +4793,7 @@
     <script src="js/shared/stock-core.js"></script>
     <script src="js/shared/inbound-core.js"></script>
     <script src="js/shared/picking-list.js"></script>
+    <script src="js/shared/erp-schedule.js"></script>
     
     <!-- 主程式 -->
     <!-- 應用程式模組（依序載入，共用全域 window；順序不可任意調換）-->

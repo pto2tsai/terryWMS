@@ -1258,6 +1258,48 @@ window.addOrdersToWaveTx = async function(wave, orders) {
     return res;
 };
 
+// 取消訂單（鼎新已經取消的單）：還沒出貨才能取消；在還沒開始揀的波次裡會一起移出（波次空了就刪掉）；
+// 波次已經開始揀或分貨，就不取消，請到現場處理。回傳 { cancelled: [單號], skipped: ['單號：原因'] }
+window.cancelSalesOrders = async function(orderIds, reason) {
+    var db = window.db, out = { cancelled: [], skipped: [] };
+    var who = (window.currentUser && (window.currentUser.name || window.currentUser.email)) || '';
+    for (var i = 0; i < orderIds.length; i++) {
+        var oref = db.collection('salesOrders').doc(orderIds[i]);
+        try {
+            var no = await db.runTransaction(async function(tx) {
+                var os = await tx.get(oref);
+                if (!os.exists) throw new Error('找不到這張單');
+                var o = os.data();
+                if (o.status === 'cancelled') throw new Error('已經取消過');
+                if (o.status === 'shipped' || o.status === 'partial' || Array.isArray(o.backorderItems)) throw new Error('已經出貨，請在鼎新處理');
+                var wref = null, w = null;
+                if (o.waveNo) {
+                    wref = db.collection('waves').doc(o.waveNo);
+                    var ws = await tx.get(wref);
+                    if (ws.exists) {
+                        w = ws.data();
+                        if (w.status !== 'pending' || (w.completedItems || []).length) throw new Error('波次 ' + o.waveNo + ' 已經開始揀貨，請到現場處理');
+                    }
+                }
+                if (w) {
+                    var entries = (w.orders || []).filter(function(e) { return (e.id || e.orderId) !== oref.id && e.orderNo !== o.orderNo; });
+                    if (entries.length === 0) tx.delete(wref);
+                    else tx.update(wref, stripUndefined(Object.assign({ orders: entries }, waveTotals(entries), { updatedAt: new Date().toISOString() })));
+                }
+                tx.update(oref, { status: 'cancelled', waveNo: '', cancelReason: reason || '', cancelledBy: who, cancelledAt: new Date().toISOString() });
+                return o.orderNo;
+            });
+            out.cancelled.push(no);
+            var local = window._orderData.orders.find(function(x) { return x.id === oref.id; });
+            if (local) { local.status = 'cancelled'; local.waveNo = ''; }
+        } catch (e) {
+            var lo = window._orderData.orders.find(function(x) { return x.id === oref.id; });
+            out.skipped.push((lo ? lo.orderNo : oref.id) + '：' + e.message);
+        }
+    }
+    return out;
+};
+
 window.createWave = async function() {
     const checked = document.querySelectorAll('.wave-order-check:checked');
     if (checked.length === 0) {

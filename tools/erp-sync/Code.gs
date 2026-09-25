@@ -8,12 +8,40 @@
 // 只處理 WMS 要用的 4 種（每日客戶銷貨明細、庫存明細、批號明細、外倉庫存）；
 // 月報（商品銷貨期、每月客戶銷貨明細、應收帳款、領料）由八方 ERP 自己的 Google 程式處理，這裡跳過不碰。
 //
-// 設定方式請看 docs/ERP報表自動匯入設定.md
+// 設定方式：貼上這份程式和 appsscript.json，上面選 setup 按「執行」，照畫面允許就完成了。
+// 詳細說明：docs/ERP報表自動匯入設定.md
 // ============================================================
 
-// ---------- 要改的設定 ----------
+// 一鍵設定（第一次執行一次就好）：
+//   1. 在「我的雲端硬碟」建立「鼎新匯出」資料夾和子資料夾（已經有就沿用）
+//   2. 設定每 10 分鐘自動檢查一次
+//   3. 檢查能不能寫進 WMS
+//   4. 寄一封信給你，寫著鼎新要輸出到哪個路徑
+function setup() {
+  var root = getRootFolder();
+  WMS_FOLDERS.forEach(function(n) { childFolder(root, n); });
+  setupTrigger();
+  var check = checkWmsAccess();
+  var lines = [
+    '✅ 資料夾：我的雲端硬碟 / 鼎新匯出（' + root.getUrl() + '）',
+    '✅ 已設定每 10 分鐘自動檢查一次',
+    check.ok ? '✅ 可以寫進 WMS' : '❌ 不能寫進 WMS：' + check.msg,
+    '',
+    '請在鼎新 COSMOS 設定定時輸出（Excel）到：',
+    '  G:\\我的雲端硬碟\\鼎新匯出\\每日客戶銷貨明細表',
+    '  時間：每天 8:55、10:55、12:55、14:55；條件：最近 7 天的銷貨明細',
+    '（電腦的雲端硬碟不是 G 槽、或是英文版，路徑前面換成你電腦上「鼎新匯出」資料夾的位置）'
+  ];
+  console.log(lines.join('\n'));
+  notify(check.ok ? 'WMS 鼎新自動匯入：設定完成' : 'WMS 鼎新自動匯入：設定未完成', lines.join('\n'));
+}
+
+// WMS 要的子資料夾（目前只有訂單；庫存、批號、外倉之後做對帳時再加）
+var WMS_FOLDERS = ['每日客戶銷貨明細表'];
+
+// ---------- 設定（通常不用改）----------
 var CONFIG = {
-  FOLDER_ID: '請貼上「鼎新匯出」資料夾的 ID',   // 資料夾網址 folders/ 後面那一串
+  FOLDER_ID: '',                                 // 不用填：setup 會自動建立「鼎新匯出」資料夾並記住
   PROJECT_ID: 'terrywms-2345f',                  // Firebase 專案 ID
   NOTIFY_EMAIL: '',                              // 失敗通知寄給誰（空白＝寄給執行這支程式的帳號）
   SETTLE_MINUTES: 2,                             // 檔案修改後幾分鐘內先不處理（等同步完成）
@@ -168,7 +196,7 @@ function buildInboxWrites(projectId, report, file, rows, nowIso, detectedBy) {
 
 // 主程式：由「觸發條件」每 10 分鐘執行一次
 function syncErpReports() {
-  var root = DriveApp.getFolderById(CONFIG.FOLDER_ID);
+  var root = getRootFolder();
   var now = new Date();
   var results = [];
   // 要看的地方：主資料夾，加上每一個子資料夾（「已匯入」「匯入失敗」除外）
@@ -248,6 +276,28 @@ function moveTo(file, parent, name, sub) {
   var dir = childFolder(parent, name);
   if (sub) dir = childFolder(dir, sub);
   file.moveTo(dir);
+}
+
+// 「鼎新匯出」資料夾：有填 FOLDER_ID 就用；否則用 setup 記住的；都沒有就在「我的雲端硬碟」找或建立
+function getRootFolder() {
+  var props = PropertiesService.getScriptProperties();
+  var id = CONFIG.FOLDER_ID || props.getProperty('FOLDER_ID');
+  if (id) return DriveApp.getFolderById(id);
+  var it = DriveApp.getRootFolder().getFoldersByName('鼎新匯出');
+  var f = it.hasNext() ? it.next() : DriveApp.getRootFolder().createFolder('鼎新匯出');
+  props.setProperty('FOLDER_ID', f.getId());
+  return f;
+}
+
+// 檢查這個 Google 帳號能不能寫進 WMS 的資料庫
+function checkWmsAccess() {
+  var res = UrlFetchApp.fetch('https://firestore.googleapis.com/v1/projects/' + CONFIG.PROJECT_ID + '/databases/(default)/documents/erpInbox?pageSize=1', {
+    muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }
+  });
+  var code = res.getResponseCode();
+  if (code === 200) return { ok: true };
+  if (code === 403 || code === 401) return { ok: false, msg: '這個 Google 帳號沒有 WMS（Firebase 專案 ' + CONFIG.PROJECT_ID + '）的權限。請用建立 Firebase 專案的帳號執行，或在 Firebase 主控台 → 專案設定 → 使用者和權限，把這個帳號加成「編輯者」。' };
+  return { ok: false, msg: '連線錯誤（' + code + '）：' + res.getContentText().slice(0, 200) };
 }
 
 function childFolder(parent, name) {
