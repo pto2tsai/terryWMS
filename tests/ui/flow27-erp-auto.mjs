@@ -1,6 +1,6 @@
 // 鼎新報表自動匯入：Google 雲端自動程式送進來的報表（用它自己的程式碼組資料）→
 // 電腦版開著就自動匯入訂單、依物流商建好波次；件數換算不出來的單留給「手動匯入」；
-// 其他報表存檔可檢視下載；應收帳款等只有主管看得到；看板、首頁提醒
+// 庫存等報表存檔可檢視下載；月報交給八方 ERP 不碰；看板、首頁提醒
 import * as H from './harness.mjs'; import { baseSeed, USERS } from './seed.mjs';
 import { pushReport } from './erp-gs.mjs';
 import XLSX from 'xlsx'; import fs from 'fs';
@@ -33,12 +33,14 @@ H.check('自動匯入沒有跳任何視窗', !log.dialogs.some(d => d.type === '
 // ---------- 其他報表：存檔；應收帳款只有主管看得到 ----------
 const stock = [['庫存明細表'], ['品號', '品名', '規格', '批號', '庫存數量'], ['A001', '白蝦', '50/60', 'B1', 120], ['A002', '透抽', 'L', 'T1', 50]];
 const r2 = await pushReport('庫存明細表.xlsx', stock);
-const r3 = await pushReport('應收帳款明細表_2026-09.xlsx', [['應收帳款明細表'], ['客戶', '金額'], ['海霸王', 123456]]);
-H.check('庫存明細表、應收帳款明細表都收到（只存檔，不用處理）', (await H.one('erpInbox', r2.id)).status === 'stored' && (await H.one('erpInbox', r3.id)).sensitive === true);
+H.check('庫存明細表收到（只存檔，不用處理）', (await H.one('erpInbox', r2.id)).status === 'stored');
+const gs0 = (await import('./erp-gs.mjs')).loadGs();
+const mine = ['每日客戶銷貨明細表', '庫存明細表', '批號明細表', '外倉庫存表', '商品銷貨期報表', '每月客戶銷貨明細表', '應收帳款明細表', '領料明細表'].map(n => gs0.isMine(gs0.detectReport(n)));
+H.check('WMS 的程式只收 4 種（每日銷貨、庫存、批號、外倉）；商品銷貨期、每月客戶銷貨、應收帳款、領料交給八方 ERP，不碰', JSON.stringify(mine) === JSON.stringify([true, true, true, true, false, false, false, false]), JSON.stringify(mine));
 
 await H.nav(page, 'erp-inbox'); await page.waitForTimeout(1500);
 const opList = await page.innerText('#erp-inbox-body');
-H.check('一般人員的 ERP 報表頁：看得到訂單、庫存明細，看不到應收帳款', opList.includes('每日客戶銷貨明細表') && opList.includes('庫存明細表') && !opList.includes('應收帳款') && opList.includes('要處理'), opList.slice(0, 300));
+H.check('ERP 報表頁：看得到訂單、庫存明細和處理狀態', opList.includes('每日客戶銷貨明細表') && opList.includes('庫存明細表') && opList.includes('要處理'), opList.slice(0, 300));
 await page.click(`button[onclick="viewErpReport('${r2.id}')"]`); await page.waitForTimeout(800);
 const view = await page.innerText('#modal-erp-view');
 H.check('檢視：看得到報表內容（白蝦 120）', view.includes('白蝦') && view.includes('120') && view.includes('共 4 列'), view.slice(0, 200));
@@ -51,8 +53,6 @@ H.check('下載：存成 Excel，內容跟鼎新的一樣', aoa.length === 4 && 
 
 const SUP = await H.openApp(base, USERS.sup);
 await SUP.page.waitForTimeout(1500);
-await H.nav(SUP.page, 'erp-inbox'); await SUP.page.waitForTimeout(1500);
-H.check('主管看得到應收帳款明細表', (await SUP.page.innerText('#erp-inbox-body')).includes('應收帳款明細表'));
 
 // ---------- 看板、首頁提醒 ----------
 const B = await ctx.newPage(); await B.setViewportSize({ width: 1920, height: 1080 });
@@ -91,7 +91,7 @@ const got = [
   idr('INVR05_20260925.xls', '', [], { INVR05: '庫存明細表' }),
   idr('INVR051_20260925.xls', '', [], { INVR05: '庫存明細表', INVR051: '批號明細表' }),
   idr('COPR11_0925.xls', '', [['崇文食品股份有限公司'], ['每日客戶銷貨明細表'], ['日期：2026/09/25']]),
-  idr('ACRR02_202609.xls', '', [['應收帳款明細表']]),
+  idr('ACRR02_202609.xls', '', [['未結案應收帳款明細表']]),
   idr('XYZ01.xls', '', [['123']])
 ];
 H.check('檔名只有代碼：放在「庫存明細表」子資料夾、代碼對照表、長代碼優先、報表標題，都認得出；都認不出就不收', JSON.stringify(got) === JSON.stringify(['stock_daily/資料夾', 'stock_daily/代碼', 'batch_daily/代碼', 'sales_daily/內容', 'ar_monthly/內容', 'null']), JSON.stringify(got));

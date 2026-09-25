@@ -3,18 +3,15 @@
 // Google 雲端的自動程式（tools/erp-sync）把鼎新定時匯出的報表整份存進 erpInbox：
 //   - 每日客戶銷貨明細表：電腦版開著時自動接手 → 匯入訂單、依物流商建好波次（不跳視窗）
 //     件數換算不出來的單留著，按「手動匯入」補填；沒有物流商的單在「建立波次」清單指定
-//   - 其他報表（庫存、批號、月報、應收帳款…）只存檔，可在這頁檢視、下載 Excel
-// 含金額／帳款的報表只有主管、財務、管理員看得到（安全規則擋）
+//   - 庫存明細、批號明細、外倉庫存只存檔，可在這頁檢視、下載 Excel（之後拿來對帳）
+// 月報與應收帳款由八方 ERP 自己接收，不進 WMS；萬一有含金額的報表進來（sensitive），只有主管、財務、管理員看得到
 // ============================================================
 
+// WMS 只收這 4 種；月報（商品銷貨期、每月客戶銷貨明細、應收帳款、領料）由八方 ERP 自己接收
 window.ERP_REPORT_TYPES = [
     { type: 'sales_daily', label: '每日客戶銷貨明細表', freq: '每天 4 次' },
     { type: 'stock_daily', label: '庫存明細表', freq: '每天' },
     { type: 'batch_daily', label: '批號明細表', freq: '每天' },
-    { type: 'product_sales_monthly', label: '商品銷貨期報表', freq: '每月', sensitive: true },
-    { type: 'customer_sales_monthly', label: '每月客戶銷貨明細表', freq: '每月', sensitive: true },
-    { type: 'ar_monthly', label: '應收帳款明細表', freq: '每月', sensitive: true },
-    { type: 'material_issue', label: '領料明細表', freq: '每月' },
     { type: 'external_stock', label: '外倉庫存表', freq: '每月' }
 ];
 
