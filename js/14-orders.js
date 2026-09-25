@@ -605,9 +605,9 @@ const ERP_HEADERS = {
     CUST_NAME: ['客戶全名', '客戶名稱', '客戶簡稱', '客戶'],
     PRODUCT: ['品名'],
     SPEC: ['規格'],
-    PKG_QTY: ['包裝數量'],
+    PKG_QTY: ['包裝數量', '銷貨包裝數量', '件數'],
     PKG_UNIT: ['包裝單位'],
-    QTY: ['銷貨數量', '數量'],
+    QTY: ['銷貨數量', '數量', '出貨數量'],
     UNIT: ['單位'],
     PRICE: ['單價'],
     REMARK: ['備註', '單頭備註', '單身備註', '物流商', '物流'],
@@ -702,12 +702,32 @@ window.parseErpOrderRows = function(rows) {
     const num = v => parseFloat(String(v == null ? '' : v).replace(/,/g, '')) || 0;
     const needPkg = [];  // 換算不出件數、要人工填的品項
 
-    for (const row of dataRows) {
-        if (!row[COL.PRODUCT]) continue;
+    // 鼎新報表的特性（跟八方 ERP 的解析經驗一致）：
+    //   每頁重複印抬頭（製表日期、期間、第 N 頁）和標題列；單位欄有「銷貨:」「淨額:」小計列；
+    //   同一張單接著的列，品名空白＝跟上一列同一個品項
+    const headCells = (rows[hdr.row] || []).map(h => String(h == null ? '' : h).trim());
+    let lastProduct = '', lastSpec = '', lastProductOrder = null;
+
+    for (let row of dataRows) {
+        if (!row || row.length === 0) continue;
+        const first = String(row[0] == null ? '' : row[0]).trim();
+        if (/^(製表日期|期間)/.test(first) || /^第\s*\d+\s*頁/.test(first)) continue;
+        if (headCells.filter((h, k) => h && String(row[k] == null ? '' : row[k]).trim() === h).length >= 3) continue;
+        if (/銷貨:|銷退:|淨額:/.test(String(row[COL.UNIT] == null ? '' : row[COL.UNIT]))) continue;
         if (String(row[COL.DATE]).includes('小計') || String(row[COL.DATE]).includes('合計')) continue;
 
         let orderNo = row[COL.ORDER_NO] ? String(row[COL.ORDER_NO]).trim() : lastOrderNo;
         if (!orderNo) continue;
+        if (!row[COL.PRODUCT]) {
+            // 品名空白：同一張單、有數量，就沿用上一列的品名、規格
+            if (!(lastProduct && lastProductOrder === orderNo && num(row[COL.QTY]) > 0)) continue;
+            row = row.slice();
+            row[COL.PRODUCT] = lastProduct;
+            if (COL.SPEC !== undefined && !row[COL.SPEC]) row[COL.SPEC] = lastSpec;
+        }
+        lastProduct = String(row[COL.PRODUCT]).trim();
+        lastSpec = COL.SPEC !== undefined && row[COL.SPEC] ? String(row[COL.SPEC]).trim() : '';
+        lastProductOrder = orderNo;
         const logistics = parseLogistics(row[COL.REMARK]);
         if (row[COL.ORDER_NO]) lastOrderNo = orderNo;
 

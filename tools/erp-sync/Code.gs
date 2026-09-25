@@ -5,6 +5,8 @@
 //   有新的 Excel／CSV 就認出是哪一種報表（看子資料夾、檔名代碼、檔名、報表標題），整份存進 WMS 的資料庫（erpInbox），
 //   處理完把檔案搬到「已匯入/年-月」；看不懂或失敗的搬到「匯入失敗」並寄信通知。
 // 訂單（每日客戶銷貨明細表）由 WMS 電腦版接手：匯入訂單、依物流商建好波次。
+// 只處理 WMS 要用的 4 種（每日客戶銷貨明細、庫存明細、批號明細、外倉庫存）；
+// 月報（商品銷貨期、每月客戶銷貨明細、應收帳款、領料）由八方 ERP 自己的 Google 程式處理，這裡跳過不碰。
 //
 // 設定方式請看 docs/ERP報表自動匯入設定.md
 // ============================================================
@@ -27,15 +29,19 @@ var CONFIG = {
 // sensitive：含金額／帳款，只有主管、財務、管理員看得到
 // process：要 WMS 接手處理（訂單）；其他只存檔、可檢視下載
 var REPORTS = [
-  { type: 'customer_sales_monthly', label: '每月客戶銷貨明細表', keys: ['每月客戶銷貨明細'], sensitive: true },
-  { type: 'sales_daily', label: '每日客戶銷貨明細表', keys: ['每日客戶銷貨明細', '客戶銷貨明細', '銷貨明細'], process: true },
-  { type: 'product_sales_monthly', label: '商品銷貨期報表', keys: ['商品銷貨'], sensitive: true },
-  { type: 'ar_monthly', label: '應收帳款明細表', keys: ['應收帳款'], sensitive: true },
-  { type: 'external_stock', label: '外倉庫存表', keys: ['外倉庫存'] },
-  { type: 'stock_daily', label: '庫存明細表', keys: ['庫存明細'] },
-  { type: 'batch_daily', label: '批號明細表', keys: ['批號明細'] },
-  { type: 'material_issue', label: '領料明細表', keys: ['領料明細'] }
+  // owner：誰負責處理。erp＝八方 ERP 自己的 Google 程式處理（seafood-system/tools/erp-sync），這支程式看到就跳過、不搬動
+  { type: 'customer_sales_monthly', label: '每月客戶銷貨明細表', keys: ['每月客戶銷貨明細'], owner: 'erp' },
+  { type: 'sales_daily', label: '每日客戶銷貨明細表', keys: ['每日客戶銷貨明細', '客戶銷貨明細', '銷貨明細'], process: true, owner: 'wms' },
+  { type: 'product_sales_monthly', label: '商品銷貨期報表', keys: ['商品銷貨'], owner: 'erp' },
+  { type: 'ar_monthly', label: '應收帳款明細表', keys: ['應收帳款', '未結案應收'], owner: 'erp' },
+  { type: 'external_stock', label: '外倉庫存表', keys: ['外倉庫存'], owner: 'wms' },
+  { type: 'stock_daily', label: '庫存明細表', keys: ['庫存明細'], owner: 'wms' },
+  { type: 'batch_daily', label: '批號明細表', keys: ['批號明細'], owner: 'wms' },
+  { type: 'material_issue', label: '領料明細表', keys: ['領料明細'], owner: 'erp' }
 ];
+
+// 這支程式（WMS）要不要處理這一種報表
+function isMine(report) { return !!report && report.owner === 'wms'; }
 
 // 依檔名認報表種類；認不出來回傳 null
 function detectReport(fileName) {
@@ -170,7 +176,10 @@ function syncErpReports() {
   var subs = root.getFolders();
   while (subs.hasNext()) {
     var sub = subs.next();
-    if (sub.getName() !== '已匯入' && sub.getName() !== '匯入失敗') places.push({ folder: sub, name: sub.getName() });
+    var subReport = detectReport(sub.getName());
+    if (sub.getName() === '已匯入' || sub.getName() === '匯入失敗') continue;
+    if (subReport && !isMine(subReport)) continue;   // 八方 ERP 的資料夾，交給它的程式
+    places.push({ folder: sub, name: sub.getName() });
   }
   places.forEach(function(place) {
     var files = place.folder.getFiles();
@@ -178,8 +187,13 @@ function syncErpReports() {
       var f = files.next();
       if (!/\.(xlsx|xls|csv)$/i.test(f.getName())) continue;
       if (now - f.getLastUpdated() < CONFIG.SETTLE_MINUTES * 60000) continue;   // 還在同步，下次再處理
+      // 先用資料夾、檔名認（不用打開檔案）：是八方 ERP 的報表就跳過、不搬動
+      var pre = identifyReport(f.getName(), place.name, [], CONFIG.CODE_MAP);
+      if (pre.report && !isMine(pre.report)) continue;
       try {
-        results.push(importOneFile(f, place.name));
+        var msg = importOneFile(f, place.name);
+        if (msg === null) continue;   // 看內容才認出是八方 ERP 的報表
+        results.push(msg);
         moveTo(f, root, '已匯入', Utilities.formatDate(now, 'Asia/Taipei', 'yyyy-MM'));
       } catch (e) {
         results.push('❌ ' + f.getName() + '：' + e.message);
@@ -195,6 +209,7 @@ function importOneFile(f, folderName) {
   var rows = readRows(f);
   if (rows.length === 0) throw new Error('檔案是空的');
   var id = identifyReport(f.getName(), folderName, rows, CONFIG.CODE_MAP);
+  if (id.report && !isMine(id.report)) return null;
   if (!id.report) throw new Error('看不出是哪一種報表。請用下面任一種方法：\n' +
     '1. 把這種報表放在用報表名稱命名的子資料夾，例如「鼎新匯出/庫存明細表」\n' +
     '2. 在程式最上面的 CODE_MAP 寫上檔名代碼對應的報表名稱\n' +
