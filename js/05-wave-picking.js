@@ -1398,6 +1398,10 @@
                 if (hasChanges) {
                     html += ' <span class="text-orange-400 text-xs" title="訂單有異動"><i class="fa-solid fa-triangle-exclamation"></i></span>';
                 }
+                // 鼎新改單、波次已自動更新：有印紙本的要重印（打開揀貨畫面按「列印揀貨單」後就會消失）
+                if (wave.reprintRequired && wave.status !== 'done') {
+                    html += ' <span class="erp-reprint text-xs px-2 py-0.5 rounded bg-amber-500 text-black font-bold" title="鼎新改單，波次數量已自動更新">🖨️ 揀貨單要重印</span>';
+                }
                 html += '</td>';
                 html += '<td class="p-3 text-white">' + (wave.logistics || '混合') + '</td>';
                 html += '<td class="p-3">' + statusBadge + '</td>';

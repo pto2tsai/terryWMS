@@ -148,7 +148,8 @@ await page.fill('.pkg-ask-input', '2'); await page.click('#pkg-ask-ok'); await p
 const sox = (await H.all('salesOrders')).filter(o => o.orderNo === 'SO-X');
 H.check('同一單號兩個物流商的品項＝一張訂單、兩個品項都在', sox.length === 1 && sox[0].items.length === 2 && sox[0].logistics === '全日物流', JSON.stringify(sox.map(o => [o.logistics, o.items.map(i => i.productName)])));
 H.check('人工填的件數有存：白蝦 24 盒 → 2 件', sox[0] && sox[0].items.find(i => i.productName === '白蝦').packageQty === 2, JSON.stringify(sox[0] && sox[0].items));
-H.check('已出貨的訂單 SO-A 在 Excel 有變動 → 不改品項並提醒', (await H.one('salesOrders', 'SO-A')).items[0].packageQty === 6 && dlg(n0).some(m => m.includes('已經出貨') && m.includes('SO-A')), JSON.stringify(dlg(n0).map(m => m.slice(0, 80))));
+const soA2 = await H.one('salesOrders', 'SO-A');
+H.check('已出貨的訂單 SO-A 在鼎新從 6 件加到 9 件 → 多的 3 件自動變補出貨（可以排波次），並提醒', ['partial', 'inWave'].includes(soA2.status) && soA2.backorderItems && soA2.backorderItems[0].packageQty === 3 && dlg(n0).some(m => m.includes('補出貨') && m.includes('SO-A')), JSON.stringify([soA2.status, soA2.backorderItems, dlg(n0).map(m => m.slice(0, 80))]));
 
 // ---------- 編輯棧板：不會蓋掉別人剛改的數量 ----------
 await page.evaluate(async () => { await editPallet('PE'); }); await page.waitForTimeout(500);

@@ -98,7 +98,7 @@ window.refreshHome = async function() {
           action: "goTab('move')" },
         { icon: 'fa-calendar-xmark', color: '#ef4444', label: '過期／30 天內到期', hint: '', count: expired + expiring,
           action: "goTab('expiry-management')" },
-        { icon: 'fa-cloud-arrow-down', color: '#0ea5e9', label: '鼎新匯入要處理', hint: '匯入失敗、件數待確認、沒有物流商的訂單',
+        { icon: 'fa-cloud-arrow-down', color: '#0ea5e9', label: '鼎新匯入要處理', hint: '訂單檔沒收到、匯入失敗、件數待確認、沒有物流商、鼎新已取消的單',
           action: "goTab('erp-inbox')" }
     ];
     todos[7].hint = '已過期 ' + expired + ' 板（不會被揀貨）、即將到期 ' + expiring + ' 板';

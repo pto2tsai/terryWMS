@@ -144,7 +144,7 @@ service cloud.firestore {
       allow create: if false;
       allow update: if canOperate() && resource.data.get('sensitive', true) == false
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status', 'processingBy', 'processingAt', 'processedAt', 'processedBy', 'result', 'issues']);
+             .hasOnly(['status', 'processingBy', 'processingAt', 'processedAt', 'processedBy', 'result', 'issues', 'missingOrders']);
       allow delete: if isAdmin();
       match /chunks/{c} {
         allow read: if canSeeErp(resource.data);

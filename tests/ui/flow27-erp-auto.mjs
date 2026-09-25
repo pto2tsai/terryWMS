@@ -100,6 +100,68 @@ let in6;
 for (let i = 0; i < 20; i++) { await page.waitForTimeout(500); in6 = await H.one('erpInbox', r6.id); if (in6 && ['done', 'attention', 'error'].includes(in6.status)) break; }
 H.check('代碼檔名的訂單檔（看標題認出）也自動匯入、建波次，並記下公司', in6.type === 'sales_daily' && in6.detectedBy === '內容' && in6.company === '崇文' && (await H.all('salesOrders')).some(o => o.orderNo === 'SO-6' && o.waveNo), JSON.stringify(in6 && [in6.type, in6.detectedBy, in6.company, in6.status, in6.result]));
 
+// ---------- 鼎新取消的單：最新檔案裡不見了 → 提醒，按一下在 WMS 也取消 ----------
+const before = Object.fromEntries((await H.all('salesOrders')).map(o => [o.orderNo, o]));
+await H.admin(async d => { const { updateDoc } = await import('firebase/firestore'); await updateDoc(H.doc(d, 'waves', before['SO-2'].waveNo), { status: 'picking', completedItems: ['x'] }); });
+const r7 = await pushReport('每日客戶銷貨明細表_1500.xlsx', [HEAD,
+  ['2026/09/25', 'SO-4', 'C4', '客戶四', '鮭魚', '切片', '', '', 24, '盒', 90, '大榮', '', '台中市', ''],
+  ['2026/09/25', 'SO-5', 'C5', '客戶五', '白蝦', '50/60', 3, '件', 3, '件', 100, '黑貓', '', '', ''],
+  ['2026/09/25', 'SO-6', 'C6', '客戶六', '透抽', 'L', 2, '件', 2, '件', 200, '新竹', '', '', '']]);
+let in7;
+for (let i = 0; i < 20; i++) { await page.waitForTimeout(500); in7 = await H.one('erpInbox', r7.id); if (in7 && ['done', 'attention', 'error'].includes(in7.status)) break; }
+const miss = (in7.missingOrders || []).map(o => o.orderNo).sort();
+H.check('最新檔案裡不見了的單（SO-1、SO-2、SO-3）列出來提醒：可能已在鼎新取消', JSON.stringify(miss) === JSON.stringify(['SO-1', 'SO-2', 'SO-3']) && in7.issues.some(x => x.includes('可能已在鼎新取消')), JSON.stringify([miss, in7.issues]));
+await H.nav(page, 'erp-inbox'); await page.waitForTimeout(1500);
+const nd = log.dialogs.length;
+await page.click(`button[onclick="cancelMissingErpOrders('${r7.id}')"]`); await page.waitForTimeout(2500);
+const after = Object.fromEntries((await H.all('salesOrders')).map(o => [o.orderNo, o]));
+const w1 = await H.one('waves', before['SO-1'].waveNo);
+H.check('按「在 WMS 也取消」：SO-1、SO-3 取消；SO-1 那個還沒開始揀的波次只有它一張，一起刪掉', after['SO-1'].status === 'cancelled' && after['SO-3'].status === 'cancelled' && !w1, JSON.stringify([after['SO-1'].status, after['SO-3'].status, !!w1]));
+H.check('SO-2 的波次已經開始揀：不取消，並說明請到現場處理', after['SO-2'].status !== 'cancelled' && log.dialogs.slice(nd).some(x => x.msg.includes('SO-2') && x.msg.includes('已經開始揀貨')), JSON.stringify(log.dialogs.slice(nd).map(x => x.msg.slice(0, 120))));
+const in7b = await H.one('erpInbox', r7.id);
+H.check('收件紀錄：取消的提醒拿掉，記下取消了幾張', (in7b.missingOrders || []).length === 0 && !in7b.issues.some(x => x.includes('可能已在鼎新取消')) && in7b.result.includes('已取消 2 張'), JSON.stringify(in7b));
+
+// ---------- 鼎新改了已經排波次的單 ----------
+const bw = Object.fromEntries((await H.all('salesOrders')).map(o => [o.orderNo, o]));
+const w5before = await H.one('waves', bw['SO-5'].waveNo);
+const r8 = await pushReport('每日客戶銷貨明細表_1500b.xlsx', [HEAD,
+  ['2026/09/25', 'SO-2', 'C2', '好市多', '透抽', 'L', 3, '件', 3, '件', 200, '新竹', '', '新北市', ''],
+  ['2026/09/25', 'SO-4', 'C4', '客戶四', '鮭魚', '切片', '', '', 24, '盒', 90, '大榮', '', '台中市', ''],
+  ['2026/09/25', 'SO-5', 'C5', '客戶五', '白蝦', '50/60', 6, '件', 6, '件', 100, '黑貓', '', '', ''],
+  ['2026/09/25', 'SO-6', 'C6', '客戶六', '透抽', 'L', 2, '件', 2, '件', 200, '新竹', '', '', '']]);
+let in8;
+for (let i = 0; i < 20; i++) { await page.waitForTimeout(500); in8 = await H.one('erpInbox', r8.id); if (in8 && ['done', 'attention', 'error'].includes(in8.status)) break; }
+const w5 = await H.one('waves', bw['SO-5'].waveNo), wv2 = await H.one('waves', bw['SO-2'].waveNo);
+H.check('鼎新把 SO-5 白蝦 3→6（波次還沒開始揀）：波次自動更新成 6 件、標記要重印', w5.totalQty === w5before.totalQty + 3 && w5.reprintRequired === true && in8.result.includes('波次已自動更新') && in8.result.includes('SO-5') && in8.result.includes('3→6'), JSON.stringify([w5before.totalQty, w5.totalQty, in8.issues]));
+H.check('鼎新把 SO-2 透抽 5→3（改版前就開始揀的舊波次，沒有揀貨記錄）：波次數量不動，記下要現場處理', wv2.totalQty === 5 && wv2.hasOrderChanges === true && (wv2.changedOrders || []).includes('SO-2') && in8.issues.some(x => x.includes('請到現場處理') && x.includes('SO-2') && x.includes('5→3')), JSON.stringify([wv2.totalQty, wv2.changedOrders, in8.issues]));
+H.check('沒有跳出全黑關不掉的視窗', !(await page.$('#modal-order-changes')));
+const MB = await H.openApp(base, USERS.op, { mobile: true });
+await MB.page.waitForTimeout(1500);
+await MB.page.evaluate(() => openPage('picking')); await MB.page.waitForTimeout(400);
+await MB.page.selectOption('#picking-wave-select', bw['SO-2'].waveNo); await MB.page.waitForTimeout(1000);
+const mw = await MB.page.innerText('#picking-next');
+H.check('手機揀這個波次時，最上面提醒：鼎新改了 SO-2，數量沒跟著改，請找主管確認', mw.includes('鼎新改了這個波次的單') && mw.includes('SO-2'), mw.slice(0, 200));
+
+// ---------- 訂單檔該到沒到 ----------
+const slot = await page.evaluate(() => {
+  const at = (h, m) => { const d = new Date(2026, 8, 25, h, m); return d; };   // 2026/9/25 星期五
+  const doc = (h, m) => ({ type: 'sales_daily', receivedAt: at(h, m).toISOString() });
+  return [
+    erpMissedSlot([], null, at(9, 20)),                       // 9:00 還沒過 25 分鐘
+    erpMissedSlot([], null, at(9, 30)),                       // 9:00 沒收到
+    erpMissedSlot([doc(8, 58)], null, at(9, 30)),             // 8:58 收到了
+    erpMissedSlot([doc(9, 5)], null, at(11, 40)),             // 11:00 沒收到
+    erpMissedSlot([], null, new Date(2026, 8, 27, 12, 0)),    // 星期日不提醒
+    erpMissedSlot([], { times: ['10:00'], days: [0] }, new Date(2026, 8, 27, 12, 0))
+  ];
+});
+H.check('訂單檔該到沒到：過了 25 分鐘沒收到才提醒；週末不提醒；時間、星期可以改', JSON.stringify(slot) === JSON.stringify([null, '09:00', null, '11:00', null, '10:00']), JSON.stringify(slot));
+const SUPP = SUP.page;
+await H.nav(SUPP, 'erp-inbox'); await SUPP.waitForTimeout(1500);
+await SUPP.fill('#erp-sched-times', '08:30, 13:00'); await SUPP.click('#erp-sched-save'); await SUPP.waitForTimeout(800);
+const sch = await H.one('settings', 'erpImport');
+H.check('主管可以改預計時間（存成 08:30、13:00）；一般人員只能看', JSON.stringify(sch && sch.times) === JSON.stringify(['08:30', '13:00']) && await page.evaluate(() => document.getElementById('erp-sched-times').disabled), JSON.stringify(sch));
+
 // ---------- 同一個檔案再送一次（例如程式重跑）：不會重複 ----------
 const r5 = await pushReport('每日客戶銷貨明細表_1100.xlsx', [HEAD], { fileId: r4.fileId, modified: r4.modified });
 H.check('同一個檔案重送：資料庫拒絕（不會重複匯入）', r5.status === 409, String(r5.status));
