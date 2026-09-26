@@ -536,7 +536,7 @@
                 var productSpecKey = targetName + '|' + targetSpec;
 
                 allZones.forEach(function(zone) {
-                    var laneCount = zone.startsWith('K-') ? 22 : 8;
+                    var laneCount = window.RACK_CONFIG.ZONE_LANES[zone] || 8;
                     for (var i = 1; i <= laneCount; i++) {
                         var laneKey = zone + '-' + (i < 10 ? '0' + i : i);
                         lanes[laneKey] = {

@@ -64,7 +64,7 @@
         /* K 區域堆疊 (E/F/G/H 上下，22巷道) */
         .zones-stack-k { display: flex; flex-direction: column; gap: 6px; flex: 1; margin-top: 14px; }
         .zone-row-item-k { display: flex; flex: 1; min-height: 0; }
-        .rack-lanes-22 { display: grid; grid-template-columns: repeat(22, 1fr); gap: 3px; flex: 1; padding: 6px; background: rgba(15, 23, 42, 0.5); border: 1px solid #334155; border-radius: 0 4px 4px 0; }
+        .rack-lanes-22 { display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; flex: 1; padding: 6px; background: rgba(15, 23, 42, 0.5); border: 1px solid #334155; border-radius: 0 4px 4px 0; }
 
         /* Hover 浮動提示卡片 - 超大尺寸版，三層完整顯示 */
         .hover-tooltip { position: fixed; z-index: 9999; pointer-events: none; width: auto; min-width: 650px; max-width: 900px; max-height: 85vh; overflow-y: auto; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 2px solid #3b82f6; border-radius: 14px; box-shadow: 0 25px 50px rgba(0,0,0,0.7), 0 0 30px rgba(59,130,246,0.4); animation: tooltipIn 0.15s ease-out; }
@@ -126,7 +126,7 @@
         .rack-lanes-grid-inbound .rack-lane-new { height: 32px; min-height: 32px; }
         .inbound-k-zones { display: flex; flex-direction: column; gap: 4px; }
         .inbound-zone-k { display: flex; align-items: center; gap: 6px; }
-        .rack-lanes-grid-k { display: grid; grid-template-columns: repeat(22, 1fr); gap: 2px; flex: 1; }
+        .rack-lanes-grid-k { display: grid; grid-template-columns: repeat(20, 1fr); gap: 2px; flex: 1; }
         .rack-lanes-grid-k .rack-lane-new { height: 32px; min-height: 32px; }
         .rack-lane { height: 60px; background: #0f172a; border: 1px solid #475569; border-radius: 4px; cursor: pointer; position: relative; transition: all 0.2s; overflow: hidden; display:flex; flex-direction:column; justify-content:flex-end; }
         .rack-lane:hover { border-color: #60a5fa; z-index: 10; transform: scale(1.05); box-shadow: 0 4px 6px rgba(0,0,0,0.5); }

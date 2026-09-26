@@ -32,6 +32,8 @@ H.check('格式不對會提示', bad.includes('格式不對'), bad);
 
 // ---------- 馬上入帳：儲位打簡碼 ----------
 await H.nav(page, 'unified-inbound'); await page.waitForTimeout(500);
+const kCells = await page.evaluate(() => ['E', 'F', 'G', 'H'].map(z => document.getElementById('grid-K-' + z + '-map').children.length));
+H.check('入庫地圖 K 庫 E～H 每列 20 格（沒有 21、22）', JSON.stringify(kCells) === '[20,20,20,20]', JSON.stringify(kCells));
 await page.click("button[onclick=\"openProductSelectModal('inbound')\"]"); await page.waitForTimeout(500);
 await page.click("#modal-product-select [onclick^=\"selectProductFromModal('P001'\"]"); await page.waitForTimeout(500);
 await page.click('#btn-type-FG');
@@ -45,6 +47,11 @@ H.check('馬上入帳儲位打 ib032 → 棧板在 I-B-03-2F', (await H.all('pal
 await H.nav(page, 'label-print'); await page.waitForTimeout(500);
 await page.evaluate(() => selectLocZone('I-A'));
 H.check('選 I-A 區：排號範圍自動帶 1～8（I 區只有 8 排）', (await page.inputValue('#loc-row-end')) === '8' && (await page.innerText('#loc-print-count')) === '24 張', await page.innerText('#loc-print-count'));
+await page.evaluate(() => selectLocZone('K-E'));
+const exists = await page.evaluate(() => ['K-E-20-1F', 'K-E-21-1F', 'K-H-22-3F', 'I-A-08-1F', 'I-A-09-1F', 'I-E-01-1F', 'TEMP-IN'].map(isValidStorageLocation));
+H.check('不存在的儲位（K-E-21、K-H-22、I-A-09、I 倉配 E 區）擋下', JSON.stringify(exists) === JSON.stringify([true, false, false, true, false, false, true]), JSON.stringify(exists));
+H.check('K 庫每區 20 排：選 K-E 區，排號帶 1～20（60 張）', (await page.inputValue('#loc-row-end')) === '20' && (await page.innerText('#loc-print-count')) === '60 張', await page.innerText('#loc-print-count'));
+await page.evaluate(() => selectLocZone('I-A'));
 await page.check('input[name="loc-paper"][value="a4"]');
 await page.check('#loc-include-virtual'); await page.dispatchEvent('#loc-include-virtual', 'change');
 H.check('加印暫存區：24 + 5 = 29 張', (await page.innerText('#loc-print-count')) === '29 張', await page.innerText('#loc-print-count'));

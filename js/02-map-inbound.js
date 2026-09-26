@@ -88,7 +88,7 @@
             });
 
             const isKZone = zoneKey.startsWith('K-');
-            const laneCount = isKZone ? 22 : 8;
+            const laneCount = window.RACK_CONFIG.ZONE_LANES[zoneKey] || (isKZone ? 20 : 8);
 
             for(let i=1; i<=laneCount; i++) {
                 const status = laneStatus[i] || { count: 0, levels: {} };
