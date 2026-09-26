@@ -30,7 +30,7 @@
                 btn.classList.remove('ring-2', 'ring-white');
             });
             document.querySelector('.loc-zone-btn[data-zone="' + zone + '"]').classList.add('ring-2', 'ring-white');
-            // 排號範圍帶入這一區實際的排數（I、J 區 8 排，K 區 22 排），不會印出不存在的儲位
+            // 排號範圍帶入這一區實際的排數（I、J 區 8 排，K 區 20 排），不會印出不存在的儲位
             var lanes = (window.RACK_CONFIG && window.RACK_CONFIG.ZONE_LANES[zone]) || 22;
             var s = document.getElementById('loc-row-start'), e = document.getElementById('loc-row-end');
             if (s) { s.max = lanes; s.value = 1; }

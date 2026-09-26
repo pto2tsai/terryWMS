@@ -189,7 +189,7 @@ const pc = await A.page.evaluate(async()=>{
   ['move-pallet-id','move-target-loc','merge-keep-id','merge-remove-id'].forEach(id=>{ if(!document.getElementById(id)) document.body.insertAdjacentHTML('beforeend','<input id="'+id+'">'); });
   ['move-pallet-info','merge-keep-info','merge-remove-info'].forEach(id=>{ if(!document.getElementById(id)) document.body.insertAdjacentHTML('beforeend','<div id="'+id+'"></div>'); });
   window._movePalletData = currentPallets().find(p=>p.id==='PI'); // stale cache from an earlier scan
-  document.getElementById('move-pallet-id').value='PG'; document.getElementById('move-target-loc').value='J-D-09-1F';
+  document.getElementById('move-pallet-id').value='PG'; document.getElementById('move-target-loc').value='J-D-07-1F';
   await executePalletMove();
   const a1 = window.__alerts.slice(-1)[0];
   await new Promise(r=>setTimeout(r,500));
@@ -203,7 +203,7 @@ const pc = await A.page.evaluate(async()=>{
   await executePalletMerge(); const a3 = window.__alerts.slice(-1)[0];
   return [a1,a2,a3]; });
 const pg = await admin(async d=>(await getDoc(doc(d,'pallets','PG'))).data());
-ok('pallet change: moved the scanned pallet (not stale cache)', pg.locationId==='J-D-09-1F' && (await admin(async d=>(await getDoc(doc(d,'pallets','PI'))).data().locationId))==='J-C-03-3F', pc[0]);
+ok('pallet change: moved the scanned pallet (not stale cache)', pg.locationId==='J-D-07-1F' && (await admin(async d=>(await getDoc(doc(d,'pallets','PI'))).data().locationId))==='J-C-03-3F', pc[0]);
 ok('pallet change: different batch is blocked; both pallets kept', pc[1].includes('批號不同') && await qty('PI')===2, pc[1]);
 ok('pallet change: merge 6+3=9', await qty('PG')===9 && await qty('PH')===null, pc[2]);
 

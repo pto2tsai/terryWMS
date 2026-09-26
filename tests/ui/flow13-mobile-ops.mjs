@@ -10,8 +10,8 @@ await H.resetData(async d => { await baseSeed(d);
   await P('M-03', { productName: '白蝦', spec: '50/60', batchNo: 'B2', expiryDate: '2027-01-01', quantity: 4, locationId: 'I-A-06-1F' });
   await P('M-04', { productName: '透抽', spec: 'L', batchNo: 'T1', expiryDate: '2027-03-01', quantity: 20, locationId: 'J-C-01-1F' });
   await P('M-05', { productName: '透抽', spec: 'L', batchNo: 'T1', expiryDate: '2027-03-01', quantity: 8, locationId: 'J-C-02-1F' });
-  await P('M-06', { productName: '魷魚', spec: 'M', batchNo: 'S1', expiryDate: '2027-02-01', quantity: 10, locationId: 'K-A-01-1F' });
-  await P('M-07', { productName: '魷魚', spec: 'M', batchNo: 'S1', expiryDate: '2027-02-01', quantity: 6, locationId: 'K-A-01-1F' });   // 同儲位兩板
+  await P('M-06', { productName: '魷魚', spec: 'M', batchNo: 'S1', expiryDate: '2027-02-01', quantity: 10, locationId: 'K-E-01-1F' });
+  await P('M-07', { productName: '魷魚', spec: 'M', batchNo: 'S1', expiryDate: '2027-02-01', quantity: 6, locationId: 'K-E-01-1F' });   // 同儲位兩板
   // 桌機建立的入庫單與發布到手機的入庫任務
   await H.setDoc(H.doc(d, 'inboundOrders', 'IO1'), { docNo: 'IN-20260923-001', productName: '鮭魚', spec: '2kg', batchNo: 'SA1', expDate: '2027-06-30', quantity: 25, locationId: 'I-B-01-1F', status: 'pending', approvalStatus: 'not_required', type: 'Import', company: '崇文', createdAt: now });
   await H.setDoc(H.doc(d, 'inboundTasks', 'TK1'), { orderId: 'IO1', orderNo: 'IN-20260923-001', palletId: 'IN-20260923-001', productName: '鮭魚', spec: '2kg', batchNo: 'SA1', quantity: 25, locationId: 'I-B-01-1F', status: 'pending', createdAt: now });
@@ -92,12 +92,12 @@ H.check('全部出庫 → 棧板刪除', !(await pal())['M-05'], await txt('out-
 
 // ---------- 移板：掃儲位標籤（同儲位兩板 → 讓使用者選）----------
 await go('move');
-await scan('move-pallet', 'K-A-01-1F');
+await scan('move-pallet', 'K-E-01-1F');
 H.check('儲位有兩板 → 列出選擇', (await page.$$eval('#move-choices .pick-choice', e => e.length)) === 2, await txt('move-result'));
 await page.click('#move-choices .pick-choice:nth-child(2)'); await page.waitForTimeout(300);
-await scan('move-loc', 'K-A-09-2F');
+await scan('move-loc', 'K-E-09-2F');
 P1 = await pal();
-H.check('移板完成且只動選到的那板', [P1['M-06'].locationId, P1['M-07'].locationId].sort().join() === 'K-A-01-1F,K-A-09-2F', JSON.stringify([P1['M-06'].locationId, P1['M-07'].locationId]));
+H.check('移板完成且只動選到的那板', [P1['M-06'].locationId, P1['M-07'].locationId].sort().join() === 'K-E-01-1F,K-E-09-2F', JSON.stringify([P1['M-06'].locationId, P1['M-07'].locationId]));
 
 // ---------- 併板：批號不同 → 擋下；同批號但效期不同 → 提醒後可併，效期取較早 ----------
 await go('merge');

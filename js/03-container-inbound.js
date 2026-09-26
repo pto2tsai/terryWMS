@@ -857,7 +857,7 @@
             selectedZones.forEach(function(zoneChar) {
                 var warehouse = (zoneChar === 'A' || zoneChar === 'B') ? 'I' : 
                                (zoneChar === 'C' || zoneChar === 'D') ? 'J' : 'K';
-                var laneCount = warehouse === 'K' ? 22 : 8;
+                var laneCount = window.RACK_CONFIG.ZONE_LANES[warehouse + '-' + zoneChar] || 8;
                 
                 for (var row = 1; row <= laneCount; row++) {
                     var laneKey = warehouse + '-' + zoneChar + '-' + (row < 10 ? '0' + row : row);
@@ -1100,7 +1100,7 @@
             var warehouseConfig = {
                 'I': { zones: ['A', 'B'], maxRow: 8 },
                 'J': { zones: ['C', 'D'], maxRow: 8 },
-                'K': { zones: ['E', 'F', 'G', 'H'], maxRow: 22 }
+                'K': { zones: ['E', 'F', 'G', 'H'], maxRow: (window.RACK_CONFIG.ZONE_LANES['K-E'] || 20) }
             };
 
             var levels = ['3F', '2F', '1F'];
@@ -1222,7 +1222,7 @@
             function getWarehouseInfo(zone) {
                 if (['A', 'B'].indexOf(zone) >= 0) return { wh: 'I', rows: 8 };
                 if (['C', 'D'].indexOf(zone) >= 0) return { wh: 'J', rows: 8 };
-                if (['E', 'F', 'G', 'H'].indexOf(zone) >= 0) return { wh: 'K', rows: 22 };
+                if (['E', 'F', 'G', 'H'].indexOf(zone) >= 0) return { wh: 'K', rows: window.RACK_CONFIG.ZONE_LANES['K-' + zone] || 20 };
                 return { wh: warehouse, rows: 10 };
             }
             
@@ -1935,7 +1935,8 @@
 
             var available = getFilteredAvailableLocations({ zones: selectedZones });
 
-            var zoneMaxRows = { 'A': 8, 'B': 8, 'C': 8, 'D': 8, 'E': 22, 'F': 22, 'G': 22, 'H': 22 };
+            var ZL = window.RACK_CONFIG.ZONE_LANES;
+            var zoneMaxRows = { 'A': ZL['I-A'], 'B': ZL['I-B'], 'C': ZL['J-C'], 'D': ZL['J-D'], 'E': ZL['K-E'], 'F': ZL['K-F'], 'G': ZL['K-G'], 'H': ZL['K-H'] };
             var total = 0;
             selectedZones.forEach(function(z) {
                 total += (zoneMaxRows[z] || 8) * 5; // 排數 x 5層

@@ -4,9 +4,17 @@
 // 兩人同時入帳同一張單時只會成功一次，另一人會收到 code = 'ALREADY_POSTED' 的錯誤。
 // ============================================================
 
+// 儲位要真的存在：倉和區要對得上（I-A/B、J-C/D、K-E～H），排號不能超過那一區的排數（RACK_CONFIG.ZONE_LANES）
 window.isValidStorageLocation = function(loc) {
     loc = String(loc || '').trim();
-    return /^[IJK]-[A-H]-\d{2}-[123]F$/.test(loc) || /^(TEMP-IN|TEMP-OUT|[A-D]00|[A-D]99|OTHER)$/.test(loc);
+    if (/^(TEMP-IN|TEMP-OUT|[A-D]00|[A-D]99|OTHER)$/.test(loc)) return true;
+    var m = /^([IJK])-([A-H])-(\d{2})-[123]F$/.exec(loc);
+    if (!m) return false;
+    var lanes = window.RACK_CONFIG && window.RACK_CONFIG.ZONE_LANES;
+    if (!lanes) return true;
+    var max = lanes[m[1] + '-' + m[2]];
+    var row = parseInt(m[3], 10);
+    return !!max && row >= 1 && row <= max;
 };
 
 // orderId：inboundOrders 文件 ID；loc：實際放置的儲位

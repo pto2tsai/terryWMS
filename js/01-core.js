@@ -466,10 +466,10 @@ console.log('✅ WMS 工具函數庫已載入');
         const mapConfig = {
             'grid-I-A':8, 'grid-I-B':8,
             'grid-J-C':8, 'grid-J-D':8,
-            'grid-K-E':22, 'grid-K-F':22, 'grid-K-G':22, 'grid-K-H':22,
+            'grid-K-E':window.RACK_CONFIG.ZONE_LANES['K-E'], 'grid-K-F':window.RACK_CONFIG.ZONE_LANES['K-F'], 'grid-K-G':window.RACK_CONFIG.ZONE_LANES['K-G'], 'grid-K-H':window.RACK_CONFIG.ZONE_LANES['K-H'],
             'grid-I-A-map':8, 'grid-I-B-map':8,
             'grid-J-C-map':8, 'grid-J-D-map':8,
-            'grid-K-E-map':22, 'grid-K-F-map':22, 'grid-K-G-map':22, 'grid-K-H-map':22
+            'grid-K-E-map':window.RACK_CONFIG.ZONE_LANES['K-E'], 'grid-K-F-map':window.RACK_CONFIG.ZONE_LANES['K-F'], 'grid-K-G-map':window.RACK_CONFIG.ZONE_LANES['K-G'], 'grid-K-H-map':window.RACK_CONFIG.ZONE_LANES['K-H']
         };
         let lockedLane = null;
 
@@ -656,8 +656,9 @@ console.log('✅ WMS 工具函數庫已載入');
         var raw = el.value.trim(), f = window.formatLocationId(raw), h = hintOf(el);
         if (!raw) { h.textContent = ''; return; }
         var ok = window.isValidStorageLocation(f) || /^V-(SALES|TEMP|QC)$/.test(f);
-        if (f !== raw.toUpperCase()) { h.textContent = '→ ' + f + (ok ? '' : '（格式不對）'); }
-        else h.textContent = ok ? '' : '格式不對，例如 IA011 或 I-A-01-1F';
+        var why = /^[IJK]-[A-H]-\d{2}-[123]F$/.test(f) ? '沒有這個儲位' : '格式不對';
+        if (f !== raw.toUpperCase()) { h.textContent = '→ ' + f + (ok ? '' : '（' + why + '）'); }
+        else h.textContent = ok ? '' : why + '，例如 IA011 或 I-A-01-1F';
         h.style.color = ok ? '#34d399' : '#f87171';
     }
     function commit(el) {

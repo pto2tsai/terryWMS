@@ -271,7 +271,7 @@ window.movePalletTx = async function(palletRef, toLocation, logExtra, opts) {
     toLocation = window.formatLocationId(toLocation);   // 簡碼 IA011 → I-A-01-1F
     if (!toLocation) throw new Error('請輸入目標儲位');
     if (!(window.isValidStorageLocation(toLocation) || /^V-(SALES|TEMP|QC)$/.test(toLocation))) {
-        throw new Error('儲位格式不正確：' + toLocation + '（例如 I-A-01-1F）');
+        throw new Error((/^[IJK]-[A-H]-\d{2}-[123]F$/.test(toLocation) ? '沒有這個儲位：' : '儲位格式不正確：') + toLocation + '（例如 I-A-01-1F）');
     }
     if (!(opts && opts.skipCapacityCheck) && typeof window.locationFullWarning === 'function') {
         var all = window.currentPallets ? window.currentPallets() : (window.pallets || []);

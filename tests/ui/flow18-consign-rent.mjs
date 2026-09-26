@@ -79,7 +79,9 @@ await H.nav(page, 'rental-report'); await page.waitForTimeout(800);
 await page.evaluate(m => { document.getElementById('rental-month').value = m; }, today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0'));
 await page.evaluate(async () => { await loadRentalReport(); }); await page.waitForTimeout(800);
 const own = await page.evaluate(() => window._rentalReportData.ownStock);
-const expectCW = 5 * (days - 1) + 1, expectBF = 2 * (days - 1) + 1;
+// 今天在這個計費期間內：前幾天 5／2 板＋今天實際 1／1 板；過了 25 日結算日，今天已經算下一期，整期都是 5／2 板
+const inPeriod = ymd(today) <= ymd(pEnd);
+const expectCW = inPeriod ? 5 * (days - 1) + 1 : 5 * days, expectBF = inPeriod ? 2 * (days - 1) + 1 : 2 * days;
 H.note('期間 ' + ymd(pStart) + '～' + ymd(pEnd) + ' 共 ' + days + ' 天；自有庫存 ' + JSON.stringify(own));
 H.check('崇文板天＝每天實際板數加總（不是今天的板數 × 天數）', own['崇文'].palletDays === expectCW && own['八方'].palletDays === expectBF, JSON.stringify(own) + ' 預期 ' + expectCW + '/' + expectBF);
 H.check('沒有缺快照的日子就不標示估算', !(await page.innerText('#own-stock-rental-body')).includes('估算'));

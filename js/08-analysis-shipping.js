@@ -250,10 +250,10 @@
                 renderZoneHeatmap('I', 'B', 8, locationStats);
                 renderZoneHeatmap('J', 'C', 8, locationStats);
                 renderZoneHeatmap('J', 'D', 8, locationStats);
-                renderZoneHeatmap('K', 'E', 22, locationStats);
-                renderZoneHeatmap('K', 'F', 22, locationStats);
-                renderZoneHeatmap('K', 'G', 22, locationStats);
-                renderZoneHeatmap('K', 'H', 22, locationStats);
+                renderZoneHeatmap('K', 'E', window.RACK_CONFIG.ZONE_LANES['K-E'], locationStats);
+                renderZoneHeatmap('K', 'F', window.RACK_CONFIG.ZONE_LANES['K-F'], locationStats);
+                renderZoneHeatmap('K', 'G', window.RACK_CONFIG.ZONE_LANES['K-G'], locationStats);
+                renderZoneHeatmap('K', 'H', window.RACK_CONFIG.ZONE_LANES['K-H'], locationStats);
 
                 updateHeatmapStats(locationStats);
 
@@ -319,7 +319,7 @@
                 }
             });
             ['K-E', 'K-F', 'K-G', 'K-H'].forEach(function(zone) {
-                for (var i = 1; i <= 22; i++) {
+                for (var i = 1; i <= window.RACK_CONFIG.ZONE_LANES[zone]; i++) {
                     allLanes.push(zone + '-' + (i < 10 ? '0' + i : i));
                 }
             });
