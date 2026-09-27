@@ -372,13 +372,13 @@
         </header>
         <div class="scan-section">
             <div class="scan-input-wrap">
-                <input type="text" id="query-input" class="scan-input" placeholder="品名、板號、批號或儲位" data-enter="doInventoryQuery" data-cam-title="庫存快查" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                <input type="text" id="query-input" class="scan-input" placeholder="品名、規格、板號、批號或儲位" data-enter="doInventoryQuery" data-cam-title="庫存快查" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
                 <button class="cam-btn" onclick="openCameraScan('query-input')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
                 <button class="scan-btn" onclick="doInventoryQuery()" aria-label="確認"><i class="fa-solid fa-magnifying-glass"></i></button>
             </div>
         </div>
         <div class="query-result" id="query-result">
-            <div class="empty-state"><i class="fa-solid fa-box-open"></i><p>輸入關鍵字或掃描標籤</p></div>
+            <div class="empty-state"><i class="fa-solid fa-box-open"></i><p>輸入關鍵字或掃描標籤</p><p style="font-size:13px;margin-top:6px">規格不用打完整，好幾個字用空白分開<br>例如「白仁 6070」「蝦 1kg」</p></div>
         </div>
     </div>
 
