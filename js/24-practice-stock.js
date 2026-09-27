@@ -92,3 +92,40 @@ window.syncPracticeStock = async function(rows) {
     return '練習庫存（' + loc + '）已更新成鼎新的數字：' + Object.keys(by).map(function(k) { return k + ' ' + by[k] + ' 筆'; }).join('、') +
         '（新增 ' + added + '、改件數 ' + changed + '、刪除 ' + removed + '）';
 };
+
+// ---------- 清空舊庫存（管理員；練習前用）----------
+// 刪掉 OTHER 以外的所有棧板（之前測試或手動建的庫存），練習庫存（OTHER）留著。
+// 刪之前先把「所有棧板」存一份雲端備份（備份與維護 → 雲端備份「列表」，可以還原回來）；每一板寫一筆異動記錄。
+window.clearOldStock = async function() {
+    var r = window.currentUser && window.currentUser.role;
+    if (r !== 'admin') { alert('只有管理員可以清空庫存'); return; }
+    var db = window.db;
+    var snap = await db.collection('pallets').get();
+    var all = [], old = [];
+    snap.forEach(function(d) { all.push({ id: d.id, data: d.data() }); if (d.data().locationId !== window.PRACTICE_STOCK_LOC) old.push(d); });
+    if (!old.length) { alert('除了練習庫存（OTHER）以外，沒有其他庫存，不用清空'); return; }
+    var qty = old.reduce(function(t, d) { return t + (parseFloat(d.data().quantity) || 0); }, 0);
+    if (!confirm('清空舊庫存？\n\n會刪掉 OTHER 以外的所有棧板：' + old.length + ' 板、共 ' + Math.round(qty * 1000) / 1000 + ' 件\n練習庫存（OTHER，' + (all.length - old.length) + ' 板）不會動\n\n刪之前會先自動存一份雲端備份，刪錯可以還原。')) return;
+    if (prompt('確定要刪除，請輸入「清空」兩個字') !== '清空') { alert('沒有刪除'); return; }
+    var now = new Date().toISOString(), backupId = 'before-clear-' + now.replace(/[:.]/g, '-');
+    try {
+        var ser = window.serializeFirestoreData || function(x) { return x; };
+        var payload = { id: backupId, timestamp: now, version: '清空舊庫存前', collections: { pallets: all.map(function(p) { return { id: p.id, data: ser(p.data) }; }) } };
+        await db.collection('backups').doc(backupId).set({ timestamp: now, version: '清空舊庫存前（只有棧板）', summary: { pallets: all.length }, data: JSON.stringify(payload) });
+    } catch (e) { alert('❌ 備份失敗，沒有刪除：' + e.message); return; }
+    try {
+        for (var i = 0; i < old.length; i += 200) {
+            var b = db.batch();
+            old.slice(i, i + 200).forEach(function(d) {
+                var p = d.data();
+                b.delete(d.ref);
+                b.set(db.collection('inventoryLogs').doc(), window.buildInventoryLogEntry({
+                    type: 'adjust', palletId: p.palletId || d.id, company: p.company, productName: p.productName, spec: p.spec, batchNo: p.batchNo,
+                    quantity: 0, quantityChange: -(parseFloat(p.quantity) || 0), locationId: p.locationId, note: '練習前清空舊庫存（備份 ' + backupId + '）'
+                }));
+            });
+            await b.commit();
+        }
+    } catch (e) { alert('❌ 刪到一半失敗：' + e.message + '\n\n可以到「備份與維護 → 雲端備份 → 列表」還原「' + backupId + '」'); return; }
+    alert('✅ 已清空舊庫存 ' + old.length + ' 板\n\n備份：' + backupId + '（在「備份與維護 → 雲端備份 → 列表」，刪錯可以還原）');
+};

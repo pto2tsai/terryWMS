@@ -65,5 +65,34 @@ await D.page.click('#btn-practice-mode');
 ib = await (async () => { let x; for (let i = 0; i < 30; i++) { await D.page.waitForTimeout(500); x = await H.one('erpInbox', r.id); if (x.status === 'done') break; } return x; })();
 H.check('打開練習模式：最近一份只存檔的批號庫存表馬上套用（60→1）', ib.status === 'done' && (await other())['A5021212/合眾_260820'][2] === 1, JSON.stringify([ib.status, ib.result]));
 
-H.check('沒有頁面錯誤', D.log.errors.length === 0, JSON.stringify(D.log.errors));
+// ---------- 清空舊庫存（管理員；練習前用）----------
+let d0 = D.log.dialogs.length;
+await D.page.evaluate(async () => { await clearOldStock(); }); await D.page.waitForTimeout(300);
+H.check('主管不能清空庫存（只有管理員）', D.log.dialogs.slice(d0).some(x => x.msg.includes('只有管理員')) && !!(await H.one('pallets', 'REAL1')));
+const A = await H.openApp(base, USERS.admin);
+await A.page.waitForTimeout(1500);
+A.page.__dialogPlan = [true, '算了'];
+await A.page.evaluate(async () => { await clearOldStock(); }); await A.page.waitForTimeout(500);
+H.check('沒打「清空」兩個字：不刪', !!(await H.one('pallets', 'REAL1')));
+d0 = A.log.dialogs.length;
+A.page.__dialogPlan = [true, '清空', true];
+await A.page.evaluate(async () => { await clearOldStock(); }); await A.page.waitForTimeout(1500);
+const dl = A.log.dialogs.slice(d0).map(x => x.msg);
+const left = await H.all('pallets');
+H.check('確認訊息寫出要刪幾板、練習庫存不會動', dl[0] && dl[0].includes('1 板') && dl[0].includes('不會動'), JSON.stringify(dl));
+H.check('清空：真正儲位的舊板刪掉，OTHER 的練習庫存留著', !left.some(p => p._id === 'REAL1') && left.length === 1 && left.every(p => p.locationId === 'OTHER'), JSON.stringify(left.map(p => [p._id, p.locationId])));
+const bk = (await H.all('backups')).find(b => b._id.startsWith('before-clear-'));
+H.check('刪之前自動存了雲端備份（含所有 2 板）', bk && JSON.parse(bk.data).collections.pallets.length === 2, JSON.stringify(bk && bk.summary));
+H.check('每一板留一筆異動記錄', (await H.all('inventoryLogs')).some(l => l.palletId === 'REAL1' && (l.note || '').includes('練習前清空')));
+
+// ---------- 手機選單：一列 3 格 ----------
+const M = await H.openApp(base, USERS.op2, { mobile: true });
+await M.page.waitForTimeout(1500);
+const cols = await M.page.evaluate(() => getComputedStyle(document.querySelector('.main-menu')).gridTemplateColumns.split(' ').length);
+const wide = await M.page.evaluate(() => { const m = document.querySelector('.main-menu').getBoundingClientRect(), w = document.querySelector('.menu-card.wide').getBoundingClientRect(); return w.width > m.width * 0.85; });
+const overflow = await M.page.evaluate(() => [...document.querySelectorAll('.menu-card h3')].some(h => h.scrollWidth > h.parentElement.parentElement.clientWidth));
+H.check('手機選單一列 3 格；「掃一下」「庫存快查」整列；字沒有超出方塊', cols === 3 && wide && !overflow, JSON.stringify([cols, wide, overflow]));
+if (process.env.SHOT) await M.page.screenshot({ path: process.env.SHOT });
+
+H.check('沒有頁面錯誤', D.log.errors.length === 0 && A.log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(D.log.errors.concat(A.log.errors, M.log.errors)));
 await H.close(); process.exit(0);
