@@ -49,7 +49,7 @@ var CONFIG = {
   NOTIFY_EMAIL: '',                              // 失敗通知寄給誰（空白＝寄給執行這支程式的帳號）
   SETTLE_MINUTES: 2,                             // 檔案修改後幾分鐘內先不處理（等同步完成）
   // 每天寄來的庫存信：用 Gmail 的搜尋條件找信，附件檔名有 attachment 的存下來（不用就把 query 清成 ''）
-  STOCK_MAIL: { query: 'from:bapbts0901@gmail.com subject:庫存 has:attachment newer_than:3d', attachment: '批號庫存' },
+  STOCK_MAIL: { query: 'from:bapbts0901@gmail.com subject:庫存 has:attachment newer_than:7d', attachment: '批號庫存' },
   // 鼎新匯出的檔名是代碼時，在這裡寫「代碼開頭 → 報表名稱」（沒有用子資料夾分開時才需要）
   // 例如 INVR05_20260925.xls 是庫存明細表，就寫 'INVR05': '庫存明細表'
   CODE_MAP: {
@@ -356,7 +356,7 @@ function checkStockMail() {
     var f = findStockMail();
     if (!CONFIG.STOCK_MAIL || !CONFIG.STOCK_MAIL.query) return '（沒有設定庫存信）';
     return f ? '✅ 找到庫存信：' + f.att.filename + '（每天會自動存進「批號明細表」，練習模式時更新 WMS 的練習庫存）'
-             : '⚠️ 最近 3 天沒找到有「' + CONFIG.STOCK_MAIL.attachment + '」附件的庫存信（搜尋條件：' + CONFIG.STOCK_MAIL.query + '）';
+             : '⚠️ 最近沒找到有「' + CONFIG.STOCK_MAIL.attachment + '」附件的庫存信（搜尋條件：' + CONFIG.STOCK_MAIL.query + '）';
   } catch (e) { return '❌ 不能讀信：' + e.message; }
 }
 
