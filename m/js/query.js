@@ -18,11 +18,14 @@ function qTerms(raw) {
     return out;
 }
 
-window.doInventoryQuery = function() {
+const QUERY_EMPTY_HTML = document.getElementById('query-result') ? document.getElementById('query-result').innerHTML : '';
+
+// live＝邊打邊查（不選取文字，不然下一個字會把前面蓋掉）
+window.doInventoryQuery = function(live) {
     const input = $('query-input');
     const result = $('query-result');
     const raw = input.value.trim();
-    if (!raw) return;
+    if (!raw) { if (live === true) result.innerHTML = QUERY_EMPTY_HTML; return; }
     const key = codeKey(raw);
     const locKey = codeKey(window.formatLocationId(raw));
     const terms = qTerms(raw);
@@ -57,5 +60,15 @@ window.doInventoryQuery = function() {
             }).join('') + '</div>';
     }).join('');
     lastResult = { ok: true, text: '找到 ' + matches.length + ' 板' };
-    input.select();
+    if (live !== true) input.select();
 };
+
+// 邊打邊查：停手 0.3 秒就顯示結果，不用按放大鏡（中文注音／拼音選字完才查）
+(function() {
+    const input = document.getElementById('query-input');
+    if (!input) return;
+    let timer = null;
+    const later = function() { clearTimeout(timer); timer = setTimeout(function() { window.doInventoryQuery(true); }, 300); };
+    input.addEventListener('input', function(e) { if (!e.isComposing) later(); });
+    input.addEventListener('compositionend', later);
+})();

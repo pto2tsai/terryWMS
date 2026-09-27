@@ -100,6 +100,13 @@ const ask = async v => { await M.page.fill('#query-input', v); await M.page.pres
 const q1 = await ask('白仁 100200'), q2 = await ask('１２ＫＧ'), q3 = await ask('502白仁 12kg'), q4 = await ask('白仁 50/60'), q5 = await ask('A50212');
 H.check('庫存快查：規格不用打完整（「白仁 100200」「１２ＫＧ」「502白仁 12kg」、品號前幾碼都找得到；「白仁 50/60」找不到）',
   q1.includes('100/200*12KG') && q2.includes('100/200*12KG') && q3.includes('100/200*12KG') && q4.includes('找不到') && q5.includes('100/200*12KG'), JSON.stringify([q1, q2, q3, q4, q5].map(x => x.slice(0, 40))));
+await M.page.fill('#query-input', ''); await M.page.dispatchEvent('#query-input', 'input'); await M.page.waitForTimeout(500);
+const q6 = await M.page.innerText('#query-result');
+await M.page.type('#query-input', '12kg', { delay: 60 }); await M.page.waitForTimeout(700);
+const q7 = await M.page.innerText('#query-result');
+const val = await M.page.inputValue('#query-input');
+await M.page.type('#query-input', 'x', { delay: 60 }); await M.page.waitForTimeout(700);
+H.check('邊打邊查：不用按放大鏡，打完就出現結果；可以接著打字（不會被選取蓋掉）；清空回到說明', q6.includes('規格不用打完整') && q7.includes('100/200*12KG') && val === '12kg' && (await M.page.inputValue('#query-input')) === '12kgx', JSON.stringify([q6.slice(0, 20), q7.slice(0, 30), val]));
 
 H.check('沒有頁面錯誤', D.log.errors.length === 0 && A.log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(D.log.errors.concat(A.log.errors, M.log.errors)));
 await H.close(); process.exit(0);
