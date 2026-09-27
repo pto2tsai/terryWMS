@@ -1236,7 +1236,10 @@ async function validateAndPreviewData(jsonData) {
 
         const isVirtualLocation = VIRTUAL_LOCATIONS.includes(record.location);
         const locationExists = existingLocations.has(record.location);
-        if (!isVirtualLocation && !locationExists) {
+        // 打錯的儲位（例如 K-E-21，K 區只有 20 列）不能默默建成新儲位
+        if (record.location && !isVirtualLocation && !window.isValidStorageLocation(record.location)) {
+            record.errors.push('沒有這個儲位：' + record.location);
+        } else if (!isVirtualLocation && !locationExists) {
             const createLocation = document.getElementById('import-opt-create-location')?.checked ?? true;
             if (createLocation) record.newLocation = true;
             else record.errors.push('儲位不存在');

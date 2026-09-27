@@ -1323,6 +1323,7 @@
                             <button onclick="setWaveCompany('崇文')" id="btn-wave-cw" class="px-3 py-1.5 rounded text-xs font-bold bg-blue-600 text-white">崇文</button>
                             <button onclick="setWaveCompany('八方')" id="btn-wave-bf" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">八方</button>
                         </div>
+                        <button id="btn-practice-mode" onclick="togglePracticeMode()" style="display:none"></button>
                         <input type="file" id="order-excel-import" accept=".xlsx,.xls" class="hidden" onchange="importERPExcel(event)">
                         <button onclick="document.getElementById('order-excel-import').click()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-bold mr-2">
                             <i class="fa-solid fa-file-excel mr-1"></i>匯入訂單
@@ -4820,5 +4821,6 @@
     <script src="js/21-step-bars.js"></script>
     <script src="js/22-report-print.js"></script>
     <script src="js/23-erp-inbox.js"></script>
+    <script src="js/24-practice-stock.js"></script>
 </body>
 </html>

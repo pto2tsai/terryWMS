@@ -5,6 +5,8 @@
 //   有新的 Excel／CSV 就認出是哪一種報表（看子資料夾、檔名代碼、檔名、報表標題），整份存進 WMS 的資料庫（erpInbox），
 //   處理完把檔案搬到「已匯入/年-月」；看不懂或失敗的搬到「匯入失敗」並寄信通知。
 // 訂單（每日客戶銷貨明細表）由 WMS 電腦版接手：匯入訂單、依物流商建好波次。
+// 每天寄來的庫存信（CONFIG.STOCK_MAIL）：把附件「批號庫存表」存進「鼎新匯出/批號明細表」，
+//   WMS 在練習模式時拿來更新練習庫存（OTHER 儲位）。只讀信、不改信。
 // 只處理 WMS 要用的 4 種（每日客戶銷貨明細、庫存明細、批號明細、外倉庫存）；
 // 月報（商品銷貨期、每月客戶銷貨明細、應收帳款、領料）由八方 ERP 自己的 Google 程式處理，這裡跳過不碰。
 //
@@ -26,6 +28,7 @@ function setup() {
     '✅ 資料夾：我的雲端硬碟 / 鼎新匯出（' + root.getUrl() + '）',
     '✅ 已設定每 10 分鐘自動檢查一次',
     check.ok ? '✅ 可以寫進 WMS' : '❌ 不能寫進 WMS：' + check.msg,
+    checkStockMail(),
     '',
     '請在鼎新 COSMOS 設定定時輸出（Excel）到：',
     '  G:\\我的雲端硬碟\\鼎新匯出\\每日客戶銷貨明細表',
@@ -37,7 +40,7 @@ function setup() {
 }
 
 // WMS 要的子資料夾（目前只有訂單；庫存、批號、外倉之後做對帳時再加）
-var WMS_FOLDERS = ['每日客戶銷貨明細表'];
+var WMS_FOLDERS = ['每日客戶銷貨明細表', '批號明細表'];
 
 // ---------- 設定（通常不用改）----------
 var CONFIG = {
@@ -45,6 +48,8 @@ var CONFIG = {
   PROJECT_ID: 'terrywms-2345f',                  // Firebase 專案 ID
   NOTIFY_EMAIL: '',                              // 失敗通知寄給誰（空白＝寄給執行這支程式的帳號）
   SETTLE_MINUTES: 2,                             // 檔案修改後幾分鐘內先不處理（等同步完成）
+  // 每天寄來的庫存信：用 Gmail 的搜尋條件找信，附件檔名有 attachment 的存下來（不用就把 query 清成 ''）
+  STOCK_MAIL: { query: 'from:bapbts0901@gmail.com subject:庫存 has:attachment newer_than:7d', attachment: '批號庫存' },
   // 鼎新匯出的檔名是代碼時，在這裡寫「代碼開頭 → 報表名稱」（沒有用子資料夾分開時才需要）
   // 例如 INVR05_20260925.xls 是庫存明細表，就寫 'INVR05': '庫存明細表'
   CODE_MAP: {
@@ -64,7 +69,7 @@ var REPORTS = [
   { type: 'ar_monthly', label: '應收帳款明細表', keys: ['應收帳款', '未結案應收'], owner: 'erp' },
   { type: 'external_stock', label: '外倉庫存表', keys: ['外倉庫存'], owner: 'wms' },
   { type: 'stock_daily', label: '庫存明細表', keys: ['庫存明細'], owner: 'wms' },
-  { type: 'batch_daily', label: '批號明細表', keys: ['批號明細'], owner: 'wms' },
+  { type: 'batch_daily', label: '批號明細表', keys: ['批號明細', '批號庫存'], process: true, owner: 'wms' },
   { type: 'material_issue', label: '領料明細表', keys: ['領料明細'], owner: 'erp' }
 ];
 
@@ -197,6 +202,7 @@ function buildInboxWrites(projectId, report, file, rows, nowIso, detectedBy) {
 // 主程式：由「觸發條件」每 10 分鐘執行一次
 function syncErpReports() {
   var root = getRootFolder();
+  try { saveStockMail(root); } catch (e) { console.log('讀庫存信失敗：' + e.message); }
   var now = new Date();
   var results = [];
   // 要看的地方：主資料夾，加上每一個子資料夾（「已匯入」「匯入失敗」除外）
@@ -308,6 +314,50 @@ function childFolder(parent, name) {
 function notify(subject, body) {
   var to = CONFIG.NOTIFY_EMAIL || Session.getEffectiveUser().getEmail();
   if (to) MailApp.sendEmail(to, subject, body);
+}
+
+// ---------- 庫存信 ----------
+// 找最新一封還沒存過的庫存信，把「批號庫存表」附件存進「鼎新匯出/批號明細表」（之後照一般報表匯入）
+// 較舊的信直接略過：只要最新的庫存
+function findStockMail() {
+  var m = CONFIG.STOCK_MAIL;
+  if (!m || !m.query) return null;
+  var list = Gmail.Users.Messages.list('me', { q: m.query, maxResults: 10 }).messages || [];
+  var newest = null;
+  list.forEach(function(x) {
+    var msg = Gmail.Users.Messages.get('me', x.id);
+    var att = findAttachment(msg.payload, m.attachment);
+    if (att && (!newest || Number(msg.internalDate) > Number(newest.msg.internalDate))) newest = { msg: msg, att: att };
+  });
+  return newest;
+}
+function findAttachment(part, key) {
+  if (!part) return null;
+  if (part.filename && part.filename.indexOf(key) >= 0 && part.body && part.body.attachmentId) return part;
+  var kids = part.parts || [];
+  for (var i = 0; i < kids.length; i++) { var f = findAttachment(kids[i], key); if (f) return f; }
+  return null;
+}
+function saveStockMail(root) {
+  var found = findStockMail();
+  if (!found) return;
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('STOCK_MAIL_LAST') === found.msg.id) return;   // 已經存過
+  var data = Gmail.Users.Messages.Attachments.get('me', found.msg.id, found.att.body.attachmentId).data;
+  var bytes = typeof data === 'string' ? Utilities.base64DecodeWebSafe(data) : data;
+  var day = Utilities.formatDate(new Date(Number(found.msg.internalDate)), 'Asia/Taipei', 'yyyy-MM-dd');
+  var ext = (found.att.filename.match(/\.[A-Za-z]+$/) || ['.xlsx'])[0].toLowerCase();
+  childFolder(root, '批號明細表').createFile(Utilities.newBlob(bytes, found.att.mimeType, '批號庫存表_' + day + ext));
+  props.setProperty('STOCK_MAIL_LAST', found.msg.id);
+  console.log('✅ 已存下 ' + day + ' 的批號庫存表');
+}
+function checkStockMail() {
+  try {
+    var f = findStockMail();
+    if (!CONFIG.STOCK_MAIL || !CONFIG.STOCK_MAIL.query) return '（沒有設定庫存信）';
+    return f ? '✅ 找到庫存信：' + f.att.filename + '（每天會自動存進「批號明細表」，練習模式時更新 WMS 的練習庫存）'
+             : '⚠️ 最近沒找到有「' + CONFIG.STOCK_MAIL.attachment + '」附件的庫存信（搜尋條件：' + CONFIG.STOCK_MAIL.query + '）';
+  } catch (e) { return '❌ 不能讀信：' + e.message; }
 }
 
 // 第一次設定時執行一次：建立「每 10 分鐘執行」的觸發條件

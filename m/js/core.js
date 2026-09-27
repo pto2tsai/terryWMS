@@ -241,6 +241,8 @@ function initData() {
     watch('inboundTasks', 'inboundTasks', function(t) { return t; }, window.isTaskOpen, 'badge-inbound', '新的入庫任務');
     // 寄倉：揀貨時保留已賣給客戶的件數（與桌機相同規則）
     watch('consignments', 'consignmentData', function(c) { return c; });
+    // 練習模式（主管在電腦版切換）
+    unsubs.push(window.watchPracticeMode(function() { if (window.onPracticeModeChange) window.onPracticeModeChange(); }));
 }
 
 function notify(text) {

@@ -9,8 +9,10 @@
 
 // WMS 目前只用「每日客戶銷貨明細表」（匯入訂單、建波次）。
 // 庫存明細、批號明細、外倉庫存之後做對帳時才需要：鼎新開始輸出就會收進來存檔，這裡先不列。
+// 批號明細表（鼎新每天寄的批號庫存表）：練習模式時拿來更新 OTHER 的練習庫存（js/24-practice-stock.js）
 window.ERP_REPORT_TYPES = [
-    { type: 'sales_daily', label: '每日客戶銷貨明細表', freq: '每天 4 次' }
+    { type: 'sales_daily', label: '每日客戶銷貨明細表', freq: '每天 4 次' },
+    { type: 'batch_daily', label: '批號庫存表（練習庫存）', freq: '每天 1 次' }
 ];
 
 var ERP_STATUS = {
@@ -114,15 +116,22 @@ window.processErpInbox = async function() {
     try {
         var base = window.db.collection('erpInbox').where('sensitive', '==', false);
         var snaps = await Promise.all([base.where('status', '==', 'pending').get(), base.where('status', '==', 'processing').get()]);
-        var docs = snaps[0].docs.concat(snaps[1].docs).filter(function(d) { return d.data().type === 'sales_daily'; })
+        var docs = snaps[0].docs.concat(snaps[1].docs).filter(function(d) { return d.data().type === 'sales_daily' || d.data().type === 'batch_daily'; })
             .sort(function(a, b) { return String(a.data().receivedAt).localeCompare(String(b.data().receivedAt)); });
         for (var i = 0; i < docs.length; i++) {
             var ref = docs[i].ref;
             if (!(await erpClaim(ref))) continue;
             var upd;
             try {
-                var out = await window.autoImportErpOrderRows(await window.loadErpRows(ref.id));
-                upd = { status: out.issues.length ? 'attention' : 'done', result: out.result, issues: out.issues, missingOrders: out.missingOrders };
+                if (docs[i].data().type === 'batch_daily') {
+                    // 練習模式才更新練習庫存；沒開只存檔（正式上線後庫存以 WMS 為準，不能被鼎新蓋掉）
+                    upd = window.isPracticeMode()
+                        ? { status: 'done', result: await window.syncPracticeStock(await window.loadErpRows(ref.id)), issues: [] }
+                        : { status: 'stored', result: '練習模式沒開，只存檔（庫存不變）', issues: [] };
+                } else {
+                    var out = await window.autoImportErpOrderRows(await window.loadErpRows(ref.id));
+                    upd = { status: out.issues.length ? 'attention' : 'done', result: out.result, issues: out.issues, missingOrders: out.missingOrders };
+                }
             } catch (e) {
                 console.error('自動匯入失敗', e);
                 upd = { status: 'error', result: '匯入失敗：' + e.message, issues: [] };
@@ -130,7 +139,7 @@ window.processErpInbox = async function() {
             upd.processedAt = new Date().toISOString();
             upd.processedBy = (window.currentUser && window.currentUser.email) || '';
             await ref.update(upd);
-            if (window.showToast) window.showToast('📥 鼎新訂單自動匯入：' + upd.result);
+            if (window.showToast) window.showToast((docs[i].data().type === 'batch_daily' ? '📦 ' : '📥 鼎新訂單自動匯入：') + upd.result);
         }
     } catch (e) {
         console.warn('ERP 收件匣處理失敗', e);
