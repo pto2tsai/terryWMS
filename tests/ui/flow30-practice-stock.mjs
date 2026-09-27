@@ -94,5 +94,12 @@ const overflow = await M.page.evaluate(() => [...document.querySelectorAll('.men
 H.check('手機選單一列 3 格；「掃一下」「庫存快查」整列；字沒有超出方塊', cols === 3 && wide && !overflow, JSON.stringify([cols, wide, overflow]));
 if (process.env.SHOT) await M.page.screenshot({ path: process.env.SHOT });
 
+// ---------- 庫存快查：規格不用打完整 ----------
+await M.page.evaluate(() => openPage('query')); await M.page.waitForTimeout(300);
+const ask = async v => { await M.page.fill('#query-input', v); await M.page.press('#query-input', 'Enter'); await M.page.waitForTimeout(300); return M.page.innerText('#query-result'); };
+const q1 = await ask('白仁 100200'), q2 = await ask('１２ＫＧ'), q3 = await ask('502白仁 12kg'), q4 = await ask('白仁 50/60'), q5 = await ask('A50212');
+H.check('庫存快查：規格不用打完整（「白仁 100200」「１２ＫＧ」「502白仁 12kg」、品號前幾碼都找得到；「白仁 50/60」找不到）',
+  q1.includes('100/200*12KG') && q2.includes('100/200*12KG') && q3.includes('100/200*12KG') && q4.includes('找不到') && q5.includes('100/200*12KG'), JSON.stringify([q1, q2, q3, q4, q5].map(x => x.slice(0, 40))));
+
 H.check('沒有頁面錯誤', D.log.errors.length === 0 && A.log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(D.log.errors.concat(A.log.errors, M.log.errors)));
 await H.close(); process.exit(0);
