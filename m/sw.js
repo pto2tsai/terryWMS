@@ -1,7 +1,7 @@
 // Terry WMS 手機版 Service Worker
 // 網路優先：有網路一律拿最新版（避免舊版卡在手機上）；沒網路才用快取，讓畫面還能打開
 // Firebase 資料不經過這裡（由 Firestore SDK 自己處理）
-const CACHE = 'wms-m-v4';   // 換新圖示（2026-09-28 崇文 Logo 系統）
+const CACHE = 'wms-m-v5';   // 桌面圖示拿掉文字（2026-09-28）
 
 self.addEventListener('install', function() { self.skipWaiting(); });
 self.addEventListener('activate', function(event) {
