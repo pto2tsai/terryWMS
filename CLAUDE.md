@@ -8,6 +8,11 @@
   先 push 到 GitHub，給檔案的 GitHub 網址（`https://github.com/pto2tsai/<專案>/blob/<分支>/<路徑>`），
   請使用者按程式碼右上角的「Copy raw file」（複製整份）再貼上。
 
+## 合併（上線）
+- 使用者已同意：**改好、測試全部通過後就直接合併**（開 PR、squash 合併到 main，網站自動更新），不用等使用者說「合併」。
+- 例外，要先問使用者：會刪除或大量改動正式資料的功能、改 `firestore.rules`（要使用者自己到 Firebase 發布）、要使用者重新貼 Google 程式的改動。
+- 合併後告訴使用者：改了什麼、怎麼更新（電腦 Ctrl+F5、手機關掉重開）、怎麼試。
+
 ## 專案
 - 崇文／八方的倉儲系統：電腦版在根目錄，手機版在 `m/`，現場看板是 `board.html`。
 - 測試：`cd tests && npm test`（規則與流程）、`npm run ui`（畫面測試）。
