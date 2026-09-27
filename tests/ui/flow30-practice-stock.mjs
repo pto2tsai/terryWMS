@@ -91,7 +91,14 @@ await M.page.waitForTimeout(1500);
 const cols = await M.page.evaluate(() => getComputedStyle(document.querySelector('.main-menu')).gridTemplateColumns.split(' ').length);
 const wide = await M.page.evaluate(() => { const m = document.querySelector('.main-menu').getBoundingClientRect(), w = document.querySelector('.menu-card.wide').getBoundingClientRect(); return w.width > m.width * 0.85; });
 const overflow = await M.page.evaluate(() => [...document.querySelectorAll('.menu-card h3')].some(h => h.scrollWidth > h.parentElement.parentElement.clientWidth));
-H.check('手機選單一列 3 格；「掃一下」「庫存快查」整列；字沒有超出方塊', cols === 3 && wide && !overflow, JSON.stringify([cols, wide, overflow]));
+const layout = await M.page.evaluate(() => {
+  const out = []; let sec = '';
+  document.querySelectorAll('.main-menu > *').forEach(el => { if (el.classList.contains('menu-section')) sec = el.innerText.slice(0, 3); else out.push(sec + ':' + el.querySelector('h3').innerText); });
+  const ps = [...document.querySelectorAll('.menu-card p')].map(p => p.getBoundingClientRect().height);
+  return { out, oneLine: ps.every(h => h < 22) };
+});
+H.check('手機選單一列 3 格；「掃一下」整列；字沒有超出方塊', cols === 3 && wide && !overflow, JSON.stringify([cols, wide, overflow]));
+H.check('手機選單：工作單＝波次揀貨、入庫任務、調度工單；現場作業 6 格剛好排滿；說明都一行', JSON.stringify(layout.out) === JSON.stringify([':掃一下', '工作單:波次揀貨', '工作單:入庫任務', '工作單:調度工單', '現場作:上架', '現場作:出庫', '現場作:移板', '現場作:併板', '現場作:盤點', '現場作:庫存快查']) && layout.oneLine, JSON.stringify(layout));
 if (process.env.SHOT) await M.page.screenshot({ path: process.env.SHOT });
 
 // ---------- 庫存快查：規格不用打完整 ----------
