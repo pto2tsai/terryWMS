@@ -1455,11 +1455,13 @@ function renderPickingListV2() {
     }
 
     let html = '';
-    list.forEach(item => {
+    list.forEach((item, idx) => {
         const statusIcon = item.completed ?
             '<i class="fa-solid fa-check-circle text-green-500 text-lg"></i>' :
             (item.shortage ?
                 '<i class="fa-solid fa-exclamation-triangle text-red-500 text-lg"></i>' :
+                item.practice ?
+                `<button onclick="confirmWaveItemAt(${idx})" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded">${item.type === 'return' ? '放回了' : '✓ 拿好了'}</button>` :
                 '<i class="fa-regular fa-circle text-slate-500 text-lg"></i>');
 
         const rowClass = item.completed ? 'bg-green-900/20' : (item.shortage ? 'bg-red-900/20' : '');
@@ -1514,7 +1516,7 @@ window.confirmWaveScan = async function() {
 
     const list = window._waveData.pickingList;
 
-    const found = list.find(i => !i.completed && !i.shortage &&
+    const found = list.find(i => !i.completed && !i.shortage && !i.practice &&
         (i.palletId === scanned || i.palletId.toUpperCase() === scanned ||
          i.locationId === scanned || i.locationId.toUpperCase() === scanned));
 
@@ -1525,7 +1527,18 @@ window.confirmWaveScan = async function() {
         input.select();
         return;
     }
+    await markWaveItemPicked(found);
+};
 
+// 練習模式：照訂單揀的那一行沒有板號，在清單上按 ✓
+window.confirmWaveItemAt = async function(idx) {
+    const found = window._waveData.pickingList[idx];
+    if (found && !found.completed && !found.shortage) await markWaveItemPicked(found);
+};
+
+async function markWaveItemPicked(found) {
+    const input = document.getElementById('wave-scan-input');
+    const result = document.getElementById('wave-scan-result');
     found.completed = true;
 
     const wave = window._waveData.currentWave;
@@ -1557,7 +1570,7 @@ window.confirmWaveScan = async function() {
 
     input.value = '';
     input.focus();
-};
+}
 
 window.printSortingLabels = function() {
     const wave = window._waveData.currentWave;
@@ -1732,7 +1745,7 @@ window.completeWave = async function() {
     saveWaves();
     renderOrderList();
 
-    alert('✅ 波次 ' + wave.waveNo + ' 已完成！\n\n全部出貨：' + nShip + ' 單' +
+    alert('✅ 波次 ' + wave.waveNo + ' 已完成！' + (window.isPracticeMode() ? '（練習模式：庫存沒有扣）' : '') + '\n\n全部出貨：' + nShip + ' 單' +
         (nPart ? '\n部分出貨：' + nPart + ' 單（缺的貨可以再排波次）' : '') +
         (nBack ? '\n完全沒出到：' + nBack + ' 單（回到待處理）' : ''));
 
@@ -1749,7 +1762,39 @@ window.closeWaveExecuteModal = function() {
 window.onLogin(function() {
     loadOrdersFromFirebase();
     loadWarehouses();
+    window.watchPracticeMode(function() {
+        renderPracticeToggle();
+        // 揀貨畫面開著：清單馬上照新模式重算
+        const modal = document.getElementById('modal-wave-execute');
+        if (modal && !modal.classList.contains('hidden') && window._waveData.currentWave) generatePickingListV2(window._waveData.currentWave);
+    });
 });
+
+// ---------- 練習模式開關（主管）----------
+function renderPracticeToggle() {
+    const btn = document.getElementById('btn-practice-mode');
+    if (!btn) return;
+    const on = window.isPracticeMode();
+    const r = window.currentUser && window.currentUser.role;
+    btn.style.display = (on || r === 'admin' || r === 'supervisor') ? '' : 'none';
+    btn.disabled = !(r === 'admin' || r === 'supervisor');
+    btn.className = 'px-3 py-2 rounded-lg font-bold mr-2 text-sm ' + (on ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600');
+    btn.innerHTML = '📝 練習模式：' + (on ? '開' : '關');
+    btn.title = '練習模式：揀貨單照訂單數量列出（不看庫存、不標缺貨），完成波次不扣庫存';
+}
+window.togglePracticeMode = async function() {
+    const on = !window.isPracticeMode();
+    const msg = on
+        ? '打開練習模式？\n\n・揀貨單照訂單數量列出，不看庫存、不標「庫存不足」\n・完成波次不扣庫存（訂單照常標記出貨）\n・波次、分貨標籤、看板照常\n\n還沒有儲位、庫存還不準的時候用。'
+        : '關掉練習模式？\n\n之後揀貨單會照庫存分配棧板，完成波次會扣庫存。\n請先確定庫存已經盤點、匯入正確的儲位。\n\n已經照訂單揀的項目不會重算。';
+    if (!confirm(msg)) return;
+    try {
+        await window.db.collection('settings').doc('practice').set({
+            enabled: on, updatedAt: new Date().toISOString(),
+            updatedBy: window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : ''
+        });
+    } catch (e) { alert('❌ 切換失敗：' + e.message); }
+};
 
 console.log('✅ 波次理貨升級版載入完成');
 

@@ -65,6 +65,17 @@ window.consignWaveUse = function(wave, consignments) {
     return uses;
 };
 
+// 練習模式（settings/practice.enabled）：還沒有儲位、庫存不準的時候用
+// 揀貨單照訂單數量列出（不分配棧板、不標缺貨），完成波次不扣庫存；波次、訂單、分貨標籤、看板照常
+window.isPracticeMode = function() { return window.wmsPractice === true; };
+window.PRACTICE_LOC = '照訂單揀';
+window.watchPracticeMode = function(onChange) {
+    return window.db.collection('settings').doc('practice').onSnapshot(function(d) {
+        window.wmsPractice = !!(d.exists && d.data().enabled === true);
+        if (onChange) onChange(window.wmsPractice);
+    }, function() {});
+};
+
 // 這些儲位的貨不能拿去出貨
 window.isHoldLocation = function(loc) { return /^V-(QC|SALES)/.test(String(loc || '').toUpperCase()); };
 
@@ -137,8 +148,8 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
                     if (q <= 0) return;
                     netOn[k] -= q; extra -= q;
                     pickingList.push({
-                        id: uniqueId('return-' + e.palletId + '-' + productName), type: 'return',
-                        docId: e.docId, palletId: e.palletId, company: e.company, locationId: e.locationId,
+                        id: uniqueId('return-' + e.palletId + '-' + productName), type: 'return', practice: !e.palletId,
+                        docId: e.docId, palletId: e.palletId, company: e.company, locationId: e.locationId || window.PRACTICE_LOC,
                         productName: e.productName, spec: e.spec, batchNo: e.batchNo, expDate: e.expDate,
                         key: key, pickQty: q, orders: item.orders, completed: false
                     });
@@ -146,6 +157,19 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
                 return;
             }
             if (needed === 0) return;
+        }
+
+        // 練習模式：不看庫存，照訂單數量列一行（人自己去找貨）
+        if (window.isPracticeMode()) {
+            if (needed > 0) {
+                pickingList.push({
+                    id: useLog ? uniqueId('practice-' + key) : 'practice-' + key, practice: true,
+                    docId: '', palletId: '', company: '', locationId: window.PRACTICE_LOC,
+                    productName: productName, spec: spec, batchNo: '', expDate: '',
+                    key: key, pickQty: needed, availableQty: needed, orders: item.orders, completed: false
+                });
+            }
+            return;
         }
 
         let expiredQty = 0, heldQty = 0, consignQty = 0;
@@ -279,7 +303,10 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
     const missing = [];
     const changes = [];
     const netByPallet = {};
+    // 練習模式不扣庫存；照訂單揀的行沒有棧板，也不扣
+    const practice = window.isPracticeMode();
     pickedItems.concat(returnedItems).forEach(item => {
+        if (practice || item.practice) return;
         const pallet = (item.docId && pallets.find(p => p.id === item.docId)) || pallets.find(p => p.palletId === item.palletId);
         if (!pallet || !pallet.id) { missing.push(item.palletId || item.productName); return; }
         const q = (parseInt(item.pickQty) || 0) * (item.type === 'return' ? -1 : 1);
@@ -361,7 +388,7 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
 
     // 寄倉客戶自己的訂單：出貨的件數同時扣寄倉剩餘件數（以實際揀到的件數為上限）
     let consUses = [];
-    try {
+    if (!practice) try {
         const snap = await db.collection('consignments').where('status', '==', 'active').get();
         const active = []; snap.forEach(d => active.push(Object.assign({ id: d.id }, d.data())));
         const pickedBy = {};
@@ -427,7 +454,7 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
                 ups.push({ ref: orderRefs[idx], data: data });
             });
             if (waveRef && readSnaps[0].exists) {
-                ups.push({ ref: waveRef, data: { status: 'done', completedAt: completedAt, shortages: shortages, shipped: shipped, shippedQty: shippedQty } });
+                ups.push({ ref: waveRef, data: { status: 'done', completedAt: completedAt, shortages: shortages, shipped: shipped, shippedQty: shippedQty, practice: practice } });
             }
             return ups;
         },

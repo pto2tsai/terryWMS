@@ -131,6 +131,15 @@ function renderNextStop() {
         const c = window.locationShortCode(i.locationId) || i.locationId;
         if (i.locationId !== n.locationId && stops.indexOf(c) < 0) stops.push(c);
     });
+    if (window.isPracticeMode()) warn += '<div class="warn-line" style="margin:0 0 10px;padding:8px 10px;border-radius:10px;background:#4c1d95;color:#fff">📝 練習模式：照訂單數量去拿，拿好按「✓ 拿好了」。不會扣庫存</div>';
+    if (n.practice) {
+        box.innerHTML = warn + '<div class="next-stop">' +
+            '<div class="ns-label">下一項（還剩 ' + pending.length + ' 項）</div>' +
+            '<div class="ns-item"><span>' + esc(n.productName) + ' ' + esc(n.spec || '') + '</span><span class="ns-qty">' + (n.type === 'return' ? '↩️ 放回 ' : '拿 ') + esc(n.pickQty) + ' 件</span></div>' +
+            '<button class="action-btn success" style="margin-top:10px" onclick="confirmPracticePick()">' + (n.type === 'return' ? '✓ 放回了' : '✓ 拿好了') + '</button>' +
+            '</div>';
+        return;
+    }
     box.innerHTML = warn + '<div class="next-stop">' +
         '<div class="ns-label">' + (n.type === 'return' ? '↩️ 先放回（鼎新減量，多拿的貨）' : '下一站') + '（還剩 ' + pending.length + ' 項）</div>' +
         '<div class="ns-code">' + esc(code) + '</div>' +
@@ -163,7 +172,17 @@ window.confirmPickingScan = async function() {
         input.select();
         return;
     }
+    await markPicked(found);
+};
 
+// 練習模式：照訂單揀的那一行沒有板號可以掃，拿好了按按鈕
+window.confirmPracticePick = async function() {
+    const n = pickingItems.filter(function(i) { return !i.completed && !i.shortage; })[0];
+    if (n && n.practice) await markPicked(n);
+};
+
+async function markPicked(found) {
+    const input = $('picking-scan');
     try {
         // 記下這一項實際揀（或放回）了幾件、哪一板：鼎新改單重算時，已經揀的不會被改掉
         await db.collection('waves').doc(currentWave.id).update({
@@ -181,6 +200,15 @@ window.confirmPickingScan = async function() {
     renderPickingList();
     input.value = '';
     focusIfNoCamera('picking-scan');
+}
+
+// 主管在電腦版切換練習模式：清單馬上重算
+window.onPracticeModeChange = function() {
+    const btn = $('picking-complete-btn');
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-flag-checkered"></i> ' + (window.isPracticeMode() ? '完成波次（練習：不扣庫存）' : '完成波次（扣庫存出貨）');
+    if (window.currentPage !== 'picking' || !currentWave) return;
+    pickingItems = window.buildWavePickingList(currentWave, window.pallets);
+    renderPickingList();
 };
 
 window.completePickingWave = async function() {
@@ -211,7 +239,7 @@ window.completePickingWave = async function() {
 
     try {
         await window.completeWaveTx(currentWave, pickingItems, window.pallets);
-        alert('✅ 波次 ' + currentWave.waveNo + ' 已完成，庫存已扣除');
+        alert('✅ 波次 ' + currentWave.waveNo + ' 已完成' + (window.isPracticeMode() ? '（練習模式：庫存沒有扣）' : '，庫存已扣除'));
         goBack();
     } catch (e) {
         alert('❌ 完成波次失敗：' + e.message + '\n\n庫存與訂單都沒有變動。');
