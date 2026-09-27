@@ -58,5 +58,12 @@ r = await pushReport('批號庫存表_2026-09-26.xlsx', page([['A5021212', '502�
 ib = await waitInbox(r.id);
 H.check('練習模式沒開：只存檔，庫存不變（正式上線後不會被鼎新蓋掉）', ib.status === 'stored' && (await other())['A5021212/合眾_260820'][2] === 60, JSON.stringify([ib.status, ib.result]));
 
+// ---------- 再打開練習模式：剛剛只存檔的那份馬上套用 ----------
+await H.nav(D.page, 'wave-picking'); await D.page.waitForTimeout(500);
+D.page.__dialogPlan = [true];
+await D.page.click('#btn-practice-mode');
+ib = await (async () => { let x; for (let i = 0; i < 30; i++) { await D.page.waitForTimeout(500); x = await H.one('erpInbox', r.id); if (x.status === 'done') break; } return x; })();
+H.check('打開練習模式：最近一份只存檔的批號庫存表馬上套用（60→1）', ib.status === 'done' && (await other())['A5021212/合眾_260820'][2] === 1, JSON.stringify([ib.status, ib.result]));
+
 H.check('沒有頁面錯誤', D.log.errors.length === 0, JSON.stringify(D.log.errors));
 await H.close(); process.exit(0);

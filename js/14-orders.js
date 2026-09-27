@@ -1793,7 +1793,15 @@ window.togglePracticeMode = async function() {
             enabled: on, updatedAt: new Date().toISOString(),
             updatedBy: window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : ''
         });
-    } catch (e) { alert('❌ 切換失敗：' + e.message); }
+    } catch (e) { alert('❌ 切換失敗：' + e.message); return; }
+    // 剛打開：最近一份批號庫存表如果在練習模式關著時收到（只存檔），重新處理一次，練習庫存馬上是鼎新的數字
+    if (on) {
+        try {
+            const snap = await window.db.collection('erpInbox').where('sensitive', '==', false).where('type', '==', 'batch_daily').get();
+            const last = snap.docs.sort((a, b) => String(b.data().receivedAt).localeCompare(String(a.data().receivedAt)))[0];
+            if (last && last.data().status === 'stored') await last.ref.update({ status: 'pending' });
+        } catch (e) { console.warn('重新處理批號庫存表失敗', e); }
+    }
 };
 
 console.log('✅ 波次理貨升級版載入完成');
