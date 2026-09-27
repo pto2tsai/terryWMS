@@ -143,11 +143,15 @@ const imp = await page.evaluate(async () => {
   await validateAndPreviewData([
     { '儲位': 'i-a-01-1f', '公司': '崇文', '品名': '白蝦', '規格': '50/60', '數量': 10, '批號': 'B9', '效期': 46203 },
     { '儲位': 'I-A-06-1F', '公司': '崇文', '品名': '白蝦', '規格': '50/60', '數量': 10, '批號': 'NEW', '效期': '2027/06/01' },
-    { '儲位': 'I-A-01-1F', '公司': '崇文', '品名': '白蝦', '規格': '50/60', '數量': 1, '效期': '明年' }]);
+    { '儲位': 'I-A-01-1F', '公司': '崇文', '品名': '白蝦', '規格': '50/60', '數量': 1, '效期': '明年' },
+    { '儲位': 'KE211', '公司': '崇文', '品名': '白蝦', '數量': 3 },
+    { '儲位': 'KE201', '公司': '崇文', '品名': '白蝦', '數量': 3 }]);
   return importPreviewData.map(r => [r.location, r.expiryDate, r.status, r.errors.join()]);
 });
 H.check('Excel 日期格子（數字 46203）換成 2026-06-30、儲位轉大寫', imp[0][0] === 'I-A-01-1F' && imp[0][1] === '2026-06-30', JSON.stringify(imp));
 H.check('同儲位同品名同數量但批號不同 → 不算重複', imp[1][2] !== 'duplicate', JSON.stringify(imp[1]));
+H.check('打錯的儲位（K 區第 21 列不存在）列為錯誤，不會建成新儲位', imp[3][2] === 'invalid' && imp[3][3].includes('沒有這個儲位'), JSON.stringify(imp[3]));
+H.check('簡碼 KE201 → K-E-20-1F 可以匯入', imp[4][0] === 'K-E-20-1F' && imp[4][2] !== 'invalid', JSON.stringify(imp[4]));
 H.check('看不懂的效期列為錯誤（不會默默變成沒有效期）', imp[2][2] === 'invalid' && imp[2][3].includes('效期看不懂'), JSON.stringify(imp[2]));
 
 // ---------- 補建期初記錄：執行兩次不會重複 ----------
