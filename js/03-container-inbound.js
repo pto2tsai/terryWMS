@@ -2408,11 +2408,11 @@
         };
 
         function filterInventory() {
-            const term = document.getElementById('global-search').value.toLowerCase();
+            const terms = window.searchTerms(document.getElementById('global-search').value);
             const companyFilter = window.inventoryCompanyFilter || 'all';
 
             document.querySelectorAll('#inventory-list-body tr').forEach(row => {
-                const matchesTerm = row.innerText.toLowerCase().includes(term);
+                const matchesTerm = window.searchMatch(terms, [row.innerText]);
                 const rowCompany = row.getAttribute('data-company') || '';
                 const matchesCompany = companyFilter === 'all' || rowCompany === companyFilter;
 

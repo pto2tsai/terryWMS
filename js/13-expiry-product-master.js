@@ -169,11 +169,11 @@
 
             var data = window._expiryReportData;
             var filter = window._expiryCurrentFilter;
-            var search = (document.getElementById('expiry-search').value || '').toLowerCase();
+            var terms = window.searchTerms(document.getElementById('expiry-search').value);
 
             var filtered = data.filter(function(item) {
                 if (filter !== 'all' && item.status.status !== filter) return false;
-                if (search && item.productName.toLowerCase().indexOf(search) === -1) return false;
+                if (!window.searchMatch(terms, [item.productName, item.spec, item.batchNo, item.locationId])) return false;
                 return true;
             });
 
@@ -433,15 +433,8 @@
             if (!tbody) return;
 
             var data = window.productMasterData.slice(); // 複製陣列
-            var search = (document.getElementById('pm-search')?.value || '').toLowerCase();
-
-            if (search) {
-                data = data.filter(function(p) {
-                    return (p.code || '').toLowerCase().includes(search) ||
-                           (p.name || '').toLowerCase().includes(search) ||
-                           (p.spec || '').toLowerCase().includes(search);
-                });
-            }
+            var terms = window.searchTerms(document.getElementById('pm-search')?.value);
+            if (terms.length) data = data.filter(function(p) { return window.searchMatch(terms, [p.code, p.name, p.spec]); });
             
             // 排序：按品名排序，同品名按板容量降羃
             data.sort(function(a, b) {

@@ -368,16 +368,13 @@
         
         // 渲染品項列表
         window.renderProductSelectList = function() {
-            var keyword = (document.getElementById('product-select-search').value || '').trim().toLowerCase();
+            var terms = window.searchTerms(document.getElementById('product-select-search').value);
             var category = document.getElementById('product-select-category').value;
             var data = window.productMasterData || [];
             
             // 過濾
             var filtered = data.filter(function(p) {
-                var matchKeyword = !keyword || 
-                    (p.code || '').toLowerCase().includes(keyword) ||
-                    (p.name || '').toLowerCase().includes(keyword) ||
-                    (p.spec || '').toLowerCase().includes(keyword);
+                var matchKeyword = window.searchMatch(terms, [p.code, p.name, p.spec]);
                 var matchCategory = !category || p.category === category;
                 return matchKeyword && matchCategory;
             });
