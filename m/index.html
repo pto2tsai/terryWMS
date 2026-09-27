@@ -40,25 +40,25 @@
         <div class="main-menu">
             <div class="menu-card wide" style="--c:#22c55e" onclick="openPage('scan')">
                 <div class="menu-icon"><i class="fa-solid fa-qrcode"></i></div>
-                <div><h3>掃一下</h3><p>掃板號或儲位，直接選要做什麼（不用先想要進哪一頁）</p></div>
+                <div><h3>掃一下</h3><p>掃板號或儲位</p></div>
             </div>
-            <div class="menu-section">工作單</div>
+            <div class="menu-section">工作單（電腦派的工作）</div>
             <div class="menu-card" style="--c:#3b82f6" onclick="openPage('picking')"><span class="badge" id="badge-picking"></span>
                 <div class="menu-icon"><i class="fa-solid fa-barcode"></i></div>
                 <div><h3>波次揀貨</h3><p>訂單出貨</p></div>
             </div>
             <div class="menu-card" style="--c:#10b981" onclick="openPage('inbound')"><span class="badge" id="badge-inbound"></span>
                 <div class="menu-icon"><i class="fa-solid fa-truck-ramp-box"></i></div>
-                <div><h3>入庫任務</h3><p>上架即入帳</p></div>
+                <div><h3>入庫任務</h3><p>上架入帳</p></div>
             </div>
-            <div class="menu-card" style="--c:#0ea5e9" onclick="openPage('stocktake')">
-                <div class="menu-icon"><i class="fa-solid fa-clipboard-check"></i></div>
-                <div><h3>盤點</h3><p>掃描點數</p></div>
+            <div class="menu-card" style="--c:#f59e0b" onclick="openPage('dispatch')"><span class="badge" id="badge-dispatch"></span>
+                <div class="menu-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
+                <div><h3>調度工單</h3><p>移板併板</p></div>
             </div>
             <div class="menu-section">現場作業</div>
             <div class="menu-card" style="--c:#14b8a6" onclick="openPage('shelve')">
                 <div class="menu-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
-                <div><h3>上架</h3><p>棧板放到儲位</p></div>
+                <div><h3>上架</h3><p>放到儲位</p></div>
             </div>
             <div class="menu-card" style="--c:#ea580c" onclick="openPage('outbound')">
                 <div class="menu-icon"><i class="fa-solid fa-dolly"></i></div>
@@ -72,13 +72,13 @@
                 <div class="menu-icon"><i class="fa-solid fa-object-group"></i></div>
                 <div><h3>併板</h3><p>兩板併一板</p></div>
             </div>
-            <div class="menu-card" style="--c:#f59e0b" onclick="openPage('dispatch')"><span class="badge" id="badge-dispatch"></span>
-                <div class="menu-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
-                <div><h3>調度工單</h3><p>電腦發的移板、併板</p></div>
+            <div class="menu-card" style="--c:#0ea5e9" onclick="openPage('stocktake')">
+                <div class="menu-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+                <div><h3>盤點</h3><p>掃描點數</p></div>
             </div>
-            <div class="menu-card wide" style="--c:#8b5cf6" onclick="openPage('query')">
+            <div class="menu-card" style="--c:#8b5cf6" onclick="openPage('query')">
                 <div class="menu-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
-                <div><h3>庫存快查</h3><p>品名、板號、儲位都能查</p></div>
+                <div><h3>庫存快查</h3><p>品名規格</p></div>
             </div>
         </div>
     </div>
