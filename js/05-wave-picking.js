@@ -308,13 +308,13 @@
 
         // Step 1: 選擇品名
         function renderRmModalStep1() {
-            var keyword = (document.getElementById('rm-modal-search').value || '').trim().toLowerCase();
+            var terms = window.searchTerms(document.getElementById('rm-modal-search').value);
             var items = window.rmModalState.allItems;
             var productMap = {};
             
             items.forEach(function(item) {
                 var name = item.productName || '';
-                if (keyword && !name.toLowerCase().includes(keyword)) return;
+                if (!window.searchMatch(terms, [name, item.spec])) return;
                 if (!productMap[name]) productMap[name] = { name: name, count: 0, totalQty: 0 };
                 productMap[name].count++;
                 productMap[name].totalQty += item.quantity || 0;
@@ -351,7 +351,7 @@
 
         // Step 2: 選擇規格
         function renderRmModalStep2() {
-            var keyword = (document.getElementById('rm-modal-search').value || '').trim().toLowerCase();
+            var terms = window.searchTerms(document.getElementById('rm-modal-search').value);
             var items = window.rmModalState.allItems;
             var selectedProduct = window.rmModalState.selectedProduct;
             var specMap = {};
@@ -359,7 +359,7 @@
             items.forEach(function(item) {
                 if (item.productName !== selectedProduct) return;
                 var spec = item.spec || '';
-                if (keyword && !spec.toLowerCase().includes(keyword)) return;
+                if (!window.searchMatch(terms, [spec])) return;
                 var key = spec || '__empty__';
                 if (!specMap[key]) specMap[key] = { spec: spec, count: 0, totalQty: 0 };
                 specMap[key].count++;
@@ -400,7 +400,7 @@
 
         // Step 3: 選擇批號
         function renderRmModalStep3() {
-            var keyword = (document.getElementById('rm-modal-search').value || '').trim().toLowerCase();
+            var terms = window.searchTerms(document.getElementById('rm-modal-search').value);
             var items = window.rmModalState.allItems;
             var state = window.rmModalState;
             var batchMap = {};
@@ -409,7 +409,7 @@
                 if (item.productName !== state.selectedProduct) return;
                 if ((item.spec || '') !== state.selectedSpec) return;
                 var batch = item.batchNo || '';
-                if (keyword && !batch.toLowerCase().includes(keyword)) return;
+                if (!window.searchMatch(terms, [batch])) return;
                 var key = batch || '__empty__';
                 var expDate = item.expiryDate;
                 if (expDate && expDate.toDate) expDate = expDate.toDate();
@@ -467,14 +467,14 @@
 
         // Step 4: 選擇儲位
         function renderRmModalStep4() {
-            var keyword = (document.getElementById('rm-modal-search').value || '').trim().toLowerCase();
+            var terms = window.searchTerms(document.getElementById('rm-modal-search').value);
             var state = window.rmModalState;
             
             var locations = state.allItems.filter(function(item) {
                 if (item.productName !== state.selectedProduct) return false;
                 if ((item.spec || '') !== state.selectedSpec) return false;
                 if ((item.batchNo || '') !== state.selectedBatch) return false;
-                if (keyword && !(item.locationId || '').toLowerCase().includes(keyword)) return false;
+                if (!window.searchMatch(terms, [item.locationId])) return false;
                 return true;
             });
             

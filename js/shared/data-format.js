@@ -45,6 +45,27 @@ window.formatLocationId = function(input) {
     if (m) return m[1] + '-' + m[2] + '-' + ('0' + m[3]).slice(-2) + '-' + m[4] + 'F';
     return s;
 };
+// ---------- 搜尋：規格不用打完整（手機庫存快查、電腦版各種搜尋框共用）----------
+// 比對用：全形轉半形、轉小寫、去掉空白和符號（60/70*1KG → 60701kg）
+window.searchNorm = function(v) {
+    return String(v == null ? '' : v).replace(/[\uFF01-\uFF5E]/g, function(c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
+        .toLowerCase().replace(/[\s\/*＊×\-_.,，、()（）\[\]【】+~～:：'"]/g, '');
+};
+// 關鍵字拆開：空白分開的每一段都要有；中文和數字黏在一起的也拆開（白仁6070 → 白仁、6070）
+window.searchTerms = function(raw) {
+    var out = [];
+    String(raw == null ? '' : raw).split(/[\s,，、]+/).forEach(function(part) {
+        (part.match(/[\u3400-\u9fff]+|[^\u3400-\u9fff]+/g) || []).forEach(function(t) { t = window.searchNorm(t); if (t) out.push(t); });
+    });
+    return out;
+};
+// 每個關鍵字都出現在 fields（品名、規格、品號…）其中一處就算符合；沒有關鍵字＝全部符合
+window.searchMatch = function(terms, fields) {
+    if (!terms || !terms.length) return true;
+    var text = (fields || []).map(window.searchNorm).join('|');
+    return terms.every(function(t) { return text.indexOf(t) >= 0; });
+};
+
 // 標準儲位 → 簡碼（印在儲位標籤上，照著打就好）：I-A-01-1F → IA011
 window.locationShortCode = function(loc) {
     var m = /^([A-Z])-([A-Z])-(\d{2})-(\d)F$/.exec(String(loc || ''));

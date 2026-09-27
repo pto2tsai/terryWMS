@@ -108,5 +108,12 @@ const val = await M.page.inputValue('#query-input');
 await M.page.type('#query-input', 'x', { delay: 60 }); await M.page.waitForTimeout(700);
 H.check('邊打邊查：不用按放大鏡，打完就出現結果；可以接著打字（不會被選取蓋掉）；清空回到說明', q6.includes('規格不用打完整') && q7.includes('100/200*12KG') && val === '12kg' && (await M.page.inputValue('#query-input')) === '12kgx', JSON.stringify([q6.slice(0, 20), q7.slice(0, 30), val]));
 
+// ---------- 電腦版搜尋也一樣：規格不用打完整 ----------
+await H.nav(A.page, 'inventory-query'); await A.page.waitForTimeout(800);
+const vis = async v => { await A.page.fill('#global-search', v); await A.page.waitForTimeout(200); return A.page.$$eval('#inventory-list-body tr', rs => rs.filter(r => r.style.display !== 'none' && r.innerText.trim()).length); };
+const v1 = await vis('白仁 100200'), v2 = await vis('１２ＫＧ'), v3 = await vis('白仁 50/60'), v4 = await vis('');
+const um = await A.page.evaluate(() => [window.searchMatch(window.searchTerms('白仁6070 1kg'), ['單凍白仁原料', '60/70*1KG*12包']), window.searchMatch(window.searchTerms('白仁 5060'), ['單凍白仁原料', '60/70*1KG'])]);
+H.check('電腦版庫存查詢：「白仁 100200」「１２ＫＧ」找得到、「白仁 50/60」找不到、清空全部顯示；共用的比對規則正確', v1 === 1 && v2 === 1 && v3 === 0 && v4 >= 1 && um[0] === true && um[1] === false, JSON.stringify([v1, v2, v3, v4, um]));
+
 H.check('沒有頁面錯誤', D.log.errors.length === 0 && A.log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(D.log.errors.concat(A.log.errors, M.log.errors)));
 await H.close(); process.exit(0);

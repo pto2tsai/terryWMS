@@ -170,16 +170,16 @@
         window.searchTransferProduct = function() {
             var mode = window.transferState.mode;
             var company = window.transferState.company;
-            var keyword = document.getElementById('transfer-product').value.trim().toLowerCase();
+            var terms = window.searchTerms(document.getElementById('transfer-product').value);
             var listDiv = document.getElementById('transfer-product-list');
 
-            if (keyword.length < 1) { listDiv.innerHTML = ''; return; }
+            if (!terms.length) { listDiv.innerHTML = ''; return; }
 
             var source = [];
 
             if (mode === 'out') {
                 source = window.inventory.filter(function(p) {
-                    return p.company === company && p.productName && p.productName.toLowerCase().includes(keyword);
+                    return p.company === company && p.productName && window.searchMatch(terms, [p.productName, p.spec, p.batchNo]);
                 });
 
                 var grouped = {};
@@ -209,7 +209,7 @@
 
                 source = window.externalStock.filter(function(s) {
                     return s.warehouseId === warehouseId && s.company === company &&
-                           s.productName && s.productName.toLowerCase().includes(keyword);
+                           s.productName && window.searchMatch(terms, [s.productName, s.spec, s.batchNo]);
                 });
             }
 
@@ -902,13 +902,13 @@
         };
 
         function renderTransferModalStep1() {
-            var keyword = (document.getElementById('transfer-modal-search').value || '').trim().toLowerCase();
+            var terms = window.searchTerms(document.getElementById('transfer-modal-search').value);
             var items = window.transferModalState.allItems;
             var productMap = {};
             
             items.forEach(function(item) {
                 var name = item.productName || '';
-                if (keyword && !name.toLowerCase().includes(keyword)) return;
+                if (!window.searchMatch(terms, [name, item.spec])) return;
                 if (!productMap[name]) productMap[name] = { name: name, count: 0, totalQty: 0 };
                 productMap[name].count++;
                 productMap[name].totalQty += item.quantity || 0;
@@ -944,7 +944,7 @@
         };
 
         function renderTransferModalStep2() {
-            var keyword = (document.getElementById('transfer-modal-search').value || '').trim().toLowerCase();
+            var terms = window.searchTerms(document.getElementById('transfer-modal-search').value);
             var items = window.transferModalState.allItems;
             var selectedProduct = window.transferModalState.selectedProduct;
             var specMap = {};
@@ -952,7 +952,7 @@
             items.forEach(function(item) {
                 if (item.productName !== selectedProduct) return;
                 var spec = item.spec || '';
-                if (keyword && !spec.toLowerCase().includes(keyword)) return;
+                if (!window.searchMatch(terms, [spec])) return;
                 var key = spec || '__empty__';
                 if (!specMap[key]) specMap[key] = { spec: spec, count: 0, totalQty: 0 };
                 specMap[key].count++;
@@ -992,7 +992,7 @@
         };
 
         function renderTransferModalStep3() {
-            var keyword = (document.getElementById('transfer-modal-search').value || '').trim().toLowerCase();
+            var terms = window.searchTerms(document.getElementById('transfer-modal-search').value);
             var items = window.transferModalState.allItems;
             var state = window.transferModalState;
             var mode = window.transferState.mode;
@@ -1002,7 +1002,7 @@
                 if (item.productName !== state.selectedProduct) return;
                 if ((item.spec || '') !== state.selectedSpec) return;
                 var batch = item.batchNo || '';
-                if (keyword && !batch.toLowerCase().includes(keyword)) return;
+                if (!window.searchMatch(terms, [batch])) return;
                 var key = batch || '__empty__';
                 if (!batchMap[key]) {
                     batchMap[key] = { batch: batch, expDate: item.expiryDate || item.expDate || '', count: 0, totalQty: 0, items: [] };
@@ -1072,14 +1072,14 @@
         };
 
         function renderTransferModalStep4() {
-            var keyword = (document.getElementById('transfer-modal-search').value || '').trim().toLowerCase();
+            var terms = window.searchTerms(document.getElementById('transfer-modal-search').value);
             var state = window.transferModalState;
             
             var locations = state.allItems.filter(function(item) {
                 if (item.productName !== state.selectedProduct) return false;
                 if ((item.spec || '') !== state.selectedSpec) return false;
                 if ((item.batchNo || '') !== state.selectedBatch) return false;
-                if (keyword && !(item.locationId || '').toLowerCase().includes(keyword)) return false;
+                if (!window.searchMatch(terms, [item.locationId])) return false;
                 return true;
             });
             

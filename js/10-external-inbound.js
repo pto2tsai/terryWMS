@@ -1050,7 +1050,7 @@
 
             try {
                 var filter = document.getElementById('approval-status-filter').value;
-                var search = (document.getElementById('approval-search').value || '').toLowerCase();
+                var terms = window.searchTerms(document.getElementById('approval-search').value);
 
                 var snapshot;
                 if (filter === 'all') {
@@ -1064,7 +1064,7 @@
                 window.approvalList = [];
                 snapshot.forEach(function(doc) {
                     var data = { id: doc.id, ...doc.data() };
-                    if (!search || data.productName.toLowerCase().includes(search) || data.docNo.toLowerCase().includes(search)) {
+                    if (window.searchMatch(terms, [data.productName, data.spec, data.docNo, data.batchNo])) {
                         window.approvalList.push(data);
                     }
                 });

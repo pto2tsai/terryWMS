@@ -457,20 +457,7 @@ window.renderConsignStockTable = function() {
     const tbody = document.getElementById('consign-stock-tbody');
     if (!tbody) return;
     
-    const searchText = (document.getElementById('consign-stock-search')?.value || '').toLowerCase().trim();
-    const typeFilter = window.consignStockFilter || 'all';
-    
-    let filtered = window.consignStockData.filter(item => {
-        if (typeFilter === 'internal' && item.stockType !== 'internal') return false;
-        if (typeFilter === 'external' && item.stockType !== 'external') return false;
-        if (searchText) {
-            return (item.productName || '').toLowerCase().includes(searchText) ||
-                   (item.spec || '').toLowerCase().includes(searchText) ||
-                   (item.batchNo || '').toLowerCase().includes(searchText) ||
-                   (item.locationId || '').toLowerCase().includes(searchText);
-        }
-        return true;
-    });
+    let filtered = consignStockFiltered();
     
     if (filtered.length === 0) {
         tbody.innerHTML = '<tr><td colspan="11" class="text-center text-slate-500 py-10">無符合條件的庫存</td></tr>';
@@ -553,21 +540,20 @@ window.toggleConsignAll = function(checked) {
     updateConsignSummary();
 };
 
-// 單選
-window.toggleConsignItem = function(idx, checked, update = true) {
-    const searchText = (document.getElementById('consign-stock-search')?.value || '').toLowerCase().trim();
+// 目前畫面上列出的庫存（清單和勾選共用同一個條件，勾到的才會是畫面上那一行）
+function consignStockFiltered() {
+    const terms = window.searchTerms(document.getElementById('consign-stock-search')?.value);
     const typeFilter = window.consignStockFilter || 'all';
-    
-    const filtered = window.consignStockData.filter(item => {
+    return window.consignStockData.filter(item => {
         if (typeFilter === 'internal' && item.stockType !== 'internal') return false;
         if (typeFilter === 'external' && item.stockType !== 'external') return false;
-        if (searchText) {
-            return (item.productName || '').toLowerCase().includes(searchText) ||
-                   (item.spec || '').toLowerCase().includes(searchText) ||
-                   (item.batchNo || '').toLowerCase().includes(searchText);
-        }
-        return true;
+        return window.searchMatch(terms, [item.productName, item.spec, item.batchNo, item.locationId]);
     });
+}
+
+// 單選
+window.toggleConsignItem = function(idx, checked, update = true) {
+    const filtered = consignStockFiltered();
     
     const item = filtered[idx];
     if (!item) return;
@@ -598,19 +584,7 @@ window.toggleConsignItem = function(idx, checked, update = true) {
 
 // 更新數量
 window.updateConsignQty = function(idx, value) {
-    const searchText = (document.getElementById('consign-stock-search')?.value || '').toLowerCase().trim();
-    const typeFilter = window.consignStockFilter || 'all';
-    
-    const filtered = window.consignStockData.filter(item => {
-        if (typeFilter === 'internal' && item.stockType !== 'internal') return false;
-        if (typeFilter === 'external' && item.stockType !== 'external') return false;
-        if (searchText) {
-            return (item.productName || '').toLowerCase().includes(searchText) ||
-                   (item.spec || '').toLowerCase().includes(searchText) ||
-                   (item.batchNo || '').toLowerCase().includes(searchText);
-        }
-        return true;
-    });
+    const filtered = consignStockFiltered();
     
     const item = filtered[idx];
     if (!item) return;
@@ -1335,13 +1309,8 @@ window.loadConsignmentList = function() {
     }
 
     if (searchText) {
-        data = data.filter(c =>
-            (c.customer || '').toLowerCase().includes(searchText) ||
-            (c.productName || '').toLowerCase().includes(searchText) ||
-            (c.batchNo || '').toLowerCase().includes(searchText) ||
-            (c.sourceWarehouse || '').toLowerCase().includes(searchText) ||
-            (c.targetWarehouse || '').toLowerCase().includes(searchText)
-        );
+        const terms = window.searchTerms(searchText);
+        data = data.filter(c => window.searchMatch(terms, [c.customer, c.productName, c.spec, c.batchNo, c.sourceWarehouse, c.targetWarehouse]));
     }
 
     let freeCount = 0, chargingCount = 0, expiringCount = 0, totalUnits = 0, totalRent = 0;
