@@ -1417,6 +1417,7 @@ window.openWaveExecute = function(waveNo) {
         return;
     }
 
+    const justStarted = wave.status === 'pending';
     if (wave.status === 'pending') {
         wave.status = 'picking';
         wave.startedAt = new Date().toISOString();
@@ -1440,6 +1441,9 @@ window.openWaveExecute = function(waveNo) {
     generatePickingListV2(wave);
 
     document.getElementById('modal-wave-execute').classList.remove('hidden');
+
+    // 按「開始揀貨」：直接打開揀貨單列印預覽（之後要重印，按畫面上的「列印揀貨單」）
+    if (justStarted && window.printPickingList) window.printPickingList();
 
     setTimeout(function() {
         document.getElementById('wave-scan-input').focus();

@@ -131,13 +131,17 @@ function renderNextStop() {
         const c = window.locationShortCode(i.locationId) || i.locationId;
         if (i.locationId !== n.locationId && stops.indexOf(c) < 0) stops.push(c);
     });
+    // 下一項是什麼（拿好這一項就知道接著要拿什麼）
+    const nx = pending[1];
+    const nextHtml = nx ? '<div class="ns-after" style="font-size:15px;color:#e2e8f0">下一項：' + (nx.type === 'return' ? '↩️ 放回 ' : '') + esc(nx.productName) + ' ' + esc(nx.spec || '') + '　<b>' + esc(nx.pickQty) + ' 件</b>' +
+        (nx.practice ? '' : '（' + esc(window.locationShortCode(nx.locationId) || nx.locationId) + '）') + '</div>' : '<div class="ns-after">這是最後一項</div>';
     if (window.isPracticeMode()) warn += '<div class="warn-line" style="margin:0 0 10px;padding:8px 10px;border-radius:10px;background:#4c1d95;color:#fff">📝 練習模式：照訂單數量去拿，拿好按「✓ 拿好了」。不會扣庫存</div>';
     if (n.practice) {
         box.innerHTML = warn + '<div class="next-stop">' +
-            '<div class="ns-label">下一項（還剩 ' + pending.length + ' 項）</div>' +
-            '<div class="ns-item"><span>' + esc(n.productName) + ' ' + esc(n.spec || '') + '</span><span class="ns-qty">' + (n.type === 'return' ? '↩️ 放回 ' : '拿 ') + esc(n.pickQty) + ' 件</span></div>' +
+            '<div class="ns-label">現在拿（還剩 ' + pending.length + ' 項）</div>' +
+            '<div class="ns-item" style="font-size:22px"><span>' + esc(n.productName) + ' ' + esc(n.spec || '') + '</span><span class="ns-qty">' + (n.type === 'return' ? '↩️ 放回 ' : '拿 ') + esc(n.pickQty) + ' 件</span></div>' +
             '<button class="action-btn success" style="margin-top:10px" onclick="confirmPracticePick()">' + (n.type === 'return' ? '✓ 放回了' : '✓ 拿好了') + '</button>' +
-            '</div>';
+            nextHtml + '</div>';
         return;
     }
     box.innerHTML = warn + '<div class="next-stop">' +
@@ -146,7 +150,8 @@ function renderNextStop() {
         (code !== n.locationId ? '<div class="ns-loc">' + esc(n.locationId) + '</div>' : '') +
         '<div class="ns-item"><span>' + esc(n.productName) + ' ' + esc(n.spec || '') + ' ' + companyTag(n.company) + '</span><span class="ns-qty">' + (n.type === 'return' ? '放回 ' : '拿 ') + esc(n.pickQty) + ' 件</span></div>' +
         '<div class="ns-sub">板號 <span class="pid">' + pidHtml(n.palletId) + '</span>' + (n.expDate ? '　效期 ' + esc(n.expDate) : '') + (sameLoc > 1 ? '　（這個儲位要揀 ' + sameLoc + ' 板）' : '') + '</div>' +
-        (stops.length ? '<div class="ns-after">接著：' + stops.slice(0, 4).map(esc).join(' → ') + (stops.length > 4 ? ' …' : '') + '</div>' : '') +
+        nextHtml +
+        (stops.length > 1 ? '<div class="ns-after">接著：' + stops.slice(0, 4).map(esc).join(' → ') + (stops.length > 4 ? ' …' : '') + '</div>' : '') +
         '</div>';
 }
 

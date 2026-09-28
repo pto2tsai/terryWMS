@@ -48,7 +48,11 @@ if (await page.isVisible("#modal-create-wave")) await page.click("#modal-create-
 const execBtn = await page.$$eval('[onclick^="openWaveExecute("]', e => e.map(x => x.getAttribute('onclick')));
 H.note('執行按鈕: ' + JSON.stringify(execBtn));
 if (execBtn[0]) {
+  const prevP = page.waitForEvent('popup', { timeout: 5000 }).catch(() => null);
   await page.click('[onclick="' + execBtn[0] + '"]'); await page.waitForTimeout(1500);
+  const prev = await prevP;
+  H.check('按「開始揀貨」直接打開揀貨單列印預覽', !!prev && (await prev.content()).includes('揀貨單'));
+  if (prev) await prev.close().catch(() => {});
   const list = await page.evaluate(() => window._waveData.pickingList.map(i => [i.palletId, i.productName, i.pickQty, i.shortage || false]));
   H.note('揀貨清單: ' + JSON.stringify(list));
   H.check('先進先出：白蝦先揀早效期 W-A2(5) 再 W-A1(5)，透抽 W-B1(5)', JSON.stringify(list.filter(i=>!i[3]).map(i => i[0] + ':' + i[2]).sort()) === JSON.stringify(['W-A1:5', 'W-A2:5', 'W-B1:5']), JSON.stringify(list));
