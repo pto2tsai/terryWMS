@@ -430,3 +430,36 @@ body {
     body > *:not(#label-print-area) { display: none !important; }
     #label-print-area { display: block !important; background: #fff; color: #000; }
 }
+
+/* ---------- 揀貨：冷凍庫版（戴手套、不想看字：一次只做一件事、一個大按鈕） ---------- */
+.list-toggle { width: 100%; background: none; border: none; color: inherit; cursor: pointer; text-align: left; }
+.pk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 18px; color: #cbd5e1; }
+.pk-top b { font-size: 24px; color: #fff; }
+.pk-chip { font-size: 14px; padding: 2px 10px; border-radius: 999px; background: #4c1d95; color: #ede9fe; }
+.pk-bar { height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+.pk-bar div { height: 100%; background: #10b981; }
+.pk-card { background: #111827; border: 3px solid #3b82f6; border-radius: 16px; padding: 16px; text-align: center; }
+.pk-card.ret { border-color: #f59e0b; }
+.pk-loc { font-size: 48px; font-weight: 900; font-family: monospace; letter-spacing: 2px; color: #fff; line-height: 1.1; }
+.pk-name { font-size: 30px; font-weight: 900; color: #fff; line-height: 1.25; }
+.pk-spec { font-size: 20px; color: #cbd5e1; margin-top: 2px; }
+.pk-qty { font-size: 64px; font-weight: 900; color: #fde047; line-height: 1.1; margin-top: 8px; }
+.pk-qty small { font-size: 28px; color: #fde68a; }
+.pk-go { display: block; width: 100%; margin-top: 14px; min-height: 84px; font-size: 30px; font-weight: 900; border: none; border-radius: 16px; background: #10b981; color: #fff; cursor: pointer; }
+.pk-go:active { transform: scale(0.98); }
+.pk-go.ret { background: #d97706; }
+.pk-short { display: block; width: 100%; margin-top: 10px; min-height: 56px; font-size: 20px; font-weight: bold; border: 2px solid #ef4444; border-radius: 14px; background: transparent; color: #fca5a5; cursor: pointer; }
+.pk-next { margin-top: 12px; font-size: 18px; color: #94a3b8; }
+.pk-next b { color: #e2e8f0; }
+.pk-warn { margin-bottom: 10px; padding: 10px 12px; border-radius: 12px; background: #1e3a8a; color: #fff; font-size: 16px; }
+.pk-done { text-align: center; }
+.pk-done .big { font-size: 34px; font-weight: 900; color: #6ee7b7; margin-bottom: 6px; }
+.pk-sub { font-size: 17px; color: #cbd5e1; margin: 6px 0; }
+.pk-link { display: block; width: 100%; margin-top: 10px; min-height: 48px; font-size: 17px; border: none; border-radius: 12px; background: #334155; color: #e2e8f0; cursor: pointer; }
+.pad-overlay { position: fixed; inset: 0; z-index: 300; background: rgba(2, 6, 23, 0.94); padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)); overflow-y: auto; }
+.pad-title { font-size: 24px; font-weight: 900; color: #fff; text-align: center; margin: 8px 0 4px; }
+.pad-sub { font-size: 18px; color: #cbd5e1; text-align: center; margin-bottom: 14px; }
+.pad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pad-grid button { min-height: 76px; font-size: 34px; font-weight: 900; border: none; border-radius: 14px; background: #1e293b; color: #fff; cursor: pointer; }
+.pad-grid button:active { background: #334155; }
+.pad-cancel { display: block; width: 100%; margin-top: 14px; min-height: 56px; font-size: 20px; border: none; border-radius: 14px; background: #475569; color: #fff; cursor: pointer; }

@@ -83,23 +83,23 @@ for (let i = 0; i < 6; i++) {
   note('手機現在要拿：', cur);
   if (cur.startsWith('502白仁')) {
     mp.__dialogPlan = ['3'];
-    await mp.click('#picking-next button.action-btn.secondary'); await mp.waitForTimeout(1500);
+    await mp.click('#picking-next .pk-short'); await mp.waitForTimeout(500);
+    if (await mp.isVisible('#short-pad')) { await mp.screenshot({ path: SD + '/m10a-phone-pad.png' }); await mp.click('#short-pad button:text-is("3")'); }
+    await mp.waitForTimeout(1500);
     await mp.screenshot({ path: SD + '/m10-phone-short.png' });
   } else {
-    await mp.click('#picking-next button.action-btn.success'); await mp.waitForTimeout(1000);
+    await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(1000);
   }
 }
-await mp.evaluate(async () => { await completePickingWave(); }); await mp.waitForTimeout(1000);
+await mp.screenshot({ path: SD + '/m10b-phone-alldone.png' });
+await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(1000);
 await mp.screenshot({ path: SD + '/m11-phone-short-panel.png', fullPage: true });
 note('缺貨畫面：', (await mp.innerText('#picking-next')).replace(/\s+/g, ' '));
-const ins = await mp.$$('.alloc-in');
-note('分配框：', await mp.$$eval('.alloc-in', e => e.map(x => x.value).join(',')));
-await mp.check('#short-labels-ok');
-await mp.click('#short-done-btn'); await mp.waitForTimeout(2500);
+await mp.click('#short-ok-btn'); await mp.waitForTimeout(2500);
 await mp.screenshot({ path: SD + '/m12-phone-finish.png' });
 note('完成畫面：', (await mp.innerText('#picking-next')).replace(/\s+/g, ' '));
 await mp.evaluate(() => { window.print = () => {}; });
-await mp.click('text=印分貨標籤'); await mp.waitForTimeout(800);
+await mp.click('text=印標籤（'); await mp.waitForTimeout(800);
 await mp.emulateMedia({ media: 'print' }); await mp.screenshot({ path: SD + '/m13-labels-print.png', fullPage: true }); await mp.emulateMedia({ media: 'screen' });
 note('訂單結果：', JSON.stringify((await H.all('salesOrders')).map(o => [o.orderNo, o.status, o.erpFixNeeded || false, (o.shortShipped || []).map(x => x.productName + x.want + '→' + x.got)])));
 

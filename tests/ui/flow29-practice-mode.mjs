@@ -42,10 +42,10 @@ const mp = M.page;
 await mp.evaluate(() => openPage('picking')); await mp.waitForTimeout(400);
 await mp.selectOption('#picking-wave-select', W.waveNo); await mp.waitForTimeout(1000);
 const n0 = await mp.innerText('#picking-next');
-H.check('手機：上方紫色提醒「練習模式」，下一項顯示品名、拿幾件、「✓ 拿好了」按鈕', n0.includes('練習模式') && n0.includes('拿好了') && /拿 (10|6) 件/.test(n0), n0);
+H.check('手機：上方「練習」標記，大字顯示品名、拿幾件、「✓ 拿好了」按鈕', n0.includes('練習') && n0.includes('拿好了') && /拿 (10|6) 件/.test(n0), n0);
 H.check('手機：拿這一項的同時，提醒「下一項」是什麼品項、幾件', /下一項：(白蝦|透抽)/.test(n0) && /下一項：.*(6|10) 件/.test(n0), n0);
-H.check('手機完成按鈕寫「練習：不扣庫存」', (await mp.innerText('#picking-complete-btn')).includes('不扣庫存'));
-await mp.click('#picking-next button'); await mp.waitForTimeout(800);
+H.check('手機：練習模式不顯示掃描框', !(await mp.isVisible('#picking-scan-box')));
+await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(800);
 const w1 = await H.one('waves', W.waveNo);
 H.check('按「拿好了」：記下揀了這一項', (w1.pickLog || []).length === 1, JSON.stringify(w1.pickLog));
 
@@ -55,8 +55,8 @@ r = await pushReport('每日客戶銷貨明細表_1100.xlsx', file([['A-1', '白
 await waitInbox(D.page, r.id); await mp.waitForTimeout(1500);
 const n1 = await mp.innerText('#picking-next');
 H.check('鼎新減量：手機出現「放回」和「✓ 放回了」按鈕', n1.includes('放回') && n1.includes('放回了'), n1);
-for (let i = 0; i < 3; i++) { const b = await mp.$('#picking-next button'); if (!b) break; await b.click(); await mp.waitForTimeout(800); }
-H.check('全部按完：顯示「全部揀完」', (await mp.innerText('#picking-next')).includes('全部揀完'));
+for (let i = 0; i < 3; i++) { const b = await mp.$('#picking-next button[onclick^="confirmCurrentPick"]'); if (!b) break; await b.click(); await mp.waitForTimeout(800); }
+H.check('全部按完：顯示「全部拿完」', (await mp.innerText('#picking-next')).includes('全部拿完'));
 
 M.page.__dialogPlan = [true, true];
 const dlg0 = M.log.dialogs.length;

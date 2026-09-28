@@ -95,21 +95,26 @@
         </div>
         <div class="scan-section" id="picking-scan-area" style="display:none">
             <div id="picking-next"></div>
-            <div class="scan-input-wrap">
-                <input type="text" id="picking-scan" class="scan-input" placeholder="掃板號或儲位" data-enter="confirmPickingScan" data-cam-title="揀貨（可連續掃）" data-continuous="1" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
-                <button class="cam-btn" onclick="openCameraScan('picking-scan')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
-                <button class="scan-btn" onclick="confirmPickingScan()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
-            </div>
-            <p class="scan-hint">📷 可連續掃，一板一板打勾；手打只要板號最後幾碼</p>
             <div id="picking-scan-result" class="scan-result"></div>
+            <!-- 有條碼時才用（練習模式沒有板號，藏起來） -->
+            <div id="picking-scan-box">
+                <div class="scan-input-wrap">
+                    <input type="text" id="picking-scan" class="scan-input" placeholder="掃板號或儲位" data-enter="confirmPickingScan" data-cam-title="揀貨（可連續掃）" data-continuous="1" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go">
+                    <button class="cam-btn" onclick="openCameraScan('picking-scan')" aria-label="用相機掃描"><i class="fa-solid fa-camera"></i></button>
+                    <button class="scan-btn" onclick="confirmPickingScan()" aria-label="確認"><i class="fa-solid fa-check"></i></button>
+                </div>
+                <p class="scan-hint">📷 可連續掃；手打只要板號最後幾碼</p>
+            </div>
         </div>
         <div class="list-section">
-            <div class="list-header"><h4>揀貨清單（依動線）</h4><span class="list-progress" id="picking-progress">0/0</span></div>
-            <div id="picking-list"></div>
+            <button class="list-header list-toggle" onclick="togglePickingList()" aria-expanded="false" id="picking-list-toggle"><h4>全部清單 ▾</h4><span class="list-progress" id="picking-progress">0/0</span></button>
+            <div id="picking-list" hidden></div>
         </div>
         <div class="bottom-actions" id="picking-actions" style="display:none">
-            <button id="picking-complete-btn" class="action-btn success" onclick="completePickingWave()"><i class="fa-solid fa-flag-checkered"></i> 完成波次（扣庫存出貨）</button>
+            <button id="picking-complete-btn" class="action-btn success" onclick="completePickingWave()"><i class="fa-solid fa-flag-checkered"></i> 完成出貨</button>
         </div>
+        <!-- 不夠：戴手套也好按的數字鍵 -->
+        <div id="short-pad" class="pad-overlay" hidden></div>
     </div>
 
     <!-- 調度工單 -->

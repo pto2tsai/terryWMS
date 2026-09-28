@@ -47,8 +47,7 @@ window.loadPickingWave = async function() {
     pickingItems = window.buildWavePickingList(currentWave, window.pallets);
     renderPickingList();
     show('picking-scan-area', true);
-    show('picking-actions', true);
-    focusIfNoCamera('picking-scan');
+    show('picking-actions', false);   // 「完成出貨」在全部拿完時出現在大卡片上
 };
 
 // 其他裝置（桌機或別支手機）揀了，這邊即時打勾
@@ -87,7 +86,7 @@ function renderPickingList() {
         return;
     }
     renderNextStop();
-    // 未揀的排前面（依動線），已揀的排後面
+    // 全部清單（平常收起來；要看再打開）：未揀的排前面（依動線），已揀的排後面
     const ordered = pickingItems.filter(function(i) { return !i.completed && !i.shortage; })
         .concat(pickingItems.filter(function(i) { return i.shortage; }))
         .concat(pickingItems.filter(function(i) { return i.completed; }));
@@ -106,54 +105,50 @@ function renderPickingList() {
             '<span class="item-qty">' + esc(item.pickQty) + '</span></div></div>';
     }).join('');
 }
+window.togglePickingList = function() {
+    const l = $('picking-list'), t = $('picking-list-toggle');
+    l.hidden = !l.hidden;
+    t.setAttribute('aria-expanded', String(!l.hidden));
+    t.querySelector('h4').innerText = l.hidden ? '全部清單 ▾' : '全部清單 ▴';
+};
 
-// 下一站：依動線的第一個待揀項目，大字顯示儲位簡碼、品項、件數；後面幾站的儲位
+// 冷凍庫版：一次只顯示現在要拿的一項（大字），一個大按鈕「拿好了」；不夠就按「不夠」點數字
 function renderNextStop() {
     const box = $('picking-next');
-    // 揀到一半，鼎新改了這個波次裡的單：數量沒有自動改，提醒找主管確認
+    const pending = pickingItems.filter(function(i) { return !i.completed && !i.shortage; });
+    const total = pickingItems.filter(function(i) { return !i.shortage || i.fieldShort; }).length;
+    const done = total - pending.length;
+    const pct = total ? Math.round(done / total * 100) : 0;
     let warn = '';
     if (currentWave && (currentWave.changeNotes || []).length) {
-        // 已經自動調整好：照清單做就好
-        warn = '<div class="warn-line" style="margin:0 0 10px;padding:10px;border:2px solid #3b82f6;border-radius:10px;background:#1e3a8a;color:#fff">🔄 鼎新改了：' + currentWave.changeNotes.map(esc).join('；') + '<br>清單已經自動調整，照清單做就好</div>';
+        warn = '<div class="pk-warn">🔄 鼎新改了：' + currentWave.changeNotes.map(esc).join('；') + '<br>已經自動調整，照清單做就好</div>';
     } else if (currentWave && currentWave.hasOrderChanges && (currentWave.changedOrders || []).length) {
-        // 改版前就開始揀的舊波次，沒辦法自動調整
-        warn = '<div class="err-line" style="margin:0 0 10px;padding:10px;border:2px solid #ef4444;border-radius:10px;background:#7f1d1d">⚠️ 鼎新改了這個波次的單：' + currentWave.changedOrders.map(esc).join('、') + '<br>清單上的數量沒有跟著改，請找主管確認再揀</div>';
+        warn = '<div class="pk-warn" style="background:#7f1d1d">⚠️ 鼎新改了這個波次的單：' + currentWave.changedOrders.map(esc).join('、') + '<br>清單上的數量沒有跟著改，請找主管確認再揀</div>';
     }
-    const pending = pickingItems.filter(function(i) { return !i.completed && !i.shortage; });
-    if (pending.length === 0) {
-        box.innerHTML = warn + (pickingItems.length ? '<div class="next-stop done">🎉 全部揀完，按下面「完成波次」</div>' : '');
-        return;
-    }
+    const top = '<div class="pk-top"><span><b>' + done + '</b> / ' + total + ' 項</span>' + (window.isPracticeMode() ? '<span class="pk-chip">練習</span>' : '') + '</div>' +
+        '<div class="pk-bar"><div style="width:' + pct + '%"></div></div>';
+    // 有板號可以掃的才顯示掃描框（練習模式沒有板號）
     const n = pending[0];
-    const code = window.locationShortCode(n.locationId) || n.locationId;
-    const sameLoc = pending.filter(function(i) { return i.locationId === n.locationId; }).length;
-    const stops = [];
-    pending.forEach(function(i) {
-        const c = window.locationShortCode(i.locationId) || i.locationId;
-        if (i.locationId !== n.locationId && stops.indexOf(c) < 0) stops.push(c);
-    });
-    // 下一項是什麼（拿好這一項就知道接著要拿什麼）
-    const nx = pending[1];
-    const nextHtml = nx ? '<div class="ns-after" style="font-size:15px;color:#e2e8f0">下一項：' + (nx.type === 'return' ? '↩️ 放回 ' : '') + esc(nx.productName) + ' ' + esc(nx.spec || '') + '　<b>' + esc(nx.pickQty) + ' 件</b>' +
-        (nx.practice ? '' : '（' + esc(window.locationShortCode(nx.locationId) || nx.locationId) + '）') + '</div>' : '<div class="ns-after">這是最後一項</div>';
-    const shortBtn = n.type === 'return' ? '' : '<button class="action-btn secondary" style="margin-top:8px;background:#7f1d1d" onclick="shortPick()">⚠️ 不夠（只拿到一部分／沒有貨）</button>';
-    if (window.isPracticeMode()) warn += '<div class="warn-line" style="margin:0 0 10px;padding:8px 10px;border-radius:10px;background:#4c1d95;color:#fff">📝 練習模式：照訂單數量去拿，拿好按「✓ 拿好了」。不會扣庫存</div>';
-    if (n.practice) {
-        box.innerHTML = warn + '<div class="next-stop">' +
-            '<div class="ns-label">現在拿（還剩 ' + pending.length + ' 項）</div>' +
-            '<div class="ns-item" style="font-size:22px"><span>' + esc(n.productName) + ' ' + esc(n.spec || '') + '</span><span class="ns-qty">' + (n.type === 'return' ? '↩️ 放回 ' : '拿 ') + esc(n.pickQty) + ' 件</span></div>' +
-            '<button class="action-btn success" style="margin-top:10px" onclick="confirmPracticePick()">' + (n.type === 'return' ? '✓ 放回了' : '✓ 拿好了') + '</button>' +
-            shortBtn + nextHtml + '</div>';
+    show('picking-scan-box', !!(n && !n.practice));
+    if (!n) {
+        const nShort = pickingItems.filter(function(i) { return i.fieldShort; }).length;
+        box.innerHTML = top + warn + '<div class="pk-card pk-done"><div class="big">✅ 全部拿完</div>' +
+            (nShort ? '<div class="pk-sub">有 ' + nShort + ' 項不夠</div>' : '') +
+            '<button class="pk-go" onclick="completePickingWave()">完成出貨</button></div>';
         return;
     }
-    box.innerHTML = warn + '<div class="next-stop">' +
-        '<div class="ns-label">' + (n.type === 'return' ? '↩️ 先放回（鼎新減量，多拿的貨）' : '下一站') + '（還剩 ' + pending.length + ' 項）</div>' +
-        '<div class="ns-code">' + esc(code) + '</div>' +
-        (code !== n.locationId ? '<div class="ns-loc">' + esc(n.locationId) + '</div>' : '') +
-        '<div class="ns-item"><span>' + esc(n.productName) + ' ' + esc(n.spec || '') + ' ' + companyTag(n.company) + '</span><span class="ns-qty">' + (n.type === 'return' ? '放回 ' : '拿 ') + esc(n.pickQty) + ' 件</span></div>' +
-        '<div class="ns-sub">板號 <span class="pid">' + pidHtml(n.palletId) + '</span>' + (n.expDate ? '　效期 ' + esc(n.expDate) : '') + (sameLoc > 1 ? '　（這個儲位要揀 ' + sameLoc + ' 板）' : '') + '</div>' +
-        shortBtn + nextHtml +
-        (stops.length > 1 ? '<div class="ns-after">接著：' + stops.slice(0, 4).map(esc).join(' → ') + (stops.length > 4 ? ' …' : '') + '</div>' : '') +
+    const ret = n.type === 'return';
+    const code = n.practice ? '' : (window.locationShortCode(n.locationId) || n.locationId);
+    const nx = pending[1];
+    box.innerHTML = top + warn + '<div class="pk-card' + (ret ? ' ret' : '') + '">' +
+        (ret ? '<div class="pk-sub" style="color:#fcd34d;font-weight:bold">↩️ 多拿了，放回去</div>' : '') +
+        (code ? '<div class="pk-loc">' + esc(code) + '</div>' : '') +
+        '<div class="pk-name">' + esc(n.productName) + '</div>' +
+        (n.spec ? '<div class="pk-spec">' + esc(n.spec) + '</div>' : '') +
+        '<div class="pk-qty">' + (ret ? '放回 ' : '拿 ') + esc(n.pickQty) + ' <small>件</small></div>' +
+        '<button class="pk-go' + (ret ? ' ret' : '') + '" onclick="confirmCurrentPick()">' + (ret ? '✓ 放回了' : '✓ 拿好了') + '</button>' +
+        (ret ? '' : '<button class="pk-short" onclick="shortPick()">不夠</button>') +
+        '<div class="pk-next">' + (nx ? '下一項：<b>' + esc(nx.productName) + ' ' + esc(nx.spec || '') + '</b>　' + esc(nx.pickQty) + ' 件' : '這是最後一項') + '</div>' +
         '</div>';
 }
 
@@ -182,21 +177,43 @@ window.confirmPickingScan = async function() {
     await markPicked(found);
 };
 
-// 練習模式：照訂單揀的那一行沒有板號可以掃，拿好了按按鈕
-window.confirmPracticePick = async function() {
+// 按大按鈕「拿好了」：現在這一項（練習模式沒有板號，只能按；有板號的也可以掃）
+window.confirmCurrentPick = async function() {
     const n = pickingItems.filter(function(i) { return !i.completed && !i.shortage; })[0];
-    if (n && n.practice) await markPicked(n);
+    if (n) await markPicked(n);
 };
+window.confirmPracticePick = window.confirmCurrentPick;
 
-// 現場不夠：輸入實際拿到幾件；不夠的記成缺貨（完成時相關訂單部分出貨，欠的下次補）
-window.shortPick = async function() {
+// 不夠：跳出數字鍵，點實際拿到幾件（戴手套也好按，不用打字）；不夠的記缺貨，不會再叫人去拿
+window.shortPick = function() {
     const n = pickingItems.filter(function(i) { return !i.completed && !i.shortage; })[0];
     if (!n || n.type === 'return') return;
     const want = parseFloat(n.pickQty) || 0;
-    const ans = prompt(n.productName + ' ' + (n.spec || '') + '\n要拿 ' + want + ' 件，實際拿到幾件？\n（沒有貨就填 0）', '0');
-    if (ans === null) return;
-    const got = parseFloat(String(ans).trim());
-    if (!(got >= 0 && got < want) || String(ans).trim() === '') { alert('請填 0 到 ' + (want - 1) + ' 之間的數字（拿到 ' + want + ' 件就按「✓ 拿好了」）'); return; }
+    if (want > 30) {   // 件數太多，數字鍵放不下：用鍵盤
+        const ans = prompt(n.productName + ' 要拿 ' + want + ' 件\n實際拿到幾件？（沒有貨填 0）', '0');
+        if (ans === null) return;
+        const g = parseFloat(String(ans).trim());
+        if (!(g >= 0 && g < want) || String(ans).trim() === '') { alert('請填 0 到 ' + (want - 1)); return; }
+        return saveShort(n, g);
+    }
+    const nums = [];
+    for (let i = 0; i < want; i++) nums.push(i);
+    const pad = $('short-pad');
+    pad.innerHTML = '<div class="pad-title">拿到幾件？</div>' +
+        '<div class="pad-sub">' + esc(n.productName) + ' ' + esc(n.spec || '') + '　要 ' + want + ' 件</div>' +
+        '<div class="pad-grid">' + nums.map(function(v) { return '<button onclick="pickShortNumber(' + v + ')">' + v + '</button>'; }).join('') + '</div>' +
+        '<button class="pad-cancel" onclick="closeShortPad()">取消</button>';
+    pad.hidden = false;
+    window._shortItem = n;
+};
+window.closeShortPad = function() { $('short-pad').hidden = true; window._shortItem = null; };
+window.pickShortNumber = function(v) {
+    const n = window._shortItem;
+    window.closeShortPad();
+    if (n) return saveShort(n, v);
+};
+async function saveShort(n, got) {
+    const want = parseFloat(n.pickQty) || 0;
     const by = window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : '';
     const upd = {
         shortLog: FieldValue.arrayUnion({ id: n.id + '-short-' + Date.now(), key: n.key, qty: want - got, productName: n.productName || '', spec: n.spec || '', by: by, at: new Date().toISOString() }),
@@ -212,9 +229,9 @@ window.shortPick = async function() {
     const snap = await db.collection('waves').doc(currentWave.id).get();
     currentWave = Object.assign({ id: snap.id }, snap.data());
     pickingItems = window.buildWavePickingList(currentWave, window.pallets);
-    setResult('picking-scan-result', 'error', '⚠️ ' + n.productName + ' 拿到 ' + got + ' 件，不夠 ' + (want - got) + ' 件（已記缺貨）');
+    setResult('picking-scan-result', 'error', '⚠️ ' + n.productName + ' 拿 ' + got + '，不夠 ' + (want - got));
     renderPickingList();
-};
+}
 
 async function markPicked(found) {
     const input = $('picking-scan');
@@ -230,37 +247,47 @@ async function markPicked(found) {
         return;
     }
     found.completed = true;
-    const left = pickingItems.filter(function(i) { return !i.completed && !i.shortage; }).length;
-    setResult('picking-scan-result', true, (found.type === 'return' ? '↩️ 已放回 ' : '✓ ') + found.productName + ' x ' + found.pickQty + '（' + found.locationId + '）' + (left ? '　還剩 ' + left + ' 項' : '　🎉 全部揀完'));
+    setResult('picking-scan-result', true, (found.type === 'return' ? '↩️ 放回 ' : '✓ ') + found.productName + ' ' + found.pickQty + ' 件');
     renderPickingList();
     input.value = '';
     focusIfNoCamera('picking-scan');
 }
 
-// 缺貨：不夠的品項要分給誰（預設先開單的先給，現場可以改），每張訂單的標籤要改成幾件；
-// 缺的這次不出、之後也不補，辦公室會收到提醒請業務改鼎新銷貨單
+// 缺貨：不夠的給誰。預設先開單的先給，一個大按鈕「好，完成」；要改才按「改分法」
+// （標籤是完成後才印、件數是實際的，不用改標籤）；缺的這次不出、之後也不補，辦公室會提醒業務改鼎新
 function renderShortfallPanel() {
     const alloc = window.waveShortAllocation(currentWave, pickingItems);
     const keys = Object.keys(alloc);
+    window._shortKeys = keys;
+    const lines = [];
+    keys.forEach(function(k) {
+        alloc[k].orders.forEach(function(o) { if (o.got < o.want) lines.push('<div style="font-size:20px;margin:6px 0"><b>' + esc(o.customer) + '</b>　' + esc(alloc[k].productName) + '　' + (o.got ? '給 ' + o.got + ' 件' : '<b style="color:#fca5a5">沒有</b>') + '</div>'); });
+    });
+    $('picking-next').innerHTML = '<div class="pk-card" style="border-color:#ef4444"><div class="pk-name" style="font-size:24px">⚠️ 有 ' + keys.length + ' 項不夠</div>' +
+        '<div class="pk-sub">先開單的先給，這幾家會少：</div>' + lines.join('') +
+        '<button class="pk-go" id="short-ok-btn" onclick="finishWithShortage(true)">好，完成</button>' +
+        '<button class="pk-link" id="short-edit-btn" onclick="renderShortEditor()">改分法</button></div>';
+    window.scrollTo(0, 0);
+}
+// 改分法：每家一個數字（加起來要等於拿到的件數）
+window.renderShortEditor = function() {
+    const alloc = window.waveShortAllocation(currentWave, pickingItems);
+    const keys = window._shortKeys = Object.keys(alloc);
     const blocks = keys.map(function(k, bi) {
         const a = alloc[k];
-        return '<div style="padding:10px 0;border-bottom:1px solid #7f1d1d"><div style="font-size:17px;font-weight:bold">' + esc(a.productName) + ' ' + esc(a.spec) + '</div>' +
-            '<div style="color:#fecaca;margin:2px 0 6px">共訂 ' + a.orders.reduce(function(t, o) { return t + o.want; }, 0) + ' 件，只拿到 <b>' + a.picked + ' 件</b>' + (a.orders.length > 1 ? '，要怎麼分？' : '') + '</div>' +
+        return '<div style="padding:10px 0;border-bottom:1px solid #7f1d1d;text-align:left"><div style="font-size:19px;font-weight:bold">' + esc(a.productName) + ' ' + esc(a.spec) + '</div>' +
+            '<div style="color:#fecaca;margin:2px 0 6px">拿到 <b>' + a.picked + ' 件</b>，要給：</div>' +
             a.orders.map(function(o) {
-                return '<div style="display:flex;align-items:center;gap:8px;margin:6px 0"><div style="flex:1"><b>' + esc(o.customer) + '</b>（' + esc(o.orderNo) + '）<br><span style="font-size:13px;color:#fecaca">訂 ' + o.want + ' 件</span></div>' +
-                    '<input type="number" inputmode="numeric" class="alloc-in qty-input" style="width:80px;margin:0" data-b="' + bi + '" data-id="' + esc(o.id) + '" data-want="' + o.want + '" value="' + o.got + '" oninput="checkShortPanel()"' + (a.orders.length > 1 ? '' : ' readonly') + '> 件</div>' +
-                    '<div class="alloc-note" data-b="' + bi + '" data-id="' + esc(o.id) + '" style="font-size:14px;margin-bottom:4px"></div>';
-            }).join('') + '<div class="alloc-sum" data-b="' + bi + '" data-picked="' + a.picked + '" style="font-size:14px"></div></div>';
+                return '<div style="display:flex;align-items:center;gap:8px;margin:6px 0"><div style="flex:1;font-size:18px"><b>' + esc(o.customer) + '</b><br><span style="font-size:14px;color:#fecaca">訂 ' + o.want + ' 件</span></div>' +
+                    '<input type="number" inputmode="numeric" class="alloc-in qty-input" style="width:90px;margin:0;font-size:26px" data-b="' + bi + '" data-id="' + esc(o.id) + '" data-want="' + o.want + '" value="' + o.got + '" oninput="checkShortPanel()"> 件</div>';
+            }).join('') + '<div class="alloc-sum" data-b="' + bi + '" data-picked="' + a.picked + '" style="font-size:16px"></div></div>';
     }).join('');
-    $('picking-next').innerHTML = '<div class="err-line" style="margin:0 0 10px;padding:12px;border:2px solid #ef4444;border-radius:10px;background:#450a0a;color:#fff">' +
-        '<div style="font-size:18px;font-weight:bold;margin-bottom:4px">⚠️ 有 ' + keys.length + ' 項不夠，請決定給誰、改分貨標籤</div>' + blocks +
-        '<div style="font-size:13px;color:#fecaca;margin-top:8px">缺的這次不出、之後也不補；辦公室會收到提醒，請業務在鼎新改銷貨單數量</div>' +
-        '<label style="display:flex;gap:10px;align-items:center;margin-top:12px;font-size:17px"><input type="checkbox" id="short-labels-ok" style="width:24px;height:24px" onchange="checkShortPanel()"> 標籤都改好了</label>' +
-        '<button id="short-done-btn" class="action-btn success" style="margin-top:10px" disabled onclick="finishWithShortage()">確認，完成波次</button></div>';
-    window._shortKeys = keys;
+    $('picking-next').innerHTML = '<div class="pk-card" style="border-color:#ef4444">' + blocks +
+        '<button id="short-done-btn" class="pk-go" disabled onclick="finishWithShortage(false)">好，完成</button>' +
+        '<button class="pk-link" onclick="renderShortfallPanel()">照原本的分法</button></div>';
     checkShortPanel();
-    window.scrollTo(0, Math.max(0, $('picking-next').getBoundingClientRect().top + window.scrollY - 80));   // 上方標題列會擋住，往下留一點
-}
+    window.scrollTo(0, 0);
+};
 window.checkShortPanel = function() {
     let ok = true;
     document.querySelectorAll('.alloc-sum').forEach(function(sumEl) {
@@ -268,45 +295,42 @@ window.checkShortPanel = function() {
         let total = 0;
         document.querySelectorAll('.alloc-in[data-b="' + b + '"]').forEach(function(inp) {
             const v = parseFloat(inp.value), want = parseFloat(inp.dataset.want);
-            const bad = !(v >= 0 && v <= want);
-            if (bad) ok = false;
-            total += bad ? 0 : v;
-            const note = document.querySelector('.alloc-note[data-b="' + b + '"][data-id="' + inp.dataset.id + '"]');
-            if (note) note.innerHTML = bad ? '<span style="color:#fca5a5">要填 0～' + want + '</span>' : v < want ? '→ 標籤改成 <b>' + v + ' 件</b>' + (v === 0 ? '（這一項劃掉）' : '') : '→ 標籤不用改';
+            if (!(v >= 0 && v <= want)) ok = false; else total += v;
         });
         const good = total === picked;
         if (!good) ok = false;
-        sumEl.innerHTML = good ? '<span style="color:#86efac">✓ 分完了（' + total + '／' + picked + ' 件）</span>' : '<span style="color:#fca5a5">加起來要等於拿到的 ' + picked + ' 件（現在 ' + total + ' 件）</span>';
+        sumEl.innerHTML = good ? '<span style="color:#86efac">✓ 分完了</span>' : '<span style="color:#fca5a5">加起來要等於 ' + picked + ' 件（現在 ' + total + '）</span>';
     });
-    const chk = $('short-labels-ok');
-    $('short-done-btn').disabled = !(ok && chk && chk.checked);
+    const btn = $('short-done-btn');
+    if (btn) btn.disabled = !ok;
 };
-window.finishWithShortage = function() {
-    const ov = {};
-    document.querySelectorAll('.alloc-in').forEach(function(inp) {
-        const k = window._shortKeys[+inp.dataset.b];
-        ov[k] = ov[k] || {};
-        ov[k][inp.dataset.id] = parseFloat(inp.value) || 0;
-    });
+window.finishWithShortage = function(useDefault) {
+    let ov = null;
+    if (!useDefault) {
+        ov = {};
+        document.querySelectorAll('.alloc-in').forEach(function(inp) {
+            const k = window._shortKeys[+inp.dataset.b];
+            ov[k] = ov[k] || {};
+            ov[k][inp.dataset.id] = parseFloat(inp.value) || 0;
+        });
+    }
     window._pendingAlloc = ov;
     return window.completePickingWave(true);
 };
 
-// 完成後：印分貨標籤（件數是實際出貨的）。辦公室自動印模式時，這裡只提示
-function renderFinishPanel(wave, nShort) {
+// 完成後：一個大按鈕「印標籤」（件數是實際出貨的）。辦公室自動印模式時，這裡只提示
+function renderFinishPanel(wave) {
     show('picking-actions', false);
+    show('picking-scan-box', false);
     const lb = window.buildSortingLabelsHtml(wave);
-    const n = lb.count;
     const office = window.labelPrintMode() === 'office';
-    $('picking-next').innerHTML = '<div class="next-stop done" style="text-align:left">' +
-        '<div style="font-size:20px;font-weight:bold">✅ 波次 ' + esc(wave.waveNo) + ' 完成</div>' +
-        '<div style="margin:6px 0 12px;font-size:15px">' + (window.isPracticeMode() ? '練習模式：庫存沒有扣' : '庫存已扣除') +
-        (nShort ? '<br>⚠️ 不夠的這次不出、之後也不補；辦公室和看板會提醒業務在鼎新改銷貨單' : '') +
-        (lb.skipped.length ? '<br>📭 這次沒有出貨、<b>不用貼標籤</b>：' + esc(lb.skipped.join('、')) : '') + '</div>' +
-        (office ? '<div style="font-size:17px;padding:10px;border-radius:10px;background:#1e3a8a">🏷️ 分貨標籤會在<b>辦公室自動印出</b>（' + n + ' 張），件數是實際出貨的</div>'
-                : '<button class="action-btn success" style="font-size:20px;padding:18px" onclick="printLabelsOnPhone()">🖨️ 印分貨標籤（' + n + ' 張）</button>' +
-                  '<div style="font-size:13px;color:#cbd5e1;margin-top:6px">件數是實際出貨的，不用再改。按了會跳出手機的列印畫面，選標籤機</div>') +
-        '<button class="action-btn secondary" style="margin-top:12px" onclick="goBack()">回到選單</button></div>';
+    $('picking-next').innerHTML = '<div class="pk-card pk-done"><div class="big">✅ 完成</div>' +
+        (lb.skipped.length ? '<div class="pk-sub">不用貼標籤：' + esc(lb.skipped.join('、')) + '</div>' : '') +
+        (office ? '<div class="pk-sub" style="font-size:20px">🏷️ 標籤在辦公室自動印出（' + lb.count + ' 張）</div>'
+                : (lb.count ? '<button class="pk-go" onclick="printLabelsOnPhone()">🖨️ 印標籤（' + lb.count + ' 張）</button>' : '')) +
+        '<button class="pk-link" onclick="goBack()">回到選單</button>' +
+        '<div class="pk-sub" style="font-size:14px;margin-top:10px">' + (window.isPracticeMode() ? '練習模式：庫存沒有扣' : '庫存已扣除') +
+        (wave.shortOrders && wave.shortOrders.length ? '　・　缺的不補，辦公室會請業務改鼎新' : '') + '</div></div>';
     window._finishedWave = wave;
     window.scrollTo(0, 0);
 }
@@ -323,8 +347,6 @@ window.printLabelsOnPhone = async function() {
 
 // 主管在電腦版切換練習模式：清單馬上重算
 window.onPracticeModeChange = function() {
-    const btn = $('picking-complete-btn');
-    if (btn) btn.innerHTML = '<i class="fa-solid fa-flag-checkered"></i> ' + (window.isPracticeMode() ? '完成波次（練習：不扣庫存）' : '完成波次（扣庫存出貨）');
     if (window.currentPage !== 'picking' || !currentWave) return;
     pickingItems = window.buildWavePickingList(currentWave, window.pallets);
     renderPickingList();
@@ -338,7 +360,7 @@ window.completePickingWave = async function(labelsFixed) {
         if (!snap.exists) { alert('波次已不存在'); return; }
         currentWave = Object.assign({ id: snap.id }, snap.data());
         pickingItems = window.buildWavePickingList(currentWave, window.pallets);
-        if (labelsFixed === true && window._pendingAlloc) currentWave.allocOverride = window._pendingAlloc;   // 現場決定的分法
+        if (labelsFixed === true && window._pendingAlloc) currentWave.allocOverride = window._pendingAlloc;   // 現場改過的分法
     } catch (e) {
         alert('❌ 讀取波次失敗：' + e.message);
         return;
@@ -351,21 +373,16 @@ window.completePickingWave = async function(labelsFixed) {
     if (completed === 0 && !pickingItems.some(function(i) { return i.fieldShort; })) { alert('尚未揀貨任何項目'); return; }
     const toReturn = pickingItems.filter(function(i) { return i.type === 'return' && !i.completed; });
     if (toReturn.length) { alert('↩️ 還有 ' + toReturn.length + ' 項要放回（鼎新減量，多拿的貨），請先放回再完成波次：\n\n' + toReturn.map(function(i) { return i.productName + ' ' + (i.spec || '') + ' ' + i.pickQty + ' 件 → ' + i.locationId; }).join('\n')); return; }
-    // 有客戶會少出：先列出來，現場改好標籤、勾選後才完成
+    // 有客戶會少出：先說誰會少（預設先開單的先給），按「好，完成」或改分法
     const shorts = window.waveShortfalls(currentWave, pickingItems);
     if (shorts.length && labelsFixed !== true) { window._pendingAlloc = null; renderShortfallPanel(); return; }
-    let msg = '完成波次並出貨？\n\n已揀：' + completed + '/' + total;
-    if (completed < total) msg += '\n未揀 ' + (total - completed) + ' 項會記為缺貨';
-    if (shortage > 0) msg += '\n庫存不足 ' + shortage + ' 項';
-    if (completed < total || shortage > 0) msg += '\n（相關訂單標為部分出貨，缺的貨之後可以再排波次）';
-    if (!shorts.length && !confirm(msg)) return;
 
     try {
         window._justCompleted = currentWave.id;   // 自己完成的：不要被「其他裝置完成」的提示蓋掉
         await window.completeWaveTx(currentWave, pickingItems, window.pallets);
         currentWave.status = 'done';
         window._pendingAlloc = null;
-        renderFinishPanel(currentWave, shorts.length);
+        renderFinishPanel(currentWave);
     } catch (e) {
         window._justCompleted = null;
         alert('❌ 完成波次失敗：' + e.message + '\n\n庫存與訂單都沒有變動。');

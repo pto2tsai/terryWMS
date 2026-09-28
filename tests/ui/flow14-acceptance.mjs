@@ -69,7 +69,7 @@ H.note('揀貨清單: ' + JSON.stringify(items));
 H.check('2 揀貨清單只有測試品、共 30 件、沒有缺貨', items.length > 0 && items.every(i => !i[3]) && items.reduce((s, i) => s + i[2], 0) === 30, JSON.stringify(items));
 for (const it of items) await mscan('picking-scan', it[1]);   // 掃儲位標籤
 M.page.__dialogPlan = [true, true];
-await M.page.click('#picking-actions button'); await M.page.waitForTimeout(2000);
+await M.page.click('#picking-next .pk-go'); await M.page.waitForTimeout(2000);
 tp = await testPallets();
 const w2 = await H.one('waves', waves[0]._id), so2 = await H.one('salesOrders', so[0]._id);
 H.check('2 手機完成波次：波次完成、訂單已出貨、測試品 70 → 40', w2.status === 'done' && so2.status === 'shipped' && tp.reduce((s, p) => s + p.quantity, 0) === 40, JSON.stringify([w2.status, so2.status, tp.map(p => [p.locationId, p.quantity])]));
