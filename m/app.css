@@ -463,3 +463,12 @@ body {
 .pad-grid button { min-height: 76px; font-size: 34px; font-weight: 900; border: none; border-radius: 14px; background: #1e293b; color: #fff; cursor: pointer; }
 .pad-grid button:active { background: #334155; }
 .pad-cancel { display: block; width: 100%; margin-top: 14px; min-height: 56px; font-size: 20px; border: none; border-radius: 14px; background: #475569; color: #fff; cursor: pointer; }
+/* 兩間倉庫：上方「📍 A 倉 ⇄」可以切換 */
+.pk-top > span { display: inline-flex; align-items: center; gap: 6px; }
+.pk-house { border: 0; background: #0369a1; color: #fff; font-size: 16px; padding: 6px 12px; cursor: pointer; }
+/* 分貨：一家一張卡片 */
+.sort-card { text-align: left; margin-bottom: 12px; }
+.sort-card .pk-name { text-align: center; }
+.sort-card.ok { opacity: .5; padding: 10px; }
+.sort-line { display: flex; justify-content: space-between; gap: 10px; font-size: 22px; color: #fff; padding: 8px 2px; border-bottom: 1px solid #334155; }
+.sort-line b { color: #fde047; white-space: nowrap; }

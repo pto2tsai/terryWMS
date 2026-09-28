@@ -100,7 +100,7 @@ await mp.click('#short-ok-btn'); await mp.waitForTimeout(2500);
 await mp.screenshot({ path: SD + '/m12-phone-finish.png' });
 note('完成畫面：', (await mp.innerText('#picking-next')).replace(/\s+/g, ' '));
 await mp.evaluate(() => { window.print = () => {}; });
-await mp.click('text=印標籤（'); await mp.waitForTimeout(800);
+if (await mp.$('text=印標籤（')) { await mp.click('text=印標籤（'); await mp.waitForTimeout(800); }
 await mp.emulateMedia({ media: 'print' }); await mp.screenshot({ path: SD + '/m13-labels-print.png', fullPage: true }); await mp.emulateMedia({ media: 'screen' });
 note('訂單結果：', JSON.stringify((await H.all('salesOrders')).map(o => [o.orderNo, o.status, o.erpFixNeeded || false, (o.shortShipped || []).map(x => x.productName + x.want + '→' + x.got)])));
 

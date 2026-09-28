@@ -5,7 +5,7 @@ import { pushReport } from './erp-gs.mjs';
 const base = H.startServer(); await H.initEnv(); await H.ensureUsers(Object.values(USERS));
 await H.resetData(async d => { await baseSeed(d); await H.setDoc(H.doc(d, 'settings', 'practice'), { enabled: true }); });
 const HEAD = ['銷貨日期', '銷貨單號', '客戶全名', '品名', '規格', '銷貨數量', '單位', '備註'];
-const rows = [HEAD, ['2026/09/28', 'A-1', '海霸王', '白蝦', '50/60', 5, '件', '黑貓'], ['2026/09/28', 'A-2', '好市多', '白蝦', '50/60', 3, '件', '黑貓'], ['2026/09/28', 'A-2', '好市多', '透抽', 'L', 2, '件', '黑貓']];
+const rows = [HEAD, ['2026/09/28', 'A-1', '海霸王', '白蝦', '50/60', 5, '件', '宅配通'], ['2026/09/28', 'A-2', '好市多', '白蝦', '50/60', 3, '件', '宅配通'], ['2026/09/28', 'A-2', '好市多', '透抽', 'L', 2, '件', '宅配通']];
 
 const D = await H.openApp(base, USERS.sup);
 const M = await H.openApp(base, USERS.op2, { mobile: true });
@@ -99,7 +99,7 @@ H.check('首頁待辦：缺貨要改鼎新 1（海霸王 白蝦 5→3）', /缺�
 // ---------- 缺的不補；鼎新改好匯入後提醒消失 ----------
 const wv = await D.page.evaluate(async () => { await loadOrdersFromFirebase(); return window._orderData.orders.filter(window.orderWaveable).map(o => o.orderNo); });
 H.check('缺的貨不會再排波次', !wv.includes('A-1'), JSON.stringify(wv));
-const r2 = await pushReport('每日客戶銷貨明細表_1100.xlsx', [HEAD, ['2026/09/28', 'A-1', '海霸王', '白蝦', '50/60', 3, '件', '黑貓'], rows[2], rows[3]]);
+const r2 = await pushReport('每日客戶銷貨明細表_1100.xlsx', [HEAD, ['2026/09/28', 'A-1', '海霸王', '白蝦', '50/60', 3, '件', '宅配通'], rows[2], rows[3]]);
 for (let i = 0; i < 30; i++) { await D.page.waitForTimeout(500); const x = await H.one('erpInbox', r2.id); if (x && ['done', 'attention', 'error'].includes(x.status)) break; }
 await B.waitForTimeout(1500);
 H.check('業務在鼎新把海霸王改成 3 件、匯入後：提醒自動消失（看板不再顯示）', (await H.all('salesOrders')).find(o => o.orderNo === 'A-1').erpFixNeeded === false && !(await B.innerText('#erp-alert')).includes('缺貨少出'), await B.innerText('#erp-alert'));
@@ -111,7 +111,7 @@ await D.page.click('#btn-label-mode'); await D.page.waitForTimeout(1200);
 H.check('主管切成「標籤：辦公室自動印」，出現「這台電腦自動印標籤」', (await H.one('settings', 'labelPrint')).mode === 'office' && (await D.page.innerText('#btn-label-mode')).includes('辦公室自動印') && await D.page.isVisible('#chk-auto-label'));
 D.page.__dialogPlan = [true];
 await D.page.check('#chk-auto-label'); await D.page.waitForTimeout(300);
-const r3 = await pushReport('每日客戶銷貨明細表_1300.xlsx', [HEAD, ['2026/09/28', 'B-1', '全聯', '透抽', 'L', 4, '件', '新竹']]);
+const r3 = await pushReport('每日客戶銷貨明細表_1300.xlsx', [HEAD, ['2026/09/28', 'B-1', '全聯', '透抽', 'L', 4, '件', '郵局']]);
 for (let i = 0; i < 30; i++) { await D.page.waitForTimeout(500); const x = await H.one('erpInbox', r3.id); if (x && ['done', 'attention', 'error'].includes(x.status)) break; }
 const W2 = (await H.all('waves')).find(w => (w.orders || []).some(o => o.orderNo === 'B-1'));
 await mp.evaluate(() => goBack()); await mp.evaluate(() => openPage('picking')); await mp.waitForTimeout(600);

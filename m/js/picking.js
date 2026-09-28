@@ -21,15 +21,44 @@ window.pageInit.picking = function() {
 const PICKER_ACTIVE_MS = 60 * 60 * 1000;
 function myPickerKey() { return (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.uid) || ''; }
 function myPickerName() { const u = window.currentUser || {}; return u.name || String(u.email || u.id || '').split('@')[0] || '有人'; }
-function otherPickers(w) {
-    const me = myPickerKey(), now = Date.now(), p = (w && w.pickers) || {};
+// 回傳 [{ name, house }]；sameHouse：只要跟我同一間（或不知道在哪間）的
+function otherPickers(w, sameHouse) {
+    const me = myPickerKey(), now = Date.now(), p = (w && w.pickers) || {}, mine = myHouse();
     return Object.keys(p).filter(function(k) { return k !== me && p[k] && now - Date.parse(p[k].at) < PICKER_ACTIVE_MS; })
-        .map(function(k) { return p[k].name || '有人'; });
+        .map(function(k) { return { name: p[k].name || '有人', house: p[k].house || '' }; })
+        .filter(function(x) { return !sameHouse || !x.house || !mine || x.house === mine; });
 }
+function pickerLabel(x) { return x.name + (x.house ? '（' + window.houseName(x.house) + '）' : ''); }
 function pickerTouch() {
     const k = myPickerKey(), o = {};
-    if (k) o['pickers.' + k] = { name: myPickerName(), at: new Date().toISOString() };
+    if (k) o['pickers.' + k] = { name: myPickerName(), house: myHouse(), at: new Date().toISOString() };
     return o;
+}
+
+// 我在哪一間倉庫：這支手機記住（選一次就好，揀貨畫面上方可以切換）
+function myHouse() { try { return localStorage.getItem('wms_pick_house') || ''; } catch (e) { return ''; } }
+window.chooseHouse = function(id) {
+    try { localStorage.setItem('wms_pick_house', id); } catch (e) {}
+    if (currentWave) {
+        db.collection('waves').doc(currentWave.id).update(pickerTouch()).catch(function() {});
+        renderPickingList();
+    } else if ($('picking-wave-select').value) window.loadPickingWave();
+};
+window.switchHouse = function() {
+    const hs = window.PICK_HOUSES, i = hs.findIndex(function(h) { return h.id === myHouse(); });
+    window.chooseHouse(hs[(i + 1) % hs.length].id);
+};
+function renderHouseChooser() {
+    $('picking-next').innerHTML = '<div class="pk-card"><div class="pk-name">你在哪一間？</div>' +
+        '<div class="pk-sub">選一次就記住，之後在上面可以切換</div>' +
+        window.PICK_HOUSES.map(function(h) { return '<button class="pk-go" onclick="chooseHouse(\'' + h.id + '\')">📍 ' + esc(h.name) + '</button>'; }).join('') + '</div>';
+}
+// 商品在哪一間有變（別支手機記起來的）：重畫
+window.onProductHomesChange = function() { if (currentWave && window.currentPage === 'picking') renderPickingList(); };
+// 還不知道在哪一間的商品，在這間拿到了：記起來
+function learnHome(item) {
+    if (!item || !item.key || window.homeOf(item.key) || !myHouse()) return;
+    window.setProductHome(item, myHouse()).catch(function(e) { console.warn('記住商品所在倉庫失敗', e); });
 }
 function pickerLeave(waveId) {
     const k = myPickerKey();
@@ -48,7 +77,7 @@ function renderWaveOptions() {
             const done = (w.completedItems || []).length;
             const who = otherPickers(w);
             return '<option value="' + esc(w.id) + '">' + esc(w.waveNo) + ' - ' + esc(w.logistics || '') + '（' + esc(w.totalQty || 0) + '件）' +
-                (w.status === 'sorting' ? '【已揀完】' : who.length ? '【' + who.join('、') + ' 揀貨中】' : done ? '【進行中】' : '') + '</option>';
+                (w.status === 'sorting' ? '【已揀完】' : who.length ? '【' + who.map(pickerLabel).join('、') + ' 揀貨中】' : done ? '【進行中】' : '') + '</option>';
         }).join('');
     if (keep && list.some(function(w) { return w.id === keep; })) select.value = keep;
 }
@@ -67,9 +96,15 @@ window.loadPickingWave = async function() {
     const snap = await db.collection('waves').doc(waveId).get();
     if (!snap.exists) { alert('波次已不存在'); return window.pageInit.picking(); }
     const w = Object.assign({ id: snap.id }, snap.data());
-    // 別人正在揀這個波次：先提醒，避免兩個人拿同一項
-    const who = otherPickers(w);
-    if (who.length && w.status !== 'done' && !confirm('👷 ' + who.join('、') + ' 正在揀這個波次\n\n確定要一起揀嗎？（兩個人會拿到同一項）')) {
+    // 第一次用：先問在哪一間
+    if (!myHouse()) {
+        currentWave = null; pickingItems = [];
+        show('picking-scan-area', true); show('picking-scan-box', false);
+        return renderHouseChooser();
+    }
+    // 同一間有別人正在揀這個波次：先提醒，避免兩個人拿同一項（另一間的人在揀不用提醒，各拿各的）
+    const who = otherPickers(w, true);
+    if (who.length && w.status !== 'done' && !confirm('👷 ' + who.map(pickerLabel).join('、') + ' 正在揀這個波次\n\n確定要一起揀嗎？（兩個人會拿到同一項）')) {
         $('picking-wave-select').value = '';
         currentWave = null; pickingItems = [];
         show('picking-scan-area', false);
@@ -158,11 +193,25 @@ function renderNextStop() {
     } else if (currentWave && currentWave.hasOrderChanges && (currentWave.changedOrders || []).length) {
         warn = '<div class="pk-warn" style="background:#7f1d1d">⚠️ 鼎新改了這個波次的單：' + currentWave.changedOrders.map(esc).join('、') + '<br>清單上的數量沒有跟著改，請找主管確認再揀</div>';
     }
-    const top = '<div class="pk-top"><span><b>' + done + '</b> / ' + total + ' 項</span>' + (window.isPracticeMode() ? '<span class="pk-chip">練習</span>' : '') + '</div>' +
+    const house = myHouse();
+    const top = '<div class="pk-top"><span><b>' + done + '</b> / ' + total + ' 項</span>' +
+        '<span>' + (window.isPracticeMode() ? '<span class="pk-chip">練習</span> ' : '') +
+        '<button class="pk-chip pk-house" onclick="switchHouse()">📍 ' + esc(window.houseName(house)) + ' ⇄</button></span></div>' +
         '<div class="pk-bar"><div style="width:' + pct + '%"></div></div>';
+    // 只叫人拿這一間的貨；還不知道在哪一間的，兩間都會出現（先拿到的那間記起來）
+    const mine = pending.filter(function(i) { const h = window.homeOf(i.key); return !h || h === house; });
+    const other = pending.length - mine.length;
     // 有板號可以掃的才顯示掃描框（練習模式沒有板號）
-    const n = pending[0];
+    const n = mine[0];
     show('picking-scan-box', !!(n && !n.practice));
+    if (!n && other) {
+        const oh = window.PICK_HOUSES.filter(function(h) { return h.id !== house; }).map(function(h) { return h.name; }).join('、');
+        const who = otherPickers(currentWave).filter(function(x) { return x.house && x.house !== house; });
+        box.innerHTML = top + warn + '<div class="pk-card pk-done"><div class="big">✅ 這間拿完了</div>' +
+            '<div class="pk-sub" style="font-size:22px">' + esc(oh) + '還有 <b>' + other + '</b> 項' + (who.length ? '（' + esc(who.map(function(x) { return x.name; }).join('、')) + ' 揀貨中）' : '') + '</div>' +
+            '<div class="pk-sub">兩間都拿完，最後一個人按「完成出貨」</div></div>';
+        return;
+    }
     if (!n) {
         const nShort = pickingItems.filter(function(i) { return i.fieldShort; }).length;
         box.innerHTML = top + warn + '<div class="pk-card pk-done"><div class="big">✅ 全部拿完</div>' +
@@ -172,7 +221,7 @@ function renderNextStop() {
     }
     const ret = n.type === 'return';
     const code = n.practice ? '' : (window.locationShortCode(n.locationId) || n.locationId);
-    const nx = pending[1];
+    const nx = mine[1];
     box.innerHTML = top + warn + '<div class="pk-card' + (ret ? ' ret' : '') + '">' +
         (ret ? '<div class="pk-sub" style="color:#fcd34d;font-weight:bold">↩️ 多拿了，放回去</div>' : '') +
         (code ? '<div class="pk-loc">' + esc(code) + '</div>' : '') +
@@ -181,7 +230,7 @@ function renderNextStop() {
         '<div class="pk-qty">' + (ret ? '放回 ' : '拿 ') + esc(n.pickQty) + ' <small>件</small></div>' +
         '<button class="pk-go' + (ret ? ' ret' : '') + '" onclick="confirmCurrentPick()">' + (ret ? '✓ 放回了' : '✓ 拿好了') + '</button>' +
         (ret ? '' : '<button class="pk-short" onclick="shortPick()">不夠</button>') +
-        '<div class="pk-next">' + (nx ? '下一項：<b>' + esc(nx.productName) + ' ' + esc(nx.spec || '') + '</b>　' + esc(nx.pickQty) + ' 件' : '這是最後一項') + '</div>' +
+        '<div class="pk-next">' + (nx ? '下一項：<b>' + esc(nx.productName) + ' ' + esc(nx.spec || '') + '</b>　' + esc(nx.pickQty) + ' 件' : other ? '這間最後一項' : '這是最後一項') + '</div>' +
         '</div>';
 }
 
@@ -211,15 +260,20 @@ window.confirmPickingScan = async function() {
 };
 
 // 按大按鈕「拿好了」：現在這一項（練習模式沒有板號，只能按；有板號的也可以掃）
+// 現在這支手機要拿的那一項（這一間的，或還不知道在哪一間的）
+function currentItem() {
+    const h = myHouse();
+    return pickingItems.filter(function(i) { const x = window.homeOf(i.key); return !i.completed && !i.shortage && (!x || x === h); })[0];
+}
 window.confirmCurrentPick = async function() {
-    const n = pickingItems.filter(function(i) { return !i.completed && !i.shortage; })[0];
+    const n = currentItem();
     if (n) await markPicked(n);
 };
 window.confirmPracticePick = window.confirmCurrentPick;
 
 // 不夠：跳出數字鍵，點實際拿到幾件（戴手套也好按，不用打字）；不夠的記缺貨，不會再叫人去拿
 window.shortPick = function() {
-    const n = pickingItems.filter(function(i) { return !i.completed && !i.shortage; })[0];
+    const n = currentItem();
     if (!n || n.type === 'return') return;
     const want = parseFloat(n.pickQty) || 0;
     if (want > 30) {   // 件數太多，數字鍵放不下：用鍵盤
@@ -247,6 +301,14 @@ window.pickShortNumber = function(v) {
 };
 async function saveShort(n, got) {
     const want = parseFloat(n.pickQty) || 0;
+    // 還不知道在哪一間的商品，這間一件都沒有：應該在另一間，交給另一間的人拿（不算缺貨）
+    const others = window.PICK_HOUSES.filter(function(h) { return h.id !== myHouse(); });
+    if (got === 0 && !window.homeOf(n.key) && myHouse() && others.length === 1) {
+        try { await window.setProductHome(n, others[0].id); }
+        catch (e) { setResult('picking-scan-result', false, '❌ 儲存失敗：' + e.message); return; }
+        setResult('picking-scan-result', 'info', '↪️ ' + n.productName + ' 這間沒有，交給 ' + others[0].name);
+        return renderPickingList();
+    }
     const by = window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : '';
     const upd = Object.assign(pickerTouch(), {
         shortLog: FieldValue.arrayUnion({ id: n.id + '-short-' + Date.now(), key: n.key, qty: want - got, productName: n.productName || '', spec: n.spec || '', by: by, at: new Date().toISOString() }),
@@ -259,6 +321,7 @@ async function saveShort(n, got) {
     }
     try { await db.collection('waves').doc(currentWave.id).update(upd); }
     catch (e) { setResult('picking-scan-result', false, '❌ 儲存失敗：' + e.message); return; }
+    if (got > 0) learnHome(n);   // 一件都沒有的不記（可能在另一間）
     const snap = await db.collection('waves').doc(currentWave.id).get();
     currentWave = Object.assign({ id: snap.id }, snap.data());
     pickingItems = window.buildWavePickingList(currentWave, window.pallets);
@@ -280,6 +343,7 @@ async function markPicked(found) {
         return;
     }
     found.completed = true;
+    learnHome(found);
     setResult('picking-scan-result', true, (found.type === 'return' ? '↩️ 已放回 ' : '✓ ') + found.productName + ' ' + found.pickQty + ' 件');
     renderPickingList();
     input.value = '';
@@ -357,16 +421,50 @@ function renderFinishPanel(wave) {
     show('picking-scan-box', false);
     const lb = window.buildSortingLabelsHtml(wave);
     const office = window.labelPrintMode() === 'office';
+    const needLb = window.waveNeedsLabels(wave);
+    const nSort = sortList(wave).length;
+    const sorted = sortList(wave).filter(function(o) { return (wave.sortedOrders || []).indexOf(o.orderNo) >= 0; }).length;
     $('picking-next').innerHTML = '<div class="pk-card pk-done"><div class="big">✅ 完成</div>' +
-        (lb.skipped.length ? '<div class="pk-sub">不用貼標籤：' + esc(lb.skipped.join('、')) + '</div>' : '') +
-        (office ? '<div class="pk-sub" style="font-size:20px">🏷️ 標籤在辦公室自動印出（' + lb.count + ' 張）</div>'
-                : (lb.count ? '<button class="pk-go" onclick="printLabelsOnPhone()">🖨️ 印標籤（' + lb.count + ' 張）</button>' : '')) +
+        // 好幾家的貨一起揀的：要分成一家一堆
+        (nSort > 1 ? '<button class="pk-go" style="background:#2563eb" onclick="openSortPanel()">📦 分貨（' + nSort + ' 家）' + (sorted ? ' ' + sorted + '/' + nSort : '') + '</button>' : '') +
+        (!needLb ? '<div class="pk-sub" style="font-size:20px">🚚 ' + esc(wave.logistics || '') + '：貼托運單就好，不用印標籤</div>'
+            : (lb.skipped.length ? '<div class="pk-sub">不用貼標籤：' + esc(lb.skipped.join('、')) + '</div>' : '') +
+              (office ? '<div class="pk-sub" style="font-size:20px">🏷️ 標籤在辦公室自動印出（' + lb.count + ' 張）</div>'
+                : (lb.count ? '<button class="pk-go" onclick="printLabelsOnPhone()">🖨️ 印標籤（' + lb.count + ' 張）</button>' : ''))) +
         '<button class="pk-link" onclick="goBack()">回到選單</button>' +
         '<div class="pk-sub" style="font-size:14px;margin-top:10px">' + (window.isPracticeMode() ? '練習模式：庫存沒有扣' : '庫存已扣除') +
         (wave.shortOrders && wave.shortOrders.length ? '　・　缺的不補，辦公室會請業務改鼎新' : '') + '</div></div>';
     window._finishedWave = wave;
     window.scrollTo(0, 0);
 }
+window.renderFinishPanel = renderFinishPanel;
+
+// 分貨：一家一張卡片，寫這家要幾件（實際出貨的），分好一家按一下
+function sortList(wave) { return (wave.shipped || []).filter(function(o) { return (o.items || []).length; }); }
+window.openSortPanel = function() {
+    const wave = window._finishedWave;
+    if (!wave) return;
+    const list = sortList(wave), done = wave.sortedOrders || [];
+    const left = list.filter(function(o) { return done.indexOf(o.orderNo) < 0; }).length;
+    $('picking-next').innerHTML = '<div class="pk-top"><span>📦 分貨　<b>' + (list.length - left) + '</b> / ' + list.length + ' 家</span></div>' +
+        list.map(function(o, i) {
+            const ok = done.indexOf(o.orderNo) >= 0;
+            return '<div class="pk-card sort-card' + (ok ? ' ok' : '') + '"><div class="pk-name" style="font-size:26px">' + esc(o.customer || o.orderNo) + '</div>' +
+                (ok ? '<div class="pk-sub">✓ 分好了</div>'
+                    : o.items.map(function(it) { return '<div class="sort-line"><span>' + esc(it.productName) + ' ' + esc(it.spec || '') + '</span><b>' + esc(it.qty) + ' 件</b></div>'; }).join('') +
+                      '<button class="pk-go" onclick="markSorted(' + i + ')">✓ 這家分好了</button>') + '</div>';
+        }).join('') +
+        (left ? '' : '<div class="pk-card pk-done"><div class="big">✅ 全部分好了</div></div>') +
+        '<button class="pk-link" onclick="renderFinishPanel(window._finishedWave)">← 回上一頁</button>';
+};
+window.markSorted = async function(i) {
+    const wave = window._finishedWave, o = wave && sortList(wave)[i];
+    if (!o) return;
+    wave.sortedOrders = (wave.sortedOrders || []).concat([o.orderNo]);
+    window.openSortPanel();
+    try { await db.collection('waves').doc(wave.id).update({ sortedOrders: FieldValue.arrayUnion(o.orderNo) }); }
+    catch (e) { console.warn('記錄分貨失敗', e); }
+};
 window.printLabelsOnPhone = async function() {
     const wave = window._finishedWave;
     if (!wave) return;

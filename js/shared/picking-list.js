@@ -89,6 +89,43 @@ window.sortingLabelsPrintCss = function(lb) {
     return lb.style + '@page{margin:3mm}.sl-title{display:none}.sl .label{display:block;width:auto;margin:0;page-break-after:always;break-after:page}.sl .label:last-child{page-break-after:auto;break-after:auto}';
 };
 
+// 大榮、黑貓、新竹物流會貼托運單（上面有客戶），不用再貼我們的分貨標籤；其他物流要貼
+window.waveNeedsLabels = function(wave) { return !/大榮|黑貓|新竹/.test(String((wave && wave.logistics) || '')); };
+
+// ---------- 兩間倉庫：每樣商品固定放在其中一間 ----------
+// 還沒有儲位，所以不用先建清單：揀貨時誰在哪一間按了「拿好了」，就記住這樣商品在那一間（productHome/{品項 key}）
+// 手機只叫人拿自己這間的貨；還不知道在哪一間的，兩間的手機都會出現，先拿到的那間就記起來
+window.PICK_HOUSES = [{ id: 'A', name: 'A 倉' }, { id: 'B', name: 'B 倉' }];
+window.houseName = function(id) { const h = window.PICK_HOUSES.find(x => x.id === id); return h ? h.name : ''; };
+window.productHomes = {};   // { 品項 key: 'A' | 'B' }
+window.productHomeId = function(key) { return encodeURIComponent(key); };
+window.homeOf = function(key) { return window.productHomes[key] || ''; };
+window.watchProductHomes = function(onChange) {
+    return window.db.collection('productHome').onSnapshot(function(snap) {
+        const m = {};
+        snap.forEach(function(d) { const x = d.data(); if (x && x.key && x.house) m[x.key] = x.house; });
+        window.productHomes = m;
+        if (onChange) onChange(m);
+    }, function(e) { console.warn('讀取商品所在倉庫失敗', e); });
+};
+window.setProductHome = function(item, house) {
+    const by = window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : '';
+    window.productHomes[item.key] = house;
+    return window.db.collection('productHome').doc(window.productHomeId(item.key)).set({
+        key: item.key, productName: item.productName || '', spec: item.spec || '', house: house, by: by, at: new Date().toISOString()
+    });
+};
+// 揀貨單分倉：[{ house: 'A', name: 'A 倉', rows }]，還不知道的放最後（「還不知道在哪一間」）
+window.groupRowsByHouse = function(rows) {
+    const groups = window.PICK_HOUSES.map(h => ({ house: h.id, name: h.name, rows: [] })).concat([{ house: '', name: '還不知道在哪一間（先找到的那間記起來）', rows: [] }]);
+    rows.forEach(r => {
+        const k = r.key || (r.productName + '|||' + (r.spec && r.spec !== '-' ? r.spec : ''));
+        const g = groups.find(x => x.house === window.homeOf(k)) || groups[groups.length - 1];
+        g.rows.push(r);
+    });
+    return groups.filter(g => g.rows.length);
+};
+
 // 這些儲位的貨不能拿去出貨
 window.isHoldLocation = function(loc) { return /^V-(QC|SALES)/.test(String(loc || '').toUpperCase()); };
 

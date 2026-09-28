@@ -1326,6 +1326,7 @@
                         </div>
                         <button id="btn-practice-mode" onclick="togglePracticeMode()" style="display:none"></button>
                         <button id="btn-label-mode" onclick="toggleLabelPrintMode()" style="display:none"></button>
+                        <button id="btn-product-homes" onclick="openProductHomes()" class="px-3 py-2 rounded-lg font-bold mr-2 text-sm bg-slate-700 text-slate-200 hover:bg-slate-600" title="揀貨時自動記住每樣商品在哪一間倉庫，放錯可以在這裡改">📍 商品在哪一間</button>
                         <label id="auto-label-wrap" class="text-xs text-sky-200 mr-2 items-center gap-1" style="display:none"><input type="checkbox" id="chk-auto-label" onchange="setAutoLabelMachine(this.checked)"> 這台電腦自動印標籤</label>
                         <input type="file" id="order-excel-import" accept=".xlsx,.xls" class="hidden" onchange="importERPExcel(event)">
                         <button onclick="document.getElementById('order-excel-import').click()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-bold mr-2">

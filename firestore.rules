@@ -130,6 +130,8 @@ service cloud.firestore {
     // ---------- 主檔與設定 ----------
     match /productMaster/{id} { allow read: if isActiveUser(); allow write: if hasLevel(60); }
     match /warehouses/{id}    { allow read: if isActiveUser(); allow write: if isSupervisor(); }
+    // 商品在哪一間倉庫：揀貨時自動記住（現場人員會寫），刪除限主管
+    match /productHome/{id}   { allow read: if isActiveUser(); allow create, update: if canOperate(); allow delete: if isSupervisor(); }
     match /settings/{id}      { allow read: if isActiveUser(); allow write: if isSupervisor(); }
 
     // 備份：限管理員

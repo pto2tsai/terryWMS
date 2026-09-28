@@ -1747,24 +1747,27 @@ window.clearLocalStorage = function() {
                 return a.floor - b.floor;
             });
 
-            html += '<table>';
-            html += '<tr><th class="check">✓</th><th style="width:70px">儲位</th><th style="width:100px">品名</th><th>規格</th><th style="width:80px">批號</th><th style="width:80px">效期</th><th style="width:50px" class="qty">數量</th><th style="width:35px">單位</th></tr>';
-
-            summaryWithLoc.forEach(function(item) {
-                var floorClass = item.floor === 1 ? 'floor-1f' : (item.floor === 2 ? 'floor-2f' : (item.floor === 3 ? 'floor-3f' : ''));
-                html += '<tr class="' + floorClass + '">';
-                html += '<td class="check">☐</td>';
-                html += '<td class="loc">' + item.location + '</td>';
-                html += '<td>' + item.productName + '</td>';
-                html += '<td>' + item.spec + '</td>';
-                html += '<td style="font-size:11px">' + item.batchNo + '</td>';
-                html += '<td style="font-size:11px">' + item.expiryDate + '</td>';
-                html += '<td class="qty">' + item.totalQty + '</td>';
-                html += '<td>' + item.unit + '</td>';
-                html += '</tr>';
+            // 兩間倉庫：一間一張（換頁），各自拿去揀
+            var groups = window.groupRowsByHouse(summaryWithLoc);
+            groups.forEach(function(g, gi) {
+                if (groups.length > 1 || g.house) html += '<h3 style="margin:10px 0 6px;font-size:18px' + (gi ? ';page-break-before:always' : '') + '">📍 ' + g.name + '　' + wave.waveNo + '（' + g.rows.length + ' 項）</h3>';
+                html += '<table>';
+                html += '<tr><th class="check">✓</th><th style="width:70px">儲位</th><th style="width:100px">品名</th><th>規格</th><th style="width:80px">批號</th><th style="width:80px">效期</th><th style="width:50px" class="qty">數量</th><th style="width:35px">單位</th></tr>';
+                g.rows.forEach(function(item) {
+                    var floorClass = item.floor === 1 ? 'floor-1f' : (item.floor === 2 ? 'floor-2f' : (item.floor === 3 ? 'floor-3f' : ''));
+                    html += '<tr class="' + floorClass + '">';
+                    html += '<td class="check">☐</td>';
+                    html += '<td class="loc">' + item.location + '</td>';
+                    html += '<td>' + item.productName + '</td>';
+                    html += '<td>' + item.spec + '</td>';
+                    html += '<td style="font-size:11px">' + item.batchNo + '</td>';
+                    html += '<td style="font-size:11px">' + item.expiryDate + '</td>';
+                    html += '<td class="qty">' + item.totalQty + '</td>';
+                    html += '<td>' + item.unit + '</td>';
+                    html += '</tr>';
+                });
+                html += '</table>';
             });
-
-            html += '</table>';
             // 揀到一半鼎新減量：多拿的要放回
             var toReturn = (list || []).filter(function(i) { return i.type === 'return' && !i.completed; });
             if (toReturn.length) {

@@ -245,6 +245,8 @@ function initData() {
     unsubs.push(window.watchPracticeMode(function() { if (window.onPracticeModeChange) window.onPracticeModeChange(); }));
     // 分貨標籤誰來印（手機／辦公室自動印）
     unsubs.push(window.watchLabelPrintMode());
+    // 商品在哪一間倉庫（揀貨時自動記起來）
+    unsubs.push(window.watchProductHomes(function() { if (window.onProductHomesChange) window.onProductHomesChange(); }));
 }
 
 function notify(text) {
