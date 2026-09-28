@@ -52,6 +52,9 @@ await t('operator can list users', assertSucceeds(getDocs(collection(O,'users'))
 await t('admin can create user', assertSucceeds(setDoc(doc(A,'users','new@x.com'),{role:'operator'})));
 await t('operator cannot edit settings', assertFails(setDoc(doc(O,'settings','rentalSettings'),{a:1})));
 await t('supervisor can edit settings', assertSucceeds(setDoc(doc(S,'settings','rentalSettings'),{a:1})));
+await t('operator can record product home warehouse', assertSucceeds(setDoc(doc(O,'productHome','%E7%99%BD%E8%9D%A6'),{key:'白蝦|||',house:'A'})));
+await t('operator cannot delete product home', assertFails(deleteDoc(doc(O,'productHome','%E7%99%BD%E8%9D%A6'))));
+await t('supervisor can delete product home', assertSucceeds(deleteDoc(doc(S,'productHome','%E7%99%BD%E8%9D%A6'))));
 await t('operator cannot read backups', assertFails(getDoc(doc(O,'backups','B1'))));
 await t('admin can write backups', assertSucceeds(setDoc(doc(A,'backups','B1'),{a:1})));
 await t('operator can bump counter', assertSucceeds(setDoc(doc(O,'counters','IN-20260923'),{seq:6})));

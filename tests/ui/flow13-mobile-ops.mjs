@@ -138,7 +138,7 @@ const items = await page.evaluate(() => pickingItems.map(i => [i.palletId, i.pic
 H.note('揀貨清單: ' + JSON.stringify(items));
 const ns = await txt('picking-next');
 const first = await page.evaluate(() => { const i = pickingItems.find(x => !x.shortage); return [locationShortCode(i.locationId) || i.locationId, i.productName, i.pickQty]; });
-H.check('揀貨「下一站」大字：儲位簡碼、品項、拿幾件', ns.includes('下一站') && ns.includes(first[0]) && ns.includes(first[1]) && ns.includes('拿 ' + first[2] + ' 件'), ns);
+H.check('揀貨大字卡片：儲位簡碼、品項、拿幾件', ns.includes(first[0]) && ns.includes(first[1]) && ns.includes('拿 ' + first[2] + ' 件'), ns);
 const route = await page.evaluate(() => {
   const locs = ['I-B-02-1F', 'J-C-01-1F', 'I-A-02-2F', 'I-A-01-1F', 'I-B-01-1F', 'I-A-02-1F', 'J-D-01-1F'];
   const pals = locs.map((l, i) => ({ id: 'R' + i, palletId: 'R' + i, productName: 'R' + i, spec: '', quantity: 5, locationId: l, expiryDate: '2099-01-01' }));
@@ -147,9 +147,9 @@ const route = await page.evaluate(() => {
 });
 H.check('揀貨動線：面對面的 A、B 區沿通道一起揀（IA01→IB01→IA02→IB02），再到下一條通道', route === 'IA011 IB011 IA021 IA022 IB021 JC011 JD011', route);
 for (const it of items) await scan('picking-scan', it[0]);
-H.check('全部揀完：下一站顯示「全部揀完」', (await txt('picking-next')).includes('全部揀完'), await txt('picking-next'));
+H.check('全部揀完：大卡片顯示「全部拿完」', (await txt('picking-next')).includes('全部拿完'), await txt('picking-next'));
 page.__dialogPlan = [true, true];
-await page.click('#picking-actions button'); await page.waitForTimeout(1500);
+await page.click('#picking-next .pk-go'); await page.waitForTimeout(1500);
 const wv = await H.one('waves', 'WV1'); const so = await H.one('salesOrders', 'SO1');
 const tq = Object.values(await pal()).filter(p => p.productName === '透抽').reduce((s, p) => s + p.quantity, 0);
 H.check('手機完成波次：波次完成、訂單出貨、透抽 17 → 12', wv.status === 'done' && so.status === 'shipped' && tq === 12, JSON.stringify([wv.status, so.status, tq]));

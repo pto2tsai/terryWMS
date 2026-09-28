@@ -268,7 +268,7 @@ const mxErr = await MX.page.evaluate(()=>document.getElementById('login-error').
 ok('mobile: unregistered account denied', mxErr.includes('尚未開通') && !(await MX.page.evaluate(()=>!!window.currentUser)), mxErr);
 const M = await openMobileAs('op2@t.com');
 ok('mobile: operator logged in and pallets loaded', await M.page.evaluate(()=>window.currentUser && window.currentUser.role==='operator' && window.pallets.length>0));
-const mp = await M.page.evaluate(async()=>{ openPage('picking'); await new Promise(r=>setTimeout(r,1200));
+const mp = await M.page.evaluate(async()=>{ localStorage.setItem('wms_pick_house','A'); openPage('picking'); await new Promise(r=>setTimeout(r,1200));
   const sel=document.getElementById('picking-wave-select'); const opts=[...sel.options].map(o=>o.value);
   sel.value='WM'; await loadPickingWave();
   const first = pickingItems.find(i=>!i.shortage); document.getElementById('picking-scan').value = first.palletId; await confirmPickingScan();

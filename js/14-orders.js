@@ -353,10 +353,14 @@ function printUpdatedPickingLists(waves, changeDetails, opts) {
             return a.floor - b.floor;
         });
 
+        // 兩間倉庫：一間一張（換頁），各自拿去揀
+        var groups = window.groupRowsByHouse(summaryWithLoc);
+        groups.forEach(function(g, gi) {
+        if (groups.length > 1 || g.house) html += '<h3 style="margin:10px 0 6px;font-size:18px' + (gi ? ';page-break-before:always' : '') + '">📍 ' + g.name + '　' + wave.waveNo + '（' + g.rows.length + ' 項）</h3>';
         html += '<table>';
         html += '<tr><th class="check">✓</th><th style="width:70px">儲位</th><th style="width:100px">品名</th><th>規格</th><th style="width:80px">批號</th><th style="width:80px">效期</th><th style="width:50px" class="qty">數量</th><th style="width:35px">單位</th>' + (fresh ? '' : '<th style="width:50px">異動</th>') + '</tr>';
 
-        summaryWithLoc.forEach(function(item) {
+        g.rows.forEach(function(item) {
             var floorClass = item.floor === 1 ? 'floor-1f' : (item.floor === 2 ? 'floor-2f' : (item.floor === 3 ? 'floor-3f' : ''));
             var diff = item.totalQty - item.prevQty;
             var changeHtml = '-';
@@ -380,6 +384,7 @@ function printUpdatedPickingLists(waves, changeDetails, opts) {
         });
 
         html += '</table>';
+        });
         html += '<div class="timestamp">版次 V' + version + ' | 列印日期：' + now + '</div>';
         html += '</div>';
     });
@@ -1735,6 +1740,7 @@ window.onLogin(function() {
     loadOrdersFromFirebase();
     loadWarehouses();
     window.watchLabelPrintMode(renderLabelModeToggle);
+    window.watchProductHomes();
     startAutoLabelPrinter();
     window.watchPracticeMode(function() {
         renderPracticeToggle();
@@ -1782,6 +1788,7 @@ function startAutoLabelPrinter() {
         snap.docChanges().forEach(function(ch) {
             const w = Object.assign({ id: ch.doc.id }, ch.doc.data());
             if (w.status !== 'done' || w.labelAutoPrintedAt || w.labelsPrintedAt) return;
+            if (!window.waveNeedsLabels(w)) return;   // 大榮、黑貓、新竹貼托運單，不印
             autoPrintWaveLabels(w).catch(function(e) { console.warn('自動印標籤失敗', e); });
         });
     }, function(e) { console.warn('自動印標籤監聽失敗', e); });
@@ -1807,6 +1814,58 @@ async function autoPrintWaveLabels(w) {
     if (window.showToast) window.showToast('🏷️ 自動印分貨標籤：' + w.waveNo + '（' + (w.orders || []).length + ' 張）');
     setTimeout(function() { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { console.warn(e); } setTimeout(function() { f.remove(); }, 60000); }, 300);
 }
+
+// ---------- 商品在哪一間倉庫（揀貨時自動記住；這裡可以改）----------
+window.openProductHomes = async function() {
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let rows = [];
+    try {
+        const snap = await window.db.collection('productHome').get();
+        snap.forEach(function(d) { rows.push(Object.assign({ id: d.id }, d.data())); });
+    } catch (e) { alert('❌ 讀取失敗：' + e.message); return; }
+    rows.sort(function(a, b) { return (a.productName || '').localeCompare(b.productName || '', 'zh-TW') || (a.spec || '').localeCompare(b.spec || ''); });
+    const r = window.currentUser && window.currentUser.role;
+    const sup = r === 'admin' || r === 'supervisor';
+    let m = document.getElementById('modal-product-homes');
+    if (!m) {
+        m = document.createElement('div');
+        m.id = 'modal-product-homes';
+        m.className = 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4';
+        document.body.appendChild(m);
+    }
+    const opts = function(cur) { return window.PICK_HOUSES.map(function(h) { return '<option value="' + h.id + '"' + (h.id === cur ? ' selected' : '') + '>' + h.name + '</option>'; }).join(''); };
+    m.innerHTML = '<div class="bg-slate-800 rounded-xl p-5 w-full max-w-2xl max-h-[85vh] flex flex-col">' +
+        '<div class="flex justify-between items-center mb-2"><h3 class="text-white text-lg font-bold">📍 商品在哪一間（' + rows.length + ' 項）</h3>' +
+        '<button onclick="document.getElementById(\'modal-product-homes\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>' +
+        '<p class="text-slate-400 text-sm mb-2">揀貨時自動記住：在哪一間按「拿好了」就記那一間；這間一件都沒有，就記成另一間。記錯了在這裡改。</p>' +
+        '<input id="ph-search" oninput="filterProductHomes()" placeholder="搜尋品名、規格" class="w-full bg-slate-900 text-white rounded px-3 py-2 mb-2 border border-slate-600">' +
+        '<div class="overflow-y-auto flex-1"><table class="w-full text-sm"><tbody id="ph-body">' +
+        (rows.length ? rows.map(function(x) {
+            return '<tr class="border-b border-slate-700" data-s="' + esc((x.productName || '') + ' ' + (x.spec || '')) + '">' +
+                '<td class="p-2 text-white">' + esc(x.productName) + ' <span class="text-yellow-400">' + esc(x.spec || '') + '</span></td>' +
+                '<td class="p-2"><select class="bg-slate-900 text-white rounded px-2 py-1 border border-slate-600" data-id="' + esc(x.id) + '" onchange="changeProductHome(this)">' + opts(x.house) + '</select></td>' +
+                '<td class="p-2 text-slate-400 text-xs">' + esc(x.by || '') + ' ' + esc(String(x.at || '').slice(0, 10)) + '</td>' +
+                '<td class="p-2">' + (sup ? '<button class="text-red-400 hover:bg-red-500/20 rounded px-2" data-id="' + esc(x.id) + '" onclick="deleteProductHome(this)" title="刪掉：下次揀貨兩間都會出現，重新記">🗑️</button>' : '') + '</td></tr>';
+        }).join('') : '<tr><td class="p-6 text-center text-slate-500">還沒有記錄。手機揀貨時按「拿好了」就會自動記起來。</td></tr>') +
+        '</tbody></table></div></div>';
+    window._productHomeRows = rows;
+};
+window.filterProductHomes = function() {
+    const terms = window.searchTerms(document.getElementById('ph-search').value);
+    document.querySelectorAll('#ph-body tr[data-s]').forEach(function(tr) { tr.style.display = !terms.length || window.searchMatch(terms, [tr.dataset.s]) ? '' : 'none'; });
+};
+window.changeProductHome = async function(sel) {
+    const x = (window._productHomeRows || []).find(function(r) { return r.id === sel.dataset.id; });
+    if (!x) return;
+    try { await window.setProductHome(x, sel.value); x.house = sel.value; if (window.showToast) window.showToast('✅ ' + x.productName + ' 改成 ' + window.houseName(sel.value)); }
+    catch (e) { alert('❌ 儲存失敗：' + e.message); sel.value = x.house; }
+};
+window.deleteProductHome = async function(btn) {
+    const x = (window._productHomeRows || []).find(function(r) { return r.id === btn.dataset.id; });
+    if (!x || !confirm('刪掉「' + x.productName + ' ' + (x.spec || '') + '」在哪一間的記錄？\n\n下次揀貨兩間的手機都會出現，拿到的那間會重新記起來。')) return;
+    try { await window.db.collection('productHome').doc(x.id).delete(); btn.closest('tr').remove(); }
+    catch (e) { alert('❌ 刪除失敗：' + e.message); }
+};
 
 // ---------- 練習模式開關（主管）----------
 function renderPracticeToggle() {

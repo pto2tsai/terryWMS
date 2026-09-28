@@ -24,7 +24,8 @@ const aoa = [['崇文冷凍食品股份有限公司'], ['每日客戶銷貨明�
   L('S1150928004', 'C004', '家樂福', '白仁成品', '60/70*5斤*6包', 4, 24, '包', '', '台中市'),
   L('S1150928005', 'C005', '王記海產', '502白仁', '60/70*16KG', 1, 16, 'KG', '自取', '')];
 const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), '銷貨明細');
-const file = SD + '/orders-test.xlsx'   // 測試工具不吃中文檔名（真的電腦沒問題）; fs.writeFileSync(file, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+const file = SD + '/orders-test.xlsx';   // 測試工具不吃中文檔名（真的電腦沒問題）
+fs.writeFileSync(file, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
 const note = (...a) => console.log('📝', ...a);
 
 // ---------- 辦公室電腦 ----------
@@ -83,23 +84,23 @@ for (let i = 0; i < 6; i++) {
   note('手機現在要拿：', cur);
   if (cur.startsWith('502白仁')) {
     mp.__dialogPlan = ['3'];
-    await mp.click('#picking-next button.action-btn.secondary'); await mp.waitForTimeout(1500);
+    await mp.click('#picking-next .pk-short'); await mp.waitForTimeout(500);
+    if (await mp.isVisible('#short-pad')) { await mp.screenshot({ path: SD + '/m10a-phone-pad.png' }); await mp.click('#short-pad button:text-is("3")'); }
+    await mp.waitForTimeout(1500);
     await mp.screenshot({ path: SD + '/m10-phone-short.png' });
   } else {
-    await mp.click('#picking-next button.action-btn.success'); await mp.waitForTimeout(1000);
+    await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(1000);
   }
 }
-await mp.evaluate(async () => { await completePickingWave(); }); await mp.waitForTimeout(1000);
+await mp.screenshot({ path: SD + '/m10b-phone-alldone.png' });
+await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(1000);
 await mp.screenshot({ path: SD + '/m11-phone-short-panel.png', fullPage: true });
 note('缺貨畫面：', (await mp.innerText('#picking-next')).replace(/\s+/g, ' '));
-const ins = await mp.$$('.alloc-in');
-note('分配框：', await mp.$$eval('.alloc-in', e => e.map(x => x.value).join(',')));
-await mp.check('#short-labels-ok');
-await mp.click('#short-done-btn'); await mp.waitForTimeout(2500);
+await mp.click('#short-ok-btn'); await mp.waitForTimeout(2500);
 await mp.screenshot({ path: SD + '/m12-phone-finish.png' });
 note('完成畫面：', (await mp.innerText('#picking-next')).replace(/\s+/g, ' '));
 await mp.evaluate(() => { window.print = () => {}; });
-await mp.click('text=印分貨標籤'); await mp.waitForTimeout(800);
+if (await mp.$('text=印標籤（')) { await mp.click('text=印標籤（'); await mp.waitForTimeout(800); }
 await mp.emulateMedia({ media: 'print' }); await mp.screenshot({ path: SD + '/m13-labels-print.png', fullPage: true }); await mp.emulateMedia({ media: 'screen' });
 note('訂單結果：', JSON.stringify((await H.all('salesOrders')).map(o => [o.orderNo, o.status, o.erpFixNeeded || false, (o.shortShipped || []).map(x => x.productName + x.want + '→' + x.got)])));
 
