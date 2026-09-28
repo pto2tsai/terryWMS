@@ -243,6 +243,8 @@ function initData() {
     watch('consignments', 'consignmentData', function(c) { return c; });
     // 練習模式（主管在電腦版切換）
     unsubs.push(window.watchPracticeMode(function() { if (window.onPracticeModeChange) window.onPracticeModeChange(); }));
+    // 分貨標籤誰來印（手機／辦公室自動印）
+    unsubs.push(window.watchLabelPrintMode());
 }
 
 function notify(text) {

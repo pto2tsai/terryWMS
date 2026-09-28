@@ -423,3 +423,10 @@ body {
 .pid b { color: #fff; font-size: 1.2em; }
 .warn-line { color: #fde68a; font-size: 16px; font-weight: bold; margin-top: 8px; line-height: 1.5; }
 .err-line { color: #fecaca; font-size: 16px; font-weight: bold; margin-top: 8px; line-height: 1.5; }
+
+/* 印分貨標籤：列印時只印標籤，其他畫面都藏起來 */
+#label-print-area { display: none; }
+@media print {
+    body > *:not(#label-print-area) { display: none !important; }
+    #label-print-area { display: block !important; background: #fff; color: #000; }
+}

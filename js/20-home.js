@@ -99,7 +99,9 @@ window.refreshHome = async function() {
         { icon: 'fa-calendar-xmark', color: '#ef4444', label: '過期／30 天內到期', hint: '', count: expired + expiring,
           action: "goTab('expiry-management')" },
         { icon: 'fa-cloud-arrow-down', color: '#0ea5e9', label: '鼎新匯入要處理', hint: '訂單檔沒收到、匯入失敗、件數待確認、沒有物流商、鼎新已取消的單',
-          action: "goTab('erp-inbox')" }
+          action: "goTab('erp-inbox')" },
+        { icon: 'fa-arrow-trend-down', color: '#dc2626', label: '缺貨要改鼎新', hint: '現場不夠、少出的銷貨單（這次不出、之後不補）：請業務在鼎新改數量，改好匯入後自動消失',
+          action: "goTab('wave-picking')" }
     ];
     todos[7].hint = '已過期 ' + expired + ' 板（不會被揀貨）、即將到期 ' + expiring + ' 板';
     renderHomeTodos(todos);
@@ -111,12 +113,27 @@ window.refreshHome = async function() {
         countWhere('salesOrders', 'status', 'in', ['pending', 'confirmed', 'partial'], function(o) { return !o.waveNo; }),
         countWhere('waves', 'status', 'in', ['pending', 'picking', 'sorting']),
         countWhere('dispatchOrders', 'status', 'in', ['pending', 'in_progress']),
-        window.countErpAttention ? window.countErpAttention() : null
+        window.countErpAttention ? window.countErpAttention() : null,
+        shortOrdersToFix()
     ]);
     todos[0].count = r[0]; todos[1].count = r[1]; todos[3].count = r[2];
     todos[4].count = r[3]; todos[5].count = r[4]; todos[6].count = r[5]; todos[8].count = r[6];
+    if (r[7]) {
+        todos[9].count = r[7].length;
+        if (r[7].length) todos[9].hint = r[7].slice(0, 3).map(function(o) {
+            return o.customer + '（' + o.orderNo + '）' + (o.shortShipped || []).map(function(x) { return x.productName + ' ' + x.want + '→' + x.got; }).join('、');
+        }).join('；') + (r[7].length > 3 ? ' 等' : '') + '：請業務在鼎新改數量';
+    }
     renderHomeTodos(todos);
 };
+
+// 缺貨少出、要請業務在鼎新改數量的銷貨單（鼎新改好、匯入後 erpFixNeeded 會變 false）
+async function shortOrdersToFix() {
+    try {
+        var snap = await window.db.collection('salesOrders').where('erpFixNeeded', '==', true).get();
+        return snap.docs.map(function(d) { return d.data(); });
+    } catch (e) { console.warn('讀取缺貨少出的訂單失敗', e); return null; }
+}
 
 // 切到今日工作時更新數字
 (function() {

@@ -76,6 +76,19 @@ window.watchPracticeMode = function(onChange) {
     }, function() {});
 };
 
+// 分貨標籤誰來印（settings/labelPrint.mode）：'phone'＝手機完成波次後直接印（預設）；'office'＝辦公室電腦自動印
+window.labelPrintMode = function() { return window.wmsLabelMode === 'office' ? 'office' : 'phone'; };
+window.watchLabelPrintMode = function(onChange) {
+    return window.db.collection('settings').doc('labelPrint').onSnapshot(function(d) {
+        window.wmsLabelMode = d.exists && d.data().mode === 'office' ? 'office' : 'phone';
+        if (onChange) onChange(window.wmsLabelMode);
+    }, function() {});
+};
+// 標籤機用：一張標籤一頁（整份文件，給手機列印區或辦公室的隱藏列印框）
+window.sortingLabelsPrintCss = function(lb) {
+    return lb.style + '@page{margin:3mm}.sl-title{display:none}.sl .label{display:block;width:auto;margin:0;page-break-after:always;break-after:page}.sl .label:last-child{page-break-after:auto;break-after:auto}';
+};
+
 // 這些儲位的貨不能拿去出貨
 window.isHoldLocation = function(loc) { return /^V-(QC|SALES)/.test(String(loc || '').toUpperCase()); };
 
@@ -103,6 +116,8 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
     log.forEach(e => { const k = e.docId || e.palletId; takenOn[k] = (takenOn[k] || 0) + (e.type === 'return' ? -e.qty : e.qty); });
     const usedIds = {};
     log.forEach(e => { usedIds[e.id] = true; });
+    const shortByKey = {};   // 現場回報不夠的件數（wave.shortLog）
+    (wave.shortLog || []).forEach(e => { shortByKey[e.key] = (shortByKey[e.key] || 0) + (parseFloat(e.qty) || 0); });
     const uniqueId = base => { let id = base, n = 2; while (usedIds[id]) id = base + '#' + (n++); usedIds[id] = true; return id; };
     const today = new Date().toLocalYMD();
     // 寄倉客戶自己的訂單要提的件數不保留（讓他的訂單揀得到）
@@ -157,6 +172,18 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
                 return;
             }
             if (needed === 0) return;
+        }
+
+        // 現場回報「不夠」的數量：不再叫人去揀，列一行缺貨（完成波次時照缺貨處理：訂單部分出貨、欠貨下次補）
+        const shortQty = Math.min(needed, shortByKey[key] || 0);
+        if (shortQty > 0) {
+            needed -= shortQty;
+            pickingList.push({
+                id: 'short-' + key, palletId: '-', locationId: '⚠️ 現場不夠', note: '現場回報不夠 ' + shortQty + ' 件',
+                productName: productName, spec: spec, batchNo: '', key: key, pickQty: shortQty, availableQty: 0,
+                orders: item.orders, completed: false, shortage: true, fieldShort: true
+            });
+            if (needed <= 0) return;
         }
 
         // 練習模式：不看庫存，照訂單數量列一行（人自己去找貨）
@@ -280,6 +307,151 @@ window.buildWavePickingList = function(wave, pallets, consignments) {
     return pickingList;
 };
 
+// 每張訂單實際出多少、欠多少（完成波次、手機完成前的缺貨清單共用，兩邊一定一樣）
+// 揀到的件數依彙總裡的訂單順序分給各訂單（先開單的先給）
+// 回傳 { 訂單 ID: { entry, sent: [{productName, spec, qty}], back: [欠貨品項], any, short: [{productName, spec, want, got}] } }
+window.waveOrderOutcomes = function(wave, pickingList) {
+    const keyOf = (name, spec) => (name || '') + '|||' + (spec || '');
+    const excluded = name => typeof window.isExcludedFromPickingList === 'function' && window.isExcludedFromPickingList(name);
+    const pickedByKey = {};
+    (pickingList || []).forEach(i => {
+        if (!i.completed || i.shortage) return;
+        const k = i.key || keyOf(i.productName, i.spec);
+        pickedByKey[k] = (pickedByKey[k] || 0) + (parseFloat(i.pickQty) || 0) * (i.type === 'return' ? -1 : 1);
+    });
+    const shippedTo = {};  // 訂單 ID 或單號 → { 品項 key: 件數 }
+    const override = wave.allocOverride || {};   // 不夠時現場指定給誰：{ 品項 key: { 訂單 ID 或單號: 件數 } }
+    (wave.summary || []).forEach(sm => {
+        const k = keyOf(sm.productName, sm.spec);
+        let avail = pickedByKey[k] || 0;
+        const ov = override[k];
+        if (ov && !excluded(sm.productName)) {
+            (sm.orders || []).forEach(o => {
+                const ok = o.orderId || o.orderNo;
+                const q = Math.max(0, Math.min(parseFloat(o.quantity) || 0, parseFloat(ov[ok]) || 0, avail));
+                avail -= q;
+                shippedTo[ok] = shippedTo[ok] || {};
+                shippedTo[ok][k] = (shippedTo[ok][k] || 0) + q;
+            });
+            return;
+        }
+        (sm.orders || []).forEach(o => {
+            const want = parseFloat(o.quantity) || 0;
+            const q = excluded(sm.productName) ? want : Math.max(0, Math.min(avail, want));
+            if (!excluded(sm.productName)) avail -= q;
+            const ok = o.orderId || o.orderNo;
+            shippedTo[ok] = shippedTo[ok] || {};
+            shippedTo[ok][k] = (shippedTo[ok][k] || 0) + q;
+        });
+    });
+    const out = {};
+    (wave.orders || []).forEach(entry => {
+        const oid = entry.id || entry.orderId;
+        if (!oid || out[oid]) return;
+        const got = Object.assign({}, shippedTo[oid] || shippedTo[entry.orderNo] || {});
+        const back = [], sent = [], short = [];
+        let any = false;
+        (entry.items || []).forEach(it => {
+            const k = keyOf(it.productName, it.spec);
+            const need = parseFloat(it.packageQty) || 1;
+            const g = Math.min(need, got[k] || 0);
+            got[k] = (got[k] || 0) - g;
+            if (g > 0) { any = true; sent.push({ productName: it.productName || '', spec: it.spec || '', qty: g }); }
+            if (need - g > 0) {
+                const b = Object.assign({}, it, { packageQty: need - g });
+                if (parseFloat(it.quantity) > 0) b.quantity = Math.round(parseFloat(it.quantity) * (need - g) / need * 100) / 100;
+                back.push(JSON.parse(JSON.stringify(b)));
+                short.push({ productName: it.productName || '', spec: it.spec || '', want: need, got: g });
+            }
+        });
+        out[oid] = { entry: entry, back: back, any: any, sent: sent, short: short };
+    });
+    return out;
+};
+
+// 不夠的品項要分給誰（現場可以改）：{ 品項 key: { productName, spec, picked, orders: [{ id, orderNo, customer, want, got }] } }
+// got 是照訂單順序先給的預設值；只列「訂的比拿到的多」的品項
+window.waveShortAllocation = function(wave, pickingList) {
+    const keyOf = (name, spec) => (name || '') + '|||' + (spec || '');
+    const excluded = name => typeof window.isExcludedFromPickingList === 'function' && window.isExcludedFromPickingList(name);
+    const picked = {};
+    (pickingList || []).forEach(i => {
+        if (!i.completed || i.shortage) return;
+        const k = i.key || keyOf(i.productName, i.spec);
+        picked[k] = (picked[k] || 0) + (parseFloat(i.pickQty) || 0) * (i.type === 'return' ? -1 : 1);
+    });
+    const out = {};
+    (wave.summary || []).forEach(sm => {
+        if (excluded(sm.productName)) return;
+        const k = keyOf(sm.productName, sm.spec);
+        const want = (sm.orders || []).reduce((t, o) => t + (parseFloat(o.quantity) || 0), 0);
+        const have = Math.max(0, picked[k] || 0);
+        if (want <= have) return;
+        let avail = have;
+        out[k] = { productName: sm.productName, spec: sm.spec || '', picked: have, orders: (sm.orders || []).map(o => {
+            const w = parseFloat(o.quantity) || 0, g = Math.min(w, avail); avail -= g;
+            const entry = (wave.orders || []).find(x => (x.id || x.orderId) === o.orderId || x.orderNo === o.orderNo) || {};
+            return { id: o.orderId || o.orderNo, orderNo: o.orderNo || entry.orderNo || '', customer: o.customer || entry.customer || '', want: w, got: g };
+        }) };
+    });
+    return out;
+};
+
+// 缺貨清單（給現場改標籤、給辦公室看）：[{ orderNo, customer, productName, spec, want, got }]
+window.waveShortfalls = function(wave, pickingList) {
+    const o = window.waveOrderOutcomes(wave, pickingList), rows = [];
+    Object.keys(o).forEach(oid => o[oid].short.forEach(x => rows.push(Object.assign({ orderNo: o[oid].entry.orderNo || '', customer: o[oid].entry.customer || '' }, x))));
+    return rows;
+};
+
+// 分貨標籤（一張訂單一張）：揀完才印（手機或辦公室自動印），件數用實際出貨的（缺貨的已經扣掉）；
+// 還沒完成的波次（辦公室手動補印）照訂單數量
+// 回傳 { style, body }，樣式都在 .sl 底下，跟揀貨單印在同一份也不會互相影響
+window.buildSortingLabelsHtml = function(wave) {
+    var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var done = wave.status === 'done' && Array.isArray(wave.shipped);
+    var shippedOf = function(orderNo, name, spec) {
+        var o = (wave.shipped || []).find(function(x) { return x.orderNo === orderNo; });
+        return ((o && o.items) || []).filter(function(i) { return i.productName === name && (i.spec || '') === (spec || ''); }).reduce(function(t, i) { return t + (parseFloat(i.qty) || 0); }, 0);
+    };
+    var body = (wave.orders || []).map(function(order) {
+        var totalPkg = 0;
+        var itemsHtml = (order.items || []).filter(function(item) {
+            return !window.isExcludedFromSortingLabel(item.productName);
+        }).map(function(item) {
+            var isPackaging = window.isPackagingItem(item.productName);
+            var qty = item.quantity || 0;
+            var boxPerPkg = window.parseBoxPerPackage(item.productName);
+            var pkgQty = (boxPerPkg > 0 && qty > 0) ? Math.ceil(qty / boxPerPkg) : (item.packageQty || 1);
+            var shortNote = '';
+            if (done && !isPackaging) {
+                var got = shippedOf(order.orderNo, item.productName, item.spec);
+                if (got < (parseFloat(item.packageQty) || 1)) { shortNote = '<div class="short">缺貨：訂 ' + (item.packageQty || 1) + '，出 ' + got + '</div>'; pkgQty = got; }
+            }
+            if (!isPackaging) totalPkg += pkgQty;
+            var qtyText = isPackaging ? '(包材)' : pkgQty + ' 件';
+            return '<div class="item"><span>' + esc(item.productName) + ' ' + esc(item.spec || '') + '</span><strong>' + qtyText + '</strong></div>' + shortNote;
+        }).join('');
+        return '<div class="label"><div class="logistics">' + esc(order.logistics || wave.logistics) + '<span style="float:right">' + esc(wave.waveNo) + '</span></div>' +
+            '<div style="font-size:14px;color:#666">📦 ' + esc(order.orderNo) + '</div>' +
+            '<div class="customer">👤 ' + esc(order.customer) + '</div>' +
+            '<div class="total">共 ' + totalPkg + ' 件</div>' +
+            '<div class="items">' + itemsHtml + '</div>' +
+            (order.address ? '<div class="address">📍 ' + esc(order.address) + '</div>' : '') + '</div>';
+    }).join('');
+    var style = '.sl .label{border:2px solid #333;padding:15px;width:320px;margin:0 20px 20px 0;page-break-inside:avoid;display:inline-block;vertical-align:top;background:#fff;color:#000}' +
+        '.sl .logistics{background:#333;color:white;padding:5px 10px;font-weight:bold;margin:-15px -15px 10px -15px}' +
+        '.sl .customer{font-size:24px;font-weight:bold;margin:10px 0}' +
+        '.sl .total{background:#dc2626;color:white;padding:8px;text-align:center;font-size:20px;font-weight:bold;margin:10px 0;border-radius:4px}' +
+        '.sl .items{border-top:1px dashed #ccc;padding-top:10px}' +
+        '.sl .item{margin:5px 0;display:flex;justify-content:space-between;gap:8px}' +
+        '.sl .short{color:#dc2626;font-size:12px;font-weight:bold;text-align:right}' +
+        '.sl .address{font-size:12px;color:#666;margin-top:10px;border-top:1px dashed #ccc;padding-top:10px}' +
+        '.sl-title{font-size:16px;font-weight:bold;margin:0 0 10px}';
+    return { style: style, body: '<div class="sl"><div class="sl-title">分貨標籤 ' + esc(wave.waveNo) + '（' + (wave.orders || []).length + ' 張）</div>' + body + '</div>' };
+};
+
+
 // ============================================================
 // 完成波次（桌機與手機共用）：扣庫存、訂單標記出貨、波次標記完成、寫異動記錄，
 // 全部在同一筆交易裡。任何一板庫存不足或波次已被別人完成，就整筆取消。
@@ -297,7 +469,7 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
     }
     const pickedItems = pickingList.filter(i => i.completed && !i.shortage && i.type !== 'return');
     const returnedItems = pickingList.filter(i => i.completed && i.type === 'return');
-    if (pickedItems.length === 0) throw new Error('尚未揀貨任何項目');
+    if (pickedItems.length === 0 && !pickingList.some(i => i.fieldShort)) throw new Error('尚未揀貨任何項目');
 
     // 每一板實際扣掉的件數＝揀的－放回的（同一板可能揀兩次或放回，合併成一筆）
     const missing = [];
@@ -326,7 +498,7 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
         productName: i.productName || '',
         spec: i.spec || '',
         qty: parseInt(i.pickQty) || 0,
-        reason: i.shortage ? '庫存不足' + (i.note ? '（' + i.note + '）' : '') : '未揀'
+        reason: i.fieldShort ? '現場不夠' : i.shortage ? '庫存不足' + (i.note ? '（' + i.note + '）' : '') : '未揀'
     }));
 
     const waveRef = wave.id ? db.collection('waves').doc(wave.id) : null;
@@ -337,51 +509,17 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
         if (oid && orderIds.indexOf(oid) === -1) { orderIds.push(oid); orderEntry[oid] = order; }
     });
 
-    // 每個品項實際揀到的件數，依彙總裡的訂單順序分給各訂單
-    const keyOf = (name, spec) => (name || '') + '|||' + (spec || '');
-    const excluded = name => typeof window.isExcludedFromPickingList === 'function' && window.isExcludedFromPickingList(name);
-    const pickedByKey = {};
-    pickedItems.forEach(i => { const k = i.key || keyOf(i.productName, i.spec); pickedByKey[k] = (pickedByKey[k] || 0) + (parseFloat(i.pickQty) || 0); });
-    returnedItems.forEach(i => { const k = i.key || keyOf(i.productName, i.spec); pickedByKey[k] = (pickedByKey[k] || 0) - (parseFloat(i.pickQty) || 0); });
-    const shippedTo = {};  // 訂單 ID 或單號 → { 品項 key: 件數 }
-    (wave.summary || []).forEach(sm => {
-        const k = keyOf(sm.productName, sm.spec);
-        let avail = pickedByKey[k] || 0;
-        (sm.orders || []).forEach(o => {
-            const want = parseFloat(o.quantity) || 0;
-            const q = excluded(sm.productName) ? want : Math.min(avail, want);
-            if (!excluded(sm.productName)) avail -= q;
-            const ok = o.orderId || o.orderNo;
-            shippedTo[ok] = shippedTo[ok] || {};
-            shippedTo[ok][k] = (shippedTo[ok][k] || 0) + q;
-        });
-    });
-    const orderOutcome = oid => {
-        const entry = orderEntry[oid];
-        const got = Object.assign({}, shippedTo[oid] || shippedTo[entry.orderNo] || {});
-        const back = [];
-        const sent = [];
-        let any = false;
-        (entry.items || []).forEach(it => {
-            const k = keyOf(it.productName, it.spec);
-            const need = parseFloat(it.packageQty) || 1;
-            const g = Math.min(need, got[k] || 0);
-            got[k] = (got[k] || 0) - g;
-            if (g > 0) { any = true; sent.push({ productName: it.productName || '', spec: it.spec || '', qty: g }); }
-            if (need - g > 0) {
-                const b = Object.assign({}, it, { packageQty: need - g });
-                if (parseFloat(it.quantity) > 0) b.quantity = Math.round(parseFloat(it.quantity) * (need - g) / need * 100) / 100;
-                back.push(JSON.parse(JSON.stringify(b)));
-            }
-        });
-        return { back: back, any: any, sent: sent };
-    };
+    const outcomes = window.waveOrderOutcomes(wave, pickingList);
+    const orderOutcome = oid => outcomes[oid];
     wave.orderResults = {};
     // 實際出貨明細（報表用：規劃的件數扣掉缺貨；部分出貨的訂單再排波次時不會重複計算）
     const shipped = orderIds.map(oid => {
         const e = orderEntry[oid], r = orderOutcome(oid);
         return { orderId: oid, orderNo: e.orderNo || '', customer: e.customer || '', logistics: e.logistics || '', items: r.sent };
     }).filter(x => x.items.length > 0);
+    // 哪個客戶少幾件（看板、首頁提醒、重印標籤用）
+    const shortOrders = [];
+    orderIds.forEach(oid => { const r = orderOutcome(oid); if (r) r.short.forEach(x => shortOrders.push(Object.assign({ orderNo: r.entry.orderNo || '', customer: r.entry.customer || '' }, x))); });
     const shippedQty = shipped.reduce((t, x) => t + x.items.reduce((u, i) => u + i.qty, 0), 0);
     const orderRefs = orderIds.map(oid => db.collection('salesOrders').doc(oid));
     const completedAt = new Date().toISOString();
@@ -443,18 +581,18 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
                 let data;
                 if (r.back.length === 0) {
                     data = { status: 'shipped', shippedAt: completedAt, waveNo: wave.waveNo, backorderItems: FV.delete() };
-                } else if (!r.any && !Array.isArray(cur.backorderItems)) {
-                    // 一件都沒出到：回到待處理，可以重新排波次
-                    data = { status: 'pending', waveNo: null, lastWaveNo: wave.waveNo };
                 } else {
-                    data = { status: 'partial', waveNo: null, lastWaveNo: wave.waveNo, backorderItems: r.back };
-                    if (r.any) { data.shippedAt = completedAt; data.shippedWaves = FV.arrayUnion(wave.waveNo); }
+                    // 缺貨：這次不出、之後也不補（使用者決定），訂單結案；記下少出多少，請業務在鼎新改銷貨單數量
+                    const prev = Array.isArray(cur.shortShipped) ? cur.shortShipped : [];
+                    data = { status: 'shipped', shippedAt: completedAt, waveNo: wave.waveNo, backorderItems: FV.delete(),
+                        shortShipped: prev.concat(r.short.map(x => ({ productName: x.productName, spec: x.spec, want: x.want, got: x.got, short: x.want - x.got, waveNo: wave.waveNo }))),
+                        erpFixNeeded: true };
                 }
-                wave.orderResults[oid] = { status: data.status, backorderItems: r.back.length ? r.back : null };
+                wave.orderResults[oid] = { status: data.status, backorderItems: null, short: r.short };
                 ups.push({ ref: orderRefs[idx], data: data });
             });
             if (waveRef && readSnaps[0].exists) {
-                ups.push({ ref: waveRef, data: { status: 'done', completedAt: completedAt, shortages: shortages, shipped: shipped, shippedQty: shippedQty, practice: practice } });
+                ups.push({ ref: waveRef, data: { status: 'done', completedAt: completedAt, shortages: shortages, shipped: shipped, shippedQty: shippedQty, practice: practice, shortOrders: shortOrders, allocOverride: wave.allocOverride || null } });
             }
             return ups;
         },
@@ -478,5 +616,6 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
     });
     wave.shipped = shipped;
     wave.shippedQty = shippedQty;
+    wave.shortOrders = shortOrders;
     return completedAt;
 };

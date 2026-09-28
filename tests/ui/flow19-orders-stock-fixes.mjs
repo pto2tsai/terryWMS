@@ -44,7 +44,7 @@ const dup = await page.evaluate(async () => {
 });
 H.check('已在波次中的訂單不能再建一個波次', dup.includes('已經排進其他波次'), dup);
 
-// ---------- 缺貨：部分出貨，缺的可以再排 ----------
+// ---------- 缺貨：這次不出、之後不補，請業務改鼎新 ----------
 const r1 = await page.evaluate(async id => {
   const w = (await db.collection('waves').doc(id).get()).data(); w.id = id;
   const l = buildWavePickingList(w, currentPallets()); l.forEach(i => { i.completed = true; });
@@ -52,24 +52,22 @@ const r1 = await page.evaluate(async id => {
 }, prefix + '001');
 const soA = await H.one('salesOrders', 'SO-A'), soB = await H.one('salesOrders', 'SO-B');
 H.note('出貨結果: ' + JSON.stringify(r1));
-H.check('白蝦只有 8 件（要 12）：SO-A 6 件出齊＝已出貨', soA.status === 'shipped', JSON.stringify(soA));
-H.check('SO-B 白蝦只出 2 件＝部分出貨，欠白蝦 4 件、透抽已出齊', soB.status === 'partial' && !soB.waveNo && soB.backorderItems.length === 1 && soB.backorderItems[0].productName === '白蝦' && soB.backorderItems[0].packageQty === 4, JSON.stringify(soB));
-await H.admin(async d => { await H.setDoc(H.doc(d, 'pallets', 'PW2'), { palletId: 'PW2', company: '崇文', productName: '白蝦', spec: '50/60', quantity: 4, locationId: 'I-A-03-1F', expiryDate: '2027-06-01' }); });
-await page.waitForTimeout(800);
-const w2no = await page.evaluate(async () => {
-  await loadOrdersFromFirebase();
-  const b = window._orderData.orders.find(o => o.orderNo === 'SO-B');
-  const r = await createWaveFromOrders([b], '全日物流'); return r.wave.waveNo;
-});
-const w2 = await H.one('waves', w2no);
-H.check('部分出貨的訂單可以再排波次，只排欠的 4 件（波次編號 -002）', w2no === prefix + '002' && w2.totalQty === 4 && w2.summary.length === 1, JSON.stringify([w2no, w2 && w2.summary]));
-await page.evaluate(async id => {
-  const w = (await db.collection('waves').doc(id).get()).data(); w.id = id;
-  const l = buildWavePickingList(w, currentPallets()); l.forEach(i => { i.completed = true; });
-  await completeWaveTx(w, l, currentPallets());
-}, w2no);
+H.check('白蝦只有 8 件（要 12）：SO-A 6 件出齊＝已出貨', soA.status === 'shipped' && !soA.erpFixNeeded, JSON.stringify(soA));
+H.check('SO-B 白蝦只出 2 件：這次不出、不變成欠貨，訂單結案並標「要改鼎新」（白蝦 6→2）', soB.status === 'shipped' && !soB.backorderItems && soB.erpFixNeeded === true &&
+  soB.shortShipped.length === 1 && soB.shortShipped[0].productName === '白蝦' && soB.shortShipped[0].want === 6 && soB.shortShipped[0].got === 2, JSON.stringify(soB));
+const waveable = await page.evaluate(async () => { await loadOrdersFromFirebase(); return window._orderData.orders.filter(window.orderWaveable).map(o => o.orderNo); });
+H.check('缺的貨不會再排波次', !waveable.includes('SO-B'), JSON.stringify(waveable));
+// 鼎新還沒改（再匯入一次一樣的數量）：不會變成補出貨、提醒還在
+const erpRow = (qty) => ({ orderNo: 'SO-B', customer: '客戶B', orderDate: '2026/09/23', logistics: '全日物流', items: [{ productName: '白蝦', spec: '50/60', quantity: qty, unit: '件', packageQty: qty }, { productName: '透抽', spec: 'L', quantity: 2, unit: '件', packageQty: 2 }] });
+await page.evaluate(async o => { await saveErpOrders([o]); }, erpRow(6));
+const soB1 = await H.one('salesOrders', 'SO-B');
+H.check('鼎新還沒改就再匯入：不會變成補出貨，「要改鼎新」提醒還在', soB1.status === 'shipped' && !soB1.backorderItems && soB1.erpFixNeeded === true, JSON.stringify(soB1));
+// 業務在鼎新改成 2 件，匯入後提醒自動消失、不會說多出貨
+let nFix = lastN();
+await page.evaluate(async o => { const r = await saveErpOrders([o]); window.__shipChanged = r.shippedChanged; }, erpRow(2));
 const soB2 = await H.one('salesOrders', 'SO-B');
-H.check('補出後 SO-B＝已出貨，欠貨清掉', soB2.status === 'shipped' && !soB2.backorderItems, JSON.stringify(soB2));
+const shipChanged = await page.evaluate(() => window.__shipChanged);
+H.check('鼎新改成 2 件後匯入：「要改鼎新」提醒消失，不會說多出貨或要補', soB2.status === 'shipped' && soB2.erpFixNeeded === false && !soB2.backorderItems && shipChanged.length === 0, JSON.stringify([soB2, shipChanged]));
 
 // ---------- 波次編號：刪掉中間的也不會重號 ----------
 const nos = await page.evaluate(async () => {
@@ -83,14 +81,14 @@ const nos = await page.evaluate(async () => {
   const n = (await createWaveFromOrders([c2], 'X')).wave.waveNo;
   return [a, b, n];
 });
-H.check('刪掉 -003 後新波次是 -005（不會和 -004 重號）', nos.join() === [prefix + '003', prefix + '004', prefix + '005'].join(), JSON.stringify(nos));
-H.check('刪除波次後訂單回到待處理，再排進新波次', (await H.one('salesOrders', 'SO-C')).waveNo === prefix + '005');
+H.check('刪掉 -002 後新波次是 -004（不會和 -003 重號）', nos.join() === [prefix + '002', prefix + '003', prefix + '004'].join(), JSON.stringify(nos));
+H.check('刪除波次後訂單回到待處理，再排進新波次', (await H.one('salesOrders', 'SO-C')).waveNo === prefix + '004');
 
 // ---------- 刪除：手機已經開始揀的波次不能刪 ----------
-await H.admin(async d => { const { updateDoc } = await import('firebase/firestore'); await updateDoc(H.doc(d, 'waves', prefix + '004'), { completedItems: ['x'] }); });
+await H.admin(async d => { const { updateDoc } = await import('firebase/firestore'); await updateDoc(H.doc(d, 'waves', prefix + '003'), { completedItems: ['x'] }); });
 let n0 = lastN();
-await page.evaluate(async no => { await deleteWave(no); }, prefix + '004');
-H.check('手機已開始揀的波次（畫面上還是待揀貨）不能刪除', dlg(n0).some(m => m.includes('已經開始揀貨')) && !!(await H.one('waves', prefix + '004')) && (await H.one('salesOrders', 'SO-D')).status === 'inWave', JSON.stringify(dlg(n0)));
+await page.evaluate(async no => { await deleteWave(no); }, prefix + '003');
+H.check('手機已開始揀的波次（畫面上還是待揀貨）不能刪除', dlg(n0).some(m => m.includes('已經開始揀貨')) && !!(await H.one('waves', prefix + '003')) && (await H.one('salesOrders', 'SO-D')).status === 'inWave', JSON.stringify(dlg(n0)));
 
 // ---------- 完成已被刪除的波次會被擋下 ----------
 const delErr = await page.evaluate(async no => {
@@ -98,7 +96,7 @@ const delErr = await page.evaluate(async no => {
   const l = buildWavePickingList(w, currentPallets()); l.forEach(i => { i.completed = true; });
   await db.collection('waves').doc(no).delete();
   try { await completeWaveTx(w, l, currentPallets()); return 'done'; } catch (e) { return e.message; }
-}, prefix + '004');
+}, prefix + '003');
 H.check('波次已被刪除 → 不能完成、不扣庫存', delErr.includes('已被刪除') && (await H.one('pallets', 'PT1')).quantity === 8, delErr + ' PT1=' + (await H.one('pallets', 'PT1')).quantity);
 await H.admin(async d => { const { updateDoc } = await import('firebase/firestore'); await updateDoc(H.doc(d, 'salesOrders', 'SO-D'), { status: 'pending', waveNo: null }); });
 
@@ -110,11 +108,11 @@ await page.evaluate(async no => {
   window._waveData.currentWave = w;
   window._waveData.pickingList = buildWavePickingList(w, currentPallets());
   window.closeWaveExecuteModal = function() {};
-}, prefix + '005');
+}, prefix + '004');
 const itemId = await page.evaluate(() => window._waveData.pickingList[0].id);
-await H.admin(async d => { const { updateDoc } = await import('firebase/firestore'); await updateDoc(H.doc(d, 'waves', prefix + '005'), { completedItems: [itemId], status: 'picking' }); });
+await H.admin(async d => { const { updateDoc } = await import('firebase/firestore'); await updateDoc(H.doc(d, 'waves', prefix + '004'), { completedItems: [itemId], status: 'picking' }); });
 await page.evaluate(async () => { await completeWave(); }); await page.waitForTimeout(800);
-H.check('電腦按完成：手機掃過的透抽 1 件有扣庫存、訂單已出貨', (await H.one('pallets', 'PT1')).quantity === pt1Before - 1 && (await H.one('salesOrders', 'SO-C')).status === 'shipped' && (await H.one('waves', prefix + '005')).status === 'done', JSON.stringify([pt1Before, (await H.one('pallets', 'PT1')).quantity]));
+H.check('電腦按完成：手機掃過的透抽 1 件有扣庫存、訂單已出貨', (await H.one('pallets', 'PT1')).quantity === pt1Before - 1 && (await H.one('salesOrders', 'SO-C')).status === 'shipped' && (await H.one('waves', prefix + '004')).status === 'done', JSON.stringify([pt1Before, (await H.one('pallets', 'PT1')).quantity]));
 
 // ---------- 清除波次：已完成的保留、已出貨的訂單不動 ----------
 await page.evaluate(async () => {
@@ -125,7 +123,7 @@ await page.evaluate(async () => {
   await clearAllWaves();
 });
 const wavesLeft = (await H.all('waves')).map(w => w.waveNo).sort();
-H.check('清除波次：只清未完成的，已完成的 3 個波次保留', wavesLeft.join() === [prefix + '001', prefix + '002', prefix + '005'].join(), JSON.stringify(wavesLeft));
+H.check('清除波次：只清未完成的，已完成的 2 個波次保留', wavesLeft.join() === [prefix + '001', prefix + '004'].join(), JSON.stringify(wavesLeft));
 H.check('已出貨的訂單沒有被改回待處理', (await H.one('salesOrders', 'SO-A')).status === 'shipped' && (await H.one('salesOrders', 'SO-C')).status === 'shipped' && (await H.one('salesOrders', 'SO-D')).status === 'pending');
 
 // ---------- 訂單匯入：同單號不拆、換算不出件數要人工填、已出貨的不改 ----------

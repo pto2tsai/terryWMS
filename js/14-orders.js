@@ -34,65 +34,8 @@ function parseLogistics(remark) {
     return '未指定';
 }
 
-window.isFeeItem = function(productName) {
-    if (!productName) return true;
-    var feeKeywords = ['運費', '費用', '代收', '代墊', '手續費', '服務費', '代付', '其他費用'];
-    return feeKeywords.some(function(kw) { return productName.includes(kw); });
-};
+// 品項分類（運費、包材、冷藏…）和每件幾盒的判斷在 js/shared/product-rules.js（電腦版與手機版共用）
 
-window.isPackagingItem = function(productName) {
-    if (!productName) return false;
-    var packagingKeywords = ['保力龍', '保麗龍', '包材', '紙箱', '冰袋', '冰塊', '保麗龍箱', '保力龍箱'];
-    return packagingKeywords.some(function(kw) { return productName.includes(kw); });
-};
-
-window.isChilledItem = function(productName) {
-    if (!productName) return false;
-    var chilledKeywords = ['現流白仁', '冷藏'];
-    return chilledKeywords.some(function(kw) { return productName.includes(kw); });
-};
-
-window.isExcludedFromPickingList = function(productName) {
-    return window.isFeeItem(productName) || window.isPackagingItem(productName) || window.isChilledItem(productName);
-};
-
-window.isExcludedFromSortingLabel = function(productName) {
-    return window.isFeeItem(productName) || window.isChilledItem(productName);
-};
-
-window.isExcludedFromQtyCount = function(productName) {
-    return window.isFeeItem(productName) || window.isPackagingItem(productName) || window.isChilledItem(productName);
-};
-
-window.isNonProductItem = window.isExcludedFromSortingLabel;
-
-window.parseBoxPerPackage = function(productName) {
-    if (!productName) return 0;
-
-    var patterns = [
-        /\*(\d+)盒/,      // *8盒
-        /\*(\d+)入/,      // *12入
-        /\*(\d+)包/,      // *6包
-        /\*(\d+)袋/,      // *10袋
-        /x(\d+)盒/i,      // x8盒
-        /x(\d+)入/i,      // x12入
-        /(\d+)盒\/件/,    // 8盒/件
-        /(\d+)入\/件/     // 12入/件
-    ];
-
-    for (var i = 0; i < patterns.length; i++) {
-        var match = productName.match(patterns[i]);
-        if (match && match[1]) {
-            return parseInt(match[1]);
-        }
-    }
-
-    return 0;  // 無法解析時返回0，使用原始邏輯
-};
-
-function parseBoxPerPackage(productName) {
-    return window.parseBoxPerPackage(productName);
-}
 
 window._orderData = {
     orders: [],  // 所有訂單
@@ -785,6 +728,7 @@ window.saveErpOrders = async function(orders) {
                 var inWave = existing.status === 'inWave' && existing.waveNo;
                 var upd = { items: order.items, modifiedAt: new Date().toISOString(), hasChanges: true };
                 upd.backorderItems = rc.open.length ? rc.open : firebase.firestore.FieldValue.delete();
+                if (rc.erpFixed) { upd.erpFixNeeded = false; existing.erpFixNeeded = false; }
                 if (!inWave) upd.status = rc.open.length ? 'partial' : 'shipped';
                 // 變成補出貨：離開原本（已完成）的波次，才能排進新的波次
                 if (!inWave && rc.open.length && existing.waveNo) { upd.waveNo = null; upd.lastWaveNo = existing.waveNo; }
@@ -1342,16 +1286,22 @@ window.recomputeShippedOrder = function(existing, newItems) {
     var pkg = function(it) { return parseFloat(it.packageQty) || 1; };
     var back = {};
     if (Array.isArray(existing.backorderItems)) existing.backorderItems.forEach(function(it) { back[key(it)] = (back[key(it)] || 0) + pkg(it); });
-    var shipped = {}, names = {};
+    // 缺貨少出（這次不出、請業務改鼎新）：實際出貨＝原本件數－少出的
+    var shortBy = {};
+    (existing.shortShipped || []).forEach(function(x) { var k = x.productName + '|||' + (x.spec || ''); shortBy[k] = (shortBy[k] || 0) + (parseFloat(x.short) || 0); });
+    var shipped = {}, names = {}, origQty = {};
     (existing.items || []).forEach(function(it) {
-        var k = key(it); names[k] = it;
+        var k = key(it); names[k] = it; origQty[k] = (origQty[k] || 0) + pkg(it);
         var s = Array.isArray(existing.backorderItems) ? pkg(it) - (back[k] || 0) : (existing.status === 'shipped' ? pkg(it) : 0);
         shipped[k] = (shipped[k] || 0) + Math.max(0, s);
     });
+    Object.keys(shortBy).forEach(function(k) { if (shipped[k] != null) shipped[k] = Math.max(0, shipped[k] - shortBy[k]); });
     var open = [], more = [], over = [];
     var seen = {};
     (newItems || []).forEach(function(it) {
         var k = key(it); seen[k] = true;
+        // 缺貨少出的品項，鼎新還沒改（還是原本的件數）：等業務改，不要變成補出貨
+        if (shortBy[k] && pkg(it) === origQty[k]) return;
         var need = pkg(it) - (shipped[k] || 0);
         if (need > 0) {
             var b = Object.assign({}, it, { packageQty: need });
@@ -1366,7 +1316,12 @@ window.recomputeShippedOrder = function(existing, newItems) {
     Object.keys(shipped).forEach(function(k) {
         if (!seen[k] && shipped[k] > 0) over.push(names[k].productName + (names[k].spec ? ' ' + names[k].spec : '') + ' 多出 ' + shipped[k] + ' 件');
     });
-    return { open: open, more: more, over: over };
+    // 鼎新已經改成實際出貨的件數（或更少）：不用再提醒改鼎新
+    var fixed = Object.keys(shortBy).every(function(k) {
+        var n = (newItems || []).filter(function(it) { return key(it) === k; }).reduce(function(t, it) { return t + pkg(it); }, 0);
+        return n <= (shipped[k] || 0);
+    });
+    return { open: open, more: more, over: over, erpFixed: Object.keys(shortBy).length > 0 && fixed };
 };
 
 window.createWave = async function() {
@@ -1721,14 +1676,16 @@ window.completeWave = async function() {
     const completed = list.filter(i => i.completed).length;
     const total = list.filter(i => !i.shortage).length;
 
-    if (completed === 0) {
+    if (completed === 0 && !list.some(i => i.fieldShort)) {
         alert('尚未揀貨任何項目');
         return;
     }
 
     // 未揀的項目併在下面同一個確認裡說明（原本要按兩次）
     const shortN = list.filter(i => i.shortage || !i.completed).length;
-    if (!confirm(`確定完成波次 ${wave.waveNo}？\n\n已揀：${completed}/${total} 項` + (shortN ? `\n缺貨／未揀 ${shortN} 項：相關訂單會標為「部分出貨」，缺的貨之後可以再排波次` : ''))) {
+    const shorts = window.waveShortfalls(wave, list);
+    const shortText = shorts.length ? '\n\n⚠️ 這些客戶會少出（分貨標籤要改）：\n' + shorts.map(x => '・' + x.customer + '（' + x.orderNo + '）' + x.productName + ' ' + (x.spec || '') + '：訂 ' + x.want + '，只出 ' + x.got).join('\n') : '';
+    if (!confirm(`確定完成波次 ${wave.waveNo}？\n\n已揀：${completed}/${total} 項` + (shortN ? `\n缺貨／未揀 ${shortN} 項：相關訂單會標為「部分出貨」，缺的貨之後可以再排波次` : '') + shortText)) {
         return;
     }
 
@@ -1777,6 +1734,8 @@ window.closeWaveExecuteModal = function() {
 window.onLogin(function() {
     loadOrdersFromFirebase();
     loadWarehouses();
+    window.watchLabelPrintMode(renderLabelModeToggle);
+    startAutoLabelPrinter();
     window.watchPracticeMode(function() {
         renderPracticeToggle();
         // 揀貨畫面開著：清單馬上照新模式重算
@@ -1784,6 +1743,70 @@ window.onLogin(function() {
         if (modal && !modal.classList.contains('hidden') && window._waveData.currentWave) generatePickingListV2(window._waveData.currentWave);
     });
 });
+
+// ---------- 分貨標籤誰來印（主管切換）：手機印／辦公室自動印 ----------
+function isThisLabelPrinter() { try { return localStorage.getItem('wms_autoLabelPrinter') === '1'; } catch (e) { return false; } }
+function renderLabelModeToggle() {
+    const btn = document.getElementById('btn-label-mode');
+    if (!btn) return;
+    const office = window.labelPrintMode() === 'office';
+    const r = window.currentUser && window.currentUser.role;
+    const sup = r === 'admin' || r === 'supervisor';
+    btn.style.display = '';
+    btn.disabled = !sup;
+    btn.className = 'px-3 py-2 rounded-lg font-bold mr-2 text-sm ' + (office ? 'bg-sky-700 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600');
+    btn.innerHTML = '🏷️ 標籤：' + (office ? '辦公室自動印' : '手機印');
+    btn.title = office ? '手機完成波次後，勾了「這台電腦自動印標籤」的電腦會自動印出分貨標籤' : '手機完成波次後，在手機上按「印分貨標籤」直接印';
+    const wrap = document.getElementById('auto-label-wrap');
+    if (wrap) wrap.style.display = office ? '' : 'none';
+    const chk = document.getElementById('chk-auto-label');
+    if (chk) chk.checked = isThisLabelPrinter();
+}
+window.toggleLabelPrintMode = async function() {
+    const office = window.labelPrintMode() !== 'office';
+    if (!confirm(office
+        ? '改成「辦公室自動印標籤」？\n\n手機完成波次後，辦公室那台電腦會自動印出分貨標籤（件數是實際出貨的）。\n請在要負責印的那台電腦勾「這台電腦自動印標籤」，並保持開著。'
+        : '改回「手機印標籤」？\n\n手機完成波次後，在手機上按「印分貨標籤」直接印。')) return;
+    try { await window.db.collection('settings').doc('labelPrint').set({ mode: office ? 'office' : 'phone', updatedAt: new Date().toISOString() }); }
+    catch (e) { alert('❌ 切換失敗：' + e.message); }
+};
+window.setAutoLabelMachine = function(on) {
+    try { localStorage.setItem('wms_autoLabelPrinter', on ? '1' : '0'); } catch (e) {}
+    if (on) alert('✅ 這台電腦會自動印分貨標籤\n\n要完全不用按「列印」：Chrome 捷徑的「目標」最後加上  --kiosk-printing（前面空一格），再用這個捷徑打開 Chrome。\n沒加的話會跳出列印視窗，按一下「列印」就好。');
+};
+// 辦公室自動印：只印這台電腦打開之後才完成的波次；多台電腦都勾了也只會印一次（先搶到的印）
+function startAutoLabelPrinter() {
+    const since = new Date().toISOString();
+    window.db.collection('waves').where('completedAt', '>=', since).onSnapshot(function(snap) {
+        if (window.labelPrintMode() !== 'office' || !isThisLabelPrinter()) return;
+        snap.docChanges().forEach(function(ch) {
+            const w = Object.assign({ id: ch.doc.id }, ch.doc.data());
+            if (w.status !== 'done' || w.labelAutoPrintedAt || w.labelsPrintedAt) return;
+            autoPrintWaveLabels(w).catch(function(e) { console.warn('自動印標籤失敗', e); });
+        });
+    }, function(e) { console.warn('自動印標籤監聽失敗', e); });
+}
+async function autoPrintWaveLabels(w) {
+    const ref = window.db.collection('waves').doc(w.id);
+    const me = window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : '';
+    const mine = await window.db.runTransaction(async function(tx) {
+        const d = (await tx.get(ref)).data();
+        if (!d || d.labelAutoPrintedAt || d.labelsPrintedAt) return false;
+        tx.update(ref, { labelAutoPrintedAt: new Date().toISOString(), labelAutoPrintedBy: me, labelsPrintedAt: new Date().toISOString(), labelsPrintedOn: 'office' });
+        return true;
+    });
+    if (!mine) return;
+    const lb = window.buildSortingLabelsHtml(w);
+    const f = document.createElement('iframe');
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+    f.className = 'auto-label-frame';
+    document.body.appendChild(f);
+    f.contentDocument.open();
+    f.contentDocument.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>分貨標籤 ' + w.waveNo + '</title><style>body{font-family:"Microsoft JhengHei",sans-serif;margin:0}' + window.sortingLabelsPrintCss(lb) + '</style></head><body>' + lb.body + '</body></html>');
+    f.contentDocument.close();
+    if (window.showToast) window.showToast('🏷️ 自動印分貨標籤：' + w.waveNo + '（' + (w.orders || []).length + ' 張）');
+    setTimeout(function() { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { console.warn(e); } setTimeout(function() { f.remove(); }, 60000); }, 300);
+}
 
 // ---------- 練習模式開關（主管）----------
 function renderPracticeToggle() {

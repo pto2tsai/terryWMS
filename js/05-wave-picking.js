@@ -1400,7 +1400,7 @@
                 }
                 // 鼎新改單、波次已自動更新：有印紙本的要重印（打開揀貨畫面按「列印揀貨單」後就會消失）
                 if (wave.reprintRequired && wave.status !== 'done') {
-                    html += ' <span class="erp-reprint text-xs px-2 py-0.5 rounded bg-amber-500 text-black font-bold" title="鼎新改單，波次數量已自動更新">🖨️ 揀貨單要重印</span>';
+                    html += ' <span class="erp-reprint text-xs px-2 py-0.5 rounded bg-amber-500 text-black font-bold" title="鼎新改單，波次數量已自動更新">🖨️ 揀貨單和標籤要重印</span>';
                 }
                 html += '</td>';
                 html += '<td class="p-3 text-white">' + (wave.logistics || '混合') + '</td>';
@@ -1581,44 +1581,15 @@ window.printSingleLabel = function(orderNo) {
     printWindow.document.close();
 };
 
+// 分貨標籤的版面 buildSortingLabelsHtml 在 js/shared/picking-list.js（手機完成波次後也要印）
 window.printAllLabels = function() {
     var wave = window._waveData.currentWave;
     var printWindow = window.open('', '_blank', 'width=1100,height=800');
-
-    var labelsHtml = (wave.orders || []).map(function(order) {
-        var totalPkg = 0;
-        var itemsHtml = (order.items || []).filter(function(item) {
-            return !window.isExcludedFromSortingLabel(item.productName);
-        }).map(function(item) {
-            var qty = item.quantity || 0;
-            var boxPerPkg = parseBoxPerPackage(item.productName);
-            var pkgQty = (boxPerPkg > 0 && qty > 0) ? Math.ceil(qty / boxPerPkg) : (item.packageQty || 1);
-            if (!window.isPackagingItem(item.productName)) {
-                totalPkg += pkgQty;
-            }
-            var isPackaging = window.isPackagingItem(item.productName);
-            var qtyText = isPackaging ? '(包材)' : pkgQty + ' 件';
-            return '<div class="item"><span>' + item.productName + '</span><strong>' + qtyText + '</strong></div>';
-        }).join('');
-
-        return '<div class="label"><div class="logistics">' + (order.logistics || wave.logistics) + '</div>' +
-            '<div style="font-size:14px;color:#666">📦 ' + order.orderNo + '</div>' +
-            '<div class="customer">👤 ' + order.customer + '</div>' +
-            '<div class="total">共 ' + totalPkg + ' 件</div>' +
-            '<div class="items">' + itemsHtml + '</div>' +
-            (order.address ? '<div class="address">📍 ' + order.address + '</div>' : '') + '</div>';
-    }).join('');
-
+    if (!printWindow) { alert('瀏覽器擋住了列印視窗，請允許這個網站「彈出式視窗」後再按一次'); return; }
+    var lb = window.buildSortingLabelsHtml(wave);
     printWindow.document.write('<!DOCTYPE html><html><head><title>分貨標籤</title>' +
-        '<style>body{font-family:"Microsoft JhengHei",sans-serif;padding:20px}' +
-        '.label{border:2px solid #333;padding:15px;width:320px;margin-bottom:20px;page-break-inside:avoid}' +
-        '.logistics{background:#333;color:white;padding:5px 10px;font-weight:bold;margin:-15px -15px 10px -15px}' +
-        '.customer{font-size:24px;font-weight:bold;margin:10px 0}' +
-        '.total{background:#dc2626;color:white;padding:8px;text-align:center;font-size:20px;font-weight:bold;margin:10px 0;border-radius:4px}' +
-        '.items{border-top:1px dashed #ccc;padding-top:10px}' +
-        '.item{margin:5px 0;display:flex;justify-content:space-between}' +
-        '.address{font-size:12px;color:#666;margin-top:10px;border-top:1px dashed #ccc;padding-top:10px}</style></head>' +
-        '<body>' + labelsHtml + '<script>window.print();<\/script></body></html>');
+        '<style>body{font-family:"Microsoft JhengHei",sans-serif;padding:20px}' + lb.style + '</style></head>' +
+        '<body>' + lb.body + '<script>window.print();<\/script></body></html>');
     printWindow.document.close();
 };
 
