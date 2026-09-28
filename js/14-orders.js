@@ -34,65 +34,8 @@ function parseLogistics(remark) {
     return '未指定';
 }
 
-window.isFeeItem = function(productName) {
-    if (!productName) return true;
-    var feeKeywords = ['運費', '費用', '代收', '代墊', '手續費', '服務費', '代付', '其他費用'];
-    return feeKeywords.some(function(kw) { return productName.includes(kw); });
-};
+// 品項分類（運費、包材、冷藏…）和每件幾盒的判斷在 js/shared/product-rules.js（電腦版與手機版共用）
 
-window.isPackagingItem = function(productName) {
-    if (!productName) return false;
-    var packagingKeywords = ['保力龍', '保麗龍', '包材', '紙箱', '冰袋', '冰塊', '保麗龍箱', '保力龍箱'];
-    return packagingKeywords.some(function(kw) { return productName.includes(kw); });
-};
-
-window.isChilledItem = function(productName) {
-    if (!productName) return false;
-    var chilledKeywords = ['現流白仁', '冷藏'];
-    return chilledKeywords.some(function(kw) { return productName.includes(kw); });
-};
-
-window.isExcludedFromPickingList = function(productName) {
-    return window.isFeeItem(productName) || window.isPackagingItem(productName) || window.isChilledItem(productName);
-};
-
-window.isExcludedFromSortingLabel = function(productName) {
-    return window.isFeeItem(productName) || window.isChilledItem(productName);
-};
-
-window.isExcludedFromQtyCount = function(productName) {
-    return window.isFeeItem(productName) || window.isPackagingItem(productName) || window.isChilledItem(productName);
-};
-
-window.isNonProductItem = window.isExcludedFromSortingLabel;
-
-window.parseBoxPerPackage = function(productName) {
-    if (!productName) return 0;
-
-    var patterns = [
-        /\*(\d+)盒/,      // *8盒
-        /\*(\d+)入/,      // *12入
-        /\*(\d+)包/,      // *6包
-        /\*(\d+)袋/,      // *10袋
-        /x(\d+)盒/i,      // x8盒
-        /x(\d+)入/i,      // x12入
-        /(\d+)盒\/件/,    // 8盒/件
-        /(\d+)入\/件/     // 12入/件
-    ];
-
-    for (var i = 0; i < patterns.length; i++) {
-        var match = productName.match(patterns[i]);
-        if (match && match[1]) {
-            return parseInt(match[1]);
-        }
-    }
-
-    return 0;  // 無法解析時返回0，使用原始邏輯
-};
-
-function parseBoxPerPackage(productName) {
-    return window.parseBoxPerPackage(productName);
-}
 
 window._orderData = {
     orders: [],  // 所有訂單
@@ -365,7 +308,6 @@ function printUpdatedPickingLists(waves, changeDetails, opts) {
         '.floor-2f { background: #fef3c7; }' +
         '.floor-3f { background: #fee2e2; }' +
         '.timestamp { text-align: right; font-size: 10px; color: #666; margin-top: 10px; }' +
-        (fresh ? window.buildSortingLabelsHtml({ orders: [] }).style : '') +
         '</style></head><body>';
 
     waves.forEach(function(wave) {
@@ -440,8 +382,6 @@ function printUpdatedPickingLists(waves, changeDetails, opts) {
         html += '</table>';
         html += '<div class="timestamp">版次 V' + version + ' | 列印日期：' + now + '</div>';
         html += '</div>';
-        // 剛建好的波次：分貨標籤跟揀貨單一起印（下一頁）
-        if (fresh) html += '<div class="wave-section">' + window.buildSortingLabelsHtml(wave).body + '</div>';
     });
 
     html += '<script>window.onload = function() { window.print(); }<\/script></body></html>';
@@ -1099,7 +1039,7 @@ window.autoCreateWavesByLogistics = async function(opts) {
         WMS.createModal('modal-wave-print', {
             title: failed.length ? '⚠️ 部分波次建立失敗' : '✅ 波次建好了', icon: 'fa-solid fa-layer-group text-blue-400', width: '520px',
             content: '<pre class="text-slate-200 text-sm whitespace-pre-wrap mb-4">' + esc(resultText.replace(/^.*\n\n/, '')) + '</pre>' +
-                '<button id="btn-print-new-waves" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-lg"><i class="fa-solid fa-print mr-2"></i>列印揀貨單＋分貨標籤（' + nos.length + ' 個波次）</button>' +
+                '<button id="btn-print-new-waves" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-lg"><i class="fa-solid fa-print mr-2"></i>列印揀貨單（' + nos.length + ' 張）</button>' +
                 '<button onclick="WMS.closeModal(\'modal-wave-print\')" class="w-full py-2 mt-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">先不印</button>'
         });
         document.getElementById('btn-print-new-waves').onclick = function() { window.printNewWavePickingLists(nos); WMS.closeModal('modal-wave-print'); };
@@ -1794,6 +1734,8 @@ window.closeWaveExecuteModal = function() {
 window.onLogin(function() {
     loadOrdersFromFirebase();
     loadWarehouses();
+    window.watchLabelPrintMode(renderLabelModeToggle);
+    startAutoLabelPrinter();
     window.watchPracticeMode(function() {
         renderPracticeToggle();
         // 揀貨畫面開著：清單馬上照新模式重算
@@ -1801,6 +1743,70 @@ window.onLogin(function() {
         if (modal && !modal.classList.contains('hidden') && window._waveData.currentWave) generatePickingListV2(window._waveData.currentWave);
     });
 });
+
+// ---------- 分貨標籤誰來印（主管切換）：手機印／辦公室自動印 ----------
+function isThisLabelPrinter() { try { return localStorage.getItem('wms_autoLabelPrinter') === '1'; } catch (e) { return false; } }
+function renderLabelModeToggle() {
+    const btn = document.getElementById('btn-label-mode');
+    if (!btn) return;
+    const office = window.labelPrintMode() === 'office';
+    const r = window.currentUser && window.currentUser.role;
+    const sup = r === 'admin' || r === 'supervisor';
+    btn.style.display = '';
+    btn.disabled = !sup;
+    btn.className = 'px-3 py-2 rounded-lg font-bold mr-2 text-sm ' + (office ? 'bg-sky-700 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600');
+    btn.innerHTML = '🏷️ 標籤：' + (office ? '辦公室自動印' : '手機印');
+    btn.title = office ? '手機完成波次後，勾了「這台電腦自動印標籤」的電腦會自動印出分貨標籤' : '手機完成波次後，在手機上按「印分貨標籤」直接印';
+    const wrap = document.getElementById('auto-label-wrap');
+    if (wrap) wrap.style.display = office ? '' : 'none';
+    const chk = document.getElementById('chk-auto-label');
+    if (chk) chk.checked = isThisLabelPrinter();
+}
+window.toggleLabelPrintMode = async function() {
+    const office = window.labelPrintMode() !== 'office';
+    if (!confirm(office
+        ? '改成「辦公室自動印標籤」？\n\n手機完成波次後，辦公室那台電腦會自動印出分貨標籤（件數是實際出貨的）。\n請在要負責印的那台電腦勾「這台電腦自動印標籤」，並保持開著。'
+        : '改回「手機印標籤」？\n\n手機完成波次後，在手機上按「印分貨標籤」直接印。')) return;
+    try { await window.db.collection('settings').doc('labelPrint').set({ mode: office ? 'office' : 'phone', updatedAt: new Date().toISOString() }); }
+    catch (e) { alert('❌ 切換失敗：' + e.message); }
+};
+window.setAutoLabelMachine = function(on) {
+    try { localStorage.setItem('wms_autoLabelPrinter', on ? '1' : '0'); } catch (e) {}
+    if (on) alert('✅ 這台電腦會自動印分貨標籤\n\n要完全不用按「列印」：Chrome 捷徑的「目標」最後加上  --kiosk-printing（前面空一格），再用這個捷徑打開 Chrome。\n沒加的話會跳出列印視窗，按一下「列印」就好。');
+};
+// 辦公室自動印：只印這台電腦打開之後才完成的波次；多台電腦都勾了也只會印一次（先搶到的印）
+function startAutoLabelPrinter() {
+    const since = new Date().toISOString();
+    window.db.collection('waves').where('completedAt', '>=', since).onSnapshot(function(snap) {
+        if (window.labelPrintMode() !== 'office' || !isThisLabelPrinter()) return;
+        snap.docChanges().forEach(function(ch) {
+            const w = Object.assign({ id: ch.doc.id }, ch.doc.data());
+            if (w.status !== 'done' || w.labelAutoPrintedAt || w.labelsPrintedAt) return;
+            autoPrintWaveLabels(w).catch(function(e) { console.warn('自動印標籤失敗', e); });
+        });
+    }, function(e) { console.warn('自動印標籤監聽失敗', e); });
+}
+async function autoPrintWaveLabels(w) {
+    const ref = window.db.collection('waves').doc(w.id);
+    const me = window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : '';
+    const mine = await window.db.runTransaction(async function(tx) {
+        const d = (await tx.get(ref)).data();
+        if (!d || d.labelAutoPrintedAt || d.labelsPrintedAt) return false;
+        tx.update(ref, { labelAutoPrintedAt: new Date().toISOString(), labelAutoPrintedBy: me, labelsPrintedAt: new Date().toISOString(), labelsPrintedOn: 'office' });
+        return true;
+    });
+    if (!mine) return;
+    const lb = window.buildSortingLabelsHtml(w);
+    const f = document.createElement('iframe');
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+    f.className = 'auto-label-frame';
+    document.body.appendChild(f);
+    f.contentDocument.open();
+    f.contentDocument.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>分貨標籤 ' + w.waveNo + '</title><style>body{font-family:"Microsoft JhengHei",sans-serif;margin:0}' + window.sortingLabelsPrintCss(lb) + '</style></head><body>' + lb.body + '</body></html>');
+    f.contentDocument.close();
+    if (window.showToast) window.showToast('🏷️ 自動印分貨標籤：' + w.waveNo + '（' + (w.orders || []).length + ' 張）');
+    setTimeout(function() { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { console.warn(e); } setTimeout(function() { f.remove(); }, 60000); }, 300);
+}
 
 // ---------- 練習模式開關（主管）----------
 function renderPracticeToggle() {

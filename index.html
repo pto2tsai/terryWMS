@@ -1325,6 +1325,8 @@
                             <button onclick="setWaveCompany('八方')" id="btn-wave-bf" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600">八方</button>
                         </div>
                         <button id="btn-practice-mode" onclick="togglePracticeMode()" style="display:none"></button>
+                        <button id="btn-label-mode" onclick="toggleLabelPrintMode()" style="display:none"></button>
+                        <label id="auto-label-wrap" class="text-xs text-sky-200 mr-2 items-center gap-1" style="display:none"><input type="checkbox" id="chk-auto-label" onchange="setAutoLabelMachine(this.checked)"> 這台電腦自動印標籤</label>
                         <input type="file" id="order-excel-import" accept=".xlsx,.xls" class="hidden" onchange="importERPExcel(event)">
                         <button onclick="document.getElementById('order-excel-import').click()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-bold mr-2">
                             <i class="fa-solid fa-file-excel mr-1"></i>匯入訂單
@@ -4798,6 +4800,7 @@
     <script src="js/shared/rack-config.js"></script>
     <script src="js/shared/stock-core.js"></script>
     <script src="js/shared/inbound-core.js"></script>
+    <script src="js/shared/product-rules.js"></script>
     <script src="js/shared/picking-list.js"></script>
     <script src="js/shared/erp-schedule.js"></script>
     

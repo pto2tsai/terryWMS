@@ -1777,11 +1777,8 @@ window.clearLocalStorage = function() {
             }
             var printTime = new Date().toLocaleString('zh-TW');
             html += '<div class="timestamp">版次 V' + version + ' | 列印日期：' + printTime + '</div>';
-            // 分貨標籤跟揀貨單一起印（換頁）：揀完就能直接分貨，不用再回辦公室印
-            var lb = window.buildSortingLabelsHtml(wave);
-            html += '<style>' + lb.style + '</style><div style="page-break-before:always;margin-top:24px"></div>' + lb.body;
-
-            openPrintPreview(html, '揀貨單＋分貨標籤 - ' + wave.waveNo, 900, 700);
+            // 分貨標籤不在這裡印：揀完才印（手機或辦公室自動印），件數才會是實際出貨的
+            openPrintPreview(html, '揀貨單 - ' + wave.waveNo, 900, 700);
         };
 
         window.openAddToWaveModal = async function(waveNo) {

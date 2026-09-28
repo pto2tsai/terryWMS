@@ -1581,52 +1581,7 @@ window.printSingleLabel = function(orderNo) {
     printWindow.document.close();
 };
 
-// 分貨標籤（一張訂單一張）：開始揀貨時跟揀貨單一起印；波次完成後重印，件數用實際出貨的（缺貨的已經扣掉）
-// 回傳 { style, body }，樣式都在 .sl 底下，跟揀貨單印在同一份也不會互相影響
-window.buildSortingLabelsHtml = function(wave) {
-    var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
-    var done = wave.status === 'done' && Array.isArray(wave.shipped);
-    var shippedOf = function(orderNo, name, spec) {
-        var o = (wave.shipped || []).find(function(x) { return x.orderNo === orderNo; });
-        return ((o && o.items) || []).filter(function(i) { return i.productName === name && (i.spec || '') === (spec || ''); }).reduce(function(t, i) { return t + (parseFloat(i.qty) || 0); }, 0);
-    };
-    var body = (wave.orders || []).map(function(order) {
-        var totalPkg = 0;
-        var itemsHtml = (order.items || []).filter(function(item) {
-            return !window.isExcludedFromSortingLabel(item.productName);
-        }).map(function(item) {
-            var isPackaging = window.isPackagingItem(item.productName);
-            var qty = item.quantity || 0;
-            var boxPerPkg = parseBoxPerPackage(item.productName);
-            var pkgQty = (boxPerPkg > 0 && qty > 0) ? Math.ceil(qty / boxPerPkg) : (item.packageQty || 1);
-            var shortNote = '';
-            if (done && !isPackaging) {
-                var got = shippedOf(order.orderNo, item.productName, item.spec);
-                if (got < (parseFloat(item.packageQty) || 1)) { shortNote = '<div class="short">缺貨：訂 ' + (item.packageQty || 1) + '，出 ' + got + '</div>'; pkgQty = got; }
-            }
-            if (!isPackaging) totalPkg += pkgQty;
-            var qtyText = isPackaging ? '(包材)' : pkgQty + ' 件';
-            return '<div class="item"><span>' + esc(item.productName) + ' ' + esc(item.spec || '') + '</span><strong>' + qtyText + '</strong></div>' + shortNote;
-        }).join('');
-        return '<div class="label"><div class="logistics">' + esc(order.logistics || wave.logistics) + '<span style="float:right">' + esc(wave.waveNo) + '</span></div>' +
-            '<div style="font-size:14px;color:#666">📦 ' + esc(order.orderNo) + '</div>' +
-            '<div class="customer">👤 ' + esc(order.customer) + '</div>' +
-            '<div class="total">共 ' + totalPkg + ' 件</div>' +
-            '<div class="items">' + itemsHtml + '</div>' +
-            (order.address ? '<div class="address">📍 ' + esc(order.address) + '</div>' : '') + '</div>';
-    }).join('');
-    var style = '.sl .label{border:2px solid #333;padding:15px;width:320px;margin:0 20px 20px 0;page-break-inside:avoid;display:inline-block;vertical-align:top;background:#fff;color:#000}' +
-        '.sl .logistics{background:#333;color:white;padding:5px 10px;font-weight:bold;margin:-15px -15px 10px -15px}' +
-        '.sl .customer{font-size:24px;font-weight:bold;margin:10px 0}' +
-        '.sl .total{background:#dc2626;color:white;padding:8px;text-align:center;font-size:20px;font-weight:bold;margin:10px 0;border-radius:4px}' +
-        '.sl .items{border-top:1px dashed #ccc;padding-top:10px}' +
-        '.sl .item{margin:5px 0;display:flex;justify-content:space-between;gap:8px}' +
-        '.sl .short{color:#dc2626;font-size:12px;font-weight:bold;text-align:right}' +
-        '.sl .address{font-size:12px;color:#666;margin-top:10px;border-top:1px dashed #ccc;padding-top:10px}' +
-        '.sl-title{font-size:16px;font-weight:bold;margin:0 0 10px}';
-    return { style: style, body: '<div class="sl"><div class="sl-title">分貨標籤 ' + esc(wave.waveNo) + '（' + (wave.orders || []).length + ' 張）</div>' + body + '</div>' };
-};
-
+// 分貨標籤的版面 buildSortingLabelsHtml 在 js/shared/picking-list.js（手機完成波次後也要印）
 window.printAllLabels = function() {
     var wave = window._waveData.currentWave;
     var printWindow = window.open('', '_blank', 'width=1100,height=800');

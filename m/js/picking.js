@@ -59,6 +59,7 @@ window.dataHooks.waves.push(function() {
     const w = window.waves.find(function(x) { return x.id === currentWave.id; });
     if (!w) return;
     if (w.status === 'done') {
+        if (window._justCompleted === w.id) return;   // 自己剛完成的，畫面上正在印標籤
         currentWave = null; pickingItems = [];
         show('picking-scan-area', false); show('picking-actions', false);
         setResult('picking-scan-result', 'info', '此波次已在其他裝置完成');
@@ -291,6 +292,33 @@ window.finishWithShortage = function() {
     return window.completePickingWave(true);
 };
 
+// 完成後：印分貨標籤（件數是實際出貨的）。辦公室自動印模式時，這裡只提示
+function renderFinishPanel(wave, nShort) {
+    show('picking-actions', false);
+    const n = (wave.orders || []).length;
+    const office = window.labelPrintMode() === 'office';
+    $('picking-next').innerHTML = '<div class="next-stop done" style="text-align:left">' +
+        '<div style="font-size:20px;font-weight:bold">✅ 波次 ' + esc(wave.waveNo) + ' 完成</div>' +
+        '<div style="margin:6px 0 12px;font-size:15px">' + (window.isPracticeMode() ? '練習模式：庫存沒有扣' : '庫存已扣除') +
+        (nShort ? '<br>⚠️ 不夠的這次不出、之後也不補；辦公室和看板會提醒業務在鼎新改銷貨單' : '') + '</div>' +
+        (office ? '<div style="font-size:17px;padding:10px;border-radius:10px;background:#1e3a8a">🏷️ 分貨標籤會在<b>辦公室自動印出</b>（' + n + ' 張），件數是實際出貨的</div>'
+                : '<button class="action-btn success" style="font-size:20px;padding:18px" onclick="printLabelsOnPhone()">🖨️ 印分貨標籤（' + n + ' 張）</button>' +
+                  '<div style="font-size:13px;color:#cbd5e1;margin-top:6px">件數是實際出貨的，不用再改。按了會跳出手機的列印畫面，選標籤機</div>') +
+        '<button class="action-btn secondary" style="margin-top:12px" onclick="goBack()">回到選單</button></div>';
+    window._finishedWave = wave;
+    window.scrollTo(0, 0);
+}
+window.printLabelsOnPhone = async function() {
+    const wave = window._finishedWave;
+    if (!wave) return;
+    const lb = window.buildSortingLabelsHtml(wave);
+    $('label-print-area').innerHTML = '<style>' + window.sortingLabelsPrintCss(lb) + '</style>' + lb.body;
+    window.print();
+    try {
+        await db.collection('waves').doc(wave.id).update({ labelsPrintedAt: new Date().toISOString(), labelsPrintedBy: window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : '', labelsPrintedOn: 'phone' });
+    } catch (e) { console.warn('記錄已印標籤失敗', e); }
+};
+
 // 主管在電腦版切換練習模式：清單馬上重算
 window.onPracticeModeChange = function() {
     const btn = $('picking-complete-btn');
@@ -331,12 +359,13 @@ window.completePickingWave = async function(labelsFixed) {
     if (!shorts.length && !confirm(msg)) return;
 
     try {
+        window._justCompleted = currentWave.id;   // 自己完成的：不要被「其他裝置完成」的提示蓋掉
         await window.completeWaveTx(currentWave, pickingItems, window.pallets);
-        alert('✅ 波次 ' + currentWave.waveNo + ' 已完成' + (window.isPracticeMode() ? '（練習模式：庫存沒有扣）' : '，庫存已扣除') +
-            (shorts.length ? '\n\n不夠的這次不出、之後也不補。辦公室和看板會提醒業務在鼎新改銷貨單數量' : ''));
+        currentWave.status = 'done';
         window._pendingAlloc = null;
-        goBack();
+        renderFinishPanel(currentWave, shorts.length);
     } catch (e) {
+        window._justCompleted = null;
         alert('❌ 完成波次失敗：' + e.message + '\n\n庫存與訂單都沒有變動。');
     }
 };

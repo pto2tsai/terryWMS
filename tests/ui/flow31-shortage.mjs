@@ -20,7 +20,7 @@ await H.nav(D.page, 'wave-picking'); await D.page.waitForTimeout(1200);
 const pvP = D.page.waitForEvent('popup', { timeout: 5000 }).catch(() => null);
 await D.page.evaluate(no => openWaveExecute(no), W.waveNo); await D.page.waitForTimeout(1200);
 const pv = await pvP; const pvHtml = pv ? await pv.content() : '';
-H.check('開始揀貨：揀貨單和分貨標籤一起預覽（每張訂單一張標籤）', pvHtml.includes('揀貨單') && pvHtml.includes('分貨標籤') && pvHtml.includes('海霸王') && pvHtml.includes('好市多') && (pvHtml.match(/class="label"/g) || []).length === 2, pvHtml.length);
+H.check('開始揀貨：只印揀貨單（分貨標籤揀完才印）', pvHtml.includes('揀貨單') && !pvHtml.includes('class="label"'), pvHtml.length);
 if (pv && process.env.SHOT_DIR) { await pv.setViewportSize({ width: 900, height: 700 }); await pv.screenshot({ path: process.env.SHOT_DIR + '/pick-with-labels.png', fullPage: true }); }
 if (pv) await pv.close().catch(() => {});
 await D.page.evaluate(() => closeWaveExecuteModal()); await D.page.waitForTimeout(300);
@@ -61,7 +61,15 @@ H.check('完成：照現場分法出貨（海霸王白蝦 3、好市多白蝦 3�
   JSON.stringify((wd.shipped || []).map(x => x.orderNo + ':' + x.items.map(i => i.productName + i.qty).join('+'))) === JSON.stringify(['A-1:白蝦3', 'A-2:白蝦3+透抽2']), JSON.stringify([wd.shipped, so['A-1'], so['A-2']]));
 H.check('海霸王標「要改鼎新」（白蝦 5→3）；好市多出齊不用改', so['A-1'].erpFixNeeded === true && so['A-1'].shortShipped[0].want === 5 && so['A-1'].shortShipped[0].got === 3 && !so['A-2'].erpFixNeeded, JSON.stringify([so['A-1'].shortShipped, so['A-2'].erpFixNeeded]));
 H.check('波次記下現場的分法和誰少出', wd.allocOverride && (wd.shortOrders || []).length === 1 && wd.shortOrders[0].customer === '海霸王' && wd.shortOrders[0].got === 3, JSON.stringify([wd.allocOverride, wd.shortOrders]));
-H.check('完成訊息：缺的不補，請業務改鼎新', M.log.dialogs.slice(d0).some(x => x.msg.includes('之後也不補') && x.msg.includes('鼎新')), JSON.stringify(M.log.dialogs.slice(d0).map(x => x.msg)));
+const fin = await mp.innerText('#picking-next');
+H.check('完成畫面：寫缺的不補、請業務改鼎新；有「印分貨標籤（2 張）」按鈕', fin.includes('完成') && fin.includes('之後也不補') && fin.includes('印分貨標籤（2 張）'), fin);
+if (process.env.SHOT_DIR) await mp.screenshot({ path: process.env.SHOT_DIR + '/finish-panel.png' });
+await mp.evaluate(() => { window.print = () => { window.__printed = document.getElementById('label-print-area').innerHTML; }; });
+await mp.click('text=印分貨標籤'); await mp.waitForTimeout(1200);
+const printed = await mp.evaluate(() => window.__printed || '');
+H.check('手機印標籤：一張訂單一張，件數是實際出貨的（海霸王白蝦 3 件、註明缺貨 訂 5 出 3；好市多白蝦 3 件）', (printed.match(/class="label"/g) || []).length === 2 &&
+  /白蝦 50\/60<\/span><strong>3 件/.test(printed) && printed.includes('缺貨：訂 5，出 3') && printed.includes('page-break-after:always'), printed.replace(/<style>[\s\S]*?<\/style>/, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 300));
+H.check('記下標籤已經在手機印過', !!(await H.one('waves', W.waveNo)).labelsPrintedAt && (await H.one('waves', W.waveNo)).labelsPrintedOn === 'phone');
 
 // ---------- 完成後重印標籤：用實際出貨數 ----------
 await D.page.evaluate(() => loadWavesFromFirebase && loadWavesFromFirebase()); await D.page.waitForTimeout(1200);
@@ -87,6 +95,27 @@ const r2 = await pushReport('每日客戶銷貨明細表_1100.xlsx', [HEAD, ['20
 for (let i = 0; i < 30; i++) { await D.page.waitForTimeout(500); const x = await H.one('erpInbox', r2.id); if (x && ['done', 'attention', 'error'].includes(x.status)) break; }
 await B.waitForTimeout(1500);
 H.check('業務在鼎新把海霸王改成 3 件、匯入後：提醒自動消失（看板不再顯示）', (await H.all('salesOrders')).find(o => o.orderNo === 'A-1').erpFixNeeded === false && !(await B.innerText('#erp-alert')).includes('缺貨少出'), await B.innerText('#erp-alert'));
+
+// ---------- 辦公室自動印（手機連不上標籤機時）----------
+await H.nav(D.page, 'wave-picking'); await D.page.waitForTimeout(800);
+D.page.__dialogPlan = [true];
+await D.page.click('#btn-label-mode'); await D.page.waitForTimeout(1200);
+H.check('主管切成「標籤：辦公室自動印」，出現「這台電腦自動印標籤」', (await H.one('settings', 'labelPrint')).mode === 'office' && (await D.page.innerText('#btn-label-mode')).includes('辦公室自動印') && await D.page.isVisible('#chk-auto-label'));
+D.page.__dialogPlan = [true];
+await D.page.check('#chk-auto-label'); await D.page.waitForTimeout(300);
+const r3 = await pushReport('每日客戶銷貨明細表_1300.xlsx', [HEAD, ['2026/09/28', 'B-1', '全聯', '透抽', 'L', 4, '件', '新竹']]);
+for (let i = 0; i < 30; i++) { await D.page.waitForTimeout(500); const x = await H.one('erpInbox', r3.id); if (x && ['done', 'attention', 'error'].includes(x.status)) break; }
+const W2 = (await H.all('waves')).find(w => (w.orders || []).some(o => o.orderNo === 'B-1'));
+await mp.evaluate(() => goBack()); await mp.evaluate(() => openPage('picking')); await mp.waitForTimeout(600);
+await mp.selectOption('#picking-wave-select', W2.waveNo); await mp.waitForTimeout(1000);
+await mp.click('#picking-next button.action-btn.success'); await mp.waitForTimeout(800);
+M.page.__dialogPlan = [true];
+await mp.evaluate(async () => { await completePickingWave(); }); await mp.waitForTimeout(3000);
+const fin2 = await mp.innerText('#picking-next');
+H.check('辦公室模式：手機完成後寫「分貨標籤會在辦公室自動印出」，沒有手機列印按鈕', fin2.includes('辦公室自動印出') && !fin2.includes('印分貨標籤（'), fin2);
+const w2 = await H.one('waves', W2.waveNo);
+const frame = await D.page.evaluate(() => { const f = document.querySelector('.auto-label-frame'); return f ? f.contentDocument.body.innerHTML : ''; });
+H.check('辦公室電腦自動印出標籤（沒有人按），件數是實際出貨的；記下是哪台印的', !!w2.labelAutoPrintedAt && w2.labelsPrintedOn === 'office' && frame.includes('全聯') && frame.includes('4 件'), JSON.stringify([w2.labelAutoPrintedAt, frame.replace(/<[^>]+>/g, ' ').slice(0, 120)]));
 
 H.check('沒有頁面錯誤', D.log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(D.log.errors.concat(M.log.errors)));
 await H.close(); process.exit(0);
