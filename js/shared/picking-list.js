@@ -414,6 +414,7 @@ window.buildSortingLabelsHtml = function(wave) {
         var o = (wave.shipped || []).find(function(x) { return x.orderNo === orderNo; });
         return ((o && o.items) || []).filter(function(i) { return i.productName === name && (i.spec || '') === (spec || ''); }).reduce(function(t, i) { return t + (parseFloat(i.qty) || 0); }, 0);
     };
+    var skipped = [];   // 已完成的波次裡一件都沒出的訂單：不印標籤
     var body = (wave.orders || []).map(function(order) {
         var totalPkg = 0;
         var itemsHtml = (order.items || []).filter(function(item) {
@@ -438,6 +439,10 @@ window.buildSortingLabelsHtml = function(wave) {
             '<div class="total">共 ' + totalPkg + ' 件</div>' +
             '<div class="items">' + itemsHtml + '</div>' +
             (order.address ? '<div class="address">📍 ' + esc(order.address) + '</div>' : '') + '</div>';
+    }).map(function(html, i) {
+        var order = (wave.orders || [])[i];
+        if (done && !(wave.shipped || []).some(function(x) { return x.orderNo === order.orderNo && (x.items || []).length; })) { skipped.push(order.customer + '（' + order.orderNo + '）'); return ''; }
+        return html;
     }).join('');
     var style = '.sl .label{border:2px solid #333;padding:15px;width:320px;margin:0 20px 20px 0;page-break-inside:avoid;display:inline-block;vertical-align:top;background:#fff;color:#000}' +
         '.sl .logistics{background:#333;color:white;padding:5px 10px;font-weight:bold;margin:-15px -15px 10px -15px}' +
@@ -448,7 +453,9 @@ window.buildSortingLabelsHtml = function(wave) {
         '.sl .short{color:#dc2626;font-size:12px;font-weight:bold;text-align:right}' +
         '.sl .address{font-size:12px;color:#666;margin-top:10px;border-top:1px dashed #ccc;padding-top:10px}' +
         '.sl-title{font-size:16px;font-weight:bold;margin:0 0 10px}';
-    return { style: style, body: '<div class="sl"><div class="sl-title">分貨標籤 ' + esc(wave.waveNo) + '（' + (wave.orders || []).length + ' 張）</div>' + body + '</div>' };
+    var count = (wave.orders || []).length - skipped.length;
+    return { style: style, count: count, skipped: skipped,
+        body: '<div class="sl"><div class="sl-title">分貨標籤 ' + esc(wave.waveNo) + '（' + count + ' 張）' + (skipped.length ? '　沒有出貨、不用貼：' + esc(skipped.join('、')) : '') + '</div>' + body + '</div>' };
 };
 
 

@@ -146,16 +146,18 @@ H.check('手機揀這個波次時，最上面提醒：鼎新改了 SO-2，數量
 const slot = await page.evaluate(() => {
   const at = (h, m) => { const d = new Date(2026, 8, 25, h, m); return d; };   // 2026/9/25 星期五
   const doc = (h, m) => ({ type: 'sales_daily', receivedAt: at(h, m).toISOString() });
+  const y = { type: 'sales_daily', receivedAt: new Date(2026, 8, 24, 15, 0).toISOString() };   // 前一天收過（自動匯入已經在用）
   return [
-    erpMissedSlot([], null, at(9, 20)),                       // 9:00 還沒過 25 分鐘
-    erpMissedSlot([], null, at(9, 30)),                       // 9:00 沒收到
-    erpMissedSlot([doc(8, 58)], null, at(9, 30)),             // 8:58 收到了
-    erpMissedSlot([doc(9, 5)], null, at(11, 40)),             // 11:00 沒收到
-    erpMissedSlot([], null, new Date(2026, 8, 27, 12, 0)),    // 星期日不提醒
-    erpMissedSlot([], { times: ['10:00'], days: [0] }, new Date(2026, 8, 27, 12, 0))
+    erpMissedSlot([y], null, at(9, 20)),                      // 9:00 還沒過 25 分鐘
+    erpMissedSlot([y], null, at(9, 30)),                      // 9:00 沒收到
+    erpMissedSlot([y, doc(8, 58)], null, at(9, 30)),          // 8:58 收到了
+    erpMissedSlot([y, doc(9, 5)], null, at(11, 40)),          // 11:00 沒收到
+    erpMissedSlot([y], null, new Date(2026, 8, 27, 12, 0)),   // 星期日不提醒
+    erpMissedSlot([y], { times: ['10:00'], days: [0] }, new Date(2026, 8, 27, 12, 0)),
+    erpMissedSlot([], null, at(11, 40))                       // 自動匯入還沒開始用（手動匯入中）：不提醒
   ];
 });
-H.check('訂單檔該到沒到：過了 25 分鐘沒收到才提醒；週末不提醒；時間、星期可以改', JSON.stringify(slot) === JSON.stringify([null, '09:00', null, '11:00', null, '10:00']), JSON.stringify(slot));
+H.check('訂單檔該到沒到：過了 25 分鐘沒收到才提醒；週末不提醒；時間、星期可以改；還在手動匯入（沒收過自動檔）不提醒', JSON.stringify(slot) === JSON.stringify([null, '09:00', null, '11:00', null, '10:00', null]), JSON.stringify(slot));
 const SUPP = SUP.page;
 await H.nav(SUPP, 'erp-inbox'); await SUPP.waitForTimeout(1500);
 await SUPP.fill('#erp-sched-times', '08:30, 13:00'); await SUPP.click('#erp-sched-save'); await SUPP.waitForTimeout(800);
