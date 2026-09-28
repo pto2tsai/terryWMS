@@ -26,6 +26,16 @@ H.check('匯入 2 張訂單', so.length === 2, JSON.stringify(so.map(o => o.orde
 const waves = await H.all('waves');
 H.note('waves: ' + JSON.stringify(waves.map(w => [w.waveNo, w.status, w.orderCount, (w.summary || []).map(s => s.productName + ':' + s.totalQty)])));
 H.check('自動建立 1 個波次含 2 張訂單（已存入資料庫）', waves.length === 1 && waves[0].orderCount === 2, JSON.stringify(waves));
+// 建好波次後：跳出「列印揀貨單」按鈕，按一下就印出剛建好的波次揀貨單
+H.check('匯入建好波次後，跳出「列印揀貨單（1 張）」按鈕', await page.isVisible('#btn-print-new-waves') && (await page.innerText('#btn-print-new-waves')).includes('1 張'));
+const popP = page.waitForEvent('popup');
+await page.click('#btn-print-new-waves');
+const pop = await popP; await pop.waitForLoadState().catch(() => {}); await page.waitForTimeout(500);
+const popHtml = await pop.content();
+H.check('印出的揀貨單：有波次號、品項和總件數，不是「更新版」', popHtml.includes(waves[0].waveNo) && popHtml.includes('白蝦') && popHtml.includes('透抽') && !popHtml.includes('更新版】') && !(await page.isVisible('#modal-wave-print')), popHtml.slice(0, 200));
+H.check('揀貨單印出儲位、批號、效期（白蝦先印效期早的 I-A-04-1F／B0；透抽 J-C-01-1F）', popHtml.includes('I-A-04-1F') && popHtml.includes('B0') && popHtml.includes('2027/01/01') && popHtml.includes('J-C-01-1F') && !popHtml.includes('I-A-03-2F'), popHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(300, 700));
+if (process.env.SHOT) { await pop.setViewportSize({ width: 900, height: 700 }); await pop.screenshot({ path: process.env.SHOT, fullPage: true }); }
+await pop.close().catch(() => {});
 const soAfter = await H.all('salesOrders'); H.check('訂單狀態在資料庫中變成 inWave', soAfter.every(o => o.status === 'inWave'), JSON.stringify(soAfter.map(o => o.status)));
 // 重新整理頁面後，這兩張訂單不應再出現在「可建立波次」清單
 await page.reload(); await page.fill('#login-email', 'x').catch(()=>{}); await page.waitForTimeout(4000);
