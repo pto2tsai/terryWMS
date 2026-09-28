@@ -36,7 +36,7 @@ function pickerTouch() {
 }
 
 // 我在哪一間倉庫：這支手機記住（選一次就好，揀貨畫面上方可以切換）
-function myHouse() { try { return localStorage.getItem('wms_pick_house') || ''; } catch (e) { return ''; } }
+function myHouse() { try { const h = localStorage.getItem('wms_pick_house') || ''; return window.houseName(h) ? h : ''; } catch (e) { return ''; } }
 window.chooseHouse = function(id) {
     try { localStorage.setItem('wms_pick_house', id); } catch (e) {}
     if (currentWave) {
