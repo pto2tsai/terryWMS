@@ -334,10 +334,13 @@ window.updateChangedWaves = async function() {
     showUpdateCompleteAlert(updatedWaveNos);
 };
 
-function printUpdatedPickingLists(waves, changeDetails) {
+// opts.fresh：剛建好的波次（一般揀貨單，不印「更新版」橫條和異動欄）
+function printUpdatedPickingLists(waves, changeDetails, opts) {
+    var fresh = !!(opts && opts.fresh);
     var printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) { alert('瀏覽器擋住了列印視窗，請允許這個網站「彈出式視窗」後再按一次'); return false; }
 
-    var html = '<!DOCTYPE html><html><head><title>📋 更新版揀貨單</title>' +
+    var html = '<!DOCTYPE html><html><head><title>' + (fresh ? '揀貨單' : '📋 更新版揀貨單') + '</title>' +
         '<style>' +
         'body { font-family: "Microsoft JhengHei", sans-serif; font-size: 12px; }' +
         '.wave-section { page-break-after: always; margin-bottom: 20px; }' +
@@ -371,7 +374,7 @@ function printUpdatedPickingLists(waves, changeDetails) {
 
         html += '<div class="wave-section">';
 
-        html += '<div class="update-banner">⚠️ 【更新版】請作廢舊版揀貨單</div>';
+        if (!fresh) html += '<div class="update-banner">⚠️ 【更新版】請作廢舊版揀貨單</div>';
 
         html += '<div class="header">';
         html += '<div><h2>揀貨單</h2><h3 style="margin:5px 0 0 0">' + wave.waveNo + '</h3></div>';
@@ -408,7 +411,7 @@ function printUpdatedPickingLists(waves, changeDetails) {
         });
 
         html += '<table>';
-        html += '<tr><th class="check">✓</th><th style="width:70px">儲位</th><th style="width:100px">品名</th><th>規格</th><th style="width:80px">批號</th><th style="width:80px">效期</th><th style="width:50px" class="qty">數量</th><th style="width:35px">單位</th><th style="width:50px">異動</th></tr>';
+        html += '<tr><th class="check">✓</th><th style="width:70px">儲位</th><th style="width:100px">品名</th><th>規格</th><th style="width:80px">批號</th><th style="width:80px">效期</th><th style="width:50px" class="qty">數量</th><th style="width:35px">單位</th>' + (fresh ? '' : '<th style="width:50px">異動</th>') + '</tr>';
 
         summaryWithLoc.forEach(function(item) {
             var floorClass = item.floor === 1 ? 'floor-1f' : (item.floor === 2 ? 'floor-2f' : (item.floor === 3 ? 'floor-3f' : ''));
@@ -429,7 +432,7 @@ function printUpdatedPickingLists(waves, changeDetails) {
             html += '<td style="font-size:11px">' + item.expiryDate + '</td>';
             html += '<td class="qty">' + item.totalQty + '</td>';
             html += '<td>' + item.unit + '</td>';
-            html += '<td style="text-align:center">' + changeHtml + '</td>';
+            if (!fresh) html += '<td style="text-align:center">' + changeHtml + '</td>';
             html += '</tr>';
         });
 
@@ -442,43 +445,41 @@ function printUpdatedPickingLists(waves, changeDetails) {
 
     printWindow.document.write(html);
     printWindow.document.close();
+    return true;
 }
+
+// 匯入訂單後，一次印出剛建好的波次揀貨單（一個波次一頁）
+window.printNewWavePickingLists = function(waveNos) {
+    var waves = (waveNos || []).map(function(no) { return window._waveData.waves.find(function(w) { return w.waveNo === no; }); }).filter(Boolean);
+    if (!waves.length) { alert('找不到剛建好的波次，請到波次清單按「開始揀貨」再列印'); return; }
+    if (printUpdatedPickingLists(waves, null, { fresh: true })) saveWaves();
+};
 
 function findProductLocation(productName, spec) {
-    var pallets = window._inventoryData && window._inventoryData.pallets ? window._inventoryData.pallets : [];
-    for (var i = 0; i < pallets.length; i++) {
-        var p = pallets[i];
-        if (p.productName === productName && (p.spec || '') === (spec || '')) {
-            return p.locationId || '-';
-        }
-    }
-    return '-';
+    var p = productPalletsFifo(productName, spec)[0];
+    return p ? (p.locationId || '-') : '-';
 }
 
+// 揀貨單上印的儲位／批號／效期：同品名規格的板，先進先出（效期早的先），過期、留置的不算
+function productPalletsFifo(productName, spec) {
+    var pallets = window.currentPallets ? window.currentPallets() : [];
+    var today = new Date().toLocalYMD();
+    var exp = function(p) { return window.normalizeDateValue(p.expiryDate || p.expDate) || ''; };
+    return pallets.filter(function(p) {
+        if (p.productName !== productName || (p.spec || '') !== (spec || '') || !((parseFloat(p.quantity) || 0) > 0)) return false;
+        if (exp(p) && exp(p) < today) return false;
+        return !(window.isHoldLocation && window.isHoldLocation(p.locationId));
+    }).sort(function(a, b) { return (exp(a) || '9999-12-31').localeCompare(exp(b) || '9999-12-31'); });
+}
 function findProductInventoryInfo(productName, spec) {
-    var pallets = window._inventoryData && window._inventoryData.pallets ? window._inventoryData.pallets : [];
     var result = { location: '-', batchNo: '-', expiryDate: '-', floor: 9 };
-
-    for (var i = 0; i < pallets.length; i++) {
-        var p = pallets[i];
-        if (p.productName === productName && (p.spec || '') === (spec || '')) {
-            result.location = p.locationId || '-';
-            result.batchNo = p.batchNo || '-';
-
-            if (p.expiryDate) {
-                var d = new Date(p.expiryDate);
-                if (!isNaN(d.getTime())) {
-                    result.expiryDate = d.getFullYear() + '/' +
-                        String(d.getMonth() + 1).padStart(2, '0') + '/' +
-                        String(d.getDate()).padStart(2, '0');
-                }
-            }
-
-            result.floor = getFloorFromLocation(result.location);
-            break;
-        }
-    }
-
+    var p = productPalletsFifo(productName, spec)[0];
+    if (!p) return result;
+    result.location = p.locationId || '-';
+    result.batchNo = p.batchNo || '-';
+    var e = window.normalizeDateValue(p.expiryDate || p.expDate);
+    if (e) result.expiryDate = e.replace(/-/g, '/');
+    result.floor = getFloorFromLocation(result.location);
     return result;
 }
 
@@ -903,11 +904,11 @@ window.importErpOrderRows = async function(rows) {
                 (modifiedCount > 0 ? '、⚠️ 異動 ' + modifiedCount + ' 筆' : '') +
                 (skipCount > 0 ? '、略過（沒變）' + skipCount + ' 筆' : '') + '\n\n' +
                 '━━━━━━━━━━━━━━━━━━━━━━\n' +
-                plan.text + '\n按「確定」就建立波次，按「取消」先不建'
+                plan.text + '\n按「確定」就建立波次（建好可以直接印揀貨單），按「取消」先不建'
             );
             if (!autoCreate && plan.count === 0) alert('✅ 匯入完成！新增 ' + savedCount + ' 筆\n\n' + plan.text);
             if (autoCreate) {
-                await autoCreateWavesByLogistics({ skipConfirm: true });
+                await autoCreateWavesByLogistics({ skipConfirm: true, offerPrint: true });
             }
         } else {
             var resultMsg = '✅ 匯入完成！\n\n' +
@@ -1088,7 +1089,17 @@ window.autoCreateWavesByLogistics = async function(opts) {
     if (skippedAll.length) resultText += '\n已被其他人排走、略過：\n' + skippedAll.join('\n') + '\n';
     if (failed.length) resultText += '\n❌ 失敗（訂單沒有變動）：\n' + failed.join('\n');
 
-    if (!(opts && opts.silent)) alert(resultText);
+    if (opts && opts.offerPrint && createdWaves.length) {
+        var nos = createdWaves.map(function(w) { return w.waveNo; });
+        var esc = function(v) { return String(v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+        WMS.createModal('modal-wave-print', {
+            title: failed.length ? '⚠️ 部分波次建立失敗' : '✅ 波次建好了', icon: 'fa-solid fa-layer-group text-blue-400', width: '520px',
+            content: '<pre class="text-slate-200 text-sm whitespace-pre-wrap mb-4">' + esc(resultText.replace(/^.*\n\n/, '')) + '</pre>' +
+                '<button id="btn-print-new-waves" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-lg"><i class="fa-solid fa-print mr-2"></i>列印揀貨單（' + nos.length + ' 張）</button>' +
+                '<button onclick="WMS.closeModal(\'modal-wave-print\')" class="w-full py-2 mt-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">先不印</button>'
+        });
+        document.getElementById('btn-print-new-waves').onclick = function() { window.printNewWavePickingLists(nos); WMS.closeModal('modal-wave-print'); };
+    } else if (!(opts && opts.silent)) alert(resultText);
     return { created: createdWaves, failed: failed, skipped: skippedAll };
 };
 
@@ -1406,6 +1417,7 @@ window.openWaveExecute = function(waveNo) {
         return;
     }
 
+    const justStarted = wave.status === 'pending';
     if (wave.status === 'pending') {
         wave.status = 'picking';
         wave.startedAt = new Date().toISOString();
@@ -1429,6 +1441,9 @@ window.openWaveExecute = function(waveNo) {
     generatePickingListV2(wave);
 
     document.getElementById('modal-wave-execute').classList.remove('hidden');
+
+    // 按「開始揀貨」：直接打開揀貨單列印預覽（之後要重印，按畫面上的「列印揀貨單」）
+    if (justStarted && window.printPickingList) window.printPickingList();
 
     setTimeout(function() {
         document.getElementById('wave-scan-input').focus();

@@ -43,6 +43,7 @@ await mp.evaluate(() => openPage('picking')); await mp.waitForTimeout(400);
 await mp.selectOption('#picking-wave-select', W.waveNo); await mp.waitForTimeout(1000);
 const n0 = await mp.innerText('#picking-next');
 H.check('手機：上方紫色提醒「練習模式」，下一項顯示品名、拿幾件、「✓ 拿好了」按鈕', n0.includes('練習模式') && n0.includes('拿好了') && /拿 (10|6) 件/.test(n0), n0);
+H.check('手機：拿這一項的同時，提醒「下一項」是什麼品項、幾件', /下一項：(白蝦|透抽)/.test(n0) && /下一項：.*(6|10) 件/.test(n0), n0);
 H.check('手機完成按鈕寫「練習：不扣庫存」', (await mp.innerText('#picking-complete-btn')).includes('不扣庫存'));
 await mp.click('#picking-next button'); await mp.waitForTimeout(800);
 const w1 = await H.one('waves', W.waveNo);
