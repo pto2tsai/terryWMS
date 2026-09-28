@@ -24,7 +24,8 @@ const aoa = [['崇文冷凍食品股份有限公司'], ['每日客戶銷貨明�
   L('S1150928004', 'C004', '家樂福', '白仁成品', '60/70*5斤*6包', 4, 24, '包', '', '台中市'),
   L('S1150928005', 'C005', '王記海產', '502白仁', '60/70*16KG', 1, 16, 'KG', '自取', '')];
 const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), '銷貨明細');
-const file = SD + '/orders-test.xlsx'   // 測試工具不吃中文檔名（真的電腦沒問題）; fs.writeFileSync(file, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+const file = SD + '/orders-test.xlsx';   // 測試工具不吃中文檔名（真的電腦沒問題）
+fs.writeFileSync(file, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
 const note = (...a) => console.log('📝', ...a);
 
 // ---------- 辦公室電腦 ----------

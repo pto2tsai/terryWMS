@@ -247,7 +247,7 @@ async function markPicked(found) {
         return;
     }
     found.completed = true;
-    setResult('picking-scan-result', true, (found.type === 'return' ? '↩️ 放回 ' : '✓ ') + found.productName + ' ' + found.pickQty + ' 件');
+    setResult('picking-scan-result', true, (found.type === 'return' ? '↩️ 已放回 ' : '✓ ') + found.productName + ' ' + found.pickQty + ' 件');
     renderPickingList();
     input.value = '';
     focusIfNoCamera('picking-scan');

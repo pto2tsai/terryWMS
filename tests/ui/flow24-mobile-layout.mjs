@@ -30,7 +30,7 @@ const rd = await page.evaluate(() => {
   const lum = ([r, g, b]) => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
   const bgOf = el => { for (let e = el; e; e = e.parentElement) { const c = rgb(getComputedStyle(e).backgroundColor); if (c.length === 3 || (c.length === 4 && c[3] > 0.9)) return c.slice(0, 3); } return [15, 23, 42]; };
   const out = [];
-  for (const sel of ['.ns-code', '.ns-qty', '.ns-item', '.ns-sub', '.ns-after', '.item-location', '.item-product', '.item-qty', '.item-detail', '.item-status', '.co-tag', '.pid b']) {
+  for (const sel of ['.pk-loc', '.pk-qty', '.pk-name', '.pk-spec', '.pk-next', '.item-location', '.item-product', '.item-qty', '.item-detail', '.item-status', '.co-tag', '.pid b']) {
     const el = document.querySelector('#page-picking ' + sel); if (!el) { out.push({ sel, missing: true }); continue; }
     const cs = getComputedStyle(el), a = lum(rgb(cs.color).slice(0, 3)), b = lum(bgOf(el));
     out.push({ sel, px: parseFloat(cs.fontSize), cr: Math.round((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) * 10) / 10 });
@@ -39,7 +39,7 @@ const rd = await page.evaluate(() => {
 });
 const bad = rd.out.filter(x => x.missing || x.px < 15 || x.cr < 7);
 H.check('揀貨關鍵文字：都至少 15px、對比至少 7:1（暗處也看得清楚）', bad.length === 0, JSON.stringify(bad.length ? bad : rd.out));
-H.check('儲位 ≥ 24px、下一站儲位 ≥ 48px、件數 ≥ 30px', rd.out.find(x => x.sel === '.item-location').px >= 24 && rd.out.find(x => x.sel === '.ns-code').px >= 48 && rd.out.find(x => x.sel === '.item-qty').px >= 30, JSON.stringify(rd.out));
+H.check('儲位 ≥ 24px、大卡片儲位 ≥ 48px、件數 ≥ 30px', rd.out.find(x => x.sel === '.item-location').px >= 24 && rd.out.find(x => x.sel === '.pk-loc').px >= 48 && rd.out.find(x => x.sel === '.item-qty').px >= 30, JSON.stringify(rd.out));
 H.check('板號最後 4 碼放大、公司標籤（八方／崇文）清楚、畫面不超出寬度', rd.pid === '0231' && rd.wide && (await page.innerText('#picking-list')).includes('八方') && (await page.innerText('#picking-list')).includes('崇文'), JSON.stringify([rd.pid, rd.wide]));
 H.check('沒有頁面錯誤', log.errors.length === 0, JSON.stringify(log.errors));
 await H.close(); process.exit(0);
