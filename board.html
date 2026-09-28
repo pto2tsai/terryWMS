@@ -203,7 +203,7 @@
     setInterval(function() { Object.keys(lastDraw).forEach(function(k) { lastDraw[k](); }); }, 60000);
 
     // 鼎新匯入的狀況：匯入失敗／要處理、訂單檔等太久沒人處理、訂單沒有物流商
-    var erpDocs = [], noLogistics = 0, erpSched = null;
+    var erpDocs = [], noLogistics = 0, erpSched = null, erpFix = [];
     function drawErpAlert() {
         var msgs = [];
         var bad = erpDocs.filter(function(r) { return r.status === 'attention' || r.status === 'error'; }).length;
@@ -213,6 +213,10 @@
         if (waiting) msgs.push('⏳ 鼎新訂單檔等了超過 15 分鐘還沒匯入：請打開電腦版 WMS');
         if (bad) msgs.push('⚠️ 鼎新匯入有 ' + bad + ' 份要處理：請到電腦版「ERP 報表」');
         if (noLogistics) msgs.push('🚚 ' + noLogistics + ' 張訂單沒有物流商，還沒排波次');
+        // 缺貨少出的銷貨單：這次不出、之後不補，要請業務在鼎新改數量（鼎新改好、匯入後自動消失）
+        if (erpFix.length) msgs.push('🧾 缺貨少出 ' + erpFix.length + ' 張，請業務在鼎新改銷貨單：' + erpFix.slice(0, 3).map(function(o) {
+            return o.customer + ' ' + (o.shortShipped || []).map(function(x) { return x.productName + ' ' + x.want + '→' + x.got; }).join('、');
+        }).join('；') + (erpFix.length > 3 ? ' 等' : ''));
         $('erp-alert').innerHTML = msgs.map(esc).join('<br>');
         $('erp-alert').classList.toggle('show', msgs.length > 0);
     }
@@ -222,6 +226,7 @@
         var ym = new Date(); ym = ym.getFullYear() + '-' + String(ym.getMonth() + 1).padStart(2, '0');
         listen(db.collection('erpInbox').where('month', '==', ym).where('sensitive', '==', false), function(rows) { erpDocs = rows; drawErpAlert(); });
         unsubs.push(db.collection('settings').doc('erpImport').onSnapshot(function(d) { erpSched = d.exists ? d.data() : null; drawErpAlert(); }, function() {}));
+        listen(db.collection('salesOrders').where('erpFixNeeded', '==', true), function(rows) { erpFix = rows; drawErpAlert(); });
         listen(db.collection('salesOrders').where('logistics', '==', '未指定'), function(rows) {
             noLogistics = rows.filter(function(o) { return ['pending', 'confirmed', 'partial'].indexOf(o.status) >= 0 && !o.waveNo; }).length;
             drawErpAlert();

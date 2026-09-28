@@ -27,7 +27,7 @@ const waves = await H.all('waves');
 H.note('waves: ' + JSON.stringify(waves.map(w => [w.waveNo, w.status, w.orderCount, (w.summary || []).map(s => s.productName + ':' + s.totalQty)])));
 H.check('自動建立 1 個波次含 2 張訂單（已存入資料庫）', waves.length === 1 && waves[0].orderCount === 2, JSON.stringify(waves));
 // 建好波次後：跳出「列印揀貨單」按鈕，按一下就印出剛建好的波次揀貨單
-H.check('匯入建好波次後，跳出「列印揀貨單（1 張）」按鈕', await page.isVisible('#btn-print-new-waves') && (await page.innerText('#btn-print-new-waves')).includes('1 張'));
+H.check('匯入建好波次後，跳出「列印揀貨單＋分貨標籤（1 個波次）」按鈕', await page.isVisible('#btn-print-new-waves') && (await page.innerText('#btn-print-new-waves')).includes('1 個波次'));
 const popP = page.waitForEvent('popup');
 await page.click('#btn-print-new-waves');
 const pop = await popP; await pop.waitForLoadState().catch(() => {}); await page.waitForTimeout(500);

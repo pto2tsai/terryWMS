@@ -365,6 +365,7 @@ function printUpdatedPickingLists(waves, changeDetails, opts) {
         '.floor-2f { background: #fef3c7; }' +
         '.floor-3f { background: #fee2e2; }' +
         '.timestamp { text-align: right; font-size: 10px; color: #666; margin-top: 10px; }' +
+        (fresh ? window.buildSortingLabelsHtml({ orders: [] }).style : '') +
         '</style></head><body>';
 
     waves.forEach(function(wave) {
@@ -439,6 +440,8 @@ function printUpdatedPickingLists(waves, changeDetails, opts) {
         html += '</table>';
         html += '<div class="timestamp">版次 V' + version + ' | 列印日期：' + now + '</div>';
         html += '</div>';
+        // 剛建好的波次：分貨標籤跟揀貨單一起印（下一頁）
+        if (fresh) html += '<div class="wave-section">' + window.buildSortingLabelsHtml(wave).body + '</div>';
     });
 
     html += '<script>window.onload = function() { window.print(); }<\/script></body></html>';
@@ -785,6 +788,7 @@ window.saveErpOrders = async function(orders) {
                 var inWave = existing.status === 'inWave' && existing.waveNo;
                 var upd = { items: order.items, modifiedAt: new Date().toISOString(), hasChanges: true };
                 upd.backorderItems = rc.open.length ? rc.open : firebase.firestore.FieldValue.delete();
+                if (rc.erpFixed) { upd.erpFixNeeded = false; existing.erpFixNeeded = false; }
                 if (!inWave) upd.status = rc.open.length ? 'partial' : 'shipped';
                 // 變成補出貨：離開原本（已完成）的波次，才能排進新的波次
                 if (!inWave && rc.open.length && existing.waveNo) { upd.waveNo = null; upd.lastWaveNo = existing.waveNo; }
@@ -1095,7 +1099,7 @@ window.autoCreateWavesByLogistics = async function(opts) {
         WMS.createModal('modal-wave-print', {
             title: failed.length ? '⚠️ 部分波次建立失敗' : '✅ 波次建好了', icon: 'fa-solid fa-layer-group text-blue-400', width: '520px',
             content: '<pre class="text-slate-200 text-sm whitespace-pre-wrap mb-4">' + esc(resultText.replace(/^.*\n\n/, '')) + '</pre>' +
-                '<button id="btn-print-new-waves" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-lg"><i class="fa-solid fa-print mr-2"></i>列印揀貨單（' + nos.length + ' 張）</button>' +
+                '<button id="btn-print-new-waves" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-lg"><i class="fa-solid fa-print mr-2"></i>列印揀貨單＋分貨標籤（' + nos.length + ' 個波次）</button>' +
                 '<button onclick="WMS.closeModal(\'modal-wave-print\')" class="w-full py-2 mt-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">先不印</button>'
         });
         document.getElementById('btn-print-new-waves').onclick = function() { window.printNewWavePickingLists(nos); WMS.closeModal('modal-wave-print'); };
@@ -1342,16 +1346,22 @@ window.recomputeShippedOrder = function(existing, newItems) {
     var pkg = function(it) { return parseFloat(it.packageQty) || 1; };
     var back = {};
     if (Array.isArray(existing.backorderItems)) existing.backorderItems.forEach(function(it) { back[key(it)] = (back[key(it)] || 0) + pkg(it); });
-    var shipped = {}, names = {};
+    // 缺貨少出（這次不出、請業務改鼎新）：實際出貨＝原本件數－少出的
+    var shortBy = {};
+    (existing.shortShipped || []).forEach(function(x) { var k = x.productName + '|||' + (x.spec || ''); shortBy[k] = (shortBy[k] || 0) + (parseFloat(x.short) || 0); });
+    var shipped = {}, names = {}, origQty = {};
     (existing.items || []).forEach(function(it) {
-        var k = key(it); names[k] = it;
+        var k = key(it); names[k] = it; origQty[k] = (origQty[k] || 0) + pkg(it);
         var s = Array.isArray(existing.backorderItems) ? pkg(it) - (back[k] || 0) : (existing.status === 'shipped' ? pkg(it) : 0);
         shipped[k] = (shipped[k] || 0) + Math.max(0, s);
     });
+    Object.keys(shortBy).forEach(function(k) { if (shipped[k] != null) shipped[k] = Math.max(0, shipped[k] - shortBy[k]); });
     var open = [], more = [], over = [];
     var seen = {};
     (newItems || []).forEach(function(it) {
         var k = key(it); seen[k] = true;
+        // 缺貨少出的品項，鼎新還沒改（還是原本的件數）：等業務改，不要變成補出貨
+        if (shortBy[k] && pkg(it) === origQty[k]) return;
         var need = pkg(it) - (shipped[k] || 0);
         if (need > 0) {
             var b = Object.assign({}, it, { packageQty: need });
@@ -1366,7 +1376,12 @@ window.recomputeShippedOrder = function(existing, newItems) {
     Object.keys(shipped).forEach(function(k) {
         if (!seen[k] && shipped[k] > 0) over.push(names[k].productName + (names[k].spec ? ' ' + names[k].spec : '') + ' 多出 ' + shipped[k] + ' 件');
     });
-    return { open: open, more: more, over: over };
+    // 鼎新已經改成實際出貨的件數（或更少）：不用再提醒改鼎新
+    var fixed = Object.keys(shortBy).every(function(k) {
+        var n = (newItems || []).filter(function(it) { return key(it) === k; }).reduce(function(t, it) { return t + pkg(it); }, 0);
+        return n <= (shipped[k] || 0);
+    });
+    return { open: open, more: more, over: over, erpFixed: Object.keys(shortBy).length > 0 && fixed };
 };
 
 window.createWave = async function() {
@@ -1721,14 +1736,16 @@ window.completeWave = async function() {
     const completed = list.filter(i => i.completed).length;
     const total = list.filter(i => !i.shortage).length;
 
-    if (completed === 0) {
+    if (completed === 0 && !list.some(i => i.fieldShort)) {
         alert('尚未揀貨任何項目');
         return;
     }
 
     // 未揀的項目併在下面同一個確認裡說明（原本要按兩次）
     const shortN = list.filter(i => i.shortage || !i.completed).length;
-    if (!confirm(`確定完成波次 ${wave.waveNo}？\n\n已揀：${completed}/${total} 項` + (shortN ? `\n缺貨／未揀 ${shortN} 項：相關訂單會標為「部分出貨」，缺的貨之後可以再排波次` : ''))) {
+    const shorts = window.waveShortfalls(wave, list);
+    const shortText = shorts.length ? '\n\n⚠️ 這些客戶會少出（分貨標籤要改）：\n' + shorts.map(x => '・' + x.customer + '（' + x.orderNo + '）' + x.productName + ' ' + (x.spec || '') + '：訂 ' + x.want + '，只出 ' + x.got).join('\n') : '';
+    if (!confirm(`確定完成波次 ${wave.waveNo}？\n\n已揀：${completed}/${total} 項` + (shortN ? `\n缺貨／未揀 ${shortN} 項：相關訂單會標為「部分出貨」，缺的貨之後可以再排波次` : '') + shortText)) {
         return;
     }
 

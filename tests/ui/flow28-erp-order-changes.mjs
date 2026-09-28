@@ -44,7 +44,7 @@ H.check('手機上方藍色提醒：鼎新改了什麼、清單已自動調整�
 H.check('自動處理好的不算「要處理」（收件紀錄是完成，結果寫著已自動調整）', in2.status === 'done' && in2.result.includes('已自動調整'), JSON.stringify([in2.status, in2.result, in2.issues]));
 
 await H.nav(D.page, 'wave-picking'); await D.page.waitForTimeout(1500);
-H.check('電腦的波次清單標出「揀貨單要重印」', (await D.page.innerText('#wave-list-body')).includes('揀貨單要重印'));
+H.check('電腦的波次清單標出「揀貨單和標籤要重印」', (await D.page.innerText('#wave-list-body')).includes('揀貨單和標籤要重印'));
 
 // ---------- 還沒放回就按完成：擋下 ----------
 let dlg0 = M.log.dialogs.length;
