@@ -50,8 +50,8 @@ export async function ensureUsers(emails) {
 
 let browser;
 // fakeVideo：y4m 影片檔，當作手機相機畫面（測試相機掃碼用）
-// house：手機預設已經選好「A 倉」（揀貨時不會先問在哪一間）；傳 null 就是第一次用的手機
-export async function openApp(base, email, { mobile = false, fakeVideo = null, house = 'A' } = {}) {
+// house：手機預設已經選好「J庫」（揀貨時不會先問在哪一間）；傳 null 就是第一次用的手機
+export async function openApp(base, email, { mobile = false, fakeVideo = null, house = 'J' } = {}) {
   browser = browser || await chromium.launch(fakeVideo ? { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--use-file-for-fake-video-capture=' + fakeVideo] } : {});
   const ctx = await browser.newContext(mobile ? { viewport: { width: 390, height: 844 } } : { viewport: { width: 1600, height: 1000 } });
   if (fakeVideo) await ctx.grantPermissions(['camera']);

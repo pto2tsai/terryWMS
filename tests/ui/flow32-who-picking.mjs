@@ -20,14 +20,14 @@ const opt = async (X, id) => X.page.$eval(`#picking-wave-select option[value="${
 await A.page.selectOption('#picking-wave-select', 'WV1'); await A.page.waitForTimeout(1200);
 const w1 = await H.one('waves', 'WV1');
 H.check('小王選了 WV1：記下小王正在揀', Object.values(w1.pickers || {}).some(p => p.name === '小王'), JSON.stringify(w1.pickers));
-H.check('小李的波次選單：WV1 寫「小王 揀貨中」，WV2 沒有', (await opt(B, 'WV1')).includes('小王（A 倉） 揀貨中') && !(await opt(B, 'WV2')).includes('揀貨中'), await opt(B, 'WV1'));
+H.check('小李的波次選單：WV1 寫「小王 揀貨中」，WV2 沒有', (await opt(B, 'WV1')).includes('小王（J庫） 揀貨中') && !(await opt(B, 'WV2')).includes('揀貨中'), await opt(B, 'WV1'));
 H.check('小王自己的選單不會寫自己在揀', !(await opt(A, 'WV1')).includes('揀貨中'), await opt(A, 'WV1'));
 
 // 小李選同一個波次：先提醒；按取消就不進去
 let d0 = B.log.dialogs.length;
 B.page.__dialogPlan = [false];
 await B.page.selectOption('#picking-wave-select', 'WV1'); await B.page.waitForTimeout(1200);
-H.check('小李選 WV1：提醒「小王 正在揀這個波次」', B.log.dialogs.slice(d0).some(x => x.msg.includes('小王（A 倉） 正在揀這個波次')), JSON.stringify(B.log.dialogs.slice(d0)));
+H.check('小李選 WV1：提醒「小王 正在揀這個波次」', B.log.dialogs.slice(d0).some(x => x.msg.includes('小王（J庫） 正在揀這個波次')), JSON.stringify(B.log.dialogs.slice(d0)));
 H.check('按取消：沒有進去（沒有揀貨卡片）', (await B.page.$eval('#picking-wave-select', s => s.value)) === '' && !(await B.page.isVisible('#picking-scan-area')));
 
 // 選 WV2：不用提醒
