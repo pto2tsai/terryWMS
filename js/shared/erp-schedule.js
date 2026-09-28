@@ -11,6 +11,8 @@ window.ERP_SCHEDULE_DEFAULT = { times: ['09:00', '11:00', '13:00', '15:00'], day
 window.erpMissedSlot = function(docs, sched, now) {
     sched = sched && Array.isArray(sched.times) ? sched : window.ERP_SCHEDULE_DEFAULT;
     now = now || new Date();
+    // 自動匯入還沒開始用（這個月一份自動送來的訂單檔都沒有，例如還在手動匯入）：不提醒，免得一直假警報
+    if (!(docs || []).some(function(r) { return r.type === 'sales_daily'; })) return null;
     if ((sched.days || []).indexOf(now.getDay()) < 0) return null;
     var slots = sched.times.map(function(t) {
         var m = /^(\d{1,2}):(\d{2})$/.exec(String(t).trim());

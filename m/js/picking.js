@@ -295,12 +295,14 @@ window.finishWithShortage = function() {
 // 完成後：印分貨標籤（件數是實際出貨的）。辦公室自動印模式時，這裡只提示
 function renderFinishPanel(wave, nShort) {
     show('picking-actions', false);
-    const n = (wave.orders || []).length;
+    const lb = window.buildSortingLabelsHtml(wave);
+    const n = lb.count;
     const office = window.labelPrintMode() === 'office';
     $('picking-next').innerHTML = '<div class="next-stop done" style="text-align:left">' +
         '<div style="font-size:20px;font-weight:bold">✅ 波次 ' + esc(wave.waveNo) + ' 完成</div>' +
         '<div style="margin:6px 0 12px;font-size:15px">' + (window.isPracticeMode() ? '練習模式：庫存沒有扣' : '庫存已扣除') +
-        (nShort ? '<br>⚠️ 不夠的這次不出、之後也不補；辦公室和看板會提醒業務在鼎新改銷貨單' : '') + '</div>' +
+        (nShort ? '<br>⚠️ 不夠的這次不出、之後也不補；辦公室和看板會提醒業務在鼎新改銷貨單' : '') +
+        (lb.skipped.length ? '<br>📭 這次沒有出貨、<b>不用貼標籤</b>：' + esc(lb.skipped.join('、')) : '') + '</div>' +
         (office ? '<div style="font-size:17px;padding:10px;border-radius:10px;background:#1e3a8a">🏷️ 分貨標籤會在<b>辦公室自動印出</b>（' + n + ' 張），件數是實際出貨的</div>'
                 : '<button class="action-btn success" style="font-size:20px;padding:18px" onclick="printLabelsOnPhone()">🖨️ 印分貨標籤（' + n + ' 張）</button>' +
                   '<div style="font-size:13px;color:#cbd5e1;margin-top:6px">件數是實際出貨的，不用再改。按了會跳出手機的列印畫面，選標籤機</div>') +

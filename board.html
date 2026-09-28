@@ -266,8 +266,15 @@
                     '<div class="bar"><div style="width:' + (all ? Math.round(done / all * 100) : 0) + '%"></div></div></div>';
             }, '目前沒有調度工單', 'dispatch');
         });
-        // 今天完成：今天的異動記錄
+        // 今天完成：今天的異動記錄；練習模式完成的波次不扣庫存、沒有異動記錄，從波次本身算
         var today = new Date().toLocalYMD();
+        var logStat = { waves: {}, inN: 0, outQty: 0, moveN: 0 }, practiceDone = [];
+        var drawStats = function() {
+            var waves = Object.assign({}, logStat.waves), outQty = logStat.outQty;
+            practiceDone.forEach(function(w) { if (!waves[w.waveNo]) { waves[w.waveNo] = true; outQty += parseFloat(w.shippedQty) || 0; } });
+            $('s-in').textContent = logStat.inN; $('s-out').textContent = outQty; $('s-move').textContent = logStat.moveN;
+            $('s-wave').textContent = Object.keys(waves).length;
+        };
         listen(db.collection('inventoryLogs').where('timestamp', '>=', window.localDayStartISO(today)), function(rows) {
             var waves = {}, inN = 0, outQty = 0, moveN = 0;
             rows.forEach(function(l) {
@@ -279,8 +286,12 @@
                     if (m) waves[m[1]] = true;
                 }
             });
-            $('s-in').textContent = inN; $('s-out').textContent = outQty; $('s-move').textContent = moveN;
-            $('s-wave').textContent = Object.keys(waves).length;
+            logStat = { waves: waves, inN: inN, outQty: outQty, moveN: moveN };
+            drawStats();
+        });
+        listen(db.collection('waves').where('completedAt', '>=', window.localDayStartISO(today)), function(rows) {
+            practiceDone = rows.filter(function(w) { return w.status === 'done' && w.practice; });
+            drawStats();
         });
         // 7 天內到期（含已過期）的板數
         var limit = new Date(); limit.setDate(limit.getDate() + 7);
