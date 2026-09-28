@@ -17,6 +17,27 @@ window.pageInit.picking = function() {
     renderPickingList();
 };
 
+// 誰正在揀：選波次時記下名字，每按一次「拿好了／不夠」更新時間；60 分鐘沒動作就不算
+const PICKER_ACTIVE_MS = 60 * 60 * 1000;
+function myPickerKey() { return (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.uid) || ''; }
+function myPickerName() { const u = window.currentUser || {}; return u.name || String(u.email || u.id || '').split('@')[0] || '有人'; }
+function otherPickers(w) {
+    const me = myPickerKey(), now = Date.now(), p = (w && w.pickers) || {};
+    return Object.keys(p).filter(function(k) { return k !== me && p[k] && now - Date.parse(p[k].at) < PICKER_ACTIVE_MS; })
+        .map(function(k) { return p[k].name || '有人'; });
+}
+function pickerTouch() {
+    const k = myPickerKey(), o = {};
+    if (k) o['pickers.' + k] = { name: myPickerName(), at: new Date().toISOString() };
+    return o;
+}
+function pickerLeave(waveId) {
+    const k = myPickerKey();
+    if (!k || !waveId) return;
+    const o = {}; o['pickers.' + k] = FieldValue.delete();
+    db.collection('waves').doc(waveId).update(o).catch(function() {});
+}
+
 function renderWaveOptions() {
     const select = $('picking-wave-select');
     const keep = select.value;
@@ -25,8 +46,9 @@ function renderWaveOptions() {
     select.innerHTML = '<option value="">' + (list.length ? '-- 請選擇（' + list.length + ' 個待揀）--' : '目前沒有待揀波次') + '</option>' +
         list.map(function(w) {
             const done = (w.completedItems || []).length;
+            const who = otherPickers(w);
             return '<option value="' + esc(w.id) + '">' + esc(w.waveNo) + ' - ' + esc(w.logistics || '') + '（' + esc(w.totalQty || 0) + '件）' +
-                (w.status === 'sorting' ? '【已揀完】' : done ? '【進行中】' : '') + '</option>';
+                (w.status === 'sorting' ? '【已揀完】' : who.length ? '【' + who.join('、') + ' 揀貨中】' : done ? '【進行中】' : '') + '</option>';
         }).join('');
     if (keep && list.some(function(w) { return w.id === keep; })) select.value = keep;
 }
@@ -34,6 +56,7 @@ function renderWaveOptions() {
 window.loadPickingWave = async function() {
     const waveId = $('picking-wave-select').value;
     clearResult('picking-scan-result');
+    if (currentWave && currentWave.id !== waveId) pickerLeave(currentWave.id);   // 換波次：原本的波次不再顯示我在揀
     if (!waveId) {
         currentWave = null; pickingItems = [];
         show('picking-scan-area', false); show('picking-actions', false);
@@ -43,7 +66,17 @@ window.loadPickingWave = async function() {
     // 讀最新的波次（含其他裝置的揀貨進度）
     const snap = await db.collection('waves').doc(waveId).get();
     if (!snap.exists) { alert('波次已不存在'); return window.pageInit.picking(); }
-    currentWave = Object.assign({ id: snap.id }, snap.data());
+    const w = Object.assign({ id: snap.id }, snap.data());
+    // 別人正在揀這個波次：先提醒，避免兩個人拿同一項
+    const who = otherPickers(w);
+    if (who.length && w.status !== 'done' && !confirm('👷 ' + who.join('、') + ' 正在揀這個波次\n\n確定要一起揀嗎？（兩個人會拿到同一項）')) {
+        $('picking-wave-select').value = '';
+        currentWave = null; pickingItems = [];
+        show('picking-scan-area', false);
+        return renderPickingList();
+    }
+    currentWave = w;
+    if (w.status !== 'done') db.collection('waves').doc(w.id).update(pickerTouch()).catch(function() {});
     pickingItems = window.buildWavePickingList(currentWave, window.pallets);
     renderPickingList();
     show('picking-scan-area', true);
@@ -215,10 +248,10 @@ window.pickShortNumber = function(v) {
 async function saveShort(n, got) {
     const want = parseFloat(n.pickQty) || 0;
     const by = window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : '';
-    const upd = {
+    const upd = Object.assign(pickerTouch(), {
         shortLog: FieldValue.arrayUnion({ id: n.id + '-short-' + Date.now(), key: n.key, qty: want - got, productName: n.productName || '', spec: n.spec || '', by: by, at: new Date().toISOString() }),
         status: 'picking'
-    };
+    });
     if (got > 0) {
         const part = Object.assign({}, n, { pickQty: got });
         upd.completedItems = FieldValue.arrayUnion(n.id);
@@ -237,11 +270,11 @@ async function markPicked(found) {
     const input = $('picking-scan');
     try {
         // 記下這一項實際揀（或放回）了幾件、哪一板：鼎新改單重算時，已經揀的不會被改掉
-        await db.collection('waves').doc(currentWave.id).update({
+        await db.collection('waves').doc(currentWave.id).update(Object.assign(pickerTouch(), {
             completedItems: FieldValue.arrayUnion(found.id),
             pickLog: FieldValue.arrayUnion(window.pickLogEntry(found)),
             status: currentWave.status === 'sorting' ? 'sorting' : 'picking'
-        });
+        }));
     } catch (e) {
         setResult('picking-scan-result', false, '❌ 儲存進度失敗：' + e.message);
         return;
