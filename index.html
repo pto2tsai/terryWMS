@@ -1313,12 +1313,12 @@
             <!-- 波次揀貨 -->
             <div id="view-wave-picking" class="view-panel h-full hidden flex flex-col p-4">
                 <!-- 頂部標題 -->
-                <div class="flex items-center justify-between bg-gradient-to-r from-orange-900 to-red-900 border border-orange-600 p-4 rounded-xl mb-4">
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-orange-900 to-red-900 border border-orange-600 p-4 rounded-xl mb-4">
                     <div>
                         <h2 class="text-white font-bold text-2xl"><i class="fa-solid fa-layer-group mr-2 text-orange-400"></i>波次揀貨</h2>
                         <p class="text-orange-200 text-sm mt-1">依物流商分波次，產生揀貨單與分貨標籤</p>
                     </div>
-                    <div class="flex gap-2 items-center">
+                    <div class="flex flex-wrap justify-end gap-2 items-center [&>button]:whitespace-nowrap [&>label]:whitespace-nowrap">
                         <!-- 公司選擇 -->
                         <div class="flex gap-1 bg-slate-900/50 rounded p-1 mr-2">
                             <button onclick="setWaveCompany('崇文')" id="btn-wave-cw" class="px-3 py-1.5 rounded text-xs font-bold bg-blue-600 text-white">崇文</button>
