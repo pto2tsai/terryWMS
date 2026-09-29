@@ -1895,6 +1895,8 @@ function renderPracticeToggle() {
     btn.disabled = !(r === 'admin' || r === 'supervisor');
     btn.className = 'px-3 py-2 rounded-lg font-bold mr-2 text-sm ' + (on ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600');
     btn.innerHTML = '📝 練習模式：' + (on ? '開' : '關');
+    const badge = document.getElementById('practice-badge');
+    if (badge) badge.style.display = on ? '' : 'none';
     btn.title = '練習模式：揀貨單照訂單數量列出（不看庫存、不標缺貨），完成波次不扣庫存';
 }
 window.togglePracticeMode = async function() {

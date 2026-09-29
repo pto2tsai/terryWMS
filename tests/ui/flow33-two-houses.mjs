@@ -81,7 +81,7 @@ H.check('兩家都分好：「全部分好了」', (await card(B)).includes('全
 const groups = await D.page.evaluate(() => groupRowsByHouse([{ productName: '白蝦', spec: '50/60' }, { productName: '透抽', spec: 'L' }, { productName: '蝦仁', spec: '-' }]).map(g => g.name + ':' + g.rows.map(r => r.productName).join('+')));
 H.check('電腦揀貨單分倉：J庫 白蝦、I庫 透抽、還不知道的 蝦仁', JSON.stringify(groups) === JSON.stringify(['J庫:白蝦', 'I庫:透抽', '還不知道在哪一間（先找到的那間記起來）:蝦仁']), JSON.stringify(groups));
 await H.nav(D.page, 'wave-picking'); await D.page.waitForTimeout(800);
-await D.page.click('#btn-product-homes'); await D.page.waitForTimeout(1000);
+await D.page.evaluate(() => toggleWaveSettings(true)); await D.page.click('#btn-product-homes'); await D.page.waitForTimeout(1000);
 const ph = await D.page.innerText('#modal-product-homes');
 H.check('電腦「📍 商品在哪一間」：列出 3 項', ph.includes('3 項') && ph.includes('魷魚') && ph.includes('透抽') && ph.includes('白蝦'), ph.slice(0, 200));
 await D.page.selectOption(`#ph-body select[data-id="${encodeURIComponent('魷魚|||M')}"]`, 'J'); await D.page.waitForTimeout(800);

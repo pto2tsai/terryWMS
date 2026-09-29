@@ -424,7 +424,7 @@ console.log('✅ WMS 工具函數庫已載入');
             if(viewId === 'warehouse-heatmap') { initWarehouseHeatmap(); }
             if(viewId === 'expiry-management') { refreshExpiryReport(); }
             if(viewId === 'user-management') { loadUserList(); }
-            if(viewId === 'wave-picking') { loadWavesFromFirebase(); }
+            if(viewId === 'wave-picking') { loadWavesFromFirebase(); if (window.watchWavesLive) window.watchWavesLive(); }
             if(viewId === 'erp-inbox' && window.initErpInboxPage) { window.initErpInboxPage(); }
             if(viewId === 'product-master') { loadProductMasterFromFirebase(); }
             if(viewId === 'external-warehouse') { loadExternalStock(); updateExtWarehouseFilter(); }

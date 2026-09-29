@@ -23,7 +23,7 @@ const M = await H.openApp(base, USERS.op2, { mobile: true });
 await D.page.waitForTimeout(1500); await M.page.waitForTimeout(1500);
 await H.nav(D.page, 'wave-picking'); await D.page.waitForTimeout(500);
 D.page.__dialogPlan = [true];
-await D.page.click('#btn-practice-mode'); await D.page.waitForTimeout(1200);
+await D.page.evaluate(() => toggleWaveSettings(true)); await D.page.click('#btn-practice-mode'); await D.page.waitForTimeout(1200);
 const st = await H.one('settings', 'practice');
 H.check('主管按開關 → 練習模式打開（記下是誰開的）', st && st.enabled === true && st.updatedBy, JSON.stringify(st));
 H.check('電腦版開關顯示「練習模式：開」', (await D.page.innerText('#btn-practice-mode')).includes('開'));
@@ -70,7 +70,7 @@ H.check('完成畫面寫「練習模式：庫存沒有扣」', (await mp.innerTe
 
 // ---------- 關掉：回到照庫存分配 ----------
 D.page.__dialogPlan = [true];
-await D.page.click('#btn-practice-mode'); await D.page.waitForTimeout(1200);
+await D.page.evaluate(() => toggleWaveSettings(true)); await D.page.click('#btn-practice-mode'); await D.page.waitForTimeout(1200);
 H.check('再按一次關掉', (await H.one('settings', 'practice')).enabled === false && (await D.page.innerText('#btn-practice-mode')).includes('關'));
 const after = await D.page.evaluate(() => window.buildWavePickingList({ summary: [{ productName: '白蝦', spec: '50/60', totalQty: 8, orders: [] }] }, window.currentPallets()).map(i => [i.locationId, i.pickQty, !!i.shortage]));
 H.check('關掉後：照庫存分配（OTHER 5 件，缺 3 件標庫存不足）', JSON.stringify(after) === JSON.stringify([['OTHER', 5, false], ['⚠️ 庫存不足', 3, true]]), JSON.stringify(after));

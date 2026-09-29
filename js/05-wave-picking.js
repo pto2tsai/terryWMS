@@ -42,6 +42,23 @@
             }
         };
 
+        // 波次清單即時更新：手機揀貨、別台電腦建波次，這裡不用按重新整理就會跟著變
+        var waveWatchUnsub = null;
+        window.watchWavesLive = function() {
+            if (waveWatchUnsub || !window.db || typeof window.db.collection !== 'function') return;
+            waveWatchUnsub = window.db.collection('waves').onSnapshot(function(snap) {
+                var list = [];
+                snap.forEach(function(d) { list.push(Object.assign({ id: d.id }, d.data())); });
+                list.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+                window._waveData.waves = list;
+                try { localStorage.setItem('wms_waves', JSON.stringify(list)); } catch (e) {}
+                refreshWaveList();
+            }, function(err) {
+                console.warn('波次即時更新失敗', err);
+                waveWatchUnsub = null;
+            });
+        };
+
         async function saveWaves() {
             localStorage.setItem('wms_waves', JSON.stringify(window._waveData.waves));
         }
@@ -60,17 +77,12 @@
 
         window.waveCompany = '崇文';
 
-        window.setWaveCompany = function(company) {
-            window.waveCompany = company;
-
-            document.getElementById('btn-wave-cw').className = company === '崇文'
-                ? 'px-3 py-1.5 rounded text-xs font-bold bg-blue-600 text-white'
-                : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
-            document.getElementById('btn-wave-bf').className = company === '八方'
-                ? 'px-3 py-1.5 rounded text-xs font-bold bg-purple-600 text-white'
-                : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600';
-
-            refreshWaveList();
+        // 波次設定列（練習模式、標籤誰來印、商品在哪一間）：按齒輪打開／收起
+        window.toggleWaveSettings = function(show) {
+            var el = document.getElementById('wave-settings');
+            if (!el) return;
+            if (show === undefined) show = el.style.display === 'none';
+            el.style.display = show ? '' : 'none';
         };
 
         window.rmCompany = 'all';

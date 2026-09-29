@@ -44,6 +44,23 @@ await page.click("button[onclick=\"openCreateWaveModal()\"]"); await page.waitFo
 const nOrders = await page.$$eval('.wave-order-check', e => e.length);
 H.check('重新整理後訂單不會被重複排波次', nOrders === 0, 'available=' + nOrders);
 if (await page.isVisible("#modal-create-wave")) await page.click("#modal-create-wave button[onclick=\"closeCreateWaveModal()\"]");
+// 上方只留「匯入訂單」「建立波次」和齒輪（設定收在齒輪裡）
+const bar = await page.evaluate(() => [...document.querySelectorAll('#view-wave-picking > div:first-child button')].filter(b => b.offsetParent).map(b => b.innerText.trim()));
+H.check('波次頁上方只剩「匯入訂單」「建立波次」和齒輪', JSON.stringify(bar) === JSON.stringify(['匯入訂單', '建立波次', '']) && !(await page.isVisible('#wave-settings')), JSON.stringify(bar));
+await page.click('#btn-wave-settings'); await page.waitForTimeout(200);
+H.check('按齒輪打開設定：看得到「商品在哪一間」', await page.isVisible('#btn-product-homes'));
+await page.click('#btn-wave-settings');
+// 清單即時更新：別的地方新增波次，不用按重新整理就出現
+await H.admin(d => H.setDoc(H.doc(d, 'waves', 'W-LIVE-1'), { waveNo: 'W-LIVE-1', logistics: '測試物流', status: 'pending', orders: [], summary: [], createdAt: '2000-01-01T00:00:00.000Z' }));
+await page.waitForTimeout(1500);
+H.check('波次清單即時更新（別處新增的波次不用重新整理就出現）', (await page.innerText('#wave-list-body')).includes('W-LIVE-1'));
+await page.evaluate(() => deleteWave('W-LIVE-1')); await page.waitForTimeout(1500);
+// 清除資料移到「備份與維護」頁，從那裡打開也讀得到波次
+await H.nav(page, 'dev-tools');
+await page.click('button[onclick="openClearDataModal()"]'); await page.waitForTimeout(1500);
+H.check('「清除資料」在「備份與維護」頁，打開看得到波次數量', await page.isVisible('#modal-clear-data') && (await page.innerText('#modal-clear-data')).includes('1'), await page.innerText('#modal-clear-data').catch(() => ''));
+await page.evaluate(() => closeClearDataModal()); await page.waitForTimeout(300);
+await H.nav(page, 'wave-picking');
 // 開始揀貨
 const execBtn = await page.$$eval('[onclick^="openWaveExecute("]', e => e.map(x => x.getAttribute('onclick')));
 H.note('執行按鈕: ' + JSON.stringify(execBtn));
