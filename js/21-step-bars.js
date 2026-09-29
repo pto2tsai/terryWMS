@@ -6,9 +6,8 @@
 window.STEP_BARS = {
     'wave-picking': {
         steps: [
-            { t: '選公司', h: '崇文／八方' },
             { t: '匯入訂單', h: '「匯入訂單」選 ERP Excel' },
-            { t: '建立波次', h: '匯入時選自動建立，或按「自動建立」' },
+            { t: '建立波次', h: '匯入時會問；之後按「建立波次」' },
             { t: '手機揀貨', h: '手機「波次揀貨」逐板掃' },
             { t: '完成波次', h: '手機或這裡按完成，扣庫存出貨' }
         ],
@@ -17,9 +16,9 @@ window.STEP_BARS = {
                 var el = [].slice.call(document.querySelectorAll('#view-wave-picking .grid > div')).find(function(d) { return d.innerText.indexOf(label) === 0; });
                 return el ? parseInt(el.innerText.replace(label, '')) || 0 : 0;
             };
-            if (num('揀貨中') > 0 || num('待揀貨') > 0) return 3;
-            if (num('待出貨訂單') > 0) return 2;
-            return 1;
+            if (num('揀貨中') > 0 || num('待揀貨') > 0) return 2;
+            if (num('待出貨訂單') > 0) return 1;
+            return 0;
         }
     },
     'transfer': {

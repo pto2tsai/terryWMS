@@ -107,7 +107,7 @@ H.check('業務在鼎新把海霸王改成 3 件、匯入後：提醒自動消�
 // ---------- 辦公室自動印（手機連不上標籤機時）----------
 await H.nav(D.page, 'wave-picking'); await D.page.waitForTimeout(800);
 D.page.__dialogPlan = [true];
-await D.page.click('#btn-label-mode'); await D.page.waitForTimeout(1200);
+await D.page.evaluate(() => toggleWaveSettings(true)); await D.page.click('#btn-label-mode'); await D.page.waitForTimeout(1200);
 H.check('主管切成「標籤：辦公室自動印」，出現「這台電腦自動印標籤」', (await H.one('settings', 'labelPrint')).mode === 'office' && (await D.page.innerText('#btn-label-mode')).includes('辦公室自動印') && await D.page.isVisible('#chk-auto-label'));
 D.page.__dialogPlan = [true];
 await D.page.check('#chk-auto-label'); await D.page.waitForTimeout(300);

@@ -1397,7 +1397,12 @@ setTimeout(function() {
 
 // ========== 清除資料功能 ==========
 
-window.openClearDataModal = function() {
+window.openClearDataModal = async function() {
+    // 從「備份與維護」頁打開時，波次和訂單可能還沒讀過：先讀最新的
+    try {
+        if (window.loadWavesFromFirebase) await window.loadWavesFromFirebase();
+        if (typeof loadOrdersFromFirebase === 'function') await loadOrdersFromFirebase();
+    } catch (e) { console.warn('讀取波次／訂單失敗', e); }
     var modal = document.createElement('div');
     modal.id = 'modal-clear-data';
     modal.className = 'fixed inset-0 z-50 bg-black/80 flex items-center justify-center backdrop-blur-sm';
