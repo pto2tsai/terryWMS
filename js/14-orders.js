@@ -403,6 +403,14 @@ window.printNewWavePickingLists = function(waveNos) {
     if (printUpdatedPickingLists(waves, null, { fresh: true })) saveWaves();
 };
 
+// 波次清單每一列的「揀貨單」：只印這個波次，不用先開始揀貨
+window.printWavePickingList = function(waveNo) {
+    var w = window._waveData.waves.find(function(x) { return x.waveNo === waveNo; });
+    if (!w) { alert('找不到波次 ' + waveNo); return; }
+    if (!(w.summary || []).length) { alert('波次 ' + waveNo + ' 沒有品項，沒有東西可以印'); return; }
+    printUpdatedPickingLists([w], null, { fresh: true });
+};
+
 function findProductLocation(productName, spec) {
     var p = productPalletsFifo(productName, spec)[0];
     return p ? (p.locationId || '-') : '-';
