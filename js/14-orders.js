@@ -525,7 +525,7 @@ const ERP_HEADERS = {
     ADDR1: ['送貨地址一', '送貨地址1', '送貨地址', '地址一', '地址'],
     ADDR2: ['送貨地址二', '送貨地址2', '地址二']
 };
-const ERP_REQUIRED = { ORDER_NO: '銷貨單號（或客戶代號）', PRODUCT: '品名', QTY: '銷貨數量', REMARK: '備註（物流商）' };
+const ERP_REQUIRED = { ORDER_NO: '銷貨單號', PRODUCT: '品名', QTY: '銷貨數量', REMARK: '備註（物流商）' };
 
 // 在前 20 列找標題列（有「品名」那一列），回傳 { row, col } 或 { error }
 function findErpHeader(rows) {
@@ -543,10 +543,8 @@ function findErpHeader(rows) {
             if (i >= 0) { col[k] = i; used[i] = true; return; }
         }
     });
-    // 「銷貨單明細表」沒有單號欄：一個客戶一天算一張單（單號＝日期-客戶代號）
-    if (col.ORDER_NO === undefined && col.CUST_CODE !== undefined && col.DATE !== undefined) col.ORDER_NO_BY_CUST = true;
-    const missing = Object.keys(ERP_REQUIRED).filter(k => col[k] === undefined && !(k === 'ORDER_NO' && col.ORDER_NO_BY_CUST)).map(k => ERP_REQUIRED[k]);
-    if (missing.length) return { error: '報表少了這些欄位：' + missing.join('、') + '\n請在鼎新報表把欄位加回來再匯出。' };
+    const missing = Object.keys(ERP_REQUIRED).filter(k => col[k] === undefined).map(k => ERP_REQUIRED[k]);
+    if (missing.length) return { error: '報表少了這些欄位：' + missing.join('、') + '\n\n可能開錯報表：請改用鼎新「每日客戶銷貨明細表」（要有銷貨單號），\n「銷貨單明細表」沒有單號，不能拿來匯入訂單。' };
     return { row: hr, col: col };
 }
 
@@ -612,13 +610,6 @@ window.parseErpOrderRows = function(rows) {
     let lastOrderNo = null;
     // 數字欄：去掉千分位，保留小數（2.5 公斤不會變 2）
     const num = v => parseFloat(String(v == null ? '' : v).replace(/,/g, '')) || 0;
-    const custOrderNo = r => {
-        const code = String(r[COL.CUST_CODE] == null ? '' : r[COL.CUST_CODE]).trim();
-        let d = r[COL.DATE];
-        if (typeof d === 'number') { const t = new Date(Math.round((d - 25569) * 86400000)); d = t.getUTCFullYear() + String(t.getUTCMonth() + 1).padStart(2, '0') + String(t.getUTCDate()).padStart(2, '0'); }
-        d = String(d == null ? '' : d).replace(/\D/g, '');
-        return code && d.length === 8 ? d + '-' + code : null;
-    };
     const needPkg = [];  // 換算不出件數、要人工填的品項
 
     // 鼎新報表的特性（跟八方 ERP 的解析經驗一致）：
@@ -635,7 +626,7 @@ window.parseErpOrderRows = function(rows) {
         if (/銷貨:|銷退:|淨額:/.test(String(row[COL.UNIT] == null ? '' : row[COL.UNIT]))) continue;
         if (String(row[COL.DATE]).includes('小計') || String(row[COL.DATE]).includes('合計')) continue;
 
-        let orderNo = COL.ORDER_NO_BY_CUST ? custOrderNo(row) : (row[COL.ORDER_NO] ? String(row[COL.ORDER_NO]).trim() : lastOrderNo);
+        let orderNo = row[COL.ORDER_NO] ? String(row[COL.ORDER_NO]).trim() : lastOrderNo;
         if (!orderNo) continue;
         if (!row[COL.PRODUCT]) {
             // 品名空白：同一張單、有數量，就沿用上一列的品名、規格
@@ -648,7 +639,7 @@ window.parseErpOrderRows = function(rows) {
         lastSpec = COL.SPEC !== undefined && row[COL.SPEC] ? String(row[COL.SPEC]).trim() : '';
         lastProductOrder = orderNo;
         const logistics = parseLogistics(row[COL.REMARK]);
-        if (COL.ORDER_NO_BY_CUST || row[COL.ORDER_NO]) lastOrderNo = orderNo;
+        if (row[COL.ORDER_NO]) lastOrderNo = orderNo;
 
         // 同一張單號就是同一張訂單（不再依物流商拆成兩張，避免後面那張蓋掉前面的品項）
         if (!orderMap.has(orderNo)) {
