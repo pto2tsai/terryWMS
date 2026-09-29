@@ -247,14 +247,19 @@ window.submitReceive = async function() {
         });
 
         // 2. 每個品項建 pallets 記錄，同時收集插單資料
+        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+        const autoBatchNo = 'IN-' + dateStr; // e.g. IN-20260929
+        const nullLoc = house + '-0-00-00';  // e.g. J-0-00-00（未指定細儲位）
         const labels = [];
         rcpItems.forEach(function(it, i) {
             const pid = 'SIN-' + now.getTime() + '-' + i;
             const itemLoc = it.locationId || locId;
+            const printLoc = it.locationId || nullLoc;
+            const batchNo = it.batchNo || autoBatchNo;
             labels.push({
                 palletId: pid, productName: it.productName, spec: it.spec || '',
-                quantity: it.qty, locationId: itemLoc, vendor: rcpVendor,
-                batchNo: it.batchNo || '', expiryDate: it.expiryDate || '', company: '崇文'
+                quantity: it.qty, locationId: printLoc, vendor: rcpVendor,
+                batchNo: batchNo, expiryDate: it.expiryDate || '', company: '崇文'
             });
             const palletRef = db.collection('pallets').doc();
             batch.set(palletRef, {
@@ -264,7 +269,7 @@ window.submitReceive = async function() {
                 quantity: it.qty,
                 locationId: itemLoc,
                 vendor: rcpVendor,
-                batchNo: it.batchNo || '',
+                batchNo: batchNo,
                 expDate: it.expiryDate || '',
                 expiryDate: it.expiryDate || '',
                 source: 'SimpleInbound',
@@ -374,7 +379,7 @@ function printSimpleInboundLabels(labels) {
         html += '<div class="cell-vendor"><div class="cell-label">廠商</div><div class="cell-value vendor">' + (label.vendor || '0') + '</div></div>';
         html += '</div>';
         html += '<div class="row-4">';
-        html += '<div class="location-box">' + (label.locationId && !label.locationId.endsWith('庫') ? label.locationId : '0') + '</div>';
+        html += '<div class="location-box">' + label.locationId + '</div>';
         html += '<div class="company-box">' + label.company + '</div>';
         html += '</div>';
         html += '</div></div>';
