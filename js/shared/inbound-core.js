@@ -7,7 +7,7 @@
 // 儲位要真的存在：倉和區要對得上（I-A/B、J-C/D、K-E～H），排號不能超過那一區的排數（RACK_CONFIG.ZONE_LANES）
 window.isValidStorageLocation = function(loc) {
     loc = String(loc || '').trim();
-    if (/^(TEMP-IN|TEMP-OUT|[A-D]00|[A-D]99|OTHER)$/.test(loc)) return true;
+    if (/^(TEMP-IN|TEMP-OUT|[A-D]00|[A-D]99|OTHER|J庫|I庫)$/.test(loc)) return true;
     var m = /^([IJK])-([A-H])-(\d{2})-[123]F$/.exec(loc);
     if (!m) return false;
     var lanes = window.RACK_CONFIG && window.RACK_CONFIG.ZONE_LANES;

@@ -132,6 +132,8 @@ service cloud.firestore {
     match /warehouses/{id}    { allow read: if isActiveUser(); allow write: if isSupervisor(); }
     // 商品在哪一間倉庫：揀貨時自動記住（現場人員會寫），刪除限主管
     match /productHome/{id}   { allow read: if isActiveUser(); allow create, update: if canOperate(); allow delete: if isSupervisor(); }
+    // 驗收入庫記錄（手機驗收用，不需條碼）：建立＋讀限現場人員，刪除限主管
+    match /simpleInbound/{id} { allow read: if isActiveUser(); allow create: if canOperate(); allow update: if isSupervisor(); allow delete: if isSupervisor(); }
     match /settings/{id}      { allow read: if isActiveUser(); allow write: if isSupervisor(); }
 
     // 備份：限管理員
