@@ -46,7 +46,7 @@ H.check('重新整理後訂單不會被重複排波次', nOrders === 0, 'availab
 if (await page.isVisible("#modal-create-wave")) await page.click("#modal-create-wave button[onclick=\"closeCreateWaveModal()\"]");
 // 上方只留「匯入訂單」「建立波次」和齒輪（設定收在齒輪裡）
 const bar = await page.evaluate(() => [...document.querySelectorAll('#view-wave-picking > div:first-child button')].filter(b => b.offsetParent).map(b => b.innerText.trim()));
-H.check('波次頁上方只剩「匯入訂單」「建立波次」和齒輪', JSON.stringify(bar) === JSON.stringify(['匯入訂單', '建立波次', '']) && !(await page.isVisible('#wave-settings')), JSON.stringify(bar));
+H.check('波次頁上方只剩「匯入訂單」「建立波次」「設定」', JSON.stringify(bar) === JSON.stringify(['匯入訂單', '建立波次', '設定']) && !(await page.isVisible('#wave-settings')), JSON.stringify(bar));
 await page.click('#btn-wave-settings'); await page.waitForTimeout(200);
 H.check('按齒輪打開設定：看得到「商品在哪一間」', await page.isVisible('#btn-product-homes'));
 await page.click('#btn-wave-settings');
