@@ -374,7 +374,7 @@ function printSimpleInboundLabels(labels) {
         html += '<div class="cell-vendor"><div class="cell-label">廠商</div><div class="cell-value vendor">' + (label.vendor || '0') + '</div></div>';
         html += '</div>';
         html += '<div class="row-4">';
-        html += '<div class="location-box">' + label.locationId + '</div>';
+        html += '<div class="location-box">' + (label.locationId && !label.locationId.endsWith('庫') ? label.locationId : '0') + '</div>';
         html += '<div class="company-box">' + label.company + '</div>';
         html += '</div>';
         html += '</div></div>';
