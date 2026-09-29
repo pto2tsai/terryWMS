@@ -351,7 +351,7 @@ function printSimpleInboundLabels(labels) {
 
     labels.forEach(function(label, idx) {
         var productName = label.productName || '-';
-        var specText = label.spec || '-';
+        var specText = label.spec || '0';
         var nameFontSize = 144;
         if (productName.length > 6) nameFontSize = 72;
         if (productName.length > 12) nameFontSize = 56;
@@ -370,8 +370,8 @@ function printSimpleInboundLabels(labels) {
         html += '<div class="row-2"><div class="product-spec" style="font-size:' + specFontSize + 'px;">' + specText + '</div></div>';
         html += '<div class="row-3">';
         html += '<div class="cell-qty"><div class="cell-label">數量</div><div class="cell-value qty">' + label.quantity + '</div></div>';
-        html += '<div class="cell-batch"><div class="cell-label">批號</div><div class="cell-value batch">' + (label.batchNo || '-') + '</div></div>';
-        html += '<div class="cell-vendor"><div class="cell-label">廠商</div><div class="cell-value vendor">' + (label.vendor || '-') + '</div></div>';
+        html += '<div class="cell-batch"><div class="cell-label">批號</div><div class="cell-value batch">' + (label.batchNo || '0') + '</div></div>';
+        html += '<div class="cell-vendor"><div class="cell-label">廠商</div><div class="cell-value vendor">' + (label.vendor || '0') + '</div></div>';
         html += '</div>';
         html += '<div class="row-4">';
         html += '<div class="location-box">' + label.locationId + '</div>';
