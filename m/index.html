@@ -56,6 +56,10 @@
                 <div><h3>調度工單</h3><p>移板併板</p></div>
             </div>
             <div class="menu-section">現場作業</div>
+            <div class="menu-card" style="--c:#f97316" onclick="openPage('receive')"><span class="badge" id="badge-receive-tasks"></span>
+                <div class="menu-icon"><i class="fa-solid fa-truck-arrow-right"></i></div>
+                <div><h3>驗收入庫</h3><p>登記進貨／待辦任務</p></div>
+            </div>
             <div class="menu-card" style="--c:#14b8a6" onclick="openPage('shelve')">
                 <div class="menu-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
                 <div><h3>上架</h3><p>放到儲位</p></div>
@@ -387,6 +391,24 @@
         </div>
     </div>
 
+    <!-- 驗收入庫 -->
+    <div id="page-receive" class="func-page">
+        <header class="func-header">
+            <button class="back-btn" onclick="goBack()" aria-label="返回"><i class="fa-solid fa-arrow-left"></i></button>
+            <span class="func-title">驗收入庫</span>
+        </header>
+        <div id="receive-body" style="padding:0 0 120px"></div>
+    </div>
+
+    <!-- 品項選擇器（全螢幕） -->
+    <div id="picker-overlay" style="display:none;position:fixed;inset:0;background:#0f172a;z-index:200;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid #1e293b">
+            <input id="picker-search" class="scan-input" style="flex:1" type="text" placeholder="搜尋品名…" oninput="pickerSearch(this.value)" autocomplete="off" autocorrect="off">
+            <button class="cam-btn" onclick="closePicker()" aria-label="關閉">✕</button>
+        </div>
+        <div id="picker-list" style="flex:1;overflow-y:auto;padding:8px 0"></div>
+    </div>
+
     <!-- 相機掃描畫面 -->
     <div id="cam-overlay">
         <div class="cam-top">
@@ -427,5 +449,6 @@
     <script src="js/stocktake.js"></script>
     <script src="js/query.js"></script>
     <script src="js/quick-scan.js"></script>
+    <script src="js/simple-inbound.js"></script>
 </body>
 </html>
