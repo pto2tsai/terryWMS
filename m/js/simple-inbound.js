@@ -1,21 +1,27 @@
 // ============================================================
 // m/js/simple-inbound.js — 驗收入庫（不需條碼）
-// 選廠商 → 加品項（品名+規格+數量）→ 完成 → 建棧板記錄＋入庫紀錄
+// 新增驗收：選廠商 → 加品項（品名+規格+數量）→ 完成 → 建棧板記錄＋入庫紀錄
+// 待辦任務：顯示電腦交辦的 inboundTasks，確認儲位後入帳
 // ============================================================
 
-// 目前正在填的入庫單
 let rcpVendor = '';
-let rcpItems = []; // [{ productName, spec, qty }]
-
-// 最近用過的廠商（從 simpleInbound 歷史撈）
+let rcpItems = [];
 let recentVendors = [];
+let rcpTab = 'receive'; // 'receive' | 'tasks'
+let rcpCurrentTask = null;
 
 window.pageInit.receive = async function() {
     rcpVendor = '';
     rcpItems = [];
+    rcpTab = 'receive';
+    rcpCurrentTask = null;
     recentVendors = await loadRecentVendors();
     renderReceivePage();
 };
+
+window.dataHooks.inboundTasks.push(function() {
+    if (window.currentPage === 'receive') renderReceivePage();
+});
 
 async function loadRecentVendors() {
     try {
@@ -27,7 +33,6 @@ async function loadRecentVendors() {
     } catch (e) { return []; }
 }
 
-// 從 window.pallets 取出所有品名規格組合，有庫存的排前面
 function productCatalog() {
     const map = {};
     (window.pallets || []).forEach(function(p) {
@@ -47,38 +52,66 @@ function myHouseLabel() {
     return h ? (h + '庫') : '選倉庫';
 }
 
+function openInboundTasks() {
+    return (window.inboundTasks || []).filter(window.isTaskOpen)
+        .sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
+}
+
+// ── 標籤列 ────────────────────────────────────────────────────
+
+function tabBarHtml() {
+    const tasks = openInboundTasks();
+    const badge = tasks.length > 0
+        ? ' <span style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:12px;font-weight:700">' + tasks.length + '</span>'
+        : '';
+    return '<div style="display:flex;gap:0;border-bottom:2px solid #1e293b;margin-bottom:0">' +
+        '<button style="flex:1;padding:12px 0;background:' + (rcpTab === 'receive' ? '#1e293b' : 'transparent') + ';color:' + (rcpTab === 'receive' ? '#f0f0f0' : '#94a3b8') + ';border:none;font-size:15px;font-weight:700;cursor:pointer;border-bottom:' + (rcpTab === 'receive' ? '2px solid #3b82f6' : '2px solid transparent') + '" onclick="setRcpTab(\'receive\')">新增驗收</button>' +
+        '<button style="flex:1;padding:12px 0;background:' + (rcpTab === 'tasks' ? '#1e293b' : 'transparent') + ';color:' + (rcpTab === 'tasks' ? '#f0f0f0' : '#94a3b8') + ';border:none;font-size:15px;font-weight:700;cursor:pointer;border-bottom:' + (rcpTab === 'tasks' ? '2px solid #3b82f6' : '2px solid transparent') + '" onclick="setRcpTab(\'tasks\')">待辦任務' + badge + '</button>' +
+    '</div>';
+}
+
+window.setRcpTab = function(tab) {
+    rcpTab = tab;
+    rcpCurrentTask = null;
+    renderReceivePage();
+};
+
 // ── 主畫面 ──────────────────────────────────────────────────
 
 function renderReceivePage() {
     const houseLabel = myHouseLabel();
     const houseOk = !!(window.myHouse && window.myHouse());
 
-    const itemsHtml = rcpItems.length === 0
-        ? '<div style="padding:32px 0;text-align:center;color:#94a3b8">還沒有品項，按下方「＋ 加品項」</div>'
-        : rcpItems.map(function(it, i) {
-            return '<div class="rcp-item">' +
-                '<div class="rcp-item-name">' + esc(it.productName) + ' <span class="rcp-item-spec">' + esc(it.spec) + '</span></div>' +
-                '<div class="rcp-item-qty">' + it.qty + ' 件</div>' +
-                '<button class="rcp-del" onclick="rcpRemoveItem(' + i + ')" aria-label="刪除">✕</button>' +
-            '</div>';
-        }).join('');
+    let content;
+    if (rcpTab === 'tasks') {
+        content = renderTasksTabHtml();
+    } else {
+        const itemsHtml = rcpItems.length === 0
+            ? '<div style="padding:32px 0;text-align:center;color:#94a3b8">還沒有品項，按下方「＋ 加品項」</div>'
+            : rcpItems.map(function(it, i) {
+                return '<div class="rcp-item">' +
+                    '<div class="rcp-item-name">' + esc(it.productName) + ' <span class="rcp-item-spec">' + esc(it.spec) + '</span></div>' +
+                    '<div class="rcp-item-qty">' + it.qty + ' 件</div>' +
+                    '<button class="rcp-del" onclick="rcpRemoveItem(' + i + ')" aria-label="刪除">✕</button>' +
+                '</div>';
+            }).join('');
 
-    $('receive-body').innerHTML =
-        // 廠商行
-        '<div class="rcp-header-row">' +
-            '<div class="rcp-vendor-wrap">' +
-                '<label class="rcp-label">廠商</label>' +
-                renderVendorSelector() +
+        content =
+            '<div class="rcp-header-row">' +
+                '<div class="rcp-vendor-wrap">' +
+                    '<label class="rcp-label">廠商</label>' +
+                    renderVendorSelector() +
+                '</div>' +
+                '<button class="pk-chip" onclick="window.switchHouse && window.switchHouse()">📍 ' + esc(houseLabel) + ' ⇄</button>' +
             '</div>' +
-            '<button class="pk-chip" onclick="window.switchHouse && window.switchHouse()">📍 ' + esc(houseLabel) + ' ⇄</button>' +
-        '</div>' +
-        // 品項清單
-        '<div class="rcp-items">' + itemsHtml + '</div>' +
-        // 按鈕
-        '<div class="rcp-actions">' +
-            '<button class="pk-short" style="flex:1" onclick="openProductPicker()">＋ 加品項</button>' +
-            '<button class="pk-go" style="flex:2;' + (rcpItems.length === 0 || !rcpVendor || !houseOk ? 'opacity:0.4;pointer-events:none' : '') + '" onclick="submitReceive()">✓ 完成入庫</button>' +
-        '</div>';
+            '<div class="rcp-items">' + itemsHtml + '</div>' +
+            '<div class="rcp-actions">' +
+                '<button class="pk-short" style="flex:1" onclick="openProductPicker()">＋ 加品項</button>' +
+                '<button class="pk-go" style="flex:2;' + (rcpItems.length === 0 || !rcpVendor || !houseOk ? 'opacity:0.4;pointer-events:none' : '') + '" onclick="submitReceive()">✓ 完成入庫</button>' +
+            '</div>';
+    }
+
+    $('receive-body').innerHTML = tabBarHtml() + '<div style="padding:0 0 120px">' + content + '</div>';
 }
 
 function renderVendorSelector() {
@@ -100,11 +133,129 @@ window.rcpRemoveItem = function(i) {
     renderReceivePage();
 };
 
+// ── 待辦任務分頁 ─────────────────────────────────────────────
+
+function renderTasksTabHtml() {
+    if (rcpCurrentTask) return renderTaskDetailHtml(rcpCurrentTask);
+    const tasks = openInboundTasks();
+    if (tasks.length === 0) {
+        return '<div style="padding:48px 16px;text-align:center;color:#94a3b8">目前沒有待入庫任務<br><span style="font-size:13px">電腦「交給堆高機」後會在這裡出現</span></div>';
+    }
+    return '<div style="padding:8px 0">' + tasks.map(function(t) {
+        return '<div class="rcp-item" onclick="rcpSelectTask(\'' + esc(t.id) + '\')" style="cursor:pointer">' +
+            '<div class="rcp-item-name">' + esc(t.productName) + ' <span class="rcp-item-spec">' + esc(t.spec || '') + '</span></div>' +
+            '<div style="font-size:13px;color:#94a3b8;margin-top:2px">' + esc(t.orderNo || t.palletId || '-') + (t.batchNo ? ' · ' + esc(t.batchNo) : '') + '</div>' +
+            '<div class="rcp-item-qty">' + esc(String(t.quantity)) + ' 件</div>' +
+        '</div>';
+    }).join('') + '</div>';
+}
+
+function renderTaskDetailHtml(t) {
+    const houseLabel = myHouseLabel();
+    return '<div style="padding:16px 16px 0">' +
+        '<div style="font-size:22px;font-weight:900;color:#f0f0f0;margin-bottom:4px">' + esc(t.productName) + (t.spec ? ' <span style="font-size:16px;color:#94a3b8">' + esc(t.spec) + '</span>' : '') + '</div>' +
+        '<div style="font-size:13px;color:#94a3b8;margin-bottom:2px">單號：' + esc(t.orderNo || t.palletId || '-') + '</div>' +
+        '<div style="font-size:13px;color:#94a3b8;margin-bottom:8px">批號：' + esc(t.batchNo || '-') + '</div>' +
+        '<div style="font-size:28px;color:#f87171;font-weight:900;margin-bottom:12px">數量：' + esc(String(t.quantity)) + ' 件</div>' +
+        (t.locationId ? '<div style="font-size:13px;color:#64748b;margin-bottom:12px">📍 指定儲位：<strong style="color:#93c5fd">' + esc(t.locationId) + '</strong></div>' : '') +
+        '<div style="font-size:14px;color:#94a3b8;margin-bottom:8px">放到哪個儲位？（留空預設 ' + esc(houseLabel) + '）</div>' +
+        '<input id="rcp-task-loc" class="scan-input" placeholder="掃描或輸入儲位（可留空）" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">' +
+        '<div id="rcp-task-result" class="scan-result" style="margin:8px 0"></div>' +
+        '<div class="row-btns" style="margin-top:12px">' +
+            '<button class="pk-short" style="flex:1" onclick="rcpCurrentTask=null;renderReceivePage()">← 返回</button>' +
+            '<button class="pk-go" style="flex:2" id="rcp-task-confirm-btn" onclick="rcpConfirmTaskLoc()">✓ 確認入庫</button>' +
+        '</div>' +
+    '</div>';
+}
+
+window.rcpSelectTask = function(id) {
+    const t = (window.inboundTasks || []).find(function(x) { return x.id === id; });
+    if (!t) return;
+    rcpCurrentTask = t;
+    renderReceivePage();
+    setTimeout(function() { var el = $('rcp-task-loc'); if (el) el.focus(); }, 100);
+};
+
+async function findRcpOrderId(task) {
+    if (task.orderId) return task.orderId;
+    if (!task.orderNo) return null;
+    const snap = await db.collection('inboundOrders').where('docNo', '==', task.orderNo).limit(1).get();
+    return snap.empty ? null : snap.docs[0].id;
+}
+
+window.rcpConfirmTaskLoc = async function() {
+    const task = rcpCurrentTask;
+    if (!task) return;
+    const raw = ($('rcp-task-loc') && $('rcp-task-loc').value.trim()) || '';
+    const house = window.myHouse ? window.myHouse() : '';
+    if (!house) { alert('請先選倉庫'); return; }
+
+    let loc;
+    if (raw) {
+        loc = window.formatLocationId ? window.formatLocationId(raw) : raw.trim().toUpperCase();
+        if (!window.isValidStorageLocation(loc)) {
+            var res = $('rcp-task-result');
+            if (res) { res.className = 'scan-result err'; res.textContent = '❌ 儲位格式不正確：' + loc; }
+            return;
+        }
+    } else {
+        loc = house + '庫';
+    }
+
+    const btn = $('rcp-task-confirm-btn');
+    if (btn) btn.disabled = true;
+
+    const who = window.currentUser ? window.currentUser.email : '';
+    const taskRef = db.collection('inboundTasks').doc(task.id);
+
+    function showTaskErr(msg) {
+        var res = $('rcp-task-result');
+        if (res) { res.className = 'scan-result err'; res.textContent = msg; }
+        if (btn) btn.disabled = false;
+    }
+
+    function taskDone(msg) {
+        rcpCurrentTask = null;
+        rcpTab = 'tasks';
+        renderReceivePage();
+        $('receive-body').insertAdjacentHTML('afterbegin',
+            '<div class="scan-result ok" style="margin:12px 16px">' + msg + '</div>');
+        setTimeout(function() { var el = document.querySelector('#receive-body .scan-result'); if (el) el.remove(); }, 5000);
+    }
+
+    try {
+        const orderId = await findRcpOrderId(task);
+        if (!orderId) throw Object.assign(new Error('入庫單已不存在（可能已被刪除）'), { code: 'ORDER_MISSING' });
+        await window.postInboundOrderTx(orderId, loc, { taskRef: taskRef, note: '驗收入庫確認' });
+        taskDone('✅ ' + task.productName + ' ' + task.quantity + ' 件已入庫 @ ' + loc);
+    } catch (e) {
+        if (e.code === 'ALREADY_POSTED') {
+            try {
+                await taskRef.update({ status: 'done', confirmedAt: new Date().toISOString(), confirmedBy: who, confirmedLocation: loc });
+                taskDone('✅ 已上架（此單電腦已入帳）@ ' + loc);
+            } catch (e2) { showTaskErr('❌ ' + e2.message); }
+        } else if (e.code === 'ORDER_CANCELLED') {
+            await taskRef.update({ status: 'cancelled', note: '入庫單已取消' }).catch(function() {});
+            showTaskErr('❌ ' + e.message);
+        } else if (e.code === 'ORDER_MISSING') {
+            if (btn) btn.disabled = false;
+            if (confirm('此任務的入庫單已不存在，要把這個任務移除嗎？')) {
+                await taskRef.update({ status: 'cancelled', confirmedAt: new Date().toISOString(), confirmedBy: who, note: '入庫單已不存在' });
+                taskDone('已移除任務');
+            } else {
+                showTaskErr('❌ ' + e.message);
+            }
+        } else {
+            showTaskErr('❌ 入庫失敗：' + e.message);
+        }
+    }
+};
+
 // ── 品項選擇器 ──────────────────────────────────────────────
 
 let pickerQuery = '';
-let pickerStep = 'list'; // 'list' | 'qty'
-let pickerSelected = null; // { productName, spec }
+let pickerStep = 'list';
+let pickerSelected = null;
 
 function openProductPicker() {
     if (rcpVendor === '__new__') {
@@ -136,8 +287,6 @@ function renderPickerList() {
     const q = pickerQuery.trim().toLowerCase();
     let catalog = productCatalog();
 
-    // 加入目前清單裡已輸入但 pallets 沒有的品項（讓它能被再次選）
-    // 也加入可以手動輸入的空項
     if (q) {
         catalog = catalog.filter(function(p) {
             return p.productName.toLowerCase().includes(q) || (p.spec || '').toLowerCase().includes(q);
@@ -156,7 +305,6 @@ function renderPickerList() {
         '</div>';
     }).join('');
 
-    // 可以手動輸入新品項
     if (q && !hasExact) {
         html += '<div class="picker-item picker-new" onclick="pickerNewProduct()">' +
             '<div class="picker-name">＋ 新品項：' + esc(pickerQuery) + '</div>' +
@@ -177,7 +325,6 @@ window.pickerSelectProduct = function(productName, spec) {
 };
 
 window.pickerNewProduct = function() {
-    // 讓用戶輸入品名和規格
     const nameInput = $('picker-search').value.trim();
     pickerSelected = { productName: nameInput, spec: '', isNew: true };
     pickerStep = 'qty';
@@ -207,7 +354,6 @@ window.pickerConfirmQty = function() {
         const specEl = $('picker-spec-input');
         if (specEl) pickerSelected.spec = specEl.value.trim();
     }
-    // 預留 batchNo / expiryDate / locationId 給未來有儲位、效期時填
     rcpItems.push({ productName: pickerSelected.productName, spec: pickerSelected.spec, qty: qty, batchNo: '', expiryDate: '', locationId: '' });
     closePicker();
     renderReceivePage();
@@ -215,7 +361,6 @@ window.pickerConfirmQty = function() {
 
 // ── 送出 ──────────────────────────────────────────────────
 
-// 最近一次入庫的插單資料（給印單按鈕用）
 let lastInboundLabels = [];
 
 window.submitReceive = async function() {
@@ -224,15 +369,15 @@ window.submitReceive = async function() {
     if (!rcpVendor || rcpVendor === '__new__') { alert('請選廠商'); return; }
     if (rcpItems.length === 0) { alert('請加品項'); return; }
 
-    const btn = document.querySelector('#page-receive .pk-go');
+    const btn = document.querySelector('#receive-body .pk-go');
     if (btn) btn.disabled = true;
 
     try {
         const now = new Date();
-        const locId = house + '庫'; // e.g. 'J庫'
+        const locId = house + '庫';
         const batch = db.batch();
 
-        // 1. simpleInbound 記錄（會計對帳用）
+        // simpleInbound 記錄（會計對帳用）
         const rcpRef = db.collection('simpleInbound').doc();
         batch.set(rcpRef, {
             vendor: rcpVendor,
@@ -246,21 +391,23 @@ window.submitReceive = async function() {
             createdBy: (window.currentUser && window.currentUser.email) || ''
         });
 
-        // 2. 每個品項建 pallets 記錄，同時收集插單資料
         const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
-        const autoBatchNo = 'IN-' + dateStr; // e.g. IN-20260929
-        const nullLoc = house + '-0-00-00';  // e.g. J-0-00-00（未指定細儲位）
+        const autoBatchNo = 'IN-' + dateStr;
+        const nullLoc = house + '-0-00-00';
         const labels = [];
+
         rcpItems.forEach(function(it, i) {
             const pid = 'SIN-' + now.getTime() + '-' + i;
             const itemLoc = it.locationId || locId;
             const printLoc = it.locationId || nullLoc;
             const batchNo = it.batchNo || autoBatchNo;
+
             labels.push({
                 palletId: pid, productName: it.productName, spec: it.spec || '',
                 quantity: it.qty, locationId: printLoc, vendor: rcpVendor,
                 batchNo: batchNo, expiryDate: it.expiryDate || '', company: '崇文'
             });
+
             const palletRef = db.collection('pallets').doc();
             batch.set(palletRef, {
                 palletId: pid,
@@ -278,22 +425,34 @@ window.submitReceive = async function() {
                 status: 'Available',
                 company: '崇文'
             });
+
+            // 入庫稽核記錄
+            const logRef = db.collection('inventoryLogs').doc();
+            batch.set(logRef, window.buildInventoryLogEntry({
+                type: 'inbound',
+                company: '崇文',
+                productName: it.productName,
+                spec: it.spec || '',
+                quantity: it.qty,
+                quantityChange: it.qty,
+                vendor: rcpVendor,
+                locationId: itemLoc,
+                batchNo: batchNo,
+                palletId: pid,
+                note: '驗收入庫 - ' + rcpVendor,
+                orderId: rcpRef.id
+            }));
         });
 
         await batch.commit();
 
-        // 儲存插單資料供印單按鈕使用
         lastInboundLabels = labels;
-
-        // 記錄廠商以供下次使用
         if (!recentVendors.includes(rcpVendor)) recentVendors.unshift(rcpVendor);
 
-        // 重置
         rcpItems = [];
         rcpVendor = '';
         renderReceivePage();
 
-        // 顯示成功＋印單按鈕
         $('receive-body').insertAdjacentHTML('afterbegin',
             '<div class="scan-result ok" style="margin:12px 16px;display:flex;align-items:center;gap:12px">' +
                 '<span>✓ 入庫完成！庫存已更新。</span>' +
