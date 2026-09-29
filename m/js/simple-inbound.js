@@ -20,6 +20,13 @@ window.pageInit.receive = async function() {
 };
 
 window.dataHooks.inboundTasks.push(function() {
+    // 更新驗收入庫選單卡的待辦數字
+    var badge = document.getElementById('badge-receive-tasks');
+    if (badge) {
+        var n = openInboundTasks().length;
+        badge.textContent = n > 0 ? n : '';
+        badge.style.display = n > 0 ? '' : 'none';
+    }
     if (window.currentPage === 'receive') renderReceivePage();
 });
 
