@@ -6,7 +6,7 @@
 
 window.isFeeItem = function(productName) {
     if (!productName) return true;
-    var feeKeywords = ['運費', '費用', '代收', '代墊', '手續費', '服務費', '代付', '其他費用'];
+    var feeKeywords = ['運費', '費用', '代工費', '加工費', '代收', '代墊', '手續費', '服務費', '代付', '其他費用'];
     return feeKeywords.some(function(kw) { return productName.includes(kw); });
 };
 
