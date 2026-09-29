@@ -411,3 +411,69 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 document.addEventListener('DOMContentLoaded', function() {
     const v = $('app-version'); if (v) v.innerText = 'v' + window.APP_VERSION;
 });
+
+// ---------- 情境式首頁：今天的工作 ----------
+function renderHomeTasks() {
+    const container = $('home-tasks');
+    if (!container) return;
+
+    const inboundOpen = window.inboundTasks.filter(window.isTaskOpen);
+    const wavesOpen = window.waves.filter(window.isWaveOpen);
+    const dispatchOpen = window.dispatchOrders.filter(window.isDispatchOpen);
+
+    if (inboundOpen.length === 0 && wavesOpen.length === 0 && dispatchOpen.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    const cards = [];
+
+    if (inboundOpen.length > 0) {
+        const names = inboundOpen.slice(0, 3).map(function(t) { return t.productName; }).filter(Boolean);
+        const extra = inboundOpen.length > 3 ? ' …等 ' + inboundOpen.length + ' 筆' : '';
+        cards.push({ page: 'inbound', color: '#10b981', icon: 'fa-truck-ramp-box',
+            label: '入庫任務', count: inboundOpen.length, unit: '筆待上架',
+            preview: names.join(' · ') + extra });
+    }
+
+    if (wavesOpen.length > 0) {
+        const nos = wavesOpen.slice(0, 3).map(function(w) { return w.waveNo || w.docNo || w.id; }).filter(Boolean);
+        const extra = wavesOpen.length > 3 ? ' 等 ' + wavesOpen.length + ' 波次' : '';
+        cards.push({ page: 'picking', color: '#3b82f6', icon: 'fa-barcode',
+            label: '波次揀貨', count: wavesOpen.length, unit: '個波次',
+            preview: nos.join(' · ') + extra });
+    }
+
+    if (dispatchOpen.length > 0) {
+        const o = dispatchOpen[0];
+        const ops = o.operations || [];
+        const preview = ops.slice(0, 2).map(function(op) {
+            return (op.fromLocation || op.from || '') + (op.toLocation || op.to ? ' → ' + (op.toLocation || op.to) : '');
+        }).filter(Boolean).join(' · ') || (o.docNo || o.note || '');
+        const extra = dispatchOpen.length > 1 ? '（共 ' + dispatchOpen.length + ' 筆）' : '';
+        cards.push({ page: 'dispatch', color: '#f59e0b', icon: 'fa-arrows-rotate',
+            label: '調度工單', count: dispatchOpen.length, unit: '筆',
+            preview: preview + extra });
+    }
+
+    container.style.display = '';
+    container.innerHTML = '<div class="home-section-label">今天的工作</div>' +
+        cards.map(function(c) {
+            return '<div class="task-summary-card" style="--c:' + c.color + '" onclick="openPage(\'' + c.page + '\')">' +
+                '<div class="ts-icon"><i class="fa-solid ' + esc(c.icon) + '"></i></div>' +
+                '<div class="ts-body">' +
+                '<div class="ts-label">' + esc(c.label) + '</div>' +
+                '<div class="ts-preview">' + esc(c.preview) + '</div>' +
+                '</div>' +
+                '<div class="ts-count-wrap">' +
+                '<div class="ts-count">' + c.count + '</div>' +
+                '<div class="ts-unit">' + esc(c.unit) + '</div>' +
+                '</div>' +
+                '<div class="ts-arrow"><i class="fa-solid fa-chevron-right"></i></div>' +
+                '</div>';
+        }).join('');
+}
+
+window.dataHooks.waves.push(renderHomeTasks);
+window.dataHooks.dispatchOrders.push(renderHomeTasks);
+window.dataHooks.inboundTasks.push(renderHomeTasks);
