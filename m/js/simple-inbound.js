@@ -215,6 +215,9 @@ window.pickerConfirmQty = function() {
 
 // ── 送出 ──────────────────────────────────────────────────
 
+// 最近一次入庫的插單資料（給印單按鈕用）
+let lastInboundLabels = [];
+
 window.submitReceive = async function() {
     const house = window.myHouse ? window.myHouse() : '';
     if (!house) { alert('請先選倉庫'); return; }
@@ -226,7 +229,6 @@ window.submitReceive = async function() {
 
     try {
         const now = new Date();
-        const dateStr = now.toISOString().slice(0, 10);
         const locId = house + '庫'; // e.g. 'J庫'
         const batch = db.batch();
 
@@ -236,7 +238,6 @@ window.submitReceive = async function() {
             vendor: rcpVendor,
             date: now.toISOString().slice(0, 10),
             house: house,
-            // 每個品項：qty／batchNo／expiryDate／locationId 未來有儲位時再填
             items: rcpItems.map(function(it) {
                 return { productName: it.productName, spec: it.spec || '', qty: it.qty,
                     batchNo: it.batchNo || '', expiryDate: it.expiryDate || '', locationId: it.locationId || '' };
@@ -245,12 +246,16 @@ window.submitReceive = async function() {
             createdBy: (window.currentUser && window.currentUser.email) || ''
         });
 
-        // 2. 每個品項建 pallets 記錄（庫存快查＋揀貨系統看得到）
-        // palletId 目前自動產生；未來有條碼時可印出條碼取代
-        // locationId 目前用「J庫」/「I庫」；未來有儲位時用實際儲位
+        // 2. 每個品項建 pallets 記錄，同時收集插單資料
+        const labels = [];
         rcpItems.forEach(function(it, i) {
             const pid = 'SIN-' + now.getTime() + '-' + i;
             const itemLoc = it.locationId || locId;
+            labels.push({
+                palletId: pid, productName: it.productName, spec: it.spec || '',
+                quantity: it.qty, locationId: itemLoc, vendor: rcpVendor,
+                batchNo: it.batchNo || '', expiryDate: it.expiryDate || '', company: '崇文'
+            });
             const palletRef = db.collection('pallets').doc();
             batch.set(palletRef, {
                 palletId: pid,
@@ -272,6 +277,9 @@ window.submitReceive = async function() {
 
         await batch.commit();
 
+        // 儲存插單資料供印單按鈕使用
+        lastInboundLabels = labels;
+
         // 記錄廠商以供下次使用
         if (!recentVendors.includes(rcpVendor)) recentVendors.unshift(rcpVendor);
 
@@ -280,13 +288,16 @@ window.submitReceive = async function() {
         rcpVendor = '';
         renderReceivePage();
 
-        // 顯示成功
+        // 顯示成功＋印單按鈕
         $('receive-body').insertAdjacentHTML('afterbegin',
-            '<div class="scan-result ok" style="margin:12px 16px">✓ 入庫完成！庫存已更新。</div>');
+            '<div class="scan-result ok" style="margin:12px 16px;display:flex;align-items:center;gap:12px">' +
+                '<span>✓ 入庫完成！庫存已更新。</span>' +
+                '<button onclick="printLastInboundLabels()" style="background:#fff;color:#16a34a;border:2px solid #16a34a;border-radius:8px;padding:6px 14px;font-size:14px;font-weight:bold;white-space:nowrap">🖨️ 印插單</button>' +
+            '</div>');
         setTimeout(function() {
             const el = document.querySelector('#receive-body .scan-result');
             if (el) el.remove();
-        }, 3000);
+        }, 8000);
 
     } catch (e) {
         console.error(e);
@@ -295,3 +306,94 @@ window.submitReceive = async function() {
         if (btn) btn.disabled = false;
     }
 };
+
+window.printLastInboundLabels = function() {
+    if (!lastInboundLabels.length) { alert('沒有可印的插單'); return; }
+    printSimpleInboundLabels(lastInboundLabels);
+};
+
+function printSimpleInboundLabels(labels) {
+    var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>棧板插單</title>';
+    html += '<style>';
+    html += '@page { size: A4 landscape; margin: 0; }';
+    html += '* { margin: 0; padding: 0; box-sizing: border-box; }';
+    html += 'body { font-family: Microsoft JhengHei, Arial, sans-serif; background: #fff; }';
+    html += '.label-page { width: 297mm; height: 210mm; padding: 5mm; box-sizing: border-box; page-break-after: always; overflow: hidden; }';
+    html += '.label-page:last-of-type { page-break-after: auto; }';
+    html += '.label-content { width: 100%; height: 100%; border: 3px solid #000; display: flex; flex-direction: column; overflow: hidden; }';
+    html += '.row-1 { height: 85mm; display: flex; border-bottom: 3px solid #000; }';
+    html += '.qr-section { width: 90mm; border-right: 2px solid #000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3mm; }';
+    html += '.qr-box { width: 80mm; height: 80mm; }';
+    html += '.qr-box svg { width: 100% !important; height: 100% !important; }';
+    html += '.pallet-no { font-size: 14px; font-weight: bold; color: #333; margin-top: 2mm; text-align: center; }';
+    html += '.name-section { flex: 1; display: flex; align-items: center; justify-content: center; padding: 5mm; overflow: hidden; }';
+    html += '.product-name { font-weight: 900; text-align: center; line-height: 1.1; word-break: break-word; }';
+    html += '.row-2 { height: 40mm; display: flex; align-items: center; justify-content: center; border-bottom: 3px solid #000; padding: 3mm 8mm; overflow: hidden; }';
+    html += '.product-spec { font-weight: 700; color: #333; text-align: center; line-height: 1.2; word-break: break-word; }';
+    html += '.row-3 { height: 45mm; display: flex; border-bottom: 3px solid #000; }';
+    html += '.cell-qty { width: 20%; border-right: 2px solid #000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2mm; }';
+    html += '.cell-batch { width: 40%; border-right: 2px solid #000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2mm; }';
+    html += '.cell-vendor { width: 40%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2mm; }';
+    html += '.cell-label { font-size: 14px; color: #666; margin-bottom: 2mm; }';
+    html += '.cell-value { font-weight: 900; white-space: nowrap; }';
+    html += '.cell-value.qty { color: #dc2626; font-size: 64px; }';
+    html += '.cell-value.batch { font-size: 48px; }';
+    html += '.cell-value.vendor { font-size: 56px; }';
+    html += '.row-4 { flex: 1; display: flex; align-items: center; padding: 3mm 8mm; gap: 15mm; }';
+    html += '.location-box { background: #000; color: #fff; font-size: 64px; font-weight: 900; padding: 4mm 15mm; }';
+    html += '.company-box { font-size: 64px; font-weight: 700; color: #333; }';
+    html += '.no-print { text-align: center; padding: 20px; background: #f0f0f0; }';
+    html += '.no-print button { padding: 15px 40px; font-size: 18px; border: none; cursor: pointer; font-weight: bold; margin: 0 10px; border-radius: 8px; }';
+    html += '.btn-print { background: #059669; color: white; }';
+    html += '.btn-close { background: #666; color: white; }';
+    html += '@media print { .no-print { display: none !important; } }';
+    html += '</style></head><body>';
+
+    labels.forEach(function(label, idx) {
+        var productName = label.productName || '-';
+        var specText = label.spec || '-';
+        var nameFontSize = 144;
+        if (productName.length > 6) nameFontSize = 72;
+        if (productName.length > 12) nameFontSize = 56;
+        if (productName.length > 18) nameFontSize = 42;
+        var specFontSize = 120;
+        if (specText.length > 8) specFontSize = 100;
+        if (specText.length > 16) specFontSize = 60;
+        if (specText.length > 24) specFontSize = 44;
+
+        html += '<div class="label-page"><div class="label-content">';
+        html += '<div class="row-1">';
+        html += '<div class="qr-section"><div id="qrcode-' + idx + '" class="qr-box"></div>';
+        html += '<div class="pallet-no">' + label.palletId + '</div></div>';
+        html += '<div class="name-section"><div class="product-name" style="font-size:' + nameFontSize + 'px;">' + label.productName + '</div></div>';
+        html += '</div>';
+        html += '<div class="row-2"><div class="product-spec" style="font-size:' + specFontSize + 'px;">' + specText + '</div></div>';
+        html += '<div class="row-3">';
+        html += '<div class="cell-qty"><div class="cell-label">數量</div><div class="cell-value qty">' + label.quantity + '</div></div>';
+        html += '<div class="cell-batch"><div class="cell-label">批號</div><div class="cell-value batch">' + (label.batchNo || '-') + '</div></div>';
+        html += '<div class="cell-vendor"><div class="cell-label">廠商</div><div class="cell-value vendor">' + (label.vendor || '-') + '</div></div>';
+        html += '</div>';
+        html += '<div class="row-4">';
+        html += '<div class="location-box">' + label.locationId + '</div>';
+        html += '<div class="company-box">' + label.company + '</div>';
+        html += '</div>';
+        html += '</div></div>';
+    });
+
+    html += '<div class="no-print">';
+    html += '<button class="btn-print" onclick="window.print()">🖨️ 列印全部 ' + labels.length + ' 張插單</button>';
+    html += '<button class="btn-close" onclick="window.close()">關閉</button>';
+    html += '</div>';
+
+    html += '<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>';
+    html += '<script>window.onload = function() {';
+    labels.forEach(function(label, idx) {
+        html += 'try { var qr' + idx + ' = qrcode(0,"L"); qr' + idx + '.addData("' + label.palletId + '"); qr' + idx + '.make(); document.getElementById("qrcode-' + idx + '").innerHTML = qr' + idx + '.createSvgTag(8,0); } catch(e) {}';
+    });
+    html += '};<\/script>';
+    html += '</body></html>';
+
+    var w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); }
+    else { alert('請允許彈出視窗，或改用電腦印插單'); }
+}
