@@ -403,6 +403,14 @@ window.printNewWavePickingLists = function(waveNos) {
     if (printUpdatedPickingLists(waves, null, { fresh: true })) saveWaves();
 };
 
+// 波次清單每一列的「揀貨單」：只印這個波次，不用先開始揀貨
+window.printWavePickingList = function(waveNo) {
+    var w = window._waveData.waves.find(function(x) { return x.waveNo === waveNo; });
+    if (!w) { alert('找不到波次 ' + waveNo); return; }
+    if (!(w.summary || []).length) { alert('波次 ' + waveNo + ' 沒有品項，沒有東西可以印'); return; }
+    printUpdatedPickingLists([w], null, { fresh: true });
+};
+
 function findProductLocation(productName, spec) {
     var p = productPalletsFifo(productName, spec)[0];
     return p ? (p.locationId || '-') : '-';
@@ -544,7 +552,7 @@ function findErpHeader(rows) {
         }
     });
     const missing = Object.keys(ERP_REQUIRED).filter(k => col[k] === undefined).map(k => ERP_REQUIRED[k]);
-    if (missing.length) return { error: '報表少了這些欄位：' + missing.join('、') + '\n請在鼎新報表把欄位加回來再匯出。' };
+    if (missing.length) return { error: '報表少了這些欄位：' + missing.join('、') + '\n\n可能開錯報表：請改用鼎新「每日客戶銷貨明細表」（要有銷貨單號），\n「銷貨單明細表」沒有單號，不能拿來匯入訂單。' };
     return { row: hr, col: col };
 }
 
@@ -1139,7 +1147,8 @@ window.createWaveFromOrders = async function(orders, logistics, extra) {
                 var snaps = await Promise.all(withId.map(function(o) { return tx.get(db.collection('salesOrders').doc(o.id)); }));
                 var ok = [], skipped = [];
                 snaps.forEach(function(s, i) {
-                    if (s.exists && window.orderWaveable(s.data())) ok.push(Object.assign({}, withId[i], s.data(), { id: s.id }));
+                    if (s.exists && window.orderWaveable(s.data()) && window.orderOpenItems(s.data()).length === 0) skipped.push(withId[i].orderNo + '（沒有品項）');
+                    else if (s.exists && window.orderWaveable(s.data())) ok.push(Object.assign({}, withId[i], s.data(), { id: s.id }));
                     else skipped.push(withId[i].orderNo + (s.exists && s.data().waveNo ? '（已在 ' + s.data().waveNo + '）' : '（已出貨或不存在）'));
                 });
                 if (ok.length === 0) throw new Error('選的訂單都已經排進其他波次或已出貨：\n' + skipped.join('\n'));

@@ -1418,6 +1418,9 @@
                 } else if (wave.status === 'sorting') {
                     html += '<button onclick="openWaveSorting(\'' + wave.waveNo + '\')" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded mr-1"><i class="fa-solid fa-tags mr-1"></i>分貨作業</button>';
                 }
+                if (wave.status === 'pending' || wave.status === 'picking') {
+                    html += '<button onclick="printWavePickingList(\'' + wave.waveNo + '\')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2 py-1 rounded mr-1" title="列印揀貨單"><i class="fa-solid fa-print mr-1"></i>揀貨單</button>';
+                }
                 html += '<button onclick="viewWaveDetail(\'' + wave.waveNo + '\')" class="bg-slate-600 hover:bg-slate-500 text-white text-xs px-2 py-1 rounded mr-1" title="檢視明細"><i class="fa-solid fa-eye"></i></button>';
                 if (wave.status === 'pending') {
                     html += '<button onclick="deleteWave(\'' + wave.waveNo + '\')" class="bg-red-600 hover:bg-red-500 text-white text-xs px-2 py-1 rounded" title="刪除波次"><i class="fa-solid fa-trash"></i></button>';
