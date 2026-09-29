@@ -533,6 +533,8 @@ const ERP_HEADERS = {
     ADDR1: ['送貨地址一', '送貨地址1', '送貨地址', '地址一', '地址'],
     ADDR2: ['送貨地址二', '送貨地址2', '地址二']
 };
+// 門市的銷貨單（單號 233-、234- 開頭）不從倉庫揀貨，匯入時整張跳過
+window.STORE_ORDER_PREFIX = /^(233|234)-/;
 const ERP_REQUIRED = { ORDER_NO: '銷貨單號', PRODUCT: '品名', QTY: '銷貨數量', REMARK: '備註（物流商）' };
 
 // 在前 20 列找標題列（有「品名」那一列），回傳 { row, col } 或 { error }
@@ -619,6 +621,7 @@ window.parseErpOrderRows = function(rows) {
     // 數字欄：去掉千分位，保留小數（2.5 公斤不會變 2）
     const num = v => parseFloat(String(v == null ? '' : v).replace(/,/g, '')) || 0;
     const needPkg = [];  // 換算不出件數、要人工填的品項
+    const storeSkipped = {};
 
     // 鼎新報表的特性（跟八方 ERP 的解析經驗一致）：
     //   每頁重複印抬頭（製表日期、期間、第 N 頁）和標題列；單位欄有「銷貨:」「淨額:」小計列；
@@ -636,6 +639,11 @@ window.parseErpOrderRows = function(rows) {
 
         let orderNo = row[COL.ORDER_NO] ? String(row[COL.ORDER_NO]).trim() : lastOrderNo;
         if (!orderNo) continue;
+        if (window.STORE_ORDER_PREFIX.test(orderNo)) {
+            if (row[COL.ORDER_NO]) lastOrderNo = orderNo;
+            storeSkipped[orderNo] = true;
+            continue;
+        }
         if (!row[COL.PRODUCT]) {
             // 品名空白：同一張單、有數量，就沿用上一列的品名、規格
             if (!(lastProduct && lastProductOrder === orderNo && num(row[COL.QTY]) > 0)) continue;
@@ -680,7 +688,7 @@ window.parseErpOrderRows = function(rows) {
             var isHeader = headerKeywords.some(function(kw) { return productName === kw || productName.includes(kw + ' '); });
             if (isHeader) continue;
 
-            var feeKeywords = ['運費', '費用', '保力龍', '保麗龍', '代收', '代墊', '手續費', '服務費', '包材', '紙箱費', '冰袋', '冰塊'];
+            var feeKeywords = ['運費', '費用', '代工費', '加工費', '保力龍', '保麗龍', '代收', '代墊', '手續費', '服務費', '包材', '紙箱費', '冰袋', '冰塊'];
             var isFee = feeKeywords.some(function(kw) { return productName.includes(kw); });
             if (isFee) continue;
 
@@ -712,7 +720,7 @@ window.parseErpOrderRows = function(rows) {
         }
     }
 
-    return { orders: Array.from(orderMap.values()), needPkg: needPkg };
+    return { orders: Array.from(orderMap.values()), needPkg: needPkg, storeSkipped: Object.keys(storeSkipped) };
 };
 
 // 存訂單：新單新增；已有的單比對異動（已出貨的不改）；回傳各種筆數
@@ -840,6 +848,7 @@ window.importErpOrderRows = async function(rows) {
         console.log('解析訂單:', orders.length, '筆');
 
         const r = await window.saveErpOrders(orders);
+        const storeNote = parsed.storeSkipped.length ? '（門市銷貨單 ' + parsed.storeSkipped.length + ' 張不揀貨，已跳過）' : '';
         const savedCount = r.savedCount, skipCount = r.skipCount, modifiedCount = r.modifiedCount, orderChanges = r.orderChanges, shippedChanged = r.shippedChanged;
 
         if (modifiedCount > 0) {
@@ -857,18 +866,18 @@ window.importErpOrderRows = async function(rows) {
         if (savedCount > 0) {
             var plan = planWavesByLogistics();
             var autoCreate = plan.count > 0 && confirm(
-                '✅ 匯入完成！新增 ' + savedCount + ' 筆' +
+                '✅ 匯入完成！新增 ' + savedCount + ' 筆' + storeNote +
                 (modifiedCount > 0 ? '、⚠️ 異動 ' + modifiedCount + ' 筆' : '') +
                 (skipCount > 0 ? '、略過（沒變）' + skipCount + ' 筆' : '') + '\n\n' +
                 '━━━━━━━━━━━━━━━━━━━━━━\n' +
                 plan.text + '\n按「確定」就建立波次（建好可以直接印揀貨單），按「取消」先不建'
             );
-            if (!autoCreate && plan.count === 0) alert('✅ 匯入完成！新增 ' + savedCount + ' 筆\n\n' + plan.text);
+            if (!autoCreate && plan.count === 0) alert('✅ 匯入完成！新增 ' + savedCount + ' 筆' + storeNote + '\n\n' + plan.text);
             if (autoCreate) {
                 await autoCreateWavesByLogistics({ skipConfirm: true, offerPrint: true });
             }
         } else {
-            var resultMsg = '✅ 匯入完成！\n\n' +
+            var resultMsg = '✅ 匯入完成！' + storeNote + '\n\n' +
                   '新增：' + savedCount + ' 筆\n';
             if (modifiedCount > 0) {
                 resultMsg += '⚠️ 異動：' + modifiedCount + ' 筆\n';

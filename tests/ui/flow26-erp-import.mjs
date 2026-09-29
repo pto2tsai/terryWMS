@@ -53,6 +53,18 @@ const parsed = await page.evaluate(() => {
 });
 H.check('鼎新報表換頁：跳過每頁抬頭和重複的標題列；品名空白沿用上一列；讀得到「銷貨包裝數量」；換了單號就不沿用（SO-P2 沒有品名，不建空單）', JSON.stringify(parsed) === JSON.stringify([['SO-P1', '黑貓宅急便', ['白蝦 50/60 x10', '白蝦 50/60 x4', '透抽 L x3']]]), JSON.stringify(parsed));
 
+const store = await page.evaluate(() => {
+  const H = ['銷貨日期', '銷貨單號', '客戶全名', '品名', '規格', '包裝數量', '銷貨數量', '單位', '備註'];
+  const r = parseErpOrderRows([H,
+    ['2026/09/29', '231-001', '客戶甲', '白蝦', '50/60', 2, 24, '盒', '黑貓'],
+    ['2026/09/29', '231-001', '客戶甲', '代工費', '', 0, 1, '式', '黑貓'],
+    ['2026/09/29', '233-001', '門市一', '卡啦脆蝦', '原味', 0, 120, '包', ''],
+    ['', '', '', '文蛤', '特大', 0, 10, '包', ''],
+    ['2026/09/29', '234-002', '門市二', '鮮蚵', '300G', 0, 15, '包', '']]);
+  return { orders: r.orders.map(o => o.orderNo + ':' + o.items.map(i => i.productName).join('/')), store: r.storeSkipped, ask: r.needPkg.length };
+});
+H.check('門市銷貨單（233-、234-）整張跳過、不問件數；代工費不列入', JSON.stringify(store) === JSON.stringify({ orders: ['231-001:白蝦'], store: ['233-001', '234-002'], ask: 0 }), JSON.stringify(store));
+
 // ---------- 在建立波次清單指定物流商 ----------
 await page.click("button[onclick=\"openCreateWaveModal()\"]"); await page.waitForTimeout(1000);
 const sel = await page.$('#modal-create-wave select[onchange^="setOrderLogistics"]');
