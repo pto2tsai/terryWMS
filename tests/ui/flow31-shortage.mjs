@@ -68,10 +68,13 @@ H.check('缺貨畫面沒有「標籤都改好了」要勾，還沒完成', !(awa
 // 現場決定：海霸王 3、好市多 3
 await mp.click('#short-edit-btn'); await mp.waitForTimeout(300);
 H.check('按「改分法」：每家一格，預設海霸王 5、好市多 1', JSON.stringify(await mp.$$eval('.alloc-in', e => e.map(x => x.value))) === JSON.stringify(['5', '1']) && !(await mp.isDisabled('#short-done-btn')));
-const ins = await mp.$$('.alloc-in');
-await ins[0].fill('4'); await mp.waitForTimeout(200);
+H.check('改分法用按的：每家有「－」「＋」，數字不能打字', (await mp.$$('.alloc-minus')).length === 2 && (await mp.$$('.alloc-plus')).length === 2 && await mp.$eval('.alloc-in', e => e.readOnly));
+const minus = await mp.$$('.alloc-minus'), plus = await mp.$$('.alloc-plus');
+await minus[0].click(); await mp.waitForTimeout(200);   // 海霸王 5→4
 H.check('分的數字加起來不等於拿到的 6 件：不能完成，並提示', await mp.isDisabled('#short-done-btn') && (await mp.innerText('#picking-next')).includes('加起來要等於 6 件'));
-await ins[0].fill('3'); await ins[1].fill('3'); await mp.waitForTimeout(200);
+await minus[0].click(); await plus[1].click(); await plus[1].click(); await mp.waitForTimeout(200);   // 海霸王 3、好市多 3
+H.check('海霸王按到 3、好市多按到 3；好市多到頂了「＋」變暗', JSON.stringify(await mp.$$eval('.alloc-in', e => e.map(x => x.value))) === JSON.stringify(['3', '3']) && await plus[1].isDisabled());
+if (process.env.SHOT_DIR) await mp.screenshot({ path: process.env.SHOT_DIR + '/short-edit.png', fullPage: true });
 H.check('改成海霸王 3、好市多 3：可以完成', !(await mp.isDisabled('#short-done-btn')) && (await mp.innerText('#picking-next')).includes('分完了'));
 await mp.click('#short-done-btn'); await mp.waitForTimeout(2500);
 const wd = await H.one('waves', W.waveNo);

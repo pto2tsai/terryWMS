@@ -44,30 +44,30 @@ WMS.createModal = function(id, options) {
     var opts = options || {};
     var modal = document.createElement('div');
     modal.id = id;
-    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50';
+    modal.className = 'ds-modal fixed inset-0 flex items-center justify-center z-50';
 
     var width = opts.width || '500px';
     var maxHeight = opts.maxHeight || '80vh';
 
-    var html = '<div class="bg-slate-800 rounded-xl p-6 w-[' + width + '] max-h-[' + maxHeight + '] overflow-y-auto border border-slate-600">';
+    // 外框、標題列、內容、按鈕列（樣式在 ds.css：.ds-modal-*）
+    var html = '<div class="ds-modal-box" style="width:min(' + width + ', 94vw);max-height:' + maxHeight + '">';
 
     if (opts.title) {
-        html += '<div class="flex justify-between items-center mb-4">';
-        html += '<h3 class="text-white font-bold text-lg">';
+        html += '<div class="ds-modal-head">';
+        html += '<h3>';
         if (opts.icon) html += '<i class="' + opts.icon + ' mr-2"></i>';
         html += opts.title + '</h3>';
-        html += '<button onclick="WMS.closeModal(\'' + id + '\')" class="text-slate-400 hover:text-white">';
-        html += '<i class="fa-solid fa-xmark text-xl"></i></button>';
+        html += '<button onclick="WMS.closeModal(\'' + id + '\')" class="ds-modal-x" title="關閉">';
+        html += '<i class="fa-solid fa-xmark text-lg"></i></button>';
         html += '</div>';
     }
 
-    html += '<div id="' + id + '-content">' + (opts.content || '') + '</div>';
-    
-    // 支持 footer
+    html += '<div id="' + id + '-content" class="ds-modal-body">' + (opts.content || '') + '</div>';
+
     if (opts.footer) {
-        html += '<div class="mt-4 pt-4 border-t border-slate-700 flex justify-end gap-3">' + opts.footer + '</div>';
+        html += '<div class="ds-modal-foot">' + opts.footer + '</div>';
     }
-    
+
     html += '</div>';
 
     modal.innerHTML = html;

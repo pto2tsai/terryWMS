@@ -312,28 +312,33 @@ window.completeSorting = async function() {
     refreshWaveList();
 };
 
+// 檢視明細：一個視窗看完（數字、時間、每張訂單的客戶和件數）
 window.viewWaveDetail = function(waveNo) {
     var wave = window._waveData.waves.find(function(w) { return w.waveNo === waveNo; });
     if (!wave) return;
-
-    var statusMap = { pending: '待揀貨', picking: '揀貨中', sorting: '待分貨', done: '已出貨' };
-    var timeInfo = '建立：' + new Date(wave.createdAt).toLocaleString('zh-TW');
-    if (wave.startedAt) timeInfo += '\n開始揀貨：' + new Date(wave.startedAt).toLocaleString('zh-TW');
-    if (wave.pickedAt) timeInfo += '\n揀貨完成：' + new Date(wave.pickedAt).toLocaleString('zh-TW');
-    if (wave.completedAt) timeInfo += '\n出貨完成：' + new Date(wave.completedAt).toLocaleString('zh-TW');
-
-    var orderList = (wave.orders || []).map(function(o, i) { return (i + 1) + '. ' + o.customer + ' (' + o.orderNo + ')'; }).join('\n');
-
-    alert('【波次明細】\n\n' +
-        '波次編號：' + wave.waveNo + '\n' +
-        '物流商：' + wave.logistics + '\n' +
-        '狀態：' + (statusMap[wave.status] || wave.status) + '\n' +
-        '訂單數：' + (wave.orders || []).length + ' 筆\n' +
-        '品項數：' + (wave.itemCount || 0) + ' 項\n' +
-        '總件數：' + (wave.totalQty || 0) + ' 件（包裝單位）\n' +
-        (wave.totalSmallQty ? '最小單位：' + wave.totalSmallQty + '\n' : '') + '\n' +
-        '【時間記錄】\n' + timeInfo + '\n\n' +
-        '【訂單清單】\n' + orderList);
+    var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var statusMap = { pending: ['待揀貨', 'badge-yellow'], picking: ['揀貨中', 'badge-blue'], sorting: ['待分貨', 'badge-purple'], done: ['已出貨', 'badge-green'] };
+    var st = statusMap[wave.status] || [wave.status, 'badge-blue'];
+    var t = function(v) { return v ? new Date(v).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : ''; };
+    var times = [['建立', wave.createdAt], ['開始揀貨', wave.startedAt], ['揀貨完成', wave.pickedAt], ['出貨完成', wave.completedAt]]
+        .filter(function(x) { return x[1]; }).map(function(x) { return '<span><b>' + x[0] + '</b>' + t(x[1]) + '</span>'; }).join('');
+    var qty = function(o) { return Math.round((o.items || []).reduce(function(a, i) { return a + (parseFloat(i.packageQty) || 0); }, 0) * 1000) / 1000; };
+    var rows = (wave.orders || []).map(function(o, i) {
+        return '<tr><td class="p-2" style="color:var(--ds-text-3)">' + (i + 1) + '</td>' +
+            '<td class="p-2" style="color:var(--ds-text);font-weight:600">' + esc(o.customer) + '</td>' +
+            '<td class="p-2 t-mono" style="color:var(--ds-text-2)">' + esc(o.orderNo) + '</td>' +
+            '<td class="p-2 text-right">' + (o.items || []).length + ' 項</td>' +
+            '<td class="p-2 text-right" style="color:var(--ds-text);font-weight:600">' + qty(o) + ' 件</td></tr>';
+    }).join('');
+    var content = '<div class="flex items-center gap-3" style="margin-bottom:14px"><span class="badge ' + st[1] + '">' + st[0] + '</span>' +
+        '<span style="color:var(--ds-text-2);font-size:14px">物流商：<b style="color:var(--ds-text)">' + esc(wave.logistics || '混合') + '</b></span></div>' +
+        '<div class="ds-kv"><div><small>訂單</small><b>' + (wave.orders || []).length + ' 張</b></div><div><small>品項</small><b>' + (wave.itemCount || 0) + ' 項</b></div>' +
+        '<div><small>總件數</small><b>' + (Math.round((wave.totalQty || 0) * 1000) / 1000) + ' 件</b></div><div><small>最小單位</small><b>' + (wave.totalSmallQty || '—') + '</b></div></div>' +
+        '<div class="ds-timeline">' + times + '</div>' +
+        '<table class="w-full text-sm"><thead><tr><th class="p-2 text-left">#</th><th class="p-2 text-left">客戶</th><th class="p-2 text-left">單號</th><th class="p-2 text-right">品項</th><th class="p-2 text-right">件數</th></tr></thead><tbody>' +
+        (rows || '<tr><td colspan="5" class="p-6 text-center" style="color:var(--ds-text-3)">沒有訂單</td></tr>') + '</tbody></table>';
+    WMS.closeModal('modal-wave-detail');
+    WMS.createModal('modal-wave-detail', { title: '波次明細 ' + esc(wave.waveNo), icon: 'fa-solid fa-eye', content: content, width: '760px', maxHeight: '86vh' });
 };
 
 window.deleteWave = async function(waveNo) {
@@ -1624,21 +1629,21 @@ window.clearLocalStorage = function() {
 
             var html = '';
             orders.forEach(function(o) {
-                html += '<tr class="hover:bg-slate-800/50 border-b border-slate-700/50">';
+                html += '<tr class="border-b border-slate-700/50">';
                 html += '<td class="p-2"><input type="checkbox" class="wave-order-check w-4 h-4" data-id="' + o.id + '"></td>';
-                html += '<td class="p-2 font-mono text-cyan-400">' + (o.orderNo || o.id) + '</td>';
-                html += '<td class="p-2 text-white">' + (o.customer || '-') + '</td>';
+                html += '<td class="p-2 t-mono" style="color:var(--ds-text-2)">' + (o.orderNo || o.id) + '</td>';
+                html += '<td class="p-2" style="color:var(--ds-text);font-weight:600">' + (o.customer || '-') + '</td>';
                 var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
                 // 沒有物流商的單：直接在這裡指定（自動建波次不會排它）
                 html += (!o.logistics || o.logistics === '未指定') && o.id
                     ? '<td class="p-2"><select class="bg-red-900 border border-red-500 rounded px-1 py-1 text-xs text-white" onchange="setOrderLogistics(\'' + esc(o.id) + '\', this.value)"><option value="">⚠️ 指定物流商</option>' +
                         Object.keys(LOGISTICS_KEYWORDS).map(function(k) { return '<option>' + esc(k) + '</option>'; }).join('') + '</select></td>'
-                    : '<td class="p-2 text-purple-400">' + esc(o.logistics) + '</td>';
+                    : '<td class="p-2"><span class="ds-pill" style="background:color-mix(in srgb, ' + getLogisticsColor(o.logistics) + ' 18%, transparent);color:' + getLogisticsColor(o.logistics) + '">' + esc(o.logistics) + '</span></td>';
                 var its = window.orderOpenItems(o);
                 var pk = its.reduce(function(t, it) { return t + (parseFloat(it.packageQty) || 1); }, 0);
                 html += '<td class="p-2 text-slate-300">' + esc(its.map(function(it) { return it.productName; }).slice(0, 2).join('、') + (its.length > 2 ? ' 等 ' + its.length + ' 項' : '')) +
                     (Array.isArray(o.backorderItems) ? ' <span class="text-[10px] px-1 rounded bg-amber-900/60 text-amber-300">欠貨</span>' : '') + '</td>';
-                html += '<td class="p-2 text-right text-yellow-400 font-bold">' + pk + '</td>';
+                html += '<td class="p-2 text-right" style="color:var(--ds-text);font-weight:600">' + pk + '</td>';
                 html += '<td class="p-2 text-slate-400 text-xs">' + esc(o.shipDate || o.orderDate || '-') + '</td>';
                 html += '</tr>';
             });
@@ -1734,24 +1739,30 @@ window.clearLocalStorage = function() {
                 return;
             }
 
-            var msg = '可追加到波次 ' + waveNo + ' 的訂單：\n\n';
-            availableOrders.forEach(function(o, idx) {
-                msg += (idx + 1) + '. ' + o.orderNo + ' - ' + (o.customer || '') + ' (' + window.orderOpenItems(o).length + ' 項)\n';
+            // 用勾選的（不用打序號）
+            var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+            var addedOrders = await new Promise(function(resolve) {
+                var list = availableOrders.map(function(o, idx) {
+                    var same = o.logistics && o.logistics === wave.logistics;
+                    return '<label class="ds-pick-row"><input type="checkbox" class="atw-chk" value="' + idx + '"' + (same ? ' checked' : '') + '>' +
+                        '<div style="flex:1;min-width:0"><div style="color:var(--ds-text);font-weight:600">' + esc(o.customer || '') + '</div>' +
+                        '<div style="font-size:12px;color:var(--ds-text-3)">' + esc(o.orderNo) + '・' + window.orderOpenItems(o).length + ' 項</div></div>' +
+                        '<span class="ds-pill ' + (same ? 'ds-pill-primary' : 'ds-pill-muted') + '">' + esc(o.logistics || '沒有物流商') + '</span></label>';
+                }).join('');
+                WMS.createModal('modal-add-to-wave', {
+                    title: '追加訂單到 ' + esc(waveNo) + '（' + esc(wave.logistics || '') + '）', icon: 'fa-solid fa-plus', width: '640px', maxHeight: '86vh', closeOnBackdrop: false,
+                    content: '<div style="font-size:13px;color:var(--ds-text-2);margin-bottom:12px">勾要加進來的訂單。同一家物流的已經先幫您勾好。</div>' + list,
+                    footer: '<button id="atw-cancel" class="ds-btn ds-btn-secondary">取消</button><button id="atw-ok" class="ds-btn ds-btn-green"><i class="fa-solid fa-plus"></i>加進波次</button>'
+                });
+                var done = function(v) { WMS.closeModal('modal-add-to-wave'); resolve(v); };
+                document.querySelector('#modal-add-to-wave .ds-modal-x').onclick = function() { done([]); };
+                document.getElementById('atw-cancel').onclick = function() { done([]); };
+                document.getElementById('atw-ok').onclick = function() {
+                    done([].slice.call(document.querySelectorAll('#modal-add-to-wave .atw-chk:checked')).map(function(c) { return availableOrders[+c.value]; }));
+                };
             });
-            msg += '\n請輸入要追加的序號或訂單編號（多筆用逗號分隔）：';
 
-            var input = prompt(msg);
-            if (!input) return;
-
-            var selected = input.split(',').map(function(x) { return x.trim(); });
-            var addedOrders = availableOrders.filter(function(o, idx) {
-                return selected.indexOf(String(idx + 1)) >= 0 || selected.indexOf(o.orderNo) >= 0;
-            });
-
-            if (addedOrders.length === 0) {
-                alert('未選擇任何訂單');
-                return;
-            }
+            if (addedOrders.length === 0) return;
 
             var res;
             try {

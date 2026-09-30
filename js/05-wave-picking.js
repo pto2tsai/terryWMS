@@ -1517,7 +1517,7 @@ window.openWaveSorting = function(waveNo) {
 
     var modal = document.createElement('div');
     modal.id = 'modal-wave-sorting';
-    modal.className = 'fixed inset-0 z-50 bg-black/80 flex items-center justify-center backdrop-blur-sm';
+    modal.className = 'ds-modal fixed inset-0 z-50 bg-black/80 flex items-center justify-center backdrop-blur-sm';
 
     var ordersHtml = '';
     (wave.orders || []).forEach(function(order) {

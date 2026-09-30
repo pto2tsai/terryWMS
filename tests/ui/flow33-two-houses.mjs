@@ -97,7 +97,7 @@ await N.page.selectOption('#picking-wave-select', W2._id); await N.page.waitForT
 const ask = await card(N);
 H.check('第一次用的手機選波次：先問「你在哪一間？」兩個大按鈕', ask.includes('你在哪一間') && ask.includes('J庫') && ask.includes('I庫'), ask);
 if (process.env.SHOT_DIR) await N.page.screenshot({ path: process.env.SHOT_DIR + '/h0-choose.png' });
-await N.page.click('text=📍 I庫'); await N.page.waitForTimeout(1200);
+await N.page.click('button.pk-go:has-text("I庫")'); await N.page.waitForTimeout(1200);
 H.check('點 I庫：記住，開始揀（蝦仁 拿 1 件）', (await N.page.evaluate(() => localStorage.getItem('wms_pick_house'))) === 'I' && (await card(N)).includes('拿 1'), await card(N));
 await N.page.click('#picking-next .pk-go'); await N.page.waitForTimeout(1200);
 await N.page.click('#picking-next .pk-go'); await N.page.waitForTimeout(2500);

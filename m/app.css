@@ -1,7 +1,8 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #0f172a;
+    font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: #0b1120;
     color: #fff;
     min-height: 100vh;
     overflow-x: hidden;
@@ -15,7 +16,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 20px;
-    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+    background: #0b1120;
 }
 .login-logo { font-size: 48px; color: #3b82f6; margin-bottom: 10px; }
 .login-title { font-size: 28px; font-weight: bold; margin-bottom: 5px; }
@@ -24,15 +25,15 @@ body {
     width: 100%;
     max-width: 320px;
     background: rgba(30, 41, 59, 0.8);
-    border: 1px solid #334155;
+    border: 1px solid #223050;
     border-radius: 16px;
     padding: 24px;
 }
 .login-input {
     width: 100%;
     padding: 14px 16px;
-    background: #1e293b;
-    border: 1px solid #334155;
+    background: #111a2c;
+    border: 1px solid #223050;
     border-radius: 10px;
     color: #fff;
     font-size: 16px;
@@ -59,12 +60,12 @@ body {
 
 /* 頂部 */
 .app-header {
-    background: #1e293b;
+    background: #111a2c;
     padding: 12px 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid #334155;
+    border-bottom: 1px solid #223050;
     position: sticky;
     top: 0;
     z-index: 100;
@@ -94,8 +95,8 @@ body {
 }
 .menu-card {
     position: relative;
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-    border: 1px solid #475569;
+    background: #111a2c;
+    border: 1px solid #33456b;
     border-left: 4px solid var(--c, #3b82f6);
     border-radius: 12px;
     padding: 12px 8px 10px 10px;
@@ -136,8 +137,8 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
-    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-    border: 1px solid #475569;
+    background: #111a2c;
+    border: 1px solid #33456b;
     border-left: 4px solid var(--c, #3b82f6);
     border-radius: 12px;
     padding: 14px 12px;
@@ -176,17 +177,17 @@ body {
     display: none;
     flex-direction: column;
     min-height: 100vh;
-    background: #0f172a;
+    background: #0b1120;
 }
 .func-page.active { display: flex; }
 
 .func-header {
-    background: #1e293b;
+    background: #111a2c;
     padding: 12px 16px;
     display: flex;
     align-items: center;
     gap: 12px;
-    border-bottom: 1px solid #334155;
+    border-bottom: 1px solid #223050;
     position: sticky;
     top: 0;
     z-index: 100;
@@ -203,7 +204,7 @@ body {
 
 /* 掃描區 */
 .scan-section {
-    background: linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%);
+    background: #0f1729; border-bottom: 1px solid #223050;
     padding: 20px 16px;
     text-align: center;
 }
@@ -215,7 +216,7 @@ body {
 .scan-input {
     flex: 1;
     padding: 14px 16px;
-    background: #0f172a;
+    background: #0b1120;
     border: 2px solid #3b82f6;
     border-radius: 10px;
     color: #fff;
@@ -260,7 +261,7 @@ body {
 }
 .cam-title { font-size: 16px; font-weight: bold; }
 .cam-close, .cam-torch {
-    padding: 10px 16px; border: none; border-radius: 8px; font-size: 16px; color: #fff; background: #334155;
+    padding: 10px 16px; border: none; border-radius: 8px; font-size: 16px; color: #fff; background: #1b2844;
 }
 .cam-result { flex: 1; font-size: 18px; font-weight: bold; min-height: 24px; }
 .cam-result.ok { color: #34d399; }
@@ -296,8 +297,8 @@ body {
 .list-progress { font-size: 18px; color: #34d399; font-weight: bold; }
 
 .list-item {
-    background: #1e293b;
-    border: 1px solid #334155;
+    background: #111a2c;
+    border: 1px solid #223050;
     border-radius: 12px;
     padding: 14px;
     margin-bottom: 10px;
@@ -334,8 +335,8 @@ body {
 .selector-input {
     width: 100%;
     padding: 14px 16px;
-    background: #1e293b;
-    border: 1px solid #334155;
+    background: #111a2c;
+    border: 1px solid #223050;
     border-radius: 10px;
     color: #fff;
     font-size: 18px;
@@ -346,8 +347,8 @@ body {
     padding: 16px;
 }
 .result-card {
-    background: #1e293b;
-    border: 1px solid #334155;
+    background: #111a2c;
+    border: 1px solid #223050;
     border-radius: 12px;
     padding: 16px;
     margin-bottom: 12px;
@@ -358,7 +359,7 @@ body {
     display: flex;
     justify-content: space-between;
     padding: 8px 0;
-    border-top: 1px solid #334155;
+    border-top: 1px solid #223050;
 }
 .result-loc { font-family: monospace; color: #93c5fd; font-weight: bold; font-size: 18px; }
 .result-qty { color: #fde047; font-weight: bold; font-size: 18px; }
@@ -366,8 +367,8 @@ body {
 /* 底部操作 */
 .bottom-actions {
     padding: 16px;
-    background: #1e293b;
-    border-top: 1px solid #334155;
+    background: #111a2c;
+    border-top: 1px solid #223050;
 }
 .action-btn {
     width: 100%;
@@ -382,7 +383,7 @@ body {
 .action-btn:last-child { margin-bottom: 0; }
 .action-btn.primary { background: #3b82f6; color: #fff; }
 .action-btn.success { background: #10b981; color: #fff; }
-.action-btn.secondary { background: #334155; color: #fff; }
+.action-btn.secondary { background: #1b2844; color: #fff; }
 .action-btn:active { opacity: 0.8; }
 
 /* 空狀態 */
@@ -409,7 +410,7 @@ body {
 /* 步驟卡片 */
 .step-card {
     margin: 12px 16px; padding: 14px; border-radius: 12px;
-    background: #1e293b; border: 1px solid #334155;
+    background: #111a2c; border: 1px solid #223050;
 }
 .step-label { font-size: 15px; color: #cbd5e1; margin-bottom: 8px; }
 .step-label b { color: #fff; }
@@ -420,11 +421,11 @@ body {
 .info-grid .v.qty { color: #fde047; font-size: 24px; }
 .qty-input {
     width: 100%; padding: 16px; font-size: 24px; font-weight: bold; text-align: center;
-    background: #0f172a; border: 2px solid #3b82f6; border-radius: 10px; color: #fff;
+    background: #0b1120; border: 2px solid #3b82f6; border-radius: 10px; color: #fff;
 }
 .quick-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .quick-btns button {
-    flex: 1; min-width: 56px; padding: 12px 8px; background: #334155; border: 1px solid #475569;
+    flex: 1; min-width: 56px; padding: 12px 8px; background: #1b2844; border: 1px solid #33456b;
     border-radius: 8px; color: #fff; font-weight: bold; font-size: 15px;
 }
 .row-btns { display: flex; gap: 10px; margin-top: 12px; }
@@ -432,8 +433,8 @@ body {
 .scan-result.info { display: block; background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
 .scan-result { white-space: pre-line; }
 .list-item.clickable { cursor: pointer; }
-.list-item.clickable:active { background: #334155; }
-.pick-choice { border: 1px solid #475569; }
+.list-item.clickable:active { background: #1b2844; }
+.pick-choice { border: 1px solid #33456b; }
 
 /* 提示訊息 */
 #toast {
@@ -466,7 +467,7 @@ body {
     display: flex; align-items: center; justify-content: center;
     font-size: 22px; border-radius: 12px;
 }
-.back-btn:active { background: #334155; }
+.back-btn:active { background: #1b2844; }
 .func-header { gap: 4px; }
 
 /* 倉庫光線暗、手機小：公司標籤、板號尾碼要一眼分得出來 */
@@ -490,7 +491,7 @@ body {
 .pk-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 18px; color: #cbd5e1; }
 .pk-top b { font-size: 24px; color: #fff; }
 .pk-chip { font-size: 14px; padding: 2px 10px; border-radius: 999px; background: #4c1d95; color: #ede9fe; }
-.pk-bar { height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+.pk-bar { height: 8px; background: #111a2c; border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
 .pk-bar div { height: 100%; background: #10b981; }
 .pk-card { background: #111827; border: 3px solid #3b82f6; border-radius: 16px; padding: 16px; text-align: center; }
 .pk-card.ret { border-color: #f59e0b; }
@@ -515,16 +516,16 @@ body {
 .pk-done { text-align: center; }
 .pk-done .big { font-size: 34px; font-weight: 900; color: #6ee7b7; margin-bottom: 6px; }
 .pk-sub { font-size: 17px; color: #cbd5e1; margin: 6px 0; }
-.pk-link { display: block; width: 100%; margin-top: 10px; min-height: 48px; font-size: 17px; border: none; border-radius: 12px; background: #334155; color: #e2e8f0; cursor: pointer; }
+.pk-link { display: block; width: 100%; margin-top: 10px; min-height: 48px; font-size: 17px; border: none; border-radius: 12px; background: #1b2844; color: #e2e8f0; cursor: pointer; }
 .pad-overlay { position: fixed; inset: 0; z-index: 300; background: rgba(2, 6, 23, 0.94); padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)); overflow-y: auto; }
 .pad-title { font-size: 24px; font-weight: 900; color: #fff; text-align: center; margin: 8px 0 4px; }
 .pad-sub { font-size: 18px; color: #cbd5e1; text-align: center; margin-bottom: 14px; }
 .pad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.pad-grid button { min-height: 76px; font-size: 34px; font-weight: 900; border: none; border-radius: 14px; background: #1e293b; color: #fff; cursor: pointer; }
-.pad-grid button:active { background: #334155; }
+.pad-grid button { min-height: 76px; font-size: 34px; font-weight: 900; border: none; border-radius: 14px; background: #111a2c; color: #fff; cursor: pointer; }
+.pad-grid button:active { background: #1b2844; }
 .pad-cancel { display: block; width: 100%; margin-top: 14px; min-height: 56px; font-size: 20px; border: none; border-radius: 14px; background: #475569; color: #fff; cursor: pointer; }
-.pad-display { font-size: 56px; font-weight: 900; color: #fde047; text-align: center; background: #0f172a; border: 2px solid #475569; border-radius: 14px; padding: 6px; margin-bottom: 12px; }
-.pad-keys .pad-fn { font-size: 22px; background: #334155; }
+.pad-display { font-size: 56px; font-weight: 900; color: #fde047; text-align: center; background: #0b1120; border: 2px solid #33456b; border-radius: 14px; padding: 6px; margin-bottom: 12px; }
+.pad-keys .pad-fn { font-size: 22px; background: #1b2844; }
 .pad-msg { color: #fca5a5; font-size: 18px; font-weight: bold; text-align: center; min-height: 24px; margin-top: 8px; }
 .pad-ok { display: block; width: 100%; margin-top: 8px; min-height: 76px; font-size: 30px; font-weight: 900; border: none; border-radius: 14px; background: #065f46; color: #fff; cursor: pointer; }
 /* 兩間倉庫：上方「📍 A 倉 ⇄」可以切換 */
@@ -534,24 +535,40 @@ body {
 .sort-card { text-align: left; margin-bottom: 12px; }
 .sort-card .pk-name { text-align: center; }
 .sort-card.ok { opacity: .5; padding: 10px; }
-.sort-line { display: flex; justify-content: space-between; gap: 10px; font-size: 22px; color: #fff; padding: 8px 2px; border-bottom: 1px solid #334155; }
+.sort-line { display: flex; justify-content: space-between; gap: 10px; font-size: 22px; color: #fff; padding: 8px 2px; border-bottom: 1px solid #223050; }
 .sort-line b { color: #fde047; white-space: nowrap; }
 
 /* 驗收入庫 */
-.rcp-header-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #1e293b; }
+.rcp-header-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #1a2540; }
 .rcp-vendor-wrap { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .rcp-label { font-size: 12px; color: #94a3b8; }
-.rcp-vendor-select, .rcp-vendor-input { width: 100%; background: #1e293b; color: #fff; border: 1px solid #334155; border-radius: 10px; padding: 8px 12px; font-size: 16px; }
+.rcp-vendor-select, .rcp-vendor-input { width: 100%; background: #111a2c; color: #fff; border: 1px solid #223050; border-radius: 10px; padding: 8px 12px; font-size: 16px; }
 .rcp-items { padding: 8px 16px; }
-.rcp-item { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid #1e293b; }
+.rcp-item { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid #1a2540; }
 .rcp-item-name { flex: 1; font-size: 18px; color: #fff; }
 .rcp-item-spec { font-size: 14px; color: #94a3b8; }
 .rcp-item-qty { font-size: 20px; font-weight: 700; color: #fde047; white-space: nowrap; }
 .rcp-del { background: none; border: none; color: #ef4444; font-size: 18px; cursor: pointer; padding: 4px 8px; }
-.rcp-actions { position: fixed; bottom: env(safe-area-inset-bottom, 0); left: 0; right: 0; padding: 10px 16px; background: #0f172a; border-top: 1px solid #1e293b; display: flex; gap: 10px; }
+.rcp-actions { position: fixed; bottom: env(safe-area-inset-bottom, 0); left: 0; right: 0; padding: 10px 16px; background: #0b1120; border-top: 1px solid #1a2540; display: flex; gap: 10px; }
 .rcp-actions .pk-go, .rcp-actions .pk-short { margin: 0; min-height: 56px; font-size: 18px; }
-.picker-item { padding: 14px 16px; border-bottom: 1px solid #1e293b; cursor: pointer; }
-.picker-item:active { background: #1e293b; }
+.picker-item { padding: 14px 16px; border-bottom: 1px solid #1a2540; cursor: pointer; }
+.picker-item:active { background: #111a2c; }
 .picker-name { font-size: 18px; color: #fff; }
 .picker-spec { font-size: 14px; color: #94a3b8; }
 .picker-new { color: #34d399; }
+
+
+/* ===== 跟電腦版同一套：品牌方塊、卡片邊線細一點、顏色只當亮點 ===== */
+.app-logo .ds-brand-mark { width: 28px; height: 28px; border-radius: 8px; background: #2f6fe8; color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+.app-logo span { letter-spacing: .02em; }
+.login-logo.ds-brand-mark { width: 64px; height: 64px; border-radius: 18px; background: #2f6fe8; color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 30px; font-family: inherit; }
+.menu-card { border-left-width: 3px; border-color: #223050; border-left-color: var(--c, #3b82f6); border-radius: 14px; }
+.menu-card p { color: #b3bfd4; }
+.logout-btn { background: transparent !important; color: #8492ab !important; }
+.logout-btn:active { color: #ff7a7a !important; }
+/* 改分法：－ 數字 ＋ */
+.alloc-step { display: flex; align-items: center; gap: 6px; }
+.alloc-step button { width: 56px; height: 56px; border-radius: 12px; border: 1px solid #33456b; background: #1b2844; color: #fff; font-size: 30px; font-weight: 900; line-height: 1; cursor: pointer; }
+.alloc-step button:active { background: #2f6fe8; }
+.alloc-step button:disabled { opacity: .3; }
+.alloc-step .alloc-in { width: 64px; height: 56px; text-align: center; font-size: 30px; font-weight: 900; color: #fde047; background: #0b1120; border: 2px solid #33456b; border-radius: 12px; }
