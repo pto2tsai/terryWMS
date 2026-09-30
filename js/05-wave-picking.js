@@ -1428,12 +1428,12 @@
                 var prog = window.waveProgress(wave);
                 if (wave.status === 'picking' && prog.all) {
                     var pct = Math.round(prog.done / prog.all * 100);
-                    timeInfo = '<div class="ds-progress' + (prog.done >= prog.all ? ' is-done' : '') + '" style="margin:8px 0 0"><span class="ds-progress-bar"><div style="width:' + pct + '%"></div></span><span>' + prog.done + '/' + prog.all + ' 項</span></div>' + timeInfo;
+                    timeInfo = '<div class="ds-progress' + (prog.done >= prog.all ? ' is-done' : '') + '" style="display:flex;margin:8px 0 0"><span class="ds-progress-bar"><div style="width:' + pct + '%"></div></span><span>' + prog.done + '/' + prog.all + ' 項</span></div>' + timeInfo;
                 }
-                html += '<td>' + statusBadge + timeInfo + '</td>';
                 html += '<td class="t-right ds-num">' + (wave.orders ? wave.orders.length : 0) + '</td>';
                 html += '<td class="t-right ds-num">' + (wave.itemCount || 0) + ' 項</td>';
                 html += '<td class="t-right ds-num t-strong">' + (Math.round((wave.totalQty || 0) * 1000) / 1000) + ' <span style="font-weight:400;color:var(--ds-text-3)">件</span></td>';
+                html += '<td style="padding-left:32px">' + statusBadge + timeInfo + '</td>';
                 html += '<td class="ds-num" style="font-size:13px;color:var(--ds-text-3)">' + new Date(wave.createdAt).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) + '</td>';
                 html += '<td class="t-right">';
                 // 一個波次只放一顆「下一步」的按鈕；不常用的收進「⋯」

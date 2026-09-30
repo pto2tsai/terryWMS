@@ -350,3 +350,7 @@ header.ds-header #page-title { font-size: 18px; font-weight: 600; color: var(--d
 .ds-sug.is-best .ds-pill { background: rgba(250, 204, 21, .16); color: var(--c-yellow); }
 .ds-sug.is-best .ds-sug-loc { color: var(--c-yellow); }
 .ds-wh-name.c-i { color: var(--c-blue); } .ds-wh-name.c-j { color: var(--c-purple); } .ds-wh-name.c-k { color: var(--c-green); }
+
+/* 步驟列：不要捲軸（Windows 的捲軸會吃掉高度，把字切掉）；太窄就換行 */
+.stepbar { overflow: visible !important; flex-wrap: wrap; row-gap: 6px; padding: 2px 0; }
+.ds-step b, .ds-step small { line-height: 1.4; }
