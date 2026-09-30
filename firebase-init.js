@@ -99,6 +99,9 @@ window.onLogin = function(fn) {
 
 // 認證狀態監聽
 auth.onAuthStateChanged(async function(user) {
+    // 按 Ctrl+F5 時程式要重新下載，登入狀態可能比後面的程式還早回來：等全部程式載入完再處理
+    // （不然右上角會一直顯示「載入中...」、部分畫面沒有初始化）
+    if (document.readyState === 'loading') await new Promise(function(r) { document.addEventListener('DOMContentLoaded', r, { once: true }); });
     if (user) {
         // 先確認帳號已開通且未停用，才進入系統並開始監聽資料
         if (window.setCurrentUser) {

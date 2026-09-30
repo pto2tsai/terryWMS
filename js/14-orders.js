@@ -1799,7 +1799,8 @@ function renderLabelModeToggle() {
     const r = window.currentUser && window.currentUser.role;
     const sup = r === 'admin' || r === 'supervisor';
     btn.style.display = '';
-    btn.disabled = !sup;
+    btn.disabled = false;   // 不鎖住按鈕（鎖住時按了沒反應，會以為壞掉）；不是主管按了會說明
+    btn.dataset.sup = sup ? '1' : '';
     btn.className = office ? 'bg-sky-600' : '';
     btn.innerHTML = '<i class="fa-solid fa-tags mr-1"></i>標籤：' + (office ? '辦公室自動印' : '手機印');
     btn.title = office ? '手機完成波次後，勾了「這台電腦自動印標籤」的電腦會自動印出分貨標籤' : '手機完成波次後，在手機上按「印分貨標籤」直接印';
@@ -1809,6 +1810,8 @@ function renderLabelModeToggle() {
     if (chk) chk.checked = isThisLabelPrinter();
 }
 window.toggleLabelPrintMode = async function() {
+    const r = window.currentUser && window.currentUser.role;
+    if (r !== 'admin' && r !== 'supervisor') { alert('只有主管或管理員可以切換「標籤誰來印」。\n\n如果您是主管：請重新整理（Ctrl+F5）後再按一次。'); return; }
     const office = window.labelPrintMode() !== 'office';
     if (!confirm(office
         ? '改成「辦公室自動印標籤」？\n\n手機完成波次後，辦公室那台電腦會自動印出分貨標籤（件數是實際出貨的）。\n請在要負責印的那台電腦勾「這台電腦自動印標籤」，並保持開著。'
@@ -1914,7 +1917,7 @@ function renderPracticeToggle() {
     const on = window.isPracticeMode();
     const r = window.currentUser && window.currentUser.role;
     btn.style.display = (on || r === 'admin' || r === 'supervisor') ? '' : 'none';
-    btn.disabled = !(r === 'admin' || r === 'supervisor');
+    btn.disabled = false;   // 不鎖住（鎖住時按了沒反應）；不是主管按了會說明
     btn.className = on ? 'bg-violet-600' : '';
     btn.innerHTML = '<i class="fa-solid fa-flask mr-1"></i>練習模式：' + (on ? '開' : '關');
     const badge = document.getElementById('practice-badge');
@@ -1922,6 +1925,8 @@ function renderPracticeToggle() {
     btn.title = '練習模式：揀貨單照訂單數量列出（不看庫存、不標缺貨），完成波次不扣庫存';
 }
 window.togglePracticeMode = async function() {
+    const r = window.currentUser && window.currentUser.role;
+    if (r !== 'admin' && r !== 'supervisor') { alert('只有主管或管理員可以切換練習模式。\n\n如果您是主管：請重新整理（Ctrl+F5）後再按一次。'); return; }
     const on = !window.isPracticeMode();
     const msg = on
         ? '打開練習模式？\n\n・揀貨單照訂單數量列出，不看庫存、不標「庫存不足」\n・完成波次不扣庫存（訂單照常標記出貨）\n・波次、分貨標籤、看板照常\n\n還沒有儲位、庫存還不準的時候用。'
