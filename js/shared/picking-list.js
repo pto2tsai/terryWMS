@@ -93,12 +93,14 @@ window.sortingLabelsPrintCss = function(lb) {
         '.sl-title{display:none}' +
         '.sl .label{display:block;box-sizing:border-box;width:' + W + 'mm;height:' + H + 'mm;margin:0;padding:2.5mm;border:none;overflow:hidden;page-break-after:always;break-after:page}' +
         '.sl .label:last-child{page-break-after:auto;break-after:auto}' +
-        '.sl .logistics{margin:-2.5mm -2.5mm 1.5mm;padding:1.2mm 2.5mm;font-size:15px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-        '.sl .label > div:nth-child(2){font-size:12px !important}' +
+        // 感熱標籤是黑白的：紅色、圖示都印不清楚 → 全部黑白、粗框
+        '.sl .label{color:#000}.sl .ic{display:none}' +
+        '.sl .logistics{background:#000;color:#fff;margin:-2.5mm -2.5mm 1.5mm;padding:1.2mm 2.5mm;font-size:15px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+        '.sl .label > div:nth-child(2){font-size:13px !important;color:#000 !important;font-weight:bold}' +
         '.sl .customer{font-size:21px;line-height:1.2;margin:1mm 0;max-height:13mm;overflow:hidden}' +
-        '.sl .total{font-size:24px;padding:1.2mm;margin:1.5mm 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+        '.sl .total{background:#fff;color:#000;border:1mm solid #000;border-radius:0;font-size:26px;font-weight:900;padding:0.6mm;margin:1.5mm 0}' +
         '.sl .items,.sl .short{display:none}' +
-        '.sl .address{font-size:12px;line-height:1.35;margin-top:1mm;padding-top:1mm;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}';
+        '.sl .address{color:#000;border-top:0.3mm solid #000;font-size:12px;line-height:1.35;margin-top:1mm;padding-top:1mm;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}';
 };
 
 // 大榮、黑貓、新竹物流會貼托運單（上面有客戶），不用再貼我們的分貨標籤；其他物流要貼
@@ -584,11 +586,11 @@ window.buildSortingLabelsHtml = function(wave) {
             return '<div class="item"><span>' + esc(item.productName) + ' ' + esc(item.spec || '') + '</span><strong>' + qtyText + '</strong></div>' + shortNote;
         }).join('');
         return '<div class="label"><div class="logistics">' + esc(order.logistics || wave.logistics) + '<span style="float:right">' + esc(wave.waveNo) + '</span></div>' +
-            '<div style="font-size:14px;color:#666">📦 ' + esc(order.orderNo) + '</div>' +
-            '<div class="customer">👤 ' + esc(order.customer) + '</div>' +
+            '<div style="font-size:14px;color:#666"><span class="ic">📦 </span>' + esc(order.orderNo) + '</div>' +
+            '<div class="customer"><span class="ic">👤 </span>' + esc(order.customer) + '</div>' +
             '<div class="total">共 ' + totalPkg + ' 件</div>' +
             '<div class="items">' + itemsHtml + '</div>' +
-            (order.address ? '<div class="address">📍 ' + esc(order.address) + '</div>' : '') + '</div>';
+            (order.address ? '<div class="address"><span class="ic">📍 </span>' + esc(order.address) + '</div>' : '') + '</div>';
     }).map(function(html, i) {
         var order = (wave.orders || [])[i];
         // 整張單都是倉庫不揀的（常溫品門市出貨、現流白仁、運費…）：不印
