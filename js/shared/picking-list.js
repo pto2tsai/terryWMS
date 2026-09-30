@@ -478,6 +478,8 @@ window.buildSortingLabelsHtml = function(wave) {
             (order.address ? '<div class="address">📍 ' + esc(order.address) + '</div>' : '') + '</div>';
     }).map(function(html, i) {
         var order = (wave.orders || [])[i];
+        // 整張單都是倉庫不揀的（常溫品門市出貨、現流白仁、運費…）：不印
+        if (!(order.items || []).some(function(it) { return !window.isExcludedFromSortingLabel(it.productName); })) { skipped.push(order.customer + '（' + order.orderNo + '）'); return ''; }
         if (done && !(wave.shipped || []).some(function(x) { return x.orderNo === order.orderNo && (x.items || []).length; })) { skipped.push(order.customer + '（' + order.orderNo + '）'); return ''; }
         return html;
     }).join('');
@@ -492,7 +494,7 @@ window.buildSortingLabelsHtml = function(wave) {
         '.sl-title{font-size:16px;font-weight:bold;margin:0 0 10px}';
     var count = (wave.orders || []).length - skipped.length;
     return { style: style, count: count, skipped: skipped,
-        body: '<div class="sl"><div class="sl-title">分貨標籤 ' + esc(wave.waveNo) + '（' + count + ' 張）' + (skipped.length ? '　沒有出貨、不用貼：' + esc(skipped.join('、')) : '') + '</div>' + body + '</div>' };
+        body: '<div class="sl"><div class="sl-title">分貨標籤 ' + esc(wave.waveNo) + '（' + count + ' 張）' + (skipped.length ? '　不用貼（沒有從倉庫出貨）：' + esc(skipped.join('、')) : '') + '</div>' + body + '</div>' };
 };
 
 

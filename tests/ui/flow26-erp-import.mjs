@@ -47,11 +47,12 @@ const parsed = await page.evaluate(() => {
     ['', '', '', '', '', '', '銷貨:', '', ''],
     ['第 2 頁'], ['製表日期：2026/09/25'], ['期間 2026/09/25 ~ 2026/09/25'], H,
     ['', '', '', '透抽', 'L', 3, '件', 3, ''],
-    ['2026/09/25', 'SO-P2', '客戶乙', '', '', 5, '件', 5, '新竹']];
+    ['2026/09/25', 'SO-P2', '客戶乙', '', '', 5, '件', 5, '新竹'],
+    ['', '', '', '', '', 999.5, '', 88.25, ''], ['', '', '', '', '', '', '', '', '<結  束>']];
   const r = parseErpOrderRows(rows);
   return r.error ? r.error : r.orders.map(o => [o.orderNo, o.logistics, o.items.map(i => i.productName + ' ' + i.spec + ' x' + i.packageQty)]);
 });
-H.check('鼎新報表換頁：跳過每頁抬頭和重複的標題列；品名空白沿用上一列；讀得到「銷貨包裝數量」；換了單號就不沿用（SO-P2 沒有品名，不建空單）', JSON.stringify(parsed) === JSON.stringify([['SO-P1', '黑貓宅急便', ['白蝦 50/60 x10', '白蝦 50/60 x4', '透抽 L x3']]]), JSON.stringify(parsed));
+H.check('鼎新報表換頁：跳過每頁抬頭和重複的標題列；品名空白沿用上一列；讀得到「銷貨包裝數量」；換了單號就不沿用（SO-P2 沒有品名，不建空單）；最後的加總列不算成品項', JSON.stringify(parsed) === JSON.stringify([['SO-P1', '黑貓宅急便', ['白蝦 50/60 x10', '白蝦 50/60 x4', '透抽 L x3']]]), JSON.stringify(parsed));
 
 const store = await page.evaluate(() => {
   const H = ['銷貨日期', '銷貨單號', '客戶全名', '品名', '規格', '包裝數量', '銷貨數量', '單位', '備註'];
@@ -72,6 +73,11 @@ const store = await page.evaluate(() => {
     ambient: isExcludedFromPickingList('卡啦脆蝦') && isExcludedFromPickingList('芝麻夾心絲') && isExcludedFromSortingLabel('卡啦小卷') && !isExcludedFromPickingList('白蝦') };
 });
 H.check('門市銷貨單（233-、234-）和統一（門市備貨）整張跳過、不問件數；代工費不列入；卡啦、夾心絲是常溫品（門市出貨）不問件數、不揀貨、不印標籤；魷魚身、魷魚原料每箱約 19 公斤自動換算（189.5→10、36→2）', JSON.stringify(store) === JSON.stringify({ orders: ['231-001:白蝦/卡啦脆蝦/芝麻夾心絲'], store: ['233-001', '234-002', '231-009'], ask: 0, squid: [10, 2], ambient: true }), JSON.stringify(store));
+const lbl = await page.evaluate(() => { const r = buildSortingLabelsHtml({ waveNo: 'W-T', logistics: '黑貓宅急便', status: 'picking', orders: [
+  { orderNo: 'A1', customer: '甲', items: [{ productName: '白蝦', spec: '50/60', quantity: 2, packageQty: 2 }] },
+  { orderNo: 'A2', customer: '乙', items: [{ productName: '卡啦脆魷', spec: '原味', quantity: 100, packageQty: 100 }, { productName: '運費', quantity: 1, packageQty: 1 }] }] });
+  return { count: r.count, skipped: r.skipped, a2: r.body.includes('👤 乙') }; });
+H.check('分貨標籤：整張單都是常溫品／運費（倉庫不揀）的不印，不會出現「共 0 件」', lbl.count === 1 && !lbl.a2 && lbl.skipped.join().includes('乙'), JSON.stringify(lbl));
 
 // ---------- 在建立波次清單指定物流商 ----------
 await page.click("button[onclick=\"openCreateWaveModal()\"]"); await page.waitForTimeout(1000);

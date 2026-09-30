@@ -252,7 +252,7 @@ window.updateChangedWaves = async function() {
                     var pkgQty = item.packageQty || 1;
                     summary[key].totalQty += pkgQty;
                     summary[key].orders.push({ orderNo: latestOrder.orderNo, orderId: latestOrder.id || orderRef.id || orderRef.orderId, customer: latestOrder.customer, quantity: pkgQty });
-                    totalQty += pkgQty;
+                    if (!window.isExcludedFromQtyCount(item.productName)) totalQty += pkgQty;
                 });
             }
         }
@@ -260,7 +260,7 @@ window.updateChangedWaves = async function() {
         wave.orders = updatedOrders;
         wave.summary = Object.values(summary);
         wave.itemCount = Object.keys(summary).length;
-        wave.totalQty = totalQty;
+        wave.totalQty = Math.round(totalQty * 1000) / 1000;
         wave.hasOrderChanges = false;
         wave.changedOrders = [];
         wave.updatedAt = new Date().toISOString();
@@ -721,6 +721,8 @@ window.parseErpOrderRows = function(rows) {
         if (!row[COL.PRODUCT]) {
             // 品名空白：同一張單、有數量，就沿用上一列的品名、規格
             if (!(lastProduct && lastProductOrder === orderNo && num(row[COL.QTY]) > 0)) continue;
+            // 報表最後的「全部加總」列：沒有單號、品名、單位，只有數字，不是續行
+            if (!row[COL.ORDER_NO] && !String(row[COL.UNIT] == null ? '' : row[COL.UNIT]).trim()) continue;
             row = row.slice();
             row[COL.PRODUCT] = lastProduct;
             if (COL.SPEC !== undefined && !row[COL.SPEC]) row[COL.SPEC] = lastSpec;
@@ -1060,8 +1062,8 @@ function planWavesByLogistics() {
     var text = keys.length ? '將建立 ' + keys.length + ' 個波次：\n' : '沒有可以建立的波次。\n';
     keys.forEach(function(lg) {
         var totalQty = 0;
-        groups[lg].forEach(function(o) { window.orderOpenItems(o).forEach(function(item) { totalQty += item.packageQty || 1; }); });
-        text += '• ' + lg + '：' + groups[lg].length + ' 單 / ' + totalQty + ' 件\n';
+        groups[lg].forEach(function(o) { window.orderOpenItems(o).forEach(function(item) { if (!window.isExcludedFromQtyCount(item.productName)) totalQty += item.packageQty || 1; }); });
+        text += '• ' + lg + '：' + groups[lg].length + ' 單 / ' + (Math.round(totalQty * 1000) / 1000) + ' 件\n';
     });
     if (unassigned.length) text += '\n⚠️ ' + unassigned.length + ' 張沒有物流商，先不排（在「建立波次」清單裡指定物流商後再排）：\n' + unassigned.slice(0, 10).join('、') + (unassigned.length > 10 ? '…' : '') + '\n';
     return { groups: groups, count: keys.length, text: text };
@@ -1173,12 +1175,17 @@ function buildWaveSummary(orders) {
                 customer: order.customer,
                 quantity: pkgQty  // 使用包裝數量
             });
-            totalQty += pkgQty;
-            totalSmallQty += item.quantity || 0;
+            if (!window.isExcludedFromQtyCount(item.productName)) {   // 總件數只算倉庫要揀的
+                totalQty += pkgQty;
+                totalSmallQty += item.quantity || 0;
+            }
         });
     });
 
-    return { summaryList: Object.values(summary), totalQty: totalQty, totalSmallQty: totalSmallQty };
+    // 包裝數量可能有小數（0.509 件），加總後去掉浮點誤差（195.50900000000001 → 195.509）
+    const r3 = x => Math.round(x * 1000) / 1000;
+    Object.values(summary).forEach(s => { s.totalQty = r3(s.totalQty); s.totalSmallQty = r3(s.totalSmallQty); });
+    return { summaryList: Object.values(summary), totalQty: r3(totalQty), totalSmallQty: r3(totalSmallQty) };
 }
 
 // ========== 建立波次（手動、依物流自動、追加訂單共用）==========

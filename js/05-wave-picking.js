@@ -1419,7 +1419,7 @@
                 html += '<td class="p-3">' + statusBadge + '</td>';
                 html += '<td class="p-3 text-right text-slate-300">' + (wave.orders ? wave.orders.length : 0) + '</td>';
                 html += '<td class="p-3 text-right text-slate-300">' + (wave.itemCount || 0) + ' 項</td>';
-                html += '<td class="p-3 text-right text-yellow-400 font-bold">' + (wave.totalQty || 0) + ' <span class="text-xs text-slate-400 font-normal">件</span></td>';
+                html += '<td class="p-3 text-right text-yellow-400 font-bold">' + (Math.round((wave.totalQty || 0) * 1000) / 1000) + ' <span class="text-xs text-slate-400 font-normal">件</span></td>';
                 html += '<td class="p-3 text-slate-400 text-xs">' + new Date(wave.createdAt).toLocaleString('zh-TW') + '</td>';
                 html += '<td class="p-3 text-center">';
                 if (wave.status === 'pending') {
