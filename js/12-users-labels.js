@@ -495,8 +495,10 @@
             if (badgeEl) {
                 var role = window.ROLES[user.role] || window.ROLES.operator;
                 badgeEl.innerText = role.name;
-                badgeEl.className = 'text-xs px-2 py-0.5 rounded-full bg-' + role.color + '-600/30 text-' + role.color + '-400';
+                badgeEl.className = 'ds-pill ds-pill-muted';
             }
+            var avEl = document.getElementById('current-user-avatar');
+            if (avEl) avEl.textContent = String(user.name || user.email || '?').trim().charAt(0).toUpperCase();
 
             try {
                 await window.updateDoc(window.doc(window.db, 'users', user.id || email), {

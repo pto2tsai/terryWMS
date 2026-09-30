@@ -28,27 +28,38 @@ function renderHomeFlows() {
     var el = document.getElementById('home-flows');
     if (!el) return;
     el.innerHTML = HOME_FLOWS.map(function(f) {
-        return '<div onclick="goTab(\'' + f.id + '\')" class="glass-panel p-5 cursor-pointer hover:bg-slate-800 transition-colors" style="border-top:4px solid ' + f.color + '">' +
-            '<div class="flex items-center gap-3 mb-3"><i class="fa-solid ' + f.icon + ' text-3xl" style="color:' + f.color + '"></i>' +
-            '<span class="text-2xl font-bold text-white">' + f.title + '</span><i class="fa-solid fa-arrow-right ml-auto text-slate-500"></i></div>' +
-            '<ol class="text-slate-300 text-sm space-y-1">' + f.steps.map(function(s, i) {
-                return '<li><span class="inline-block w-5 h-5 rounded-full text-center text-xs leading-5 mr-1 text-white" style="background:' + f.color + '">' + (i + 1) + '</span>' + s + '</li>';
-            }).join('') + '</ol></div>';
+        return '<div onclick="goTab(\'' + f.id + '\')" class="ds-card ds-flow" style="--c:' + f.color + '">' +
+            '<div class="ds-flow-title"><span class="ds-todo-icon"><i class="fa-solid ' + f.icon + '"></i></span>' + f.title + '<i class="fa-solid fa-arrow-right ds-arrow"></i></div>' +
+            '<ol>' + f.steps.map(function(s) { return '<li>' + s + '</li>'; }).join('') + '</ol></div>';
     }).join('');
 }
 
-// 待辦：{ key, icon, color, label, hint, count, action }
+// 待辦：{ key, icon, label, hint, count, action, urgent }
+// 有事要做的放成大卡片（數字大、點了直接去處理）；是 0 的收成下面一排小標籤，不佔位置
 function renderHomeTodos(todos) {
     var el = document.getElementById('home-todos');
+    var clearEl = document.getElementById('home-todos-clear');
     if (!el) return;
-    el.innerHTML = todos.map(function(t) {
-        var zero = !t.count;
-        return '<div onclick="' + t.action + '" class="glass-panel p-4 cursor-pointer hover:bg-slate-800 transition-colors ' + (zero ? 'opacity-50' : '') + '" style="border-left:4px solid ' + (zero ? '#475569' : t.color) + '">' +
-            '<div class="flex items-center justify-between"><span class="text-slate-300 text-sm"><i class="fa-solid ' + t.icon + ' mr-1" style="color:' + t.color + '"></i>' + t.label + '</span>' +
-            (zero ? '<i class="fa-solid fa-check text-emerald-500"></i>' : '') + '</div>' +
-            '<div class="text-3xl font-bold mt-1 ' + (zero ? 'text-slate-500' : 'text-white') + '">' + (t.count == null ? '…' : t.count) + '</div>' +
-            '<div class="text-xs text-slate-500 mt-1">' + t.hint + '</div></div>';
+    var open = todos.filter(function(t) { return t.count !== 0; });
+    var clear = todos.filter(function(t) { return t.count === 0; });
+    el.innerHTML = open.map(function(t) {
+        var n = t.count == null ? '<span style="color:var(--ds-text-3)">—</span>' : t.count;
+        return '<div onclick="' + t.action + '" class="ds-card ds-todo' + (t.urgent ? ' is-urgent' : '') + '" style="--c:' + t.color + '">' +
+            '<div class="ds-todo-head"><span class="ds-todo-icon"><i class="fa-solid ' + t.icon + '"></i></span>' + t.label + '</div>' +
+            '<div class="ds-todo-n ds-num">' + n + '</div>' +
+            '<div class="ds-todo-hint">' + (t.hint || '') + '</div>' +
+            '<div class="ds-todo-go">去處理<i class="fa-solid fa-arrow-right"></i></div></div>';
     }).join('');
+    if (!open.length) el.innerHTML = '<div class="ds-card ds-allclear" style="grid-column:1/-1"><span class="ds-allclear-icon"><i class="fa-solid fa-check"></i></span>' +
+        '<div><div style="color:var(--ds-text);font-weight:600;font-size:16px">今天的待辦都處理完了</div><div style="color:var(--ds-text-3);font-size:14px;margin-top:2px">有新的訂單或入庫單進來，會自動出現在這裡</div></div></div>';
+    if (clearEl) clearEl.innerHTML = clear.map(function(t) {
+        return '<button onclick="' + t.action + '" class="ds-clear" title="' + t.label + '：沒有待辦"><i class="fa-solid fa-check"></i>' + t.label + '</button>';
+    }).join('');
+    var sum = document.getElementById('home-summary');
+    if (sum) {
+        var busy = open.filter(function(t) { return t.count > 0; }).length;
+        sum.innerHTML = busy ? '<span class="ds-pill ds-pill-primary">' + busy + ' 件事要處理</span>' : '<span class="ds-pill ds-pill-success">待辦都清空了</span>';
+    }
 }
 
 async function countWhere(coll, field, op, value, filterFn) {
@@ -104,7 +115,8 @@ window.refreshHome = async function() {
           action: "goTab('wave-picking')" }
     ];
     todos[7].hint = '已過期 ' + expired + ' 板（不會被揀貨）、即將到期 ' + expiring + ' 板';
-    renderHomeTodos(todos);
+    todos[7].urgent = expired > 0;
+    todos[9].urgent = true;
 
     var r = await Promise.all([
         countWhere('inboundOrders', 'status', '==', 'pending', function(o) { return !o.isExternal; }),

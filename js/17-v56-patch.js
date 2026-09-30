@@ -265,6 +265,7 @@
         
         // 只檢查基本資料（品名、效期、數量），儲位改為提交時檢查
         var hasBasicData = name && exp && qty > 0;
+        if (window.renderInboundSteps) window.renderInboundSteps(!!hasBasicData, isExternal || !!(loc && loc.trim()));
         
         ['btn-inbound-direct', 'btn-inbound-forklift'].forEach(function(id) {
             var b = document.getElementById(id);
@@ -533,6 +534,8 @@
     function initExpiryDateInput() {
         var expInput = document.getElementById('in-exp');
         if (!expInput || expInput.dataset.enhanced === 'true') return;
+        // 效期已經改成「年／月／日」三格，in-exp 只是藏起來存值的欄位：不要換成看得見的輸入框（會多一個白框）
+        if (expInput.type === 'hidden') return;
         
         var newInput = document.createElement('input');
         newInput.type = 'text';

@@ -1369,9 +1369,17 @@
 
             var orders = (window._orderData && window._orderData.orders) ? window._orderData.orders.filter(window.orderWaveable) : [];
             document.getElementById('wave-stat-orders').innerText = orders.length;
+            ['today', 'pending', 'picking', 'done', 'orders'].forEach(function(k) {
+                var el = document.getElementById('wave-stat-' + k);
+                if (el && el.closest('.ds-stat')) el.closest('.ds-stat').classList.toggle('is-zero', el.innerText === '0');
+            });
 
             if (waves.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-500 py-8">尚無波次資料</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="ds-empty"><div class="ds-empty-icon"><i class="fa-solid fa-layer-group"></i></div>' +
+                    '<div class="ds-empty-title">還沒有波次</div>' +
+                    '<div class="ds-empty-text">' + (orders.length ? '有 ' + orders.length + ' 張訂單還沒排，按「建立波次」依物流商分好。' : '按「匯入訂單」選鼎新的「每日客戶銷貨明細表」，系統會依物流商自動建好波次。') + '</div>' +
+                    (orders.length ? '<button onclick="openCreateWaveModal()" class="ds-btn ds-btn-green"><i class="fa-solid fa-plus"></i>建立波次</button>'
+                        : '<button onclick="document.getElementById(\'order-excel-import\').click()" class="ds-btn ds-btn-secondary"><i class="fa-solid fa-file-excel" style="color:var(--c-purple)"></i>匯入訂單</button>') + '</td></tr>';
                 return;
             }
 
@@ -1386,69 +1394,73 @@
                 var timeInfo = '';
 
                 if (wave.status === 'pending') {
-                    statusBadge = '<span class="badge badge-yellow"><i class="fa-solid fa-clock mr-1"></i>待揀貨</span>';
+                    statusBadge = '<span class="badge badge-yellow"><span class="ds-dot"></span>待揀貨</span>';
                 } else if (wave.status === 'picking') {
-                    statusBadge = '<span class="badge badge-blue"><i class="fa-solid fa-spinner fa-spin mr-1"></i>揀貨中</span>';
+                    statusBadge = '<span class="badge badge-blue"><span class="ds-dot"></span>揀貨中</span>';
                     if (wave.startedAt) {
                         var mins = Math.round((new Date() - new Date(wave.startedAt)) / 60000);
-                        timeInfo = '<div class="text-xs text-orange-400">已進行 ' + mins + ' 分鐘</div>';
+                        timeInfo = '<div style="font-size:12px;color:var(--ds-text-3);margin-top:4px">已進行 ' + mins + ' 分鐘</div>';
                     }
                 } else if (wave.status === 'sorting') {
-                    statusBadge = '<span class="badge badge-purple"><i class="fa-solid fa-tags mr-1"></i>待分貨</span>';
+                    statusBadge = '<span class="badge badge-purple"><span class="ds-dot"></span>待分貨</span>';
                 } else if (wave.status === 'done') {
-                    statusBadge = '<span class="badge badge-green"><i class="fa-solid fa-check mr-1"></i>已出貨</span>';
+                    statusBadge = '<span class="badge badge-green"><i class="fa-solid fa-check"></i>已出貨</span>';
                     if (wave.completedAt && wave.createdAt) {
                         var mins = Math.round((new Date(wave.completedAt) - new Date(wave.createdAt)) / 60000);
-                        timeInfo = '<div class="text-xs text-slate-500">耗時 ' + mins + ' 分鐘</div>';
+                        timeInfo = '<div style="font-size:12px;color:var(--ds-text-3);margin-top:4px">耗時 ' + mins + ' 分鐘</div>';
                     }
                 }
 
                 var hasChanges = wave.hasOrderChanges;
-                var rowClass = hasChanges ? 'bg-orange-900/20 border-l-4 border-l-orange-500' : '';
-                html += '<tr class="hover:bg-slate-800/50 border-b border-slate-700/50 ' + rowClass + '">';
-                html += '<td class="p-3 font-mono text-cyan-400 font-bold">' + wave.waveNo;
+                html += '<tr class="' + (hasChanges ? 'has-change' : '') + '">';
+                html += '<td class="t-mono t-strong">' + wave.waveNo;
+                var flags = '';
                 if (hasChanges) {
-                    html += ' <span class="text-orange-400 text-xs" title="訂單有異動"><i class="fa-solid fa-triangle-exclamation"></i></span>';
+                    flags += '<span class="ds-flag" title="訂單有異動"><i class="fa-solid fa-triangle-exclamation"></i>訂單有異動</span>';
                 }
                 // 鼎新改單、波次已自動更新：有印紙本的要重印（打開揀貨畫面按「列印揀貨單」後就會消失）
                 if (wave.reprintRequired && wave.status !== 'done') {
-                    html += ' <span class="erp-reprint text-xs px-2 py-0.5 rounded bg-amber-500 text-black font-bold" title="鼎新改單，波次數量已自動更新">🖨️ 揀貨單和標籤要重印</span>';
+                    flags += '<span class="erp-reprint ds-flag" title="鼎新改單，波次數量已自動更新"><i class="fa-solid fa-print"></i>揀貨單和標籤要重印</span>';
                 }
+                if (flags) html += '<div class="ds-flags">' + flags + '</div>';
                 html += '</td>';
-                html += '<td class="p-3 text-white">' + (wave.logistics || '混合') + '</td>';
-                html += '<td class="p-3">' + statusBadge + '</td>';
-                html += '<td class="p-3 text-right text-slate-300">' + (wave.orders ? wave.orders.length : 0) + '</td>';
-                html += '<td class="p-3 text-right text-slate-300">' + (wave.itemCount || 0) + ' 項</td>';
-                html += '<td class="p-3 text-right text-yellow-400 font-bold">' + (Math.round((wave.totalQty || 0) * 1000) / 1000) + ' <span class="text-xs text-slate-400 font-normal">件</span></td>';
-                html += '<td class="p-3 text-slate-400 text-xs">' + new Date(wave.createdAt).toLocaleString('zh-TW') + '</td>';
-                html += '<td class="p-3 text-center">';
-                // 一個波次只放一顆「下一步」的大按鈕；不常用的收進「⋯」
-                var no = String(wave.waveNo).replace(/'/g, '');
+                html += '<td class="t-strong">' + (wave.logistics || '混合') + '</td>';
                 var prog = window.waveProgress(wave);
-                var bar = function(color) { var pct = prog.all ? Math.round(prog.done / prog.all * 100) : 0; return '<div class="inline-flex items-center gap-2 mr-2"><div class="w-28 h-3 bg-slate-700 rounded overflow-hidden"><div class="h-3 ' + color + '" style="width:' + pct + '%"></div></div><span class="text-sm font-bold text-white">' + prog.done + '/' + prog.all + ' 項</span></div>'; };
-                var big = function(fn, cls, text) { return '<button onclick="' + fn + '" class="next-step ' + cls + ' text-white text-sm font-bold px-4 py-1.5 rounded-lg mr-2 whitespace-nowrap">' + text + '</button>'; };
+                if (wave.status === 'picking' && prog.all) {
+                    var pct = Math.round(prog.done / prog.all * 100);
+                    timeInfo = '<div class="ds-progress' + (prog.done >= prog.all ? ' is-done' : '') + '" style="margin:8px 0 0"><span class="ds-progress-bar"><div style="width:' + pct + '%"></div></span><span>' + prog.done + '/' + prog.all + ' 項</span></div>' + timeInfo;
+                }
+                html += '<td>' + statusBadge + timeInfo + '</td>';
+                html += '<td class="t-right ds-num">' + (wave.orders ? wave.orders.length : 0) + '</td>';
+                html += '<td class="t-right ds-num">' + (wave.itemCount || 0) + ' 項</td>';
+                html += '<td class="t-right ds-num t-strong">' + (Math.round((wave.totalQty || 0) * 1000) / 1000) + ' <span style="font-weight:400;color:var(--ds-text-3)">件</span></td>';
+                html += '<td class="ds-num" style="font-size:13px;color:var(--ds-text-3)">' + new Date(wave.createdAt).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) + '</td>';
+                html += '<td class="t-right">';
+                // 一個波次只放一顆「下一步」的按鈕；不常用的收進「⋯」
+                var no = String(wave.waveNo).replace(/'/g, '');
+                var big = function(fn, cls, icon, text) { return '<button onclick="' + fn + '" class="next-step ds-btn ds-btn-sm ' + cls + '" style="margin-right:8px;vertical-align:middle"><i class="fa-solid ' + icon + '"></i>' + text + '</button>'; };
                 if (wave.status === 'pending' && (!wave.lastPrinted || wave.reprintRequired)) {
-                    html += big("printWavePickingList('" + no + "')", 'bg-emerald-600 hover:bg-emerald-500', '🖨 ' + (wave.lastPrinted ? '重印揀貨單' : '印揀貨單'));
+                    html += big("printWavePickingList('" + no + "')", 'ds-btn-green', 'fa-print', wave.lastPrinted ? '重印揀貨單' : '印揀貨單');
                 } else if (wave.status === 'pending') {
-                    html += '<span class="text-slate-300 text-sm mr-2">📱 等手機揀貨</span>';
+                    html += '<span class="ds-wait"><i class="fa-solid fa-mobile-screen-button"></i>等手機揀貨</span>';
                 } else if (wave.status === 'picking' && prog.all && prog.done >= prog.all) {
-                    html += bar('bg-emerald-500') + big("openWaveExecute('" + no + "')", 'bg-orange-600 hover:bg-orange-500', '✅ 完成出貨');
+                    html += big("openWaveExecute('" + no + "')", 'ds-btn-orange', 'fa-check', '完成出貨');
                 } else if (wave.status === 'picking') {
-                    html += bar('bg-blue-500') + (wave.reprintRequired ? big("printWavePickingList('" + no + "')", 'bg-amber-600 hover:bg-amber-500', '🖨 重印揀貨單') : '');
+                    html += (wave.reprintRequired ? big("printWavePickingList('" + no + "')", 'ds-btn-orange', 'fa-print', '重印揀貨單') : '');
                 } else if (wave.status === 'sorting') {
-                    html += big("openWaveSorting('" + no + "')", 'bg-purple-600 hover:bg-purple-500', '🏷 分貨作業');
+                    html += big("openWaveSorting('" + no + "')", 'ds-btn-purple', 'fa-tags', '分貨作業');
                 } else if (wave.status === 'done') {
-                    html += big("printWaveLabels('" + no + "')", 'bg-slate-600 hover:bg-slate-500', '🏷 重印標籤');
+                    html += big("printWaveLabels('" + no + "')", 'ds-btn-secondary', 'fa-tags', '重印標籤');
                 }
                 var menu = [];
-                if (wave.status === 'pending' || wave.status === 'picking') menu.push(['printWavePickingList', '🖨 揀貨單']);
-                if (wave.status === 'pending' || wave.status === 'picking') menu.push(['openWaveExecute', '💻 在電腦上揀貨／完成']);
-                if (wave.status === 'pending') menu.push(['openAddToWaveModal', '＋ 追加訂單']);
-                menu.push(['viewWaveDetail', '👁 檢視明細']);
-                if (wave.status === 'pending') menu.push(['deleteWave', '🗑 刪除波次']);
-                html += '<details class="wave-more relative inline-block align-middle"><summary class="list-none cursor-pointer px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold" title="其他操作">⋯</summary>' +
-                    '<div class="absolute right-0 z-30 mt-1 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-xl py-1 text-left">' +
-                    menu.map(function(m) { return '<button onclick="this.closest(\'details\').open=false;' + m[0] + '(\'' + no + '\')" class="block w-full text-left px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 whitespace-nowrap">' + m[1] + '</button>'; }).join('') +
+                if (wave.status === 'pending' || wave.status === 'picking') menu.push(['printWavePickingList', 'fa-print', '揀貨單']);
+                if (wave.status === 'pending' || wave.status === 'picking') menu.push(['openWaveExecute', 'fa-desktop', '在電腦上揀貨／完成']);
+                if (wave.status === 'pending') menu.push(['openAddToWaveModal', 'fa-plus', '追加訂單']);
+                menu.push(['viewWaveDetail', 'fa-eye', '檢視明細']);
+                if (wave.status === 'pending') menu.push(['deleteWave', 'fa-trash-can', '刪除波次', true]);
+                html += '<details class="wave-more relative inline-block align-middle"><summary class="ds-icon-btn" title="其他操作"><i class="fa-solid fa-ellipsis"></i></summary>' +
+                    '<div class="ds-menu">' +
+                    menu.map(function(m) { return '<button onclick="this.closest(\'details\').open=false;' + m[0] + '(\'' + no + '\')"' + (m[3] ? ' class="is-danger"' : '') + '><i class="fa-solid ' + m[1] + '"></i>' + m[2] + '</button>'; }).join('') +
                     '</div></details>';
                 html += '</td>';
                 html += '</tr>';
