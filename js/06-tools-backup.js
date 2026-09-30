@@ -477,7 +477,7 @@ window.renderFavoritesList = function() {
         var func = window._allFunctions.find(function(f) { return f.id === favId; });
         if (func) {
             html += '<div class="nav-item" onclick="switchTab(\'' + func.id + '\', event)">';
-            html += '<i class="fa-solid ' + func.icon + '"></i>';
+            html += '<i class="fa-solid ' + func.icon + ' ' + func.color + '"></i>';
             html += '<span class="truncate">' + func.name + '</span>';
             html += '</div>';
         }

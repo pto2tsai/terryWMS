@@ -1624,8 +1624,11 @@ window.printAllLabels = function() {
     var printWindow = window.open('', '_blank', 'width=1100,height=800');
     if (!printWindow) { alert('瀏覽器擋住了列印視窗，請允許這個網站「彈出式視窗」後再按一次'); return; }
     var lb = window.buildSortingLabelsHtml(wave);
-    printWindow.document.write('<!DOCTYPE html><html><head><title>分貨標籤</title>' +
-        '<style>body{font-family:"Microsoft JhengHei",sans-serif;padding:20px}' + lb.style + '</style></head>' +
+    // 跟手機、辦公室自動印同一個版面：8×6 公分一張一頁、黑白（感熱標籤印不出紅色底）
+    // 螢幕上把每張標籤排開、加灰底，方便看；印出來就是一張一張的標籤
+    printWindow.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>分貨標籤 ' + (wave.waveNo || '') + '</title>' +
+        '<style>body{font-family:"Microsoft JhengHei",sans-serif;margin:0}' + window.sortingLabelsPrintCss(lb) +
+        '@media screen{body{background:#e5e7eb;padding:16px}.sl{display:flex;flex-wrap:wrap;gap:12px}.sl .label{background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25)}}</style></head>' +
         '<body>' + lb.body + '<script>window.print();<\/script></body></html>');
     printWindow.document.close();
 };
