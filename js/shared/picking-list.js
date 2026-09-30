@@ -138,6 +138,17 @@ window.pickLogEntry = function(item) {
         productName: item.productName || '', spec: item.spec || '', batchNo: item.batchNo || '', expDate: item.expDate || '', company: item.company || ''
     }));
 };
+// 揀貨進度：要揀的品項裡，拿夠了（或回報不夠）的有幾項
+window.waveProgress = function(wave) {
+    var items = (wave.summary || []).filter(function(s) { return !window.isExcludedFromPickingList(s.productName); });
+    var all = items.length;
+    if (!Array.isArray(wave.pickLog)) return { done: Math.min(all, (wave.completedItems || []).length), all: all };
+    var net = {}, short = {};
+    wave.pickLog.forEach(function(e) { net[e.key] = (net[e.key] || 0) + (e.type === 'return' ? -e.qty : e.qty); });
+    (wave.shortLog || []).forEach(function(e) { short[e.key] = (short[e.key] || 0) + (parseFloat(e.qty) || 0); });
+    var done = items.filter(function(s) { var k = s.productName + '|||' + (s.spec || ''); return (net[k] || 0) + (short[k] || 0) >= (parseFloat(s.totalQty) || 0) - 1e-9; }).length;
+    return { done: done, all: all };
+};
 // 這個波次有沒有完整的揀貨記錄（新波次都有；改版前就開始揀的舊波次沒有，照舊方式算）
 window.waveHasPickLog = function(wave) {
     const log = wave.pickLog;
@@ -527,7 +538,8 @@ window.recordPickListPrint = function(wave, rows) {
     var snap = {};
     rows.forEach(function(r) { snap[window.pickListKey(r)] = r.totalQty; });
     wave.lastPrinted = snap;
-    if (wave.id && window.db) window.db.collection('waves').doc(wave.id).update({ lastPrinted: snap, printVersion: wave.printVersion || 1 }).catch(function(e) { console.warn('記錄揀貨單版次失敗', e); });
+    wave.reprintRequired = false;
+    if (wave.id && window.db) window.db.collection('waves').doc(wave.id).update({ lastPrinted: snap, printVersion: wave.printVersion || 1, reprintRequired: false }).catch(function(e) { console.warn('記錄揀貨單版次失敗', e); });
 };
 
 // 分貨標籤（一張訂單一張）：揀完才印（手機或辦公室自動印），件數用實際出貨的（缺貨的已經扣掉）；

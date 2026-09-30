@@ -79,19 +79,26 @@ await page.click('button[onclick="openClearDataModal()"]'); await page.waitForTi
 H.check('「清除資料」在「備份與維護」頁，打開看得到波次數量', await page.isVisible('#modal-clear-data') && (await page.innerText('#modal-clear-data')).includes('1'), await page.innerText('#modal-clear-data').catch(() => ''));
 await page.evaluate(() => closeClearDataModal()); await page.waitForTimeout(300);
 await H.nav(page, 'wave-picking');
-// 開始揀貨
-const execBtn = await page.$$eval('[onclick^="openWaveExecute("]', e => e.map(x => x.getAttribute('onclick')));
-H.note('執行按鈕: ' + JSON.stringify(execBtn));
+// 每個波次只有一顆「下一步」：印過揀貨單 → 顯示「等手機揀貨」；其他操作收在「⋯」
+const rowTxt = await page.innerText('#wave-list-body');
+H.check('印過揀貨單的波次：顯示「等手機揀貨」，沒有「開始揀貨」大按鈕', rowTxt.includes('等手機揀貨') && !rowTxt.includes('開始揀貨') && (await page.$$('#wave-list-body .next-step')).length === 0, rowTxt.slice(0, 300));
+await page.click('#wave-list-body details.wave-more summary'); await page.waitForTimeout(200);
+const menuTxt = await page.innerText('#wave-list-body details.wave-more');
+H.check('「⋯」裡有：揀貨單、在電腦上揀貨、追加訂單、檢視明細、刪除波次', ['揀貨單', '在電腦上揀貨', '追加訂單', '檢視明細', '刪除波次'].every(t => menuTxt.includes(t)), menuTxt);
+// 在電腦上揀貨（從「⋯」進去）
+const execBtn = ['x'];
 if (execBtn[0]) {
   const prevP = page.waitForEvent('popup', { timeout: 5000 }).catch(() => null);
-  await page.click('[onclick="' + execBtn[0] + '"]'); await page.waitForTimeout(1500);
+  await page.click('#wave-list-body details.wave-more button:has-text("在電腦上揀貨")'); await page.waitForTimeout(1500);
   const prev = await prevP;
-  H.check('按「開始揀貨」直接打開揀貨單列印預覽', !!prev && (await prev.content()).includes('揀貨單'));
+  H.check('從「⋯ → 在電腦上揀貨」開始：直接打開揀貨單列印預覽', !!prev && (await prev.content()).includes('揀貨單'));
   if (prev) await prev.close().catch(() => {});
   const list = await page.evaluate(() => window._waveData.pickingList.map(i => [i.palletId, i.productName, i.pickQty, i.shortage || false]));
   H.note('揀貨清單: ' + JSON.stringify(list));
   H.check('先進先出：白蝦先揀早效期 W-A2(5) 再 W-A1(5)，透抽 W-B1(5)', JSON.stringify(list.filter(i=>!i[3]).map(i => i[0] + ':' + i[2]).sort()) === JSON.stringify(['W-A1:5', 'W-A2:5', 'W-B1:5']), JSON.stringify(list));
   for (const it of list.filter(i => !i[3])) { await page.fill('#wave-scan-input', it[0]); await page.press('#wave-scan-input', 'Enter'); await page.waitForTimeout(700); }
+  await page.waitForTimeout(1500);
+  H.check('全部揀完：波次那一列出現「完成出貨」和進度 2/2 項', await page.evaluate(() => { const t = document.getElementById('wave-list-body').innerText; return t.includes('完成出貨') && t.includes('2/2 項'); }), await page.evaluate(() => document.getElementById('wave-list-body').innerText.slice(0, 200)));
   const wv = (await H.all('waves'))[0]; H.check('掃描進度寫入 Firestore', (wv.completedItems || []).length === 3, JSON.stringify(wv.completedItems));
   await page.click("#modal-wave-execute button[onclick=\"completeWave()\"]"); await page.waitForTimeout(3000);
   H.note('完成 dialogs: ' + JSON.stringify(log.dialogs.slice(-3).map(d => d.msg.slice(0, 200))));

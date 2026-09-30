@@ -1422,24 +1422,34 @@
                 html += '<td class="p-3 text-right text-yellow-400 font-bold">' + (Math.round((wave.totalQty || 0) * 1000) / 1000) + ' <span class="text-xs text-slate-400 font-normal">件</span></td>';
                 html += '<td class="p-3 text-slate-400 text-xs">' + new Date(wave.createdAt).toLocaleString('zh-TW') + '</td>';
                 html += '<td class="p-3 text-center">';
-                if (wave.status === 'pending') {
-                    html += '<button onclick="openWaveExecute(\'' + wave.waveNo + '\')" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded mr-1"><i class="fa-solid fa-play mr-1"></i>開始揀貨</button>';
-                    html += '<button onclick="openAddToWaveModal(\'' + wave.waveNo + '\')" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-2 py-1 rounded mr-1" title="追加訂單"><i class="fa-solid fa-plus"></i></button>';
+                // 一個波次只放一顆「下一步」的大按鈕；不常用的收進「⋯」
+                var no = String(wave.waveNo).replace(/'/g, '');
+                var prog = window.waveProgress(wave);
+                var bar = function(color) { var pct = prog.all ? Math.round(prog.done / prog.all * 100) : 0; return '<div class="inline-flex items-center gap-2 mr-2"><div class="w-28 h-3 bg-slate-700 rounded overflow-hidden"><div class="h-3 ' + color + '" style="width:' + pct + '%"></div></div><span class="text-sm font-bold text-white">' + prog.done + '/' + prog.all + ' 項</span></div>'; };
+                var big = function(fn, cls, text) { return '<button onclick="' + fn + '" class="next-step ' + cls + ' text-white text-sm font-bold px-4 py-1.5 rounded-lg mr-2 whitespace-nowrap">' + text + '</button>'; };
+                if (wave.status === 'pending' && (!wave.lastPrinted || wave.reprintRequired)) {
+                    html += big("printWavePickingList('" + no + "')", 'bg-emerald-600 hover:bg-emerald-500', '🖨 ' + (wave.lastPrinted ? '重印揀貨單' : '印揀貨單'));
+                } else if (wave.status === 'pending') {
+                    html += '<span class="text-slate-300 text-sm mr-2">📱 等手機揀貨</span>';
+                } else if (wave.status === 'picking' && prog.all && prog.done >= prog.all) {
+                    html += bar('bg-emerald-500') + big("openWaveExecute('" + no + "')", 'bg-orange-600 hover:bg-orange-500', '✅ 完成出貨');
                 } else if (wave.status === 'picking') {
-                    html += '<button onclick="openWaveExecute(\'' + wave.waveNo + '\')" class="bg-orange-600 hover:bg-orange-500 text-white text-xs px-3 py-1 rounded mr-1"><i class="fa-solid fa-spinner fa-spin mr-1"></i>繼續揀貨</button>';
+                    html += bar('bg-blue-500') + (wave.reprintRequired ? big("printWavePickingList('" + no + "')", 'bg-amber-600 hover:bg-amber-500', '🖨 重印揀貨單') : '');
                 } else if (wave.status === 'sorting') {
-                    html += '<button onclick="openWaveSorting(\'' + wave.waveNo + '\')" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 rounded mr-1"><i class="fa-solid fa-tags mr-1"></i>分貨作業</button>';
+                    html += big("openWaveSorting('" + no + "')", 'bg-purple-600 hover:bg-purple-500', '🏷 分貨作業');
+                } else if (wave.status === 'done') {
+                    html += big("printWaveLabels('" + no + "')", 'bg-slate-600 hover:bg-slate-500', '🏷 重印標籤');
                 }
-                if (wave.status === 'pending' || wave.status === 'picking') {
-                    html += '<button onclick="printWavePickingList(\'' + wave.waveNo + '\')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2 py-1 rounded mr-1" title="列印揀貨單"><i class="fa-solid fa-print mr-1"></i>揀貨單</button>';
-                }
-                html += '<button onclick="viewWaveDetail(\'' + wave.waveNo + '\')" class="bg-slate-600 hover:bg-slate-500 text-white text-xs px-2 py-1 rounded mr-1" title="檢視明細"><i class="fa-solid fa-eye"></i></button>';
-                if (wave.status === 'pending') {
-                    html += '<button onclick="deleteWave(\'' + wave.waveNo + '\')" class="bg-red-600 hover:bg-red-500 text-white text-xs px-2 py-1 rounded" title="刪除波次"><i class="fa-solid fa-trash"></i></button>';
-                }
-                if (wave.status === 'done') {
-                    html += '<button onclick="printWaveLabels(\'' + wave.waveNo + '\')" class="bg-slate-600 hover:bg-slate-500 text-white text-xs px-2 py-1 rounded" title="重印標籤"><i class="fa-solid fa-print"></i></button>';
-                }
+                var menu = [];
+                if (wave.status === 'pending' || wave.status === 'picking') menu.push(['printWavePickingList', '🖨 揀貨單']);
+                if (wave.status === 'pending' || wave.status === 'picking') menu.push(['openWaveExecute', '💻 在電腦上揀貨／完成']);
+                if (wave.status === 'pending') menu.push(['openAddToWaveModal', '＋ 追加訂單']);
+                menu.push(['viewWaveDetail', '👁 檢視明細']);
+                if (wave.status === 'pending') menu.push(['deleteWave', '🗑 刪除波次']);
+                html += '<details class="wave-more relative inline-block align-middle"><summary class="list-none cursor-pointer px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold" title="其他操作">⋯</summary>' +
+                    '<div class="absolute right-0 z-30 mt-1 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-xl py-1 text-left">' +
+                    menu.map(function(m) { return '<button onclick="this.closest(\'details\').open=false;' + m[0] + '(\'' + no + '\')" class="block w-full text-left px-3 py-2 text-sm text-slate-100 hover:bg-slate-700 whitespace-nowrap">' + m[1] + '</button>'; }).join('') +
+                    '</div></details>';
                 html += '</td>';
                 html += '</tr>';
             });
