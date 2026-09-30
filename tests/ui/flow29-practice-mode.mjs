@@ -17,6 +17,9 @@ await O.page.waitForTimeout(1500);
 await H.nav(O.page, 'wave-picking'); await O.page.waitForTimeout(500);
 const ob = await O.page.evaluate(() => { const b = document.getElementById('btn-practice-mode'); return [b.style.display, b.disabled]; });
 H.check('一般人員看不到練習模式開關（還沒開的時候）', ob[0] === 'none', JSON.stringify(ob));
+const nd0 = O.log.dialogs.length;
+await O.page.evaluate(() => toggleWaveSettings(true)); await O.page.click('#btn-label-mode'); await O.page.waitForTimeout(500);
+H.check('一般人員按「標籤：手機印」：按鈕沒有鎖死，會說明只有主管能切換', !(await O.page.isDisabled('#btn-label-mode')) && O.log.dialogs.slice(nd0).some(d => d.msg.includes('只有主管')), JSON.stringify(O.log.dialogs.slice(nd0)));
 
 const D = await H.openApp(base, USERS.sup);           // 主管的電腦（也負責自動匯入）
 const M = await H.openApp(base, USERS.op2, { mobile: true });

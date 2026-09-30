@@ -354,3 +354,4 @@ header.ds-header #page-title { font-size: 18px; font-weight: 600; color: var(--d
 /* 步驟列：不要捲軸（Windows 的捲軸會吃掉高度，把字切掉）；太窄就換行 */
 .stepbar { overflow: visible !important; flex-wrap: wrap; row-gap: 6px; padding: 2px 0; }
 .ds-step b, .ds-step small { line-height: 1.4; }
+#wave-settings button:disabled { opacity: .45; cursor: not-allowed; }
