@@ -1,6 +1,6 @@
 // ============================================================
 // js/shared/product-rules.js — 品項分類（電腦版與手機版共用）
-// 運費、包材、冷藏等不從倉庫揀（沒有庫存），揀貨清單、分貨標籤、件數統計照這裡判斷
+// 運費、包材、冷藏、常溫品等不從倉庫揀（沒有庫存），揀貨清單、分貨標籤、件數統計照這裡判斷
 // 兩邊一定要用同一份，不然手機的揀貨清單會跟電腦的不一樣
 // ============================================================
 
@@ -22,16 +22,23 @@ window.isChilledItem = function(productName) {
     return chilledKeywords.some(function(kw) { return productName.includes(kw); });
 };
 
+// 常溫品（卡啦系列、零嘴）：門市出貨，不在工廠冷凍庫
+window.isAmbientStoreItem = function(productName) {
+    if (!productName) return false;
+    var ambientKeywords = ['卡啦', '夾心絲'];
+    return ambientKeywords.some(function(kw) { return productName.includes(kw); });
+};
+
 window.isExcludedFromPickingList = function(productName) {
-    return window.isFeeItem(productName) || window.isPackagingItem(productName) || window.isChilledItem(productName);
+    return window.isFeeItem(productName) || window.isPackagingItem(productName) || window.isChilledItem(productName) || window.isAmbientStoreItem(productName);
 };
 
 window.isExcludedFromSortingLabel = function(productName) {
-    return window.isFeeItem(productName) || window.isChilledItem(productName);
+    return window.isFeeItem(productName) || window.isChilledItem(productName) || window.isAmbientStoreItem(productName);
 };
 
 window.isExcludedFromQtyCount = function(productName) {
-    return window.isFeeItem(productName) || window.isPackagingItem(productName) || window.isChilledItem(productName);
+    return window.isFeeItem(productName) || window.isPackagingItem(productName) || window.isChilledItem(productName) || window.isAmbientStoreItem(productName);
 };
 
 window.isNonProductItem = window.isExcludedFromSortingLabel;
