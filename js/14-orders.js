@@ -555,6 +555,11 @@ const ERP_HEADERS = {
 };
 // 門市的銷貨單（單號 233-、234- 開頭）不從倉庫揀貨，匯入時整張跳過
 window.STORE_ORDER_PREFIX = /^(233|234)-/;
+// 門市備貨的客戶（客戶名稱有這些字）：整張跳過
+window.STORE_PREPARED_CUSTOMERS = ['統一'];
+window.isStoreOrder = function(orderNo, customer) {
+    return window.STORE_ORDER_PREFIX.test(orderNo) || window.STORE_PREPARED_CUSTOMERS.some(function(k) { return String(customer || '').includes(k); });
+};
 const ERP_REQUIRED = { ORDER_NO: '銷貨單號', PRODUCT: '品名', QTY: '銷貨數量', REMARK: '備註（物流商）' };
 
 // 在前 20 列找標題列（有「品名」那一列），回傳 { row, col } 或 { error }
@@ -708,7 +713,7 @@ window.parseErpOrderRows = function(rows) {
 
         let orderNo = row[COL.ORDER_NO] ? String(row[COL.ORDER_NO]).trim() : lastOrderNo;
         if (!orderNo) continue;
-        if (window.STORE_ORDER_PREFIX.test(orderNo)) {
+        if (storeSkipped[orderNo] || window.isStoreOrder(orderNo, COL.CUST_NAME !== undefined ? row[COL.CUST_NAME] : '')) {
             if (row[COL.ORDER_NO]) lastOrderNo = orderNo;
             storeSkipped[orderNo] = true;
             continue;
