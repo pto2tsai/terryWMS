@@ -507,7 +507,7 @@ body {
 .pk-take.ret { background: #92400e; }
 .pk-take .pk-qty { display: inline; font-size: 60px; color: #fff; margin: 0; line-height: 1; vertical-align: -4px; }
 .pk-take small { font-size: 26px; color: #fff; }
-.pk-short { display: block; width: 100%; margin-top: 10px; min-height: 56px; font-size: 20px; font-weight: bold; border: 2px solid #ef4444; border-radius: 14px; background: transparent; color: #fca5a5; cursor: pointer; }
+.pk-short { display: block; width: 100%; margin-top: 12px; min-height: 72px; font-size: 30px; font-weight: bold; border: 2px solid #ef4444; border-radius: 14px; background: transparent; color: #fca5a5; cursor: pointer; }
 .pk-skip { display: block; width: 100%; margin-top: 10px; min-height: 52px; font-size: 18px; font-weight: bold; border: 2px solid #64748b; border-radius: 14px; background: transparent; color: #cbd5e1; cursor: pointer; }
 .pk-next { margin-top: 12px; font-size: 18px; color: #cbd5e1; }
 .pk-next b { color: #e2e8f0; }
@@ -523,6 +523,10 @@ body {
 .pad-grid button { min-height: 76px; font-size: 34px; font-weight: 900; border: none; border-radius: 14px; background: #1e293b; color: #fff; cursor: pointer; }
 .pad-grid button:active { background: #334155; }
 .pad-cancel { display: block; width: 100%; margin-top: 14px; min-height: 56px; font-size: 20px; border: none; border-radius: 14px; background: #475569; color: #fff; cursor: pointer; }
+.pad-display { font-size: 56px; font-weight: 900; color: #fde047; text-align: center; background: #0f172a; border: 2px solid #475569; border-radius: 14px; padding: 6px; margin-bottom: 12px; }
+.pad-keys .pad-fn { font-size: 22px; background: #334155; }
+.pad-msg { color: #fca5a5; font-size: 18px; font-weight: bold; text-align: center; min-height: 24px; margin-top: 8px; }
+.pad-ok { display: block; width: 100%; margin-top: 8px; min-height: 76px; font-size: 30px; font-weight: 900; border: none; border-radius: 14px; background: #065f46; color: #fff; cursor: pointer; }
 /* 兩間倉庫：上方「📍 A 倉 ⇄」可以切換 */
 .pk-top > span { display: inline-flex; align-items: center; gap: 6px; }
 .pk-house { border: 0; background: #0369a1; color: #fff; font-size: 16px; padding: 6px 12px; cursor: pointer; }
