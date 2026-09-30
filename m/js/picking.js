@@ -183,13 +183,20 @@ function renderPickingList() {
             item.type === 'return' ? '<span class="item-status shortage">↩️ 要放回</span>' :
             '<span class="item-status pending">待揀</span>';
         const canPick = !item.completed && !item.shortage;
+        // 主角是品名、規格（大字、上下兩行）；練習模式沒有儲位、板號，不顯示「照訂單揀」「- |」
+        const loc = item.practice || item.locationId === window.PRACTICE_LOC ? '' : (item.locationId || '');
+        const detail = [item.palletId ? '<span class="pid">' + pidHtml(item.palletId) + '</span>' : '', esc([item.batchNo, item.expDate].filter(Boolean).join(' '))].filter(Boolean).join(' | ');
         return '<div class="list-item ' + cls + (canPick ? ' clickable' : '') + '"' + (canPick ? ' onclick="choosePickItem(\'' + esc(skipKey(item)).replace(/'/g, '') + '\')"' : '') + '>' +
-            '<div class="item-row"><span class="item-location">' + esc(item.locationId) + '</span>' + status + '</div>' +
-            '<div class="item-product">' + esc(item.productName) + ' ' + esc(item.spec || '') +
-                ' ' + companyTag(item.company) + '</div>' +
+            '<div class="item-row" style="align-items:flex-start;gap:10px">' +
+                '<div style="min-width:0">' +
+                    (loc ? '<div class="item-location">' + esc(loc) + '</div>' : '') +
+                    '<div class="pk-li-name">' + esc(item.productName) + ' ' + companyTag(item.company) + '</div>' +
+                    (item.spec ? '<div class="pk-li-spec">' + esc(item.spec) + '</div>' : '') +
+                '</div>' +
+                '<div style="text-align:right;flex-shrink:0">' + status + '<div class="item-qty">' + esc(item.pickQty) + '</div></div>' +
+            '</div>' +
             (item.shortage && item.note ? '<div class="item-detail" style="color:#fbbf24">' + esc(item.note) + '</div>' : '') +
-            '<div class="item-row"><span class="item-detail"><span class="pid">' + pidHtml(item.palletId) + '</span> | ' + esc(item.batchNo || '') + ' ' + esc(item.expDate || '') + '</span>' +
-            '<span class="item-qty">' + esc(item.pickQty) + '</span></div></div>';
+            (detail ? '<div class="item-detail">' + detail + '</div>' : '') + '</div>';
     }).join('');
 }
 window.togglePickingList = function() {

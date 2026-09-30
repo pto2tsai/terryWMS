@@ -56,6 +56,8 @@ await mp.click('#picking-next .pk-skip'); await mp.waitForTimeout(400);
 H.check('再跳過一次：回到原本那一項', (await mp.innerText('#picking-next')).split('下一項')[0].includes(cur0));
 // 全部清單點任一項：那一項變成現在要拿的
 await mp.click('#picking-list-toggle'); await mp.waitForTimeout(200);
+if (process.env.SHOT3) { await mp.evaluate(() => document.getElementById('picking-list').scrollIntoView()); await mp.screenshot({ path: process.env.SHOT3 }); }
+H.check('手機全部清單：練習模式不顯示「照訂單揀」，品名、規格分兩行', !(await mp.innerText('#picking-list')).includes('照訂單揀') && (await mp.$$('#picking-list .pk-li-name')).length === 2 && (await mp.$$('#picking-list .pk-li-spec')).length === 2);
 await mp.click('#picking-list .list-item.clickable:has-text("' + other + '")'); await mp.waitForTimeout(400);
 H.check('全部清單點「' + other + '」：它變成現在要拿的一項', (await mp.innerText('#picking-next')).split('下一項')[0].includes(other));
 await mp.click('#picking-list .list-item.clickable:has-text("' + cur0 + '")'); await mp.waitForTimeout(400);

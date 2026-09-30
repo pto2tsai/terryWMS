@@ -323,6 +323,8 @@ body {
 .item-status.shortage { background: #7f1d1d; color: #fecaca; }
 
 .item-product { font-size: 19px; font-weight: bold; color: #fff; margin: 8px 0 4px; }
+.pk-li-name { font-size: 24px; font-weight: 900; color: #fff; line-height: 1.25; }
+.pk-li-spec { font-size: 20px; font-weight: bold; color: #e2e8f0; line-height: 1.3; margin-top: 2px; }
 .item-detail { font-size: 15px; color: #cbd5e1; }
 .item-qty { font-size: 30px; font-weight: bold; color: #fbbf24; text-align: right; }
 
@@ -494,7 +496,7 @@ body {
 .pk-card.ret { border-color: #f59e0b; }
 .pk-loc { font-size: 48px; font-weight: 900; font-family: monospace; letter-spacing: 2px; color: #fff; line-height: 1.1; }
 .pk-name { font-size: 30px; font-weight: 900; color: #fff; line-height: 1.25; }
-.pk-spec { font-size: 20px; color: #cbd5e1; margin-top: 2px; }
+.pk-spec { font-size: 24px; font-weight: bold; color: #e2e8f0; margin-top: 4px; line-height: 1.3; }
 .pk-qty { font-size: 64px; font-weight: 900; color: #fde047; line-height: 1.1; margin-top: 8px; }
 .pk-qty small { font-size: 28px; color: #fde68a; }
 .pk-go { display: block; width: 100%; margin-top: 14px; min-height: 84px; font-size: 30px; font-weight: 900; border: none; border-radius: 16px; background: #10b981; color: #fff; cursor: pointer; }
