@@ -42,7 +42,7 @@ const mp = M.page;
 await mp.evaluate(() => openPage('picking')); await mp.waitForTimeout(400);
 await mp.selectOption('#picking-wave-select', W.waveNo); await mp.waitForTimeout(1000);
 const n0 = await mp.innerText('#picking-next');
-H.check('手機：上方「練習」標記，大字顯示品名、拿幾件、「✓ 拿好了」按鈕', n0.includes('練習') && n0.includes('拿好了') && /拿 (10|6) 件/.test(n0), n0);
+H.check('手機：上方「練習」標記，大字顯示品名、「✓ 拿 N 件」一顆按鈕', n0.includes('練習') && /拿\s*(10|6)\s*件/.test(await mp.innerText('#picking-next .pk-take')), n0);
 H.check('手機：拿這一項的同時，提醒「下一項」是什麼品項、幾件', /下一項：(白蝦|透抽)/.test(n0) && /下一項：.*(6|10) 件/.test(n0), n0);
 H.check('手機：練習模式不顯示掃描框', !(await mp.isVisible('#picking-scan-box')));
 // 先跳過：現在這項排到最後，先拿下一項（順序跟現場不一樣時不會卡住）
@@ -72,7 +72,7 @@ const first = w1.pickLog[0];
 r = await pushReport('每日客戶銷貨明細表_1100.xlsx', file([['A-1', '白蝦', '50/60', first.productName === '白蝦' ? 7 : 10], ['A-2', '透抽', 'L', first.productName === '透抽' ? 4 : 6]]));
 await waitInbox(D.page, r.id); await mp.waitForTimeout(1500);
 const n1 = await mp.innerText('#picking-next');
-H.check('鼎新減量：手機出現「放回」和「✓ 放回了」按鈕', n1.includes('放回') && n1.includes('放回了'), n1);
+H.check('鼎新減量：手機出現「✓ 放回 N 件」按鈕', /放回\s*\d+\s*件/.test(n1) && (await mp.$$('#picking-next .pk-take.ret')).length === 1, n1);
 for (let i = 0; i < 3; i++) { const b = await mp.$('#picking-next button[onclick^="confirmCurrentPick"]'); if (!b) break; await b.click(); await mp.waitForTimeout(800); }
 H.check('全部按完：顯示「全部拿完」', (await mp.innerText('#picking-next')).includes('全部拿完'));
 
