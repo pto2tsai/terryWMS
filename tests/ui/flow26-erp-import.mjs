@@ -60,13 +60,18 @@ const store = await page.evaluate(() => {
     ['2026/09/29', '231-001', '客戶甲', '代工費', '', 0, 1, '式', '黑貓'],
     ['2026/09/29', '231-001', '客戶甲', '卡啦脆蝦', '原味NEW*25G', 0, 120, '包', '黑貓'],
     ['2026/09/29', '231-001', '客戶甲', '芝麻夾心絲', '120G', 0, 5, '包', '黑貓'],
+    ['2026/09/29', '231-002', '客戶丙', '魷魚身TUBE', '300/400*不定重', 0, 189.5, 'KG', '大榮'],
+    ['2026/09/29', '231-002', '客戶丙', '魷魚原料', 'L', 0, 36, 'KG', '大榮'],
     ['2026/09/29', '233-001', '門市一', '卡啦脆蝦', '原味', 0, 120, '包', ''],
     ['', '', '', '文蛤', '特大', 0, 10, '包', ''],
-    ['2026/09/29', '234-002', '門市二', '鮮蚵', '300G', 0, 15, '包', '']]);
-  return { orders: r.orders.map(o => o.orderNo + ':' + o.items.map(i => i.productName).join('/')), store: r.storeSkipped, ask: r.needPkg.length,
+    ['2026/09/29', '234-002', '門市二', '鮮蚵', '300G', 0, 15, '包', ''],
+    ['2026/09/29', '231-009', '統一永康福利社', '金目鱸魚片(包)-免', '200/300*10KG', 0, 10, '包', '崇文'],
+    ['', '', '', '鯛魚排(包)-免', '2L', 0, 5, '片', '']]);
+  return { orders: r.orders.filter(o => o.orderNo !== '231-002').map(o => o.orderNo + ':' + o.items.map(i => i.productName).join('/')), store: r.storeSkipped, ask: r.needPkg.length,
+    squid: r.orders.filter(o => o.orderNo === '231-002').flatMap(o => o.items.map(i => i.packageQty)),
     ambient: isExcludedFromPickingList('卡啦脆蝦') && isExcludedFromPickingList('芝麻夾心絲') && isExcludedFromSortingLabel('卡啦小卷') && !isExcludedFromPickingList('白蝦') };
 });
-H.check('門市銷貨單（233-、234-）整張跳過、不問件數；代工費不列入；卡啦、夾心絲是常溫品（門市出貨）不問件數、不揀貨、不印標籤', JSON.stringify(store) === JSON.stringify({ orders: ['231-001:白蝦/卡啦脆蝦/芝麻夾心絲'], store: ['233-001', '234-002'], ask: 0, ambient: true }), JSON.stringify(store));
+H.check('門市銷貨單（233-、234-）和統一（門市備貨）整張跳過、不問件數；代工費不列入；卡啦、夾心絲是常溫品（門市出貨）不問件數、不揀貨、不印標籤；魷魚身、魷魚原料每箱約 19 公斤自動換算（189.5→10、36→2）', JSON.stringify(store) === JSON.stringify({ orders: ['231-001:白蝦/卡啦脆蝦/芝麻夾心絲'], store: ['233-001', '234-002', '231-009'], ask: 0, squid: [10, 2], ambient: true }), JSON.stringify(store));
 
 // ---------- 在建立波次清單指定物流商 ----------
 await page.click("button[onclick=\"openCreateWaveModal()\"]"); await page.waitForTimeout(1000);

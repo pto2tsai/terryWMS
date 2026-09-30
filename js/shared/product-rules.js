@@ -43,6 +43,18 @@ window.isExcludedFromQtyCount = function(productName) {
 
 window.isNonProductItem = window.isExcludedFromSortingLabel;
 
+// 論公斤賣、鼎新沒填包裝數量的品項：每箱大約幾公斤（用來換算要揀幾箱）
+window.kgPerCase = function(productName) {
+    if (!productName) return 0;
+    var rules = [
+        { kw: ['魷魚原料', '魷魚身'], kg: 19 }
+    ];
+    for (var i = 0; i < rules.length; i++) {
+        if (rules[i].kw.some(function(k) { return productName.includes(k); })) return rules[i].kg;
+    }
+    return 0;
+};
+
 window.parseBoxPerPackage = function(productName) {
     if (!productName) return 0;
 
