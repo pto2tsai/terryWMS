@@ -120,7 +120,7 @@
             </div>
         </div>
         <nav class="flex-1 overflow-y-auto py-1" id="main-nav">
-            <div class="nav-item active" onclick="switchTab('home', event)"><i class="fa-solid fa-house"></i>今日工作</div>
+            <div class="nav-item active" onclick="switchTab('home', event)"><i class="fa-solid fa-house text-yellow-400"></i>今日工作</div>
 
             <!-- 常用功能區塊 -->
             <div id="favorites-section">
@@ -639,7 +639,7 @@
                 <div class="ds-inbound-cols">
 
                     <!-- 1. 填寫資料 -->
-                    <div class="ds-card ds-col overflow-y-auto">
+                    <div class="ds-card ds-col overflow-y-auto" style="--c:var(--c-blue)">
                         <div class="ds-col-title"><span class="ds-step-n">1</span>填寫資料</div>
 
                         <div class="ds-field">
@@ -749,7 +749,7 @@
                     <!-- 2. 倉庫與儲位 -->
                     <div class="flex flex-col min-w-0 min-h-0" style="gap:16px">
                         <div class="ds-card" style="padding:16px 20px;display:flex;align-items:center;gap:16px">
-                            <div class="ds-col-title" style="margin:0;white-space:nowrap"><span class="ds-step-n">2</span>倉庫</div>
+                            <div class="ds-col-title" style="margin:0;white-space:nowrap"><span class="ds-step-n" style="color:var(--c-green);border-color:var(--c-green);background:rgba(52,211,153,.14)">2</span>倉庫</div>
                             <select id="in-warehouse" class="flex-1" onchange="onWarehouseChange()">
                                 <optgroup label="本倉"><option value="MAIN">一般庫存</option><option value="MAIN-CONSIGN">客戶寄倉</option></optgroup>
                                 <optgroup label="崇文外倉" id="optgroup-cw"></optgroup>
@@ -771,15 +771,15 @@
                         </div>
 
                         <!-- 本倉儲位選擇區域 -->
-                        <div id="location-section" class="ds-card ds-col flex-1">
+                        <div id="location-section" class="ds-card ds-col flex-1" style="--c:var(--c-green)">
                             <div class="ds-loc-head">
                                 <div class="ds-col-title">選擇儲位</div>
                                 <input type="text" id="in-loc" class="ds-input" placeholder="輸入儲位，例 IA011" oninput="validateLocationInput(); updateInboundProgress();" onchange="validateLocationInput()">
                             </div>
 
                             <div class="ds-quick">
-                                <button onclick="selectVirtualLocation('TEMP-IN')">進貨暫存</button>
-                                <button onclick="selectVirtualLocation('TEMP-OUT')">出貨暫存</button>
+                                <button class="q-in" onclick="selectVirtualLocation('TEMP-IN')"><i class="fa-solid fa-truck-ramp-box mr-1"></i>進貨暫存</button>
+                                <button class="q-out" onclick="selectVirtualLocation('TEMP-OUT')"><i class="fa-solid fa-truck mr-1"></i>出貨暫存</button>
                                 <span class="sep"></span>
                                 <button onclick="selectVirtualLocation('A00')">A00</button>
                                 <button onclick="selectVirtualLocation('B00')">B00</button>
@@ -807,17 +807,17 @@
                                 </div>
                                 <div class="inbound-map-container">
                                     <div class="inbound-map-row">
-                                        <div class="inbound-warehouse"><div class="ds-wh-name">I 庫</div><div class="inbound-zone"><span class="ds-zone-key">A</span><div class="rack-lanes-grid-inbound" id="grid-I-A-map"></div></div><div class="inbound-zone"><span class="ds-zone-key">B</span><div class="rack-lanes-grid-inbound" id="grid-I-B-map"></div></div></div>
-                                        <div class="inbound-warehouse"><div class="ds-wh-name">J 庫</div><div class="inbound-zone"><span class="ds-zone-key">C</span><div class="rack-lanes-grid-inbound" id="grid-J-C-map"></div></div><div class="inbound-zone"><span class="ds-zone-key">D</span><div class="rack-lanes-grid-inbound" id="grid-J-D-map"></div></div></div>
+                                        <div class="inbound-warehouse"><div class="ds-wh-name c-i">I 庫</div><div class="inbound-zone"><span class="ds-zone-key">A</span><div class="rack-lanes-grid-inbound" id="grid-I-A-map"></div></div><div class="inbound-zone"><span class="ds-zone-key">B</span><div class="rack-lanes-grid-inbound" id="grid-I-B-map"></div></div></div>
+                                        <div class="inbound-warehouse"><div class="ds-wh-name c-j">J 庫</div><div class="inbound-zone"><span class="ds-zone-key">C</span><div class="rack-lanes-grid-inbound" id="grid-J-C-map"></div></div><div class="inbound-zone"><span class="ds-zone-key">D</span><div class="rack-lanes-grid-inbound" id="grid-J-D-map"></div></div></div>
                                     </div>
-                                    <div class="inbound-warehouse-k"><div class="ds-wh-name">K 庫</div><div class="inbound-k-zones"><div class="inbound-zone-k"><span class="ds-zone-key">E</span><div class="rack-lanes-grid-k" id="grid-K-E-map"></div></div><div class="inbound-zone-k"><span class="ds-zone-key">F</span><div class="rack-lanes-grid-k" id="grid-K-F-map"></div></div><div class="inbound-zone-k"><span class="ds-zone-key">G</span><div class="rack-lanes-grid-k" id="grid-K-G-map"></div></div><div class="inbound-zone-k"><span class="ds-zone-key">H</span><div class="rack-lanes-grid-k" id="grid-K-H-map"></div></div></div></div>
+                                    <div class="inbound-warehouse-k"><div class="ds-wh-name c-k">K 庫</div><div class="inbound-k-zones"><div class="inbound-zone-k"><span class="ds-zone-key">E</span><div class="rack-lanes-grid-k" id="grid-K-E-map"></div></div><div class="inbound-zone-k"><span class="ds-zone-key">F</span><div class="rack-lanes-grid-k" id="grid-K-F-map"></div></div><div class="inbound-zone-k"><span class="ds-zone-key">G</span><div class="rack-lanes-grid-k" id="grid-K-G-map"></div></div><div class="inbound-zone-k"><span class="ds-zone-key">H</span><div class="rack-lanes-grid-k" id="grid-K-H-map"></div></div></div></div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- 3. 確認入庫 -->
-                    <div class="ds-card ds-col overflow-y-auto">
+                    <div class="ds-card ds-col overflow-y-auto" style="--c:var(--c-purple)">
                         <div class="ds-col-title"><span class="ds-step-n">3</span>確認入庫</div>
 
                         <!-- 待確認清單（公司、品名、數量、效期、儲位）-->
@@ -850,18 +850,18 @@
                                 <label class="ds-check">
                                     <input type="checkbox" id="in-print-slip" checked onchange="try{localStorage.setItem('wms_print_slip', this.checked ? '1' : '0')}catch(e){}"> 同時列印棧板單
                                 </label>
-                                <button onclick="smartInbound('direct')" id="btn-inbound-direct" class="ds-btn ds-btn-primary ds-btn-lg ds-btn-block" disabled>
+                                <button onclick="smartInbound('direct')" id="btn-inbound-direct" class="ds-btn ds-btn-green ds-btn-lg ds-btn-block" disabled>
                                     <i class="fa-solid fa-check"></i>馬上入帳
                                 </button>
                                 <div class="ds-action-note">貨已經放在儲位上，現在就建立庫存</div>
-                                <button onclick="smartInbound('forklift')" id="btn-inbound-forklift" class="ds-btn ds-btn-secondary ds-btn-lg ds-btn-block" disabled>
+                                <button onclick="smartInbound('forklift')" id="btn-inbound-forklift" class="ds-btn ds-btn-blue ds-btn-lg ds-btn-block" disabled>
                                     <i class="fa-solid fa-mobile-screen-button"></i>交給堆高機
                                 </button>
                                 <div class="ds-action-note" style="margin-bottom:0">發到手機「入庫任務」，堆高機上架掃儲位後自動入帳</div>
                             </div>
                             <!-- 外倉模式按鈕 -->
                             <div id="external-wh-buttons" class="hidden">
-                                <button onclick="smartInbound('external')" id="btn-inbound-external" class="ds-btn ds-btn-primary ds-btn-lg ds-btn-block" disabled>
+                                <button onclick="smartInbound('external')" id="btn-inbound-external" class="ds-btn ds-btn-green ds-btn-lg ds-btn-block" disabled>
                                     <i class="fa-solid fa-building"></i>確認入庫（外倉）
                                 </button>
                             </div>
@@ -1244,7 +1244,7 @@
             <div id="view-wave-picking" class="view-panel h-full hidden flex flex-col ds-page" style="padding-bottom:24px">
                 <div class="ds-page-head">
                     <div>
-                        <h2 class="ds-h1">波次揀貨</h2>
+                        <h2 class="ds-h1" style="--c:var(--c-orange)"><i class="fa-solid fa-layer-group ds-title-icon"></i>波次揀貨</h2>
                         <p class="ds-sub">依物流商分波次，產生揀貨單與分貨標籤</p>
                     </div>
                     <div class="flex flex-wrap justify-end gap-2 items-center">
@@ -1254,9 +1254,9 @@
                             <i class="fa-solid fa-sliders"></i>設定
                         </button>
                         <button onclick="document.getElementById('order-excel-import').click()" class="ds-btn ds-btn-secondary">
-                            <i class="fa-solid fa-file-arrow-up"></i>匯入訂單
+                            <i class="fa-solid fa-file-excel" style="color:var(--c-purple)"></i>匯入訂單
                         </button>
-                        <button onclick="openCreateWaveModal()" class="ds-btn ds-btn-primary" title="把還沒排的訂單建成波次：可以依物流商自動分，也可以自己勾選">
+                        <button onclick="openCreateWaveModal()" class="ds-btn ds-btn-green" title="把還沒排的訂單建成波次：可以依物流商自動分，也可以自己勾選">
                             <i class="fa-solid fa-plus"></i>建立波次
                         </button>
                     </div>
@@ -1275,11 +1275,11 @@
                 <div id="stepbar-wave-picking" class="stepbar"></div>
                 <!-- 波次統計 -->
                 <div class="ds-stats">
-                    <div class="ds-card ds-stat"><div class="ds-stat-label">今日波次</div><div class="ds-stat-n ds-num" id="wave-stat-today">0</div></div>
-                    <div class="ds-card ds-stat"><div class="ds-stat-label"><span class="ds-dot" style="color:var(--ds-warn)"></span>待揀貨</div><div class="ds-stat-n ds-num" id="wave-stat-pending">0</div></div>
-                    <div class="ds-card ds-stat"><div class="ds-stat-label"><span class="ds-dot" style="color:var(--ds-primary)"></span>揀貨中</div><div class="ds-stat-n ds-num" id="wave-stat-picking">0</div></div>
-                    <div class="ds-card ds-stat"><div class="ds-stat-label"><span class="ds-dot" style="color:var(--ds-success)"></span>已完成</div><div class="ds-stat-n ds-num" id="wave-stat-done">0</div></div>
-                    <div class="ds-card ds-stat"><div class="ds-stat-label">待出貨訂單</div><div class="ds-stat-n ds-num" id="wave-stat-orders">0</div></div>
+                    <div class="ds-card ds-stat" style="--c:var(--c-blue)"><div class="ds-stat-label">今日波次</div><div class="ds-stat-n ds-num" id="wave-stat-today">0</div></div>
+                    <div class="ds-card ds-stat" style="--c:var(--c-yellow)"><div class="ds-stat-label">待揀貨</div><div class="ds-stat-n ds-num" id="wave-stat-pending">0</div></div>
+                    <div class="ds-card ds-stat" style="--c:var(--c-orange)"><div class="ds-stat-label">揀貨中</div><div class="ds-stat-n ds-num" id="wave-stat-picking">0</div></div>
+                    <div class="ds-card ds-stat" style="--c:var(--c-green)"><div class="ds-stat-label">已完成</div><div class="ds-stat-n ds-num" id="wave-stat-done">0</div></div>
+                    <div class="ds-card ds-stat" style="--c:var(--c-purple)"><div class="ds-stat-label">待出貨訂單</div><div class="ds-stat-n ds-num" id="wave-stat-orders">0</div></div>
                 </div>
 
                 <!-- 波次清單 -->

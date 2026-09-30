@@ -1378,8 +1378,8 @@
                 tbody.innerHTML = '<tr><td colspan="8" class="ds-empty"><div class="ds-empty-icon"><i class="fa-solid fa-layer-group"></i></div>' +
                     '<div class="ds-empty-title">還沒有波次</div>' +
                     '<div class="ds-empty-text">' + (orders.length ? '有 ' + orders.length + ' 張訂單還沒排，按「建立波次」依物流商分好。' : '按「匯入訂單」選鼎新的「每日客戶銷貨明細表」，系統會依物流商自動建好波次。') + '</div>' +
-                    (orders.length ? '<button onclick="openCreateWaveModal()" class="ds-btn ds-btn-primary"><i class="fa-solid fa-plus"></i>建立波次</button>'
-                        : '<button onclick="document.getElementById(\'order-excel-import\').click()" class="ds-btn ds-btn-primary"><i class="fa-solid fa-file-arrow-up"></i>匯入訂單</button>') + '</td></tr>';
+                    (orders.length ? '<button onclick="openCreateWaveModal()" class="ds-btn ds-btn-green"><i class="fa-solid fa-plus"></i>建立波次</button>'
+                        : '<button onclick="document.getElementById(\'order-excel-import\').click()" class="ds-btn ds-btn-secondary"><i class="fa-solid fa-file-excel" style="color:var(--c-purple)"></i>匯入訂單</button>') + '</td></tr>';
                 return;
             }
 
@@ -1438,19 +1438,19 @@
                 html += '<td class="t-right">';
                 // 一個波次只放一顆「下一步」的按鈕；不常用的收進「⋯」
                 var no = String(wave.waveNo).replace(/'/g, '');
-                var big = function(fn, primary, icon, text) { return '<button onclick="' + fn + '" class="next-step ds-btn ds-btn-sm ' + (primary ? 'ds-btn-primary' : 'ds-btn-secondary') + '" style="margin-right:8px;vertical-align:middle"><i class="fa-solid ' + icon + '"></i>' + text + '</button>'; };
+                var big = function(fn, cls, icon, text) { return '<button onclick="' + fn + '" class="next-step ds-btn ds-btn-sm ' + cls + '" style="margin-right:8px;vertical-align:middle"><i class="fa-solid ' + icon + '"></i>' + text + '</button>'; };
                 if (wave.status === 'pending' && (!wave.lastPrinted || wave.reprintRequired)) {
-                    html += big("printWavePickingList('" + no + "')", true, 'fa-print', wave.lastPrinted ? '重印揀貨單' : '印揀貨單');
+                    html += big("printWavePickingList('" + no + "')", 'ds-btn-green', 'fa-print', wave.lastPrinted ? '重印揀貨單' : '印揀貨單');
                 } else if (wave.status === 'pending') {
                     html += '<span class="ds-wait"><i class="fa-solid fa-mobile-screen-button"></i>等手機揀貨</span>';
                 } else if (wave.status === 'picking' && prog.all && prog.done >= prog.all) {
-                    html += big("openWaveExecute('" + no + "')", true, 'fa-check', '完成出貨');
+                    html += big("openWaveExecute('" + no + "')", 'ds-btn-orange', 'fa-check', '完成出貨');
                 } else if (wave.status === 'picking') {
-                    html += (wave.reprintRequired ? big("printWavePickingList('" + no + "')", true, 'fa-print', '重印揀貨單') : '');
+                    html += (wave.reprintRequired ? big("printWavePickingList('" + no + "')", 'ds-btn-orange', 'fa-print', '重印揀貨單') : '');
                 } else if (wave.status === 'sorting') {
-                    html += big("openWaveSorting('" + no + "')", true, 'fa-tags', '分貨作業');
+                    html += big("openWaveSorting('" + no + "')", 'ds-btn-purple', 'fa-tags', '分貨作業');
                 } else if (wave.status === 'done') {
-                    html += big("printWaveLabels('" + no + "')", false, 'fa-tags', '重印標籤');
+                    html += big("printWaveLabels('" + no + "')", 'ds-btn-secondary', 'fa-tags', '重印標籤');
                 }
                 var menu = [];
                 if (wave.status === 'pending' || wave.status === 'picking') menu.push(['printWavePickingList', 'fa-print', '揀貨單']);

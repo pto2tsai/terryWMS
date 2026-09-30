@@ -14,13 +14,13 @@ window.goTab = function(viewId, then) {
 };
 
 var HOME_FLOWS = [
-    { id: 'unified-inbound', icon: 'fa-truck-ramp-box', title: '入庫',
+    { id: 'unified-inbound', icon: 'fa-truck-ramp-box', color: '#10b981', title: '入庫',
       steps: ['選品項、填數量與效期', '選儲位', '馬上入帳，或交給堆高機用手機上架'] },
-    { id: 'wave-picking', icon: 'fa-dolly', title: '出貨',
+    { id: 'wave-picking', icon: 'fa-dolly', color: '#f97316', title: '出貨',
       steps: ['匯入 ERP 訂單（自動建波次）', '手機「波次揀貨」逐板掃', '完成波次（扣庫存、訂單出貨）'] },
-    { id: 'transfer', icon: 'fa-right-left', title: '調撥',
+    { id: 'transfer', icon: 'fa-right-left', color: '#3b82f6', title: '調撥',
       steps: ['選方向：調撥出庫／入庫／外庫間', '選倉庫與品項數量', '確認執行'] },
-    { id: 'stocktake', icon: 'fa-clipboard-check', title: '盤點',
+    { id: 'stocktake', icon: 'fa-clipboard-check', color: '#0ea5e9', title: '盤點',
       steps: ['選區域與排', '列印盤點表去點數', '輸入實盤數送出（或用手機逐板盤）'] }
 ];
 
@@ -28,7 +28,7 @@ function renderHomeFlows() {
     var el = document.getElementById('home-flows');
     if (!el) return;
     el.innerHTML = HOME_FLOWS.map(function(f) {
-        return '<div onclick="goTab(\'' + f.id + '\')" class="ds-card ds-flow">' +
+        return '<div onclick="goTab(\'' + f.id + '\')" class="ds-card ds-flow" style="--c:' + f.color + '">' +
             '<div class="ds-flow-title"><span class="ds-todo-icon"><i class="fa-solid ' + f.icon + '"></i></span>' + f.title + '<i class="fa-solid fa-arrow-right ds-arrow"></i></div>' +
             '<ol>' + f.steps.map(function(s) { return '<li>' + s + '</li>'; }).join('') + '</ol></div>';
     }).join('');
@@ -44,7 +44,7 @@ function renderHomeTodos(todos) {
     var clear = todos.filter(function(t) { return t.count === 0; });
     el.innerHTML = open.map(function(t) {
         var n = t.count == null ? '<span style="color:var(--ds-text-3)">—</span>' : t.count;
-        return '<div onclick="' + t.action + '" class="ds-card ds-todo' + (t.urgent ? ' is-urgent' : '') + '">' +
+        return '<div onclick="' + t.action + '" class="ds-card ds-todo' + (t.urgent ? ' is-urgent' : '') + '" style="--c:' + t.color + '">' +
             '<div class="ds-todo-head"><span class="ds-todo-icon"><i class="fa-solid ' + t.icon + '"></i></span>' + t.label + '</div>' +
             '<div class="ds-todo-n ds-num">' + n + '</div>' +
             '<div class="ds-todo-hint">' + (t.hint || '') + '</div>' +
@@ -93,25 +93,25 @@ window.refreshHome = async function() {
     });
 
     var todos = [
-        { icon: 'fa-inbox', label: '待入帳入庫單', hint: '貨到了還沒入帳（手機上架也會自動入帳）',
+        { icon: 'fa-inbox', color: '#10b981', label: '待入帳入庫單', hint: '貨到了還沒入帳（手機上架也會自動入帳）',
           action: "goTab('unified-inbound', function(){ showPendingInbounds(); })" },
-        { icon: 'fa-truck-ramp-box', label: '等堆高機上架', hint: '已發布到手機「入庫任務」',
+        { icon: 'fa-truck-ramp-box', color: '#14b8a6', label: '等堆高機上架', hint: '已發布到手機「入庫任務」',
           action: "goTab('unified-inbound', function(){ showPendingInbounds(); })" },
-        { icon: 'fa-boxes-stacked', label: '暫存區待上架', hint: 'TEMP-IN 的板，手機「上架」掃儲位即可', count: tempIn,
+        { icon: 'fa-boxes-stacked', color: '#eab308', label: '暫存區待上架', hint: 'TEMP-IN 的板，手機「上架」掃儲位即可', count: tempIn,
           action: "goTab('visual-map')" },
-        { icon: 'fa-clipboard-check', label: '待財務核准', hint: '採購進貨對帳（不影響入帳）',
+        { icon: 'fa-clipboard-check', color: '#f59e0b', label: '待財務核准', hint: '採購進貨對帳（不影響入帳）',
           action: "goTab('approval')" },
-        { icon: 'fa-file-invoice', label: '訂單未排波次', hint: '已匯入、還沒建波次的訂單',
+        { icon: 'fa-file-invoice', color: '#a855f7', label: '訂單未排波次', hint: '已匯入、還沒建波次的訂單',
           action: "goTab('wave-picking')" },
-        { icon: 'fa-layer-group', label: '待揀波次', hint: '手機「波次揀貨」處理',
+        { icon: 'fa-layer-group', color: '#f97316', label: '待揀波次', hint: '手機「波次揀貨」處理',
           action: "goTab('wave-picking')" },
-        { icon: 'fa-arrows-rotate', label: '調度工單未完成', hint: '已發布到手機「調度工單」',
+        { icon: 'fa-arrows-rotate', color: '#3b82f6', label: '調度工單未完成', hint: '已發布到手機「調度工單」',
           action: "goTab('move')" },
-        { icon: 'fa-calendar-xmark', label: '過期／30 天內到期', hint: '', count: expired + expiring,
+        { icon: 'fa-calendar-xmark', color: '#ef4444', label: '過期／30 天內到期', hint: '', count: expired + expiring,
           action: "goTab('expiry-management')" },
-        { icon: 'fa-cloud-arrow-down', label: '鼎新匯入要處理', hint: '訂單檔沒收到、匯入失敗、件數待確認、沒有物流商、鼎新已取消的單',
+        { icon: 'fa-cloud-arrow-down', color: '#0ea5e9', label: '鼎新匯入要處理', hint: '訂單檔沒收到、匯入失敗、件數待確認、沒有物流商、鼎新已取消的單',
           action: "goTab('erp-inbox')" },
-        { icon: 'fa-arrow-trend-down', label: '缺貨要改鼎新', hint: '現場不夠、少出的銷貨單（這次不出、之後不補）：請業務在鼎新改數量，改好匯入後自動消失',
+        { icon: 'fa-arrow-trend-down', color: '#dc2626', label: '缺貨要改鼎新', hint: '現場不夠、少出的銷貨單（這次不出、之後不補）：請業務在鼎新改數量，改好匯入後自動消失',
           action: "goTab('wave-picking')" }
     ];
     todos[7].hint = '已過期 ' + expired + ' 板（不會被揀貨）、即將到期 ' + expiring + ' 板';

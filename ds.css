@@ -46,12 +46,11 @@ aside.ds-sidebar { background: var(--ds-sidebar); border-right: 1px solid var(--
 aside.ds-sidebar nav { padding: 10px 10px 16px; }
 aside.ds-sidebar .nav-item { border-left: 0; border-radius: var(--ds-radius-sm); margin: 1px 0; padding: 8px 12px; color: var(--ds-text-2); font-size: 14px; font-weight: 500; transition: background .15s var(--ds-ease), color .15s var(--ds-ease); }
 aside.ds-sidebar .nav-group-items .nav-item { padding-left: 12px; font-size: 14px; }
-aside.ds-sidebar .nav-item i:first-child, aside.ds-sidebar .nav-group-header i:first-child { color: var(--ds-text-3) !important; width: 18px; margin-right: 10px; font-size: 14px; }
+aside.ds-sidebar .nav-item i:first-child, aside.ds-sidebar .nav-group-header span > i:first-child { width: 18px; margin-right: 10px; font-size: 14px; }
 aside.ds-sidebar .nav-item:hover { background: var(--ds-hover); color: var(--ds-text); }
 aside.ds-sidebar .nav-item.active { background: var(--ds-primary-soft); color: var(--ds-text); font-weight: 600; box-shadow: inset 3px 0 0 var(--ds-primary); }
-aside.ds-sidebar .nav-item.active i:first-child { color: var(--ds-primary) !important; }
 aside.ds-sidebar .nav-group-header { border-left: 0; padding: 18px 12px 6px; color: var(--ds-text-3); font-size: 12px; font-weight: 600; letter-spacing: .08em; }
-aside.ds-sidebar .nav-group-header i:first-child { display: none; }
+aside.ds-sidebar .nav-group-header span > i:first-child { font-size: 12px; margin-right: 8px; }
 aside.ds-sidebar .nav-group-header:hover { background: none; color: var(--ds-text-2); }
 aside.ds-sidebar #approval-count { background: var(--ds-warn); color: #1a1405; font-weight: 700; min-width: 20px; text-align: center; }
 aside.ds-sidebar #favorites-section { border-color: var(--ds-border); }
@@ -297,3 +296,57 @@ header.ds-header #page-title { font-size: 18px; font-weight: 600; color: var(--d
 @media (max-width: 1400px) { .ds-page { padding: 24px 24px 32px; } }
 .ds-flow-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 1180px) { .ds-flow-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+
+/* ============================================================
+   亮點色：保留原本每個功能的代表色，但只用在圖示、細邊線、數字、選到的狀態；
+   不用大片漸層、不整塊塗滿
+   ============================================================ */
+:root {
+    --c-green: #34d399; --c-emerald: #10b981; --c-teal: #2dd4bf; --c-orange: #fb923c; --c-blue: #60a5fa;
+    --c-sky: #38bdf8; --c-purple: #c084fc; --c-yellow: #facc15; --c-red: #f87171;
+}
+.ds-tint { background: color-mix(in srgb, var(--c) 16%, transparent) !important; color: var(--c) !important; }
+
+/* 今日工作：每張卡片用自己的顏色 */
+.ds-todo[style*="--c"] .ds-todo-icon, .ds-flow[style*="--c"] .ds-todo-icon { background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--c); }
+.ds-todo[style*="--c"]::before { content: ''; position: absolute; left: -1px; top: 18px; bottom: 18px; width: 3px; border-radius: 0 3px 3px 0; background: var(--c); }
+.ds-todo[style*="--c"]:hover { border-color: color-mix(in srgb, var(--c) 50%, var(--ds-border)); }
+.ds-todo[style*="--c"] .ds-todo-go { color: var(--c); }
+.ds-flow[style*="--c"] { border-top: 3px solid var(--c); }
+.ds-flow[style*="--c"]:hover { border-color: var(--c); border-top-color: var(--c); }
+.ds-flow[style*="--c"]:hover .ds-arrow { color: var(--c); }
+.ds-flow[style*="--c"] li::before { background: var(--c); border-color: var(--c); color: #0b1120; }
+
+/* 按鈕：綠、橘、紫（每列只有一顆「下一步」才用） */
+.ds-btn-green { background: #059669; color: #fff; }
+.ds-btn-green:hover:not(:disabled) { background: #10b981; }
+.ds-btn-orange { background: #ea580c; color: #fff; }
+.ds-btn-orange:hover:not(:disabled) { background: #f97316; }
+.ds-btn-purple { background: #7c3aed; color: #fff; }
+.ds-btn-purple:hover:not(:disabled) { background: #8b5cf6; }
+.ds-btn-blue { background: var(--ds-primary-fill); color: #fff; }
+.ds-btn-blue:hover:not(:disabled) { background: var(--ds-primary-fill-hover); }
+
+/* 波次揀貨：統計格上方一條顏色線，標題用顏色字 */
+.ds-stat[style*="--c"] { border-top: 3px solid var(--c); }
+.ds-stat[style*="--c"] .ds-stat-label { color: var(--c); }
+.ds-stat.is-zero[style*="--c"] { border-top-color: color-mix(in srgb, var(--c) 35%, var(--ds-border)); }
+.badge-purple { background: rgba(192, 132, 252, .14); color: var(--c-purple); }
+.badge-blue { background: rgba(96, 165, 250, .14); color: var(--c-blue); }
+.ds-title-icon { color: var(--c); margin-right: 12px; font-size: 24px; }
+
+/* 智能入庫中心：三欄各有代表色（跟原本一樣：填資料藍、儲位綠、確認紫） */
+.ds-col[style*="--c"] { border-top: 3px solid var(--c); }
+.ds-col[style*="--c"] > .ds-col-title .ds-step-n, .ds-col[style*="--c"] .ds-loc-head .ds-col-title { color: var(--c); }
+.ds-col[style*="--c"] > .ds-col-title .ds-step-n { border-color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
+.ds-seg input[value="崇文"]:checked + div { background: rgba(59, 130, 246, .22); box-shadow: inset 0 0 0 1px #3b82f6; color: #fff; }
+.ds-seg input[value="八方"]:checked + div { background: rgba(168, 85, 247, .22); box-shadow: inset 0 0 0 1px #a855f7; color: #fff; }
+#btn-type-Raw { --c: var(--c-emerald); } #btn-type-FG { --c: #a855f7; } #btn-type-WIP { --c: #eab308; } #btn-type-RM { --c: #f97316; }
+#view-unified-inbound .inbound-type-btn.active { background: color-mix(in srgb, var(--c) 22%, transparent) !important; border-color: var(--c) !important; color: #fff !important; }
+.ds-quick .q-in { color: var(--c-green); border-color: rgba(52, 211, 153, .35); }
+.ds-quick .q-out { color: var(--c-orange); border-color: rgba(251, 146, 60, .35); }
+.ds-sug.is-best { border-color: rgba(250, 204, 21, .55); background: rgba(250, 204, 21, .08); }
+.ds-sug.is-best .ds-pill { background: rgba(250, 204, 21, .16); color: var(--c-yellow); }
+.ds-sug.is-best .ds-sug-loc { color: var(--c-yellow); }
+.ds-wh-name.c-i { color: var(--c-blue); } .ds-wh-name.c-j { color: var(--c-purple); } .ds-wh-name.c-k { color: var(--c-green); }
