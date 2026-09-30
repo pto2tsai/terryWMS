@@ -129,3 +129,46 @@ window.clearOldStock = async function() {
     } catch (e) { alert('❌ 刪到一半失敗：' + e.message + '\n\n可以到「備份與維護 → 雲端備份 → 列表」還原「' + backupId + '」'); return; }
     alert('✅ 已清空舊庫存 ' + old.length + ' 板\n\n備份：' + backupId + '（在「備份與維護 → 雲端備份 → 列表」，刪錯可以還原）');
 };
+
+// ---------- 清掉全部測試資料（管理員；測試期間要從頭再試一次）----------
+// 平常的「清除訂單／波次」會保留已出貨的（出貨記錄）；測試時要全部重來，才能再匯入同一份報表。
+// 刪之前先把波次和訂單存一份雲端備份（太大存不進雲端就先下載 Excel 備份）；庫存、儲位、品項都不動。
+window.clearAllTestOrders = async function() {
+    var r = window.currentUser && window.currentUser.role;
+    if (r !== 'admin') { alert('只有管理員可以清掉全部測試資料'); return; }
+    var db = window.db;
+    var ws = await db.collection('waves').get(), os = await db.collection('salesOrders').get();
+    if (!ws.size && !os.size) { alert('沒有波次和訂單，不用清'); return; }
+    var shipped = 0; os.forEach(function(d) { if (['shipped', 'partial'].indexOf(d.data().status) >= 0) shipped++; });
+    if (!confirm('清掉全部測試資料？\n\n會刪掉：' + ws.size + ' 個波次、' + os.size + ' 張訂單（其中已出貨 ' + shipped + ' 張）\n庫存、儲位、品項都不會動\n\n刪之前會先自動存一份備份，刪錯可以還原。\n⚠️ 正式上線後不要用這個功能。')) return;
+    if (prompt('確定要刪除，請輸入「清除」兩個字') !== '清除') { alert('沒有刪除'); return; }
+    var now = new Date().toISOString(), backupId = 'before-clear-test-' + now.replace(/[:.]/g, '-');
+    var ser = window.serializeFirestoreData || function(x) { return x; };
+    var pack = function(snap) { var a = []; snap.forEach(function(d) { a.push({ id: d.id, data: ser(d.data()) }); }); return a; };
+    var payload = JSON.stringify({ id: backupId, timestamp: now, version: '清掉測試資料前', collections: { waves: pack(ws), salesOrders: pack(os) } });
+    try {
+        if (payload.length > 900000) {
+            // 雲端備份一筆最多 1MB：太大就先下載 Excel 備份
+            if (!confirm('資料太多，雲端備份存不下。\n按「確定」會先下載一份 Excel 備份到電腦，再刪除；按「取消」不刪。')) { alert('沒有刪除'); return; }
+            if (window.exportBackupExcel) await window.exportBackupExcel();
+            backupId = '（已下載 Excel 備份）';
+        } else {
+            await db.collection('backups').doc(backupId).set({ timestamp: now, version: '清掉測試資料前（波次、訂單）', summary: { waves: ws.size, salesOrders: os.size }, data: payload });
+        }
+    } catch (e) { alert('❌ 備份失敗，沒有刪除：' + e.message); return; }
+    try {
+        var refs = []; ws.forEach(function(d) { refs.push(d.ref); }); os.forEach(function(d) { refs.push(d.ref); });
+        for (var i = 0; i < refs.length; i += 400) {
+            var b = db.batch();
+            refs.slice(i, i + 400).forEach(function(ref) { b.delete(ref); });
+            await b.commit();
+        }
+    } catch (e) { alert('❌ 刪到一半失敗：' + e.message + '\n\n可以到「備份與維護 → 雲端備份 → 列表」還原「' + backupId + '」'); return; }
+    if (window._waveData) { window._waveData.waves = []; window._waveData.currentWave = null; }
+    if (window._orderData) window._orderData.orders = [];
+    try { localStorage.removeItem('wms_waves'); } catch (e) {}
+    if (typeof refreshWaveList === 'function') refreshWaveList();
+    if (typeof renderOrderList === 'function') renderOrderList();
+    if (window.closeClearDataModal) window.closeClearDataModal();
+    alert('✅ 已清掉 ' + ws.size + ' 個波次、' + os.size + ' 張訂單\n\n備份：' + backupId + '\n現在可以重新匯入報表，從頭再試一次。');
+};

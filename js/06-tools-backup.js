@@ -1430,6 +1430,9 @@ window.openClearDataModal = async function() {
         '<i class="fa-solid fa-layer-group mr-2"></i>清除所有波次<br><span class="text-xs text-orange-200 font-normal">訂單保留，波次全部刪除，訂單狀態恢復為待處理</span></button>' +
         '<button onclick="clearAllOrders()" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold text-left px-4">' +
         '<i class="fa-solid fa-file-lines mr-2"></i>清除所有訂單<br><span class="text-xs text-red-200 font-normal">訂單和波次全部刪除（從 Firebase 移除）</span></button>' +
+        ((window.currentUser && window.currentUser.role) === 'admin' ?
+        '<button onclick="clearAllTestOrders()" class="w-full py-3 bg-red-900 hover:bg-red-800 border-2 border-red-500 text-white rounded-lg font-bold text-left px-4">' +
+        '<i class="fa-solid fa-triangle-exclamation mr-2"></i>清掉全部測試資料（包含已出貨的）<br><span class="text-xs text-red-200 font-normal">管理員；測試期間重來用。所有波次和訂單都刪掉，先自動備份；庫存不動</span></button>' : '') +
         '<button onclick="clearLocalStorage()" class="w-full py-3 bg-slate-600 hover:bg-slate-500 text-white rounded-lg font-bold text-left px-4">' +
         '<i class="fa-solid fa-database mr-2"></i>清除本機快取<br><span class="text-xs text-slate-300 font-normal">僅清除瀏覽器 localStorage，不影響 Firebase 資料</span></button>' +
         '</div></div>' +
