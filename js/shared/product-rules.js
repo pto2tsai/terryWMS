@@ -47,7 +47,7 @@ window.isNonProductItem = window.isExcludedFromSortingLabel;
 window.kgPerCase = function(productName) {
     if (!productName) return 0;
     var rules = [
-        { kw: ['魷魚原料', '魷魚身'], kg: 18 }
+        { kw: ['魷魚原料', '魷魚身'], kg: 19 }
     ];
     for (var i = 0; i < rules.length; i++) {
         if (rules[i].kw.some(function(k) { return productName.includes(k); })) return rules[i].kg;

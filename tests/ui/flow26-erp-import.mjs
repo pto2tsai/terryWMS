@@ -71,7 +71,7 @@ const store = await page.evaluate(() => {
     squid: r.orders.filter(o => o.orderNo === '231-002').flatMap(o => o.items.map(i => i.packageQty)),
     ambient: isExcludedFromPickingList('卡啦脆蝦') && isExcludedFromPickingList('芝麻夾心絲') && isExcludedFromSortingLabel('卡啦小卷') && !isExcludedFromPickingList('白蝦') };
 });
-H.check('門市銷貨單（233-、234-）和統一（門市備貨）整張跳過、不問件數；代工費不列入；卡啦、夾心絲是常溫品（門市出貨）不問件數、不揀貨、不印標籤；魷魚身、魷魚原料每箱約 18 公斤自動換算（189.5→11、36→2）', JSON.stringify(store) === JSON.stringify({ orders: ['231-001:白蝦/卡啦脆蝦/芝麻夾心絲'], store: ['233-001', '234-002', '231-009'], ask: 0, squid: [11, 2], ambient: true }), JSON.stringify(store));
+H.check('門市銷貨單（233-、234-）和統一（門市備貨）整張跳過、不問件數；代工費不列入；卡啦、夾心絲是常溫品（門市出貨）不問件數、不揀貨、不印標籤；魷魚身、魷魚原料每箱約 19 公斤自動換算（189.5→10、36→2）', JSON.stringify(store) === JSON.stringify({ orders: ['231-001:白蝦/卡啦脆蝦/芝麻夾心絲'], store: ['233-001', '234-002', '231-009'], ask: 0, squid: [10, 2], ambient: true }), JSON.stringify(store));
 
 // ---------- 在建立波次清單指定物流商 ----------
 await page.click("button[onclick=\"openCreateWaveModal()\"]"); await page.waitForTimeout(1000);
