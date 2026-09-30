@@ -441,6 +441,95 @@ window.waveShortfalls = function(wave, pickingList) {
     return rows;
 };
 
+// 揀貨單的樣式（A4 橫式、大字）：電腦版「列印揀貨單」和匯入後一次印都用這一份
+window.PICKLIST_STYLE =
+    '@page { size: A4 landscape; margin: 10mm; }' +
+    'body { font-family: "Microsoft JhengHei", sans-serif; font-size: 16px; color: #000; }' +
+    '.pl { width: 1047px; }' +
+    '@media print { .pl { width: auto; } }' +
+    '.wave-section { page-break-after: always; margin-bottom: 20px; }' +
+    '.wave-section:last-child { page-break-after: auto; }' +
+    '.update-banner { background: #dc2626; color: white; padding: 8px 15px; font-size: 18px; font-weight: bold; margin-bottom: 10px; }' +
+    '.header { margin-bottom: 10px; border-bottom: 2px solid #333; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }' +
+    '.header h2 { margin: 0; font-size: 28px; }' +
+    '.header h3 { margin: 4px 0 0; font-size: 22px; }' +
+    '.version { background: #374151; color: white; padding: 6px 14px; border-radius: 4px; font-weight: bold; font-size: 16px; }' +
+    '.info-row { display: flex; gap: 15px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed #999; }' +
+    '.info-item { flex: 1; }' +
+    '.info-label { font-size: 14px; color: #444; }' +
+    '.info-value { font-size: 22px; font-weight: bold; }' +
+    'table { width: 100%; border-collapse: collapse; }' +
+    'thead { display: table-header-group; }' +
+    'tr { page-break-inside: avoid; }' +
+    'th, td { border: 1px solid #333; padding: 6px 7px; text-align: left; vertical-align: middle; }' +
+    'th { background: #374151; color: white; font-size: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+    '.loc { font-weight: bold; font-size: 20px; color: #1e40af; white-space: nowrap; }' +
+    '.name { font-size: 17px; font-weight: bold; }' +
+    '.small { font-size: 15px; white-space: nowrap; }' +
+    '.qty { text-align: center; font-weight: bold; font-size: 24px; color: #c00; }' +
+    '.check { width: 36px; text-align: center; font-size: 22px; }' +
+    '.change-add { color: #16a34a; font-weight: bold; }' +
+    '.change-sub { color: #dc2626; font-weight: bold; }' +
+    '.floor-1f { background: #dbeafe; } .floor-2f { background: #fef3c7; } .floor-3f { background: #fee2e2; }' +
+    '.floor-1f, .floor-2f, .floor-3f { -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+    '.house { margin: 10px 0 6px; font-size: 22px; }' +
+    '.bt b { font-size: 15px; white-space: nowrap; } .bt .exp { font-size: 14px; white-space: nowrap; }' +
+    'tr.chg { background: #fde68a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+    'tr.del td { text-decoration: line-through; color: #666; } tr.del .chgcell { text-decoration: none; }' +
+    '.prev { font-size: 13px; color: #333; font-weight: normal; }' +
+    '.chgcell { text-align: center; font-size: 20px; font-weight: bold; }' +
+    '.timestamp { text-align: right; font-size: 13px; color: #444; margin-top: 8px; }';
+window.PICKLIST_HEAD = function(withChange) {
+    return '<thead><tr><th class="check">✓</th><th style="width:118px">儲位</th><th style="width:22%">品名</th><th>規格</th><th style="width:118px">批號／效期</th><th style="width:78px;text-align:center">數量</th><th style="width:44px">單位</th>' + (withChange ? '<th style="width:64px;text-align:center">異動</th>' : '') + '</tr></thead>';
+};
+// 跟「上一次印的」比：追加、減量、新增、刪除（wave.lastPrinted = { 品名|||規格: 件數 }）
+// 還沒記錄過的舊波次，用鼎新改單時記下的 prevQty
+window.pickListKey = function(r) { return r.productName + '|||' + (r.spec && r.spec !== '-' ? r.spec : ''); };
+window.pickListDiff = function(wave, rows) {
+    var last = wave.lastPrinted || null;
+    var changed = 0;
+    rows.forEach(function(r) {
+        var prev = last ? last[window.pickListKey(r)] : r.prevQty;
+        r.change = '';
+        if (prev === undefined || prev === null) { if (last) { r.change = 'new'; changed++; } return; }
+        r.prev = prev;
+        if (prev !== r.totalQty) { r.change = r.totalQty > prev ? 'add' : 'sub'; changed++; }
+    });
+    var removed = [];
+    if (last) Object.keys(last).forEach(function(k) {
+        if (!(last[k] > 0) || rows.some(function(r) { return window.pickListKey(r) === k; })) return;
+        var p = k.split('|||');
+        removed.push({ productName: p[0], spec: p[1] || '-', unit: '件', totalQty: 0, prev: last[k], change: 'del', location: '-', batchNo: '', expiryDate: '' });
+    });
+    return { removed: removed, changed: changed + removed.length };
+};
+window.pickListRowHtml = function(item, showChange) {
+    var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var floor = item.floor === 1 ? ' floor-1f' : item.floor === 2 ? ' floor-2f' : item.floor === 3 ? ' floor-3f' : '';
+    var chg = item.change === 'add' ? '<span class="change-add">+' + (Math.round((item.totalQty - item.prev) * 1000) / 1000) + '</span>'
+        : item.change === 'sub' ? '<span class="change-sub">−' + (Math.round((item.prev - item.totalQty) * 1000) / 1000) + '</span>'
+        : item.change === 'new' ? '<span class="change-add">新增</span>'
+        : item.change === 'del' ? '<span class="change-sub">刪除</span>' : '';
+    var bt = (item.batchNo && item.batchNo !== '-' ? '<b>' + esc(item.batchNo) + '</b>' : '<b>-</b>') +
+        (item.expiryDate && item.expiryDate !== '-' ? '<div class="exp">' + esc(item.expiryDate) + '</div>' : '');
+    return '<tr class="' + (item.change ? 'chg' : floor.trim()) + (item.change === 'del' ? ' del' : '') + '">' +
+        '<td class="check">☐</td>' +
+        '<td class="loc">' + esc(item.location) + '</td>' +
+        '<td class="name">' + esc(item.productName) + '</td>' +
+        '<td class="name">' + esc(item.spec) + '</td>' +
+        '<td class="bt">' + bt + '</td>' +
+        '<td class="qty">' + esc(item.totalQty) + (item.change && item.change !== 'new' ? '<div class="prev">原 ' + esc(item.prev) + '</div>' : '') + '</td>' +
+        '<td>' + esc(item.unit) + '</td>' +
+        (showChange ? '<td class="chgcell">' + chg + '</td>' : '') + '</tr>';
+};
+// 印完記下這一版（下次重印才比得出追加減）
+window.recordPickListPrint = function(wave, rows) {
+    var snap = {};
+    rows.forEach(function(r) { snap[window.pickListKey(r)] = r.totalQty; });
+    wave.lastPrinted = snap;
+    if (wave.id && window.db) window.db.collection('waves').doc(wave.id).update({ lastPrinted: snap, printVersion: wave.printVersion || 1 }).catch(function(e) { console.warn('記錄揀貨單版次失敗', e); });
+};
+
 // 分貨標籤（一張訂單一張）：揀完才印（手機或辦公室自動印），件數用實際出貨的（缺貨的已經扣掉）；
 // 還沒完成的波次（辦公室手動補印）照訂單數量
 // 回傳 { style, body }，樣式都在 .sl 底下，跟揀貨單印在同一份也不會互相影響

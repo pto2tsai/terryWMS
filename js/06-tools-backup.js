@@ -1690,89 +1690,13 @@ window.clearLocalStorage = function() {
                 return;
             }
 
-            wave.printVersion = (wave.printVersion || 0) + 1;
-            var version = wave.printVersion;
             // 印了新版就不再提醒「要重印」
             if (wave.reprintRequired && wave.id) {
                 wave.reprintRequired = false;
                 window.db.collection('waves').doc(wave.id).update({ reprintRequired: false }).catch(function(e) { console.warn('更新重印標記失敗', e); });
             }
 
-            var html = '<style>';
-            html += 'body { font-family: "Microsoft JhengHei", sans-serif; font-size: 12px; }';
-            html += '.header { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #333; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }';
-            html += '.header h2 { margin: 0; }';
-            html += '.version { background: #374151; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold; }';
-            html += '.info-row { display: flex; gap: 15px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed #ccc; }';
-            html += '.info-item { flex: 1; }';
-            html += '.info-label { font-size: 11px; color: #666; }';
-            html += '.info-value { font-size: 15px; font-weight: bold; }';
-            html += 'table { width: 100%; border-collapse: collapse; }';
-            html += 'th, td { border: 1px solid #333; padding: 6px; text-align: left; }';
-            html += 'th { background: #374151; color: white; font-size: 11px; }';
-            html += '.loc { font-weight: bold; font-size: 13px; color: #1e40af; }';
-            html += '.qty { text-align: center; font-weight: bold; font-size: 16px; color: #c00; }';
-            html += '.check { width: 30px; text-align: center; }';
-            html += '.floor-1f { background: #dbeafe; }';
-            html += '.floor-2f { background: #fef3c7; }';
-            html += '.floor-3f { background: #fee2e2; }';
-            html += '.timestamp { text-align: right; font-size: 10px; color: #666; margin-top: 10px; }';
-            html += '</style>';
-
-            html += '<div class="header">';
-            html += '<div><h2>揀貨單</h2><h3 style="margin:5px 0 0 0">' + wave.waveNo + '</h3></div>';
-            html += '<span class="version">版次 V' + version + '</span>';
-            html += '</div>';
-
-            html += '<div class="info-row">';
-            html += '<div class="info-item"><div class="info-label">物流商</div><div class="info-value">' + wave.logistics + '</div></div>';
-            html += '<div class="info-item"><div class="info-label">訂單數</div><div class="info-value">' + (wave.orders ? wave.orders.length : 0) + ' 筆</div></div>';
-            html += '<div class="info-item"><div class="info-label">品項數</div><div class="info-value">' + wave.itemCount + ' 項</div></div>';
-            html += '<div class="info-item"><div class="info-label">總件數</div><div class="info-value" style="color:#c00">' + wave.totalQty + ' 件</div></div>';
-            html += '</div>';
-
-            var summaryWithLoc = (wave.summary || []).filter(function(item) {
-                return !window.isExcludedFromPickingList(item.productName);
-            }).map(function(item) {
-                var invInfo = findProductInventoryInfo(item.productName, item.spec);
-                return {
-                    productName: item.productName,
-                    spec: item.spec || '-',
-                    unit: item.unit || '件',
-                    totalQty: item.totalQty,
-                    location: invInfo.location,
-                    batchNo: invInfo.batchNo,
-                    expiryDate: invInfo.expiryDate,
-                    floor: invInfo.floor
-                };
-            });
-
-            summaryWithLoc.sort(function(a, b) {
-                if (b.totalQty !== a.totalQty) return b.totalQty - a.totalQty;
-                return a.floor - b.floor;
-            });
-
-            // 兩間倉庫：一間一張（換頁），各自拿去揀
-            var groups = window.groupRowsByHouse(summaryWithLoc);
-            groups.forEach(function(g, gi) {
-                if (groups.length > 1 || g.house) html += '<h3 style="margin:10px 0 6px;font-size:18px' + (gi ? ';page-break-before:always' : '') + '">📍 ' + g.name + '　' + wave.waveNo + '（' + g.rows.length + ' 項）</h3>';
-                html += '<table>';
-                html += '<tr><th class="check">✓</th><th style="width:70px">儲位</th><th style="width:100px">品名</th><th>規格</th><th style="width:80px">批號</th><th style="width:80px">效期</th><th style="width:50px" class="qty">數量</th><th style="width:35px">單位</th></tr>';
-                g.rows.forEach(function(item) {
-                    var floorClass = item.floor === 1 ? 'floor-1f' : (item.floor === 2 ? 'floor-2f' : (item.floor === 3 ? 'floor-3f' : ''));
-                    html += '<tr class="' + floorClass + '">';
-                    html += '<td class="check">☐</td>';
-                    html += '<td class="loc">' + item.location + '</td>';
-                    html += '<td>' + item.productName + '</td>';
-                    html += '<td>' + item.spec + '</td>';
-                    html += '<td style="font-size:11px">' + item.batchNo + '</td>';
-                    html += '<td style="font-size:11px">' + item.expiryDate + '</td>';
-                    html += '<td class="qty">' + item.totalQty + '</td>';
-                    html += '<td>' + item.unit + '</td>';
-                    html += '</tr>';
-                });
-                html += '</table>';
-            });
+            var html = '<style>' + window.PICKLIST_STYLE + '</style><div class="pl">' + window.buildPickListSectionHtml(wave);
             // 揀到一半鼎新減量：多拿的要放回
             var toReturn = (list || []).filter(function(i) { return i.type === 'return' && !i.completed; });
             if (toReturn.length) {
@@ -1783,8 +1707,7 @@ window.clearLocalStorage = function() {
                 });
                 html += '</table>';
             }
-            var printTime = new Date().toLocaleString('zh-TW');
-            html += '<div class="timestamp">版次 V' + version + ' | 列印日期：' + printTime + '</div>';
+            html += '</div>';
             // 分貨標籤不在這裡印：揀完才印（手機或辦公室自動印），件數才會是實際出貨的
             openPrintPreview(html, '揀貨單 - ' + wave.waveNo, 900, 700);
         };

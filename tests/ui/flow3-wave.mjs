@@ -36,6 +36,24 @@ H.check('印出的揀貨單：有波次號、品項和總件數，不是「更�
 H.check('揀貨單印出儲位、批號、效期（白蝦先印效期早的 I-A-04-1F／B0；透抽 J-C-01-1F）', popHtml.includes('I-A-04-1F') && popHtml.includes('B0') && popHtml.includes('2027/01/01') && popHtml.includes('J-C-01-1F') && !popHtml.includes('I-A-03-2F'), popHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(300, 700));
 if (process.env.SHOT) { await pop.setViewportSize({ width: 900, height: 700 }); await pop.screenshot({ path: process.env.SHOT, fullPage: true }); }
 await pop.close().catch(() => {});
+// 追加減：印過之後鼎新改量，重印要標出來（黃底、+2、刪除、新增、原 X）
+const w0 = (await H.all('waves'))[0];
+H.check('印揀貨單會記下這一版（之後重印才比得出追加減）', w0.lastPrinted && w0.lastPrinted['白蝦|||50/60'] === 10 && w0.lastPrinted['透抽|||L'] === 5, JSON.stringify(w0.lastPrinted));
+const origSummary = w0.summary; const { _id: wid, ...w0data } = w0;
+await H.admin(d => H.setDoc(H.doc(d, 'waves', wid), Object.assign({}, w0data, { summary: [
+  Object.assign({}, origSummary.find(x => x.productName === '白蝦'), { totalQty: 12 }),
+  { productName: '干貝', spec: 'S', unit: '件', totalQty: 3, orders: [] }] })));
+await page.waitForTimeout(1500);
+const pop2P = page.waitForEvent('popup');
+await page.evaluate(no => printWavePickingList(no), w0.waveNo);
+const pop2 = await pop2P; await pop2.waitForLoadState().catch(() => {}); await page.waitForTimeout(500);
+const h2 = await pop2.content();
+if (process.env.SHOT2) { await pop2.setViewportSize({ width: 1100, height: 700 }); await pop2.screenshot({ path: process.env.SHOT2, fullPage: true }); }
+await pop2.close().catch(() => {});
+H.check('重印標出追加減：更新版 V2、白蝦 +2（原 10）、干貝 新增、透抽 刪除', h2.includes('更新版 V2') && h2.includes('+2') && h2.includes('原 10') && h2.includes('新增') && h2.includes('刪除') && h2.includes('鼎新刪掉的品項'), h2.replace(/<style[\s\S]*?<\/style>/, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 600));
+H.check('揀貨單：批號、效期同一欄上下兩行', /<td class="bt"><b>B0<\/b><div class="exp">2027\/01\/01<\/div><\/td>/.test(h2), '');
+await H.admin(d => H.setDoc(H.doc(d, 'waves', wid), Object.assign({}, w0data, { summary: origSummary })));
+await page.waitForTimeout(1500);
 const soAfter = await H.all('salesOrders'); H.check('訂單狀態在資料庫中變成 inWave', soAfter.every(o => o.status === 'inWave'), JSON.stringify(soAfter.map(o => o.status)));
 // 重新整理頁面後，這兩張訂單不應再出現在「可建立波次」清單
 await page.reload(); await page.fill('#login-email', 'x').catch(()=>{}); await page.waitForTimeout(4000);
