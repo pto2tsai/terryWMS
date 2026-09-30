@@ -475,18 +475,19 @@ window.PICKLIST_STYLE =
     '.wave-section { page-break-after: always; margin-bottom: 20px; }' +
     '.wave-section:last-child { page-break-after: auto; }' +
     '.update-banner { background: #000; color: #fff; padding: 8px 15px; font-size: 18px; font-weight: bold; margin-bottom: 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
-    '.header { margin-bottom: 10px; border-bottom: 2px solid #333; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }' +
+    '.header { margin-bottom: 6px; border-bottom: 2px solid #333; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }' +
     '.header h2 { margin: 0; font-size: 28px; }' +
     '.header h3 { margin: 4px 0 0; font-size: 22px; }' +
+    '.printed { font-size: 13px; color: #000; text-align: right; margin-top: 4px; }' +
     '.version { background: #000; color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 6px 14px; border-radius: 4px; font-weight: bold; font-size: 16px; }' +
-    '.info-row { display: flex; gap: 15px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed #999; }' +
+    '.info-row { display: flex; gap: 15px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed #999; }' +
     '.info-item { flex: 1; }' +
     '.info-label { font-size: 14px; color: #444; }' +
     '.info-value { font-size: 22px; font-weight: bold; color: #000 !important; }' +
     'table { width: 100%; border-collapse: collapse; }' +
     'thead { display: table-header-group; }' +
     'tr { page-break-inside: avoid; }' +
-    'th, td { border: 1px solid #333; padding: 6px 7px; text-align: left; vertical-align: middle; }' +
+    'th, td { border: 1px solid #333; padding: 3px 7px; text-align: left; vertical-align: middle; line-height: 1.25; }' +
     'th { background: #000; color: #fff; font-size: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
     '.loc { font-weight: bold; font-size: 20px; color: #000; white-space: nowrap; }' +
     '.name { font-size: 17px; font-weight: bold; }' +
@@ -543,7 +544,10 @@ window.pickListRowHtml = function(item, showChange) {
         '<td class="name">' + esc(item.productName) + '</td>' +
         '<td class="name">' + esc(item.spec) + '</td>' +
         '<td class="bt">' + bt + '</td>' +
-        '<td class="qty">' + esc(item.totalQty) + (item.change && item.change !== 'new' ? '<div class="prev">原 ' + esc(item.prev) + '</div>' : '') + '</td>' +
+        '<td class="qty">' + esc(item.totalQty) +
+            // 不到一箱（0.167 件）：寫出小單位，現場才看得懂要拿多少
+            (item.totalQty % 1 && item.smallQty && item.smallUnit ? '<div class="prev">＝' + esc(item.smallQty) + ' ' + esc(item.smallUnit) + '</div>' : '') +
+            (item.change && item.change !== 'new' ? '<div class="prev">原 ' + esc(item.prev) + '</div>' : '') + '</td>' +
         '<td>' + esc(item.unit) + '</td>' +
         (showChange ? '<td class="chgcell">' + chg + '</td>' : '') + '</tr>';
 };

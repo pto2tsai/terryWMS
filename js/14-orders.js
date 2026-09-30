@@ -325,14 +325,15 @@ window.buildPickListSectionHtml = function(wave, opts) {
     }).map(function(item) {
         var inv = findProductInventoryInfo(item.productName, item.spec);
         return { productName: item.productName, spec: item.spec || '-', unit: item.unit || '件', totalQty: item.totalQty,
-            prevQty: item.prevQty, location: inv.location, batchNo: inv.batchNo, expiryDate: inv.expiryDate, floor: inv.floor };
+            smallQty: item.totalSmallQty, smallUnit: item.smallUnit, prevQty: item.prevQty, location: inv.location, batchNo: inv.batchNo, expiryDate: inv.expiryDate, floor: inv.floor };
     });
     rows.sort(function(a, b) { return (b.totalQty - a.totalQty) || (a.floor - b.floor); });
     var d = window.pickListDiff(wave, rows);
     var showChange = d.changed > 0;
     var html = '';
     if (showChange || opts.forceBanner) html += '<div class="update-banner">⚠️ 更新版 V' + version + (showChange ? '：有 ' + d.changed + ' 項異動（灰底 ★）' : '') + '，請作廢舊版揀貨單</div>';
-    html += '<div class="header"><div><h2>揀貨單</h2><h3>' + esc(wave.waveNo) + '</h3></div><span class="version">版次 V' + version + '</span></div>';
+    // 列印日期放右上角（放最底下會自己擠到下一頁，多印一張）
+    html += '<div class="header"><div><h2>揀貨單</h2><h3>' + esc(wave.waveNo) + '</h3></div><div><span class="version">版次 V' + version + '</span><div class="printed">列印：' + new Date().toLocaleString('zh-TW') + '</div></div></div>';
     html += '<div class="info-row">' +
         '<div class="info-item"><div class="info-label">物流商</div><div class="info-value">' + esc(wave.logistics) + '</div></div>' +
         '<div class="info-item"><div class="info-label">訂單數</div><div class="info-value">' + (wave.orders || []).length + ' 筆</div></div>' +
@@ -349,7 +350,6 @@ window.buildPickListSectionHtml = function(wave, opts) {
         html += '<h3 class="house" style="border:3px solid #000;padding:4px 8px">✖ 鼎新刪掉的品項（不用拿；已經拿了要放回）</h3>';
         html += '<table>' + window.PICKLIST_HEAD(true) + '<tbody>' + d.removed.map(function(r) { return window.pickListRowHtml(r, true); }).join('') + '</tbody></table>';
     }
-    html += '<div class="timestamp">版次 V' + version + ' | 列印日期：' + new Date().toLocaleString('zh-TW') + '</div>';
     wave.printVersion = version;
     window.recordPickListPrint(wave, rows);
     return html;
