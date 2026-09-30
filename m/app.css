@@ -566,9 +566,12 @@ body {
 .menu-card p { color: #b3bfd4; }
 .logout-btn { background: transparent !important; color: #8492ab !important; }
 .logout-btn:active { color: #ff7a7a !important; }
-/* 改分法：－ 數字 ＋ */
-.alloc-step { display: flex; align-items: center; gap: 6px; }
-.alloc-step button { width: 56px; height: 56px; border-radius: 12px; border: 1px solid #33456b; background: #1b2844; color: #fff; font-size: 30px; font-weight: 900; line-height: 1; cursor: pointer; }
-.alloc-step button:active { background: #2f6fe8; }
-.alloc-step button:disabled { opacity: .3; }
-.alloc-step .alloc-in { width: 64px; height: 56px; text-align: center; font-size: 30px; font-weight: 900; color: #fde047; background: #0b1120; border: 2px solid #33456b; border-radius: 12px; }
+/* 改分法：一列「客戶　訂幾件　［－］　給幾件」；只有－（少的那件自動移給別家） */
+.alloc-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+.alloc-who { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+.alloc-who b { font-size: 26px; font-weight: 900; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alloc-who span { font-size: 20px; color: #fecaca; white-space: nowrap; }
+.alloc-minus { width: 64px; height: 64px; flex-shrink: 0; border-radius: 14px; border: 1px solid #33456b; background: #1b2844; color: #fff; font-size: 36px; font-weight: 900; line-height: 1; cursor: pointer; }
+.alloc-minus:active { background: #2f6fe8; }
+.alloc-minus:disabled { opacity: .3; }
+.alloc-row .alloc-in { width: 72px; height: 64px; flex-shrink: 0; text-align: center; font-size: 36px; font-weight: 900; color: #fde047; background: #0b1120; border: 2px solid #33456b; border-radius: 14px; }

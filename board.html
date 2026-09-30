@@ -223,7 +223,7 @@
     lastDraw.erpAlert = drawErpAlert;
 
     function startListeners() {
-        var ym = new Date(); ym = ym.getFullYear() + '-' + String(ym.getMonth() + 1).padStart(2, '0');
+        var ym = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 7);   // 台灣時間的年-月（跟 Google 自動程式寫入的 month 一致）
         listen(db.collection('erpInbox').where('month', '==', ym).where('sensitive', '==', false), function(rows) { erpDocs = rows; drawErpAlert(); });
         unsubs.push(db.collection('settings').doc('erpImport').onSnapshot(function(d) { erpSched = d.exists ? d.data() : null; drawErpAlert(); }, function() {}));
         listen(db.collection('salesOrders').where('erpFixNeeded', '==', true), function(rows) { erpFix = rows; drawErpAlert(); });

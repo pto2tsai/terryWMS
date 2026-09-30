@@ -68,12 +68,13 @@ H.check('缺貨畫面沒有「標籤都改好了」要勾，還沒完成', !(awa
 // 現場決定：海霸王 3、好市多 3
 await mp.click('#short-edit-btn'); await mp.waitForTimeout(300);
 H.check('按「改分法」：每家一格，預設海霸王 5、好市多 1', JSON.stringify(await mp.$$eval('.alloc-in', e => e.map(x => x.value))) === JSON.stringify(['5', '1']) && !(await mp.isDisabled('#short-done-btn')));
-H.check('改分法用按的：每家有「－」「＋」，數字不能打字', (await mp.$$('.alloc-minus')).length === 2 && (await mp.$$('.alloc-plus')).length === 2 && await mp.$eval('.alloc-in', e => e.readOnly));
-const minus = await mp.$$('.alloc-minus'), plus = await mp.$$('.alloc-plus');
-await minus[0].click(); await mp.waitForTimeout(200);   // 海霸王 5→4
-H.check('分的數字加起來不等於拿到的 6 件：不能完成，並提示', await mp.isDisabled('#short-done-btn') && (await mp.innerText('#picking-next')).includes('加起來要等於 6 件'));
-await minus[0].click(); await plus[1].click(); await plus[1].click(); await mp.waitForTimeout(200);   // 海霸王 3、好市多 3
-H.check('海霸王按到 3、好市多按到 3；好市多到頂了「＋」變暗', JSON.stringify(await mp.$$eval('.alloc-in', e => e.map(x => x.value))) === JSON.stringify(['3', '3']) && await plus[1].isDisabled());
+H.check('改分法用按的：每家只有「－」，數字不能打字', (await mp.$$('.alloc-minus')).length === 2 && (await mp.$$('.alloc-plus')).length === 0 && await mp.$eval('.alloc-in', e => e.readOnly));
+const minus = await mp.$$('.alloc-minus');
+H.check('海霸王已經給滿（5/5）：好市多的「－」不能按（少的那件沒人能收）', await minus[1].isDisabled());
+await minus[0].click(); await mp.waitForTimeout(200);   // 海霸王 5→4，好市多自動 1→2
+H.check('海霸王按一下「－」：少的那件自動移給好市多（4、2），加起來還是 6、可以完成', JSON.stringify(await mp.$$eval('.alloc-in', e => e.map(x => x.value))) === JSON.stringify(['4', '2']) && !(await mp.isDisabled('#short-done-btn')));
+await minus[0].click(); await mp.waitForTimeout(200);   // 海霸王 3、好市多 3（訂 3，給滿了）
+H.check('再按一下：海霸王 3、好市多 3；好市多給滿了，海霸王的「－」就不能再按', JSON.stringify(await mp.$$eval('.alloc-in', e => e.map(x => x.value))) === JSON.stringify(['3', '3']) && await minus[0].isDisabled());
 if (process.env.SHOT_DIR) await mp.screenshot({ path: process.env.SHOT_DIR + '/short-edit.png', fullPage: true });
 H.check('改成海霸王 3、好市多 3：可以完成', !(await mp.isDisabled('#short-done-btn')) && (await mp.innerText('#picking-next')).includes('分完了'));
 await mp.click('#short-done-btn'); await mp.waitForTimeout(2500);

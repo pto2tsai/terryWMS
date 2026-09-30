@@ -434,11 +434,10 @@ window.renderShortEditor = function() {
         return '<div style="padding:10px 0;border-bottom:1px solid #7f1d1d;text-align:left"><div style="font-size:19px;font-weight:bold">' + esc(a.productName) + ' ' + esc(a.spec) + '</div>' +
             '<div style="color:#fecaca;margin:2px 0 6px">拿到 <b>' + a.picked + ' 件</b>，要給：</div>' +
             a.orders.map(function(o) {
-                return '<div style="display:flex;align-items:center;gap:8px;margin:6px 0"><div style="flex:1;font-size:18px"><b>' + esc(o.customer) + '</b><br><span style="font-size:14px;color:#fecaca">訂 ' + o.want + ' 件</span></div>' +
-                    // 用按的：－／＋（不用打字）；數字只能看、不能打
-                    '<div class="alloc-step"><button type="button" class="alloc-minus" onclick="allocStep(this,-1)" aria-label="少一件">－</button>' +
-                    '<input type="text" readonly tabindex="-1" class="alloc-in" data-b="' + bi + '" data-id="' + esc(o.id) + '" data-want="' + o.want + '" value="' + o.got + '">' +
-                    '<button type="button" class="alloc-plus" onclick="allocStep(this,1)" aria-label="多一件">＋</button></div></div>';
+                // 一列：客戶　訂幾件　［－］　給幾件（只有－：少的那件自動移給別家還沒給夠的）
+                return '<div class="alloc-row"><div class="alloc-who"><b>' + esc(o.customer) + '</b><span>訂 ' + o.want + '</span></div>' +
+                    '<button type="button" class="alloc-minus" onclick="allocStep(this)" aria-label="少給一件">－</button>' +
+                    '<input type="text" readonly tabindex="-1" class="alloc-in" data-b="' + bi + '" data-id="' + esc(o.id) + '" data-want="' + o.want + '" value="' + o.got + '"></div>';
             }).join('') + '<div class="alloc-sum" data-b="' + bi + '" data-picked="' + a.picked + '" style="font-size:16px"></div></div>';
     }).join('');
     $('picking-next').innerHTML = '<div class="pk-card" style="border-color:#ef4444">' + blocks +
@@ -447,12 +446,20 @@ window.renderShortEditor = function() {
     checkShortPanel();
     window.scrollTo(0, 0);
 };
-// 改分法的－／＋：不能小於 0、不能超過這家訂的件數
-window.allocStep = function(btn, d) {
+// 改分法只有「－」：這家少給 1 件，自動移給同一品項裡還沒給夠的下一家（沒有人能收就不能按）
+function allocReceiver(inp) {
+    const all = [].slice.call(document.querySelectorAll('.alloc-in[data-b="' + inp.dataset.b + '"]'));
+    const i = all.indexOf(inp);
+    const order = all.slice(i + 1).concat(all.slice(0, i));
+    return order.find(function(x) { return (parseFloat(x.value) || 0) < (parseFloat(x.dataset.want) || 0); }) || null;
+}
+window.allocStep = function(btn) {
     const inp = btn.parentNode.querySelector('.alloc-in');
-    const want = parseFloat(inp.dataset.want) || 0;
-    const v = Math.max(0, Math.min(want, (parseFloat(inp.value) || 0) + d));
-    inp.value = v;
+    const v = parseFloat(inp.value) || 0;
+    const to = allocReceiver(inp);
+    if (v <= 0 || !to) return;
+    inp.value = v - 1;
+    to.value = (parseFloat(to.value) || 0) + 1;
     window.checkShortPanel();
 };
 window.checkShortPanel = function() {
@@ -461,9 +468,7 @@ window.checkShortPanel = function() {
         const b = sumEl.dataset.b, picked = parseFloat(sumEl.dataset.picked) || 0;
         let total = 0;
         document.querySelectorAll('.alloc-in[data-b="' + b + '"]').forEach(function(inp) {
-            const v0 = parseFloat(inp.value) || 0;
-            inp.parentNode.querySelector('.alloc-minus').disabled = v0 <= 0;
-            inp.parentNode.querySelector('.alloc-plus').disabled = v0 >= (parseFloat(inp.dataset.want) || 0);
+            inp.parentNode.querySelector('.alloc-minus').disabled = (parseFloat(inp.value) || 0) <= 0 || !allocReceiver(inp);
             const v = parseFloat(inp.value), want = parseFloat(inp.dataset.want);
             if (!(v >= 0 && v <= want)) ok = false; else total += v;
         });

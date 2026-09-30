@@ -27,7 +27,8 @@ var ERP_STATUS = {
 function erpEsc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function erpCanSeeSensitive() { var r = window.currentUser && window.currentUser.role; return r === 'admin' || r === 'supervisor' || r === 'finance'; }
 function erpCanOperate() { var r = window.currentUser && window.currentUser.role; return !!r && r !== 'readonly'; }
-function erpMonth(d) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+// 用台灣時間的年-月（跟 Google 自動程式寫入的 month 一致；電腦時區設錯或在國外開也不會對不上）
+function erpMonth(d) { d = d || new Date(); return new Date(d.getTime() + 8 * 3600000).toISOString().slice(0, 7); }
 
 // 讀出整份報表（分段存的表格接回來）
 window.loadErpRows = async function(id) {
