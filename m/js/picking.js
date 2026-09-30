@@ -5,6 +5,12 @@
 // ============================================================
 let currentWave = null;
 let pickingItems = [];
+// 先跳過的項目（只影響這支手機的順序）：排到最後，其他拿完再回來拿
+let skipOrder = [];
+function skipKey(i) { return i.id || (i.key + '@' + i.palletId); }
+function bySkip(list) {
+    return list.slice().sort(function(a, b) { return skipOrder.indexOf(skipKey(a)) - skipOrder.indexOf(skipKey(b)); });
+}
 
 window.pageInit.picking = function() {
     currentWave = null;
@@ -85,7 +91,7 @@ function renderWaveOptions() {
 window.loadPickingWave = async function() {
     const waveId = $('picking-wave-select').value;
     clearResult('picking-scan-result');
-    if (currentWave && currentWave.id !== waveId) pickerLeave(currentWave.id);   // 換波次：原本的波次不再顯示我在揀
+    if (currentWave && currentWave.id !== waveId) { pickerLeave(currentWave.id); skipOrder = []; }   // 換波次：原本的波次不再顯示我在揀
     if (!waveId) {
         currentWave = null; pickingItems = [];
         show('picking-scan-area', false); show('picking-actions', false);
@@ -199,7 +205,7 @@ function renderNextStop() {
         '<button class="pk-chip pk-house" onclick="switchHouse()">📍 ' + esc(window.houseName(house)) + ' ⇄</button></span></div>' +
         '<div class="pk-bar"><div style="width:' + pct + '%"></div></div>';
     // 只叫人拿這一間的貨；還不知道在哪一間的，兩間都會出現（先拿到的那間記起來）
-    const mine = pending.filter(function(i) { const h = window.homeOf(i.key); return !h || h === house; });
+    const mine = bySkip(pending.filter(function(i) { const h = window.homeOf(i.key); return !h || h === house; }));
     const other = pending.length - mine.length;
     // 有板號可以掃的才顯示掃描框（練習模式沒有板號）
     const n = mine[0];
@@ -230,6 +236,7 @@ function renderNextStop() {
         '<div class="pk-qty">' + (ret ? '放回 ' : '拿 ') + esc(n.pickQty) + ' <small>件</small></div>' +
         '<button class="pk-go' + (ret ? ' ret' : '') + '" onclick="confirmCurrentPick()">' + (ret ? '✓ 放回了' : '✓ 拿好了') + '</button>' +
         (ret ? '' : '<button class="pk-short" onclick="shortPick()">不夠</button>') +
+        (mine.length > 1 ? '<button class="pk-skip" onclick="skipCurrentPick()">⏭ 先跳過，等一下再拿</button>' : '') +
         '<div class="pk-next">' + (nx ? '下一項：<b>' + esc(nx.productName) + ' ' + esc(nx.spec || '') + '</b>　' + esc(nx.pickQty) + ' 件' : other ? '這間最後一項' : '這是最後一項') + '</div>' +
         '</div>';
 }
@@ -263,8 +270,16 @@ window.confirmPickingScan = async function() {
 // 現在這支手機要拿的那一項（這一間的，或還不知道在哪一間的）
 function currentItem() {
     const h = myHouse();
-    return pickingItems.filter(function(i) { const x = window.homeOf(i.key); return !i.completed && !i.shortage && (!x || x === h); })[0];
+    return bySkip(pickingItems.filter(function(i) { const x = window.homeOf(i.key); return !i.completed && !i.shortage && (!x || x === h); }))[0];
 }
+window.skipCurrentPick = function() {
+    const n = currentItem();
+    if (!n) return;
+    const k = skipKey(n);
+    skipOrder = skipOrder.filter(function(x) { return x !== k; }).concat([k]);
+    toast('⏭ ' + n.productName + ' 排到最後，等一下再拿');
+    renderPickingList();
+};
 window.confirmCurrentPick = async function() {
     const n = currentItem();
     if (n) await markPicked(n);

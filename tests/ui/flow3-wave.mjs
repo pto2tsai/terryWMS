@@ -36,6 +36,24 @@ H.check('印出的揀貨單：有波次號、品項和總件數，不是「更�
 H.check('揀貨單印出儲位、批號、效期（白蝦先印效期早的 I-A-04-1F／B0；透抽 J-C-01-1F）', popHtml.includes('I-A-04-1F') && popHtml.includes('B0') && popHtml.includes('2027/01/01') && popHtml.includes('J-C-01-1F') && !popHtml.includes('I-A-03-2F'), popHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(300, 700));
 if (process.env.SHOT) { await pop.setViewportSize({ width: 900, height: 700 }); await pop.screenshot({ path: process.env.SHOT, fullPage: true }); }
 await pop.close().catch(() => {});
+// 追加減：印過之後鼎新改量，重印要標出來（黃底、+2、刪除、新增、原 X）
+const w0 = (await H.all('waves'))[0];
+H.check('印揀貨單會記下這一版（之後重印才比得出追加減）', w0.lastPrinted && w0.lastPrinted['白蝦|||50/60'] === 10 && w0.lastPrinted['透抽|||L'] === 5, JSON.stringify(w0.lastPrinted));
+const origSummary = w0.summary; const { _id: wid, ...w0data } = w0;
+await H.admin(d => H.setDoc(H.doc(d, 'waves', wid), Object.assign({}, w0data, { summary: [
+  Object.assign({}, origSummary.find(x => x.productName === '白蝦'), { totalQty: 12 }),
+  { productName: '干貝', spec: 'S', unit: '件', totalQty: 3, orders: [] }] })));
+await page.waitForTimeout(1500);
+const pop2P = page.waitForEvent('popup');
+await page.evaluate(no => printWavePickingList(no), w0.waveNo);
+const pop2 = await pop2P; await pop2.waitForLoadState().catch(() => {}); await page.waitForTimeout(500);
+const h2 = await pop2.content();
+if (process.env.SHOT2) { await pop2.setViewportSize({ width: 1100, height: 700 }); await pop2.screenshot({ path: process.env.SHOT2, fullPage: true }); }
+await pop2.close().catch(() => {});
+H.check('重印標出追加減：更新版 V2、白蝦 +2（原 10）、干貝 新增、透抽 刪除', h2.includes('更新版 V2') && h2.includes('+2') && h2.includes('原 10') && h2.includes('新增') && h2.includes('刪除') && h2.includes('鼎新刪掉的品項'), h2.replace(/<style[\s\S]*?<\/style>/, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 600));
+H.check('揀貨單：批號、效期同一欄上下兩行', /<td class="bt"><b>B0<\/b><div class="exp">2027\/01\/01<\/div><\/td>/.test(h2), '');
+await H.admin(d => H.setDoc(H.doc(d, 'waves', wid), Object.assign({}, w0data, { summary: origSummary })));
+await page.waitForTimeout(1500);
 const soAfter = await H.all('salesOrders'); H.check('訂單狀態在資料庫中變成 inWave', soAfter.every(o => o.status === 'inWave'), JSON.stringify(soAfter.map(o => o.status)));
 // 重新整理頁面後，這兩張訂單不應再出現在「可建立波次」清單
 await page.reload(); await page.fill('#login-email', 'x').catch(()=>{}); await page.waitForTimeout(4000);
@@ -61,19 +79,26 @@ await page.click('button[onclick="openClearDataModal()"]'); await page.waitForTi
 H.check('「清除資料」在「備份與維護」頁，打開看得到波次數量', await page.isVisible('#modal-clear-data') && (await page.innerText('#modal-clear-data')).includes('1'), await page.innerText('#modal-clear-data').catch(() => ''));
 await page.evaluate(() => closeClearDataModal()); await page.waitForTimeout(300);
 await H.nav(page, 'wave-picking');
-// 開始揀貨
-const execBtn = await page.$$eval('[onclick^="openWaveExecute("]', e => e.map(x => x.getAttribute('onclick')));
-H.note('執行按鈕: ' + JSON.stringify(execBtn));
+// 每個波次只有一顆「下一步」：印過揀貨單 → 顯示「等手機揀貨」；其他操作收在「⋯」
+const rowTxt = await page.innerText('#wave-list-body');
+H.check('印過揀貨單的波次：顯示「等手機揀貨」，沒有「開始揀貨」大按鈕', rowTxt.includes('等手機揀貨') && !rowTxt.includes('開始揀貨') && (await page.$$('#wave-list-body .next-step')).length === 0, rowTxt.slice(0, 300));
+await page.click('#wave-list-body details.wave-more summary'); await page.waitForTimeout(200);
+const menuTxt = await page.innerText('#wave-list-body details.wave-more');
+H.check('「⋯」裡有：揀貨單、在電腦上揀貨、追加訂單、檢視明細、刪除波次', ['揀貨單', '在電腦上揀貨', '追加訂單', '檢視明細', '刪除波次'].every(t => menuTxt.includes(t)), menuTxt);
+// 在電腦上揀貨（從「⋯」進去）
+const execBtn = ['x'];
 if (execBtn[0]) {
   const prevP = page.waitForEvent('popup', { timeout: 5000 }).catch(() => null);
-  await page.click('[onclick="' + execBtn[0] + '"]'); await page.waitForTimeout(1500);
+  await page.click('#wave-list-body details.wave-more button:has-text("在電腦上揀貨")'); await page.waitForTimeout(1500);
   const prev = await prevP;
-  H.check('按「開始揀貨」直接打開揀貨單列印預覽', !!prev && (await prev.content()).includes('揀貨單'));
+  H.check('從「⋯ → 在電腦上揀貨」開始：直接打開揀貨單列印預覽', !!prev && (await prev.content()).includes('揀貨單'));
   if (prev) await prev.close().catch(() => {});
   const list = await page.evaluate(() => window._waveData.pickingList.map(i => [i.palletId, i.productName, i.pickQty, i.shortage || false]));
   H.note('揀貨清單: ' + JSON.stringify(list));
   H.check('先進先出：白蝦先揀早效期 W-A2(5) 再 W-A1(5)，透抽 W-B1(5)', JSON.stringify(list.filter(i=>!i[3]).map(i => i[0] + ':' + i[2]).sort()) === JSON.stringify(['W-A1:5', 'W-A2:5', 'W-B1:5']), JSON.stringify(list));
   for (const it of list.filter(i => !i[3])) { await page.fill('#wave-scan-input', it[0]); await page.press('#wave-scan-input', 'Enter'); await page.waitForTimeout(700); }
+  await page.waitForTimeout(1500);
+  H.check('全部揀完：波次那一列出現「完成出貨」和進度 2/2 項', await page.evaluate(() => { const t = document.getElementById('wave-list-body').innerText; return t.includes('完成出貨') && t.includes('2/2 項'); }), await page.evaluate(() => document.getElementById('wave-list-body').innerText.slice(0, 200)));
   const wv = (await H.all('waves'))[0]; H.check('掃描進度寫入 Firestore', (wv.completedItems || []).length === 3, JSON.stringify(wv.completedItems));
   await page.click("#modal-wave-execute button[onclick=\"completeWave()\"]"); await page.waitForTimeout(3000);
   H.note('完成 dialogs: ' + JSON.stringify(log.dialogs.slice(-3).map(d => d.msg.slice(0, 200))));

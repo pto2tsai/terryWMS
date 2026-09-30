@@ -76,8 +76,8 @@ H.check('門市銷貨單（233-、234-）和統一（門市備貨）整張跳過
 const lbl = await page.evaluate(() => { const r = buildSortingLabelsHtml({ waveNo: 'W-T', logistics: '黑貓宅急便', status: 'picking', orders: [
   { orderNo: 'A1', customer: '甲', items: [{ productName: '白蝦', spec: '50/60', quantity: 2, packageQty: 2 }] },
   { orderNo: 'A2', customer: '乙', items: [{ productName: '卡啦脆魷', spec: '原味', quantity: 100, packageQty: 100 }, { productName: '運費', quantity: 1, packageQty: 1 }] }] });
-  return { count: r.count, skipped: r.skipped, a2: r.body.includes('👤 乙') }; });
-H.check('分貨標籤：整張單都是常溫品／運費（倉庫不揀）的不印，不會出現「共 0 件」', lbl.count === 1 && !lbl.a2 && lbl.skipped.join().includes('乙'), JSON.stringify(lbl));
+  return { count: r.count, skipped: r.skipped, a2: r.body.includes('</span>乙</div>'), a1: r.body.includes('</span>甲</div>') }; });
+H.check('分貨標籤：整張單都是常溫品／運費（倉庫不揀）的不印，不會出現「共 0 件」', lbl.count === 1 && lbl.a1 && !lbl.a2 && lbl.skipped.join().includes('乙'), JSON.stringify(lbl));
 
 // ---------- 在建立波次清單指定物流商 ----------
 await page.click("button[onclick=\"openCreateWaveModal()\"]"); await page.waitForTimeout(1000);

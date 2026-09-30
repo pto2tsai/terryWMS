@@ -304,117 +304,56 @@ function printUpdatedPickingLists(waves, changeDetails, opts) {
     if (!printWindow) { alert('瀏覽器擋住了列印視窗，請允許這個網站「彈出式視窗」後再按一次'); return false; }
 
     var html = '<!DOCTYPE html><html><head><title>' + (fresh ? '揀貨單' : '📋 更新版揀貨單') + '</title>' +
-        '<style>' +
-        'body { font-family: "Microsoft JhengHei", sans-serif; font-size: 12px; }' +
-        '.wave-section { page-break-after: always; margin-bottom: 20px; }' +
-        '.wave-section:last-child { page-break-after: auto; }' +
-        '.update-banner { background: #dc2626; color: white; padding: 8px 15px; font-size: 14px; font-weight: bold; margin-bottom: 10px; }' +
-        '.header { text-align: center; margin-bottom: 15px; border-bottom: 2px solid #333; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }' +
-        '.header h2 { margin: 0; font-size: 20px; }' +
-        '.version { background: #374151; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold; }' +
-        '.info-row { display: flex; gap: 15px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed #ccc; }' +
-        '.info-item { flex: 1; }' +
-        '.info-label { font-size: 11px; color: #666; }' +
-        '.info-value { font-size: 15px; font-weight: bold; }' +
-        'table { width: 100%; border-collapse: collapse; }' +
-        'th, td { border: 1px solid #333; padding: 6px; text-align: left; }' +
-        'th { background: #374151; color: white; font-size: 11px; }' +
-        '.loc { font-weight: bold; font-size: 13px; color: #1e40af; }' +
-        '.qty { text-align: center; font-weight: bold; font-size: 16px; color: #c00; }' +
-        '.check { width: 30px; text-align: center; }' +
-        '.change-add { color: #16a34a; font-weight: bold; }' +
-        '.change-sub { color: #dc2626; font-weight: bold; }' +
-        '.floor-1f { background: #dbeafe; }' +
-        '.floor-2f { background: #fef3c7; }' +
-        '.floor-3f { background: #fee2e2; }' +
-        '.timestamp { text-align: right; font-size: 10px; color: #666; margin-top: 10px; }' +
-        '</style></head><body>';
+        '<style>' + window.PICKLIST_STYLE + '</style></head><body><div class="pl">';
 
-    waves.forEach(function(wave) {
-        var now = new Date().toLocaleString('zh-TW');
-        var version = (wave.printVersion || 0) + 1;
-        wave.printVersion = version;
+    waves.forEach(function(wave) { html += '<div class="wave-section">' + window.buildPickListSectionHtml(wave, { forceBanner: !fresh }) + '</div>'; });
 
-        html += '<div class="wave-section">';
-
-        if (!fresh) html += '<div class="update-banner">⚠️ 【更新版】請作廢舊版揀貨單</div>';
-
-        html += '<div class="header">';
-        html += '<div><h2>揀貨單</h2><h3 style="margin:5px 0 0 0">' + wave.waveNo + '</h3></div>';
-        html += '<span class="version">版次 V' + version + '</span>';
-        html += '</div>';
-
-        html += '<div class="info-row">' +
-            '<div class="info-item"><div class="info-label">物流商</div><div class="info-value">' + wave.logistics + '</div></div>' +
-            '<div class="info-item"><div class="info-label">訂單數</div><div class="info-value">' + (wave.orders || []).length + ' 筆</div></div>' +
-            '<div class="info-item"><div class="info-label">品項數</div><div class="info-value">' + wave.itemCount + ' 項</div></div>' +
-            '<div class="info-item"><div class="info-label">總件數</div><div class="info-value" style="color:#dc2626;">' + wave.totalQty + ' 件</div></div>' +
-            '</div>';
-
-        var summaryWithLoc = (wave.summary || []).filter(function(item) {
-            return !window.isExcludedFromPickingList(item.productName);
-        }).map(function(item) {
-            var invInfo = findProductInventoryInfo(item.productName, item.spec);
-            return {
-                productName: item.productName,
-                spec: item.spec || '-',
-                unit: item.unit || '件',
-                totalQty: item.totalQty,
-                prevQty: item.prevQty || item.totalQty,
-                location: invInfo.location,
-                batchNo: invInfo.batchNo,
-                expiryDate: invInfo.expiryDate,
-                floor: invInfo.floor
-            };
-        });
-
-        summaryWithLoc.sort(function(a, b) {
-            if (b.totalQty !== a.totalQty) return b.totalQty - a.totalQty;
-            return a.floor - b.floor;
-        });
-
-        // 兩間倉庫：一間一張（換頁），各自拿去揀
-        var groups = window.groupRowsByHouse(summaryWithLoc);
-        groups.forEach(function(g, gi) {
-        if (groups.length > 1 || g.house) html += '<h3 style="margin:10px 0 6px;font-size:18px' + (gi ? ';page-break-before:always' : '') + '">📍 ' + g.name + '　' + wave.waveNo + '（' + g.rows.length + ' 項）</h3>';
-        html += '<table>';
-        html += '<tr><th class="check">✓</th><th style="width:70px">儲位</th><th style="width:100px">品名</th><th>規格</th><th style="width:80px">批號</th><th style="width:80px">效期</th><th style="width:50px" class="qty">數量</th><th style="width:35px">單位</th>' + (fresh ? '' : '<th style="width:50px">異動</th>') + '</tr>';
-
-        g.rows.forEach(function(item) {
-            var floorClass = item.floor === 1 ? 'floor-1f' : (item.floor === 2 ? 'floor-2f' : (item.floor === 3 ? 'floor-3f' : ''));
-            var diff = item.totalQty - item.prevQty;
-            var changeHtml = '-';
-            if (diff > 0) {
-                changeHtml = '<span class="change-add">+' + diff + '</span>';
-            } else if (diff < 0) {
-                changeHtml = '<span class="change-sub">' + diff + '</span>';
-            }
-
-            html += '<tr class="' + floorClass + '">';
-            html += '<td class="check">☐</td>';
-            html += '<td class="loc">' + item.location + '</td>';
-            html += '<td>' + item.productName + '</td>';
-            html += '<td>' + item.spec + '</td>';
-            html += '<td style="font-size:11px">' + item.batchNo + '</td>';
-            html += '<td style="font-size:11px">' + item.expiryDate + '</td>';
-            html += '<td class="qty">' + item.totalQty + '</td>';
-            html += '<td>' + item.unit + '</td>';
-            if (!fresh) html += '<td style="text-align:center">' + changeHtml + '</td>';
-            html += '</tr>';
-        });
-
-        html += '</table>';
-        });
-        html += '<div class="timestamp">版次 V' + version + ' | 列印日期：' + now + '</div>';
-        html += '</div>';
-    });
-
-    html += '<script>window.onload = function() { window.print(); }<\/script></body></html>';
+    html += '</div><script>window.onload = function() { window.print(); }<\/script></body></html>';
 
     printWindow.document.write(html);
     printWindow.document.close();
     return true;
 }
+
+// 一個波次的揀貨單內容（標題、資訊、依倉庫分表格、追加減標示）；印完記下這一版
+window.buildPickListSectionHtml = function(wave, opts) {
+    opts = opts || {};
+    var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var version = (wave.printVersion || 0) + 1;
+    var rows = (wave.summary || []).filter(function(item) {
+        return !window.isExcludedFromPickingList(item.productName);
+    }).map(function(item) {
+        var inv = findProductInventoryInfo(item.productName, item.spec);
+        return { productName: item.productName, spec: item.spec || '-', unit: item.unit || '件', totalQty: item.totalQty,
+            prevQty: item.prevQty, location: inv.location, batchNo: inv.batchNo, expiryDate: inv.expiryDate, floor: inv.floor };
+    });
+    rows.sort(function(a, b) { return (b.totalQty - a.totalQty) || (a.floor - b.floor); });
+    var d = window.pickListDiff(wave, rows);
+    var showChange = d.changed > 0;
+    var html = '';
+    if (showChange || opts.forceBanner) html += '<div class="update-banner">⚠️ 更新版 V' + version + (showChange ? '：有 ' + d.changed + ' 項異動（黃底）' : '') + '，請作廢舊版揀貨單</div>';
+    html += '<div class="header"><div><h2>揀貨單</h2><h3>' + esc(wave.waveNo) + '</h3></div><span class="version">版次 V' + version + '</span></div>';
+    html += '<div class="info-row">' +
+        '<div class="info-item"><div class="info-label">物流商</div><div class="info-value">' + esc(wave.logistics) + '</div></div>' +
+        '<div class="info-item"><div class="info-label">訂單數</div><div class="info-value">' + (wave.orders || []).length + ' 筆</div></div>' +
+        '<div class="info-item"><div class="info-label">品項數</div><div class="info-value">' + rows.length + ' 項</div></div>' +
+        '<div class="info-item"><div class="info-label">總件數</div><div class="info-value" style="color:#dc2626;">' + (Math.round((wave.totalQty || 0) * 1000) / 1000) + ' 件</div></div>' +
+        '</div>';
+    // 兩間倉庫：一間一張（換頁），各自拿去揀
+    var groups = window.groupRowsByHouse(rows);
+    groups.forEach(function(g, gi) {
+        if (groups.length > 1 || g.house) html += '<h3 class="house"' + (gi ? ' style="page-break-before:always"' : '') + '>📍 ' + esc(g.name) + '　' + esc(wave.waveNo) + '（' + g.rows.length + ' 項）</h3>';
+        html += '<table>' + window.PICKLIST_HEAD(showChange) + '<tbody>' + g.rows.map(function(r) { return window.pickListRowHtml(r, showChange); }).join('') + '</tbody></table>';
+    });
+    if (d.removed.length) {
+        html += '<h3 class="house" style="color:#c00">✖ 鼎新刪掉的品項（不用拿；已經拿了要放回）</h3>';
+        html += '<table>' + window.PICKLIST_HEAD(true) + '<tbody>' + d.removed.map(function(r) { return window.pickListRowHtml(r, true); }).join('') + '</tbody></table>';
+    }
+    html += '<div class="timestamp">版次 V' + version + ' | 列印日期：' + new Date().toLocaleString('zh-TW') + '</div>';
+    wave.printVersion = version;
+    window.recordPickListPrint(wave, rows);
+    return html;
+};
 
 // 匯入訂單後，一次印出剛建好的波次揀貨單（一個波次一頁）
 window.printNewWavePickingLists = function(waveNos) {

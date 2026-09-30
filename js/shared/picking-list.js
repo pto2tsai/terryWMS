@@ -85,8 +85,22 @@ window.watchLabelPrintMode = function(onChange) {
     }, function() {});
 };
 // 標籤機用：一張標籤一頁（整份文件，給手機列印區或辦公室的隱藏列印框）
+window.LABEL_PAPER = { w: 80, h: 60 };   // 標籤紙 8×6 公分（橫式）
 window.sortingLabelsPrintCss = function(lb) {
-    return lb.style + '@page{margin:3mm}.sl-title{display:none}.sl .label{display:block;width:auto;margin:0;page-break-after:always;break-after:page}.sl .label:last-child{page-break-after:auto;break-after:auto}';
+    var W = window.LABEL_PAPER.w, H = window.LABEL_PAPER.h;
+    // 標籤只放：物流商、單號、客戶、共幾件、地址（明細不放，品項多也不會塞不下）
+    return lb.style + '@page{size:' + W + 'mm ' + H + 'mm;margin:0}' +
+        '.sl-title{display:none}' +
+        '.sl .label{display:block;box-sizing:border-box;width:' + W + 'mm;height:' + H + 'mm;margin:0;padding:2.5mm;border:none;overflow:hidden;page-break-after:always;break-after:page}' +
+        '.sl .label:last-child{page-break-after:auto;break-after:auto}' +
+        // 感熱標籤是黑白的：紅色、圖示都印不清楚 → 全部黑白、粗框
+        '.sl .label{color:#000}.sl .ic{display:none}' +
+        '.sl .logistics{background:#000;color:#fff;margin:-2.5mm -2.5mm 1.5mm;padding:1.2mm 2.5mm;font-size:15px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+        '.sl .label > div:nth-child(2){font-size:13px !important;color:#000 !important;font-weight:bold}' +
+        '.sl .customer{font-size:21px;line-height:1.2;margin:1mm 0;max-height:13mm;overflow:hidden}' +
+        '.sl .total{background:#fff;color:#000;border:1mm solid #000;border-radius:0;font-size:26px;font-weight:900;padding:0.6mm;margin:1.5mm 0}' +
+        '.sl .items,.sl .short{display:none}' +
+        '.sl .address{color:#000;border-top:0.3mm solid #000;font-size:12px;line-height:1.35;margin-top:1mm;padding-top:1mm;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}';
 };
 
 // 大榮、黑貓、新竹物流會貼托運單（上面有客戶），不用再貼我們的分貨標籤；其他物流要貼
@@ -137,6 +151,17 @@ window.pickLogEntry = function(item) {
         palletId: item.palletId || '', docId: item.docId || '', locationId: item.locationId || '',
         productName: item.productName || '', spec: item.spec || '', batchNo: item.batchNo || '', expDate: item.expDate || '', company: item.company || ''
     }));
+};
+// 揀貨進度：要揀的品項裡，拿夠了（或回報不夠）的有幾項
+window.waveProgress = function(wave) {
+    var items = (wave.summary || []).filter(function(s) { return !window.isExcludedFromPickingList(s.productName); });
+    var all = items.length;
+    if (!Array.isArray(wave.pickLog)) return { done: Math.min(all, (wave.completedItems || []).length), all: all };
+    var net = {}, short = {};
+    wave.pickLog.forEach(function(e) { net[e.key] = (net[e.key] || 0) + (e.type === 'return' ? -e.qty : e.qty); });
+    (wave.shortLog || []).forEach(function(e) { short[e.key] = (short[e.key] || 0) + (parseFloat(e.qty) || 0); });
+    var done = items.filter(function(s) { var k = s.productName + '|||' + (s.spec || ''); return (net[k] || 0) + (short[k] || 0) >= (parseFloat(s.totalQty) || 0) - 1e-9; }).length;
+    return { done: done, all: all };
 };
 // 這個波次有沒有完整的揀貨記錄（新波次都有；改版前就開始揀的舊波次沒有，照舊方式算）
 window.waveHasPickLog = function(wave) {
@@ -441,6 +466,96 @@ window.waveShortfalls = function(wave, pickingList) {
     return rows;
 };
 
+// 揀貨單的樣式（A4 橫式、大字）：電腦版「列印揀貨單」和匯入後一次印都用這一份
+window.PICKLIST_STYLE =
+    '@page { size: A4 landscape; margin: 10mm; }' +
+    'body { font-family: "Microsoft JhengHei", sans-serif; font-size: 16px; color: #000; }' +
+    '.pl { width: 1047px; }' +
+    '@media print { .pl { width: auto; } }' +
+    '.wave-section { page-break-after: always; margin-bottom: 20px; }' +
+    '.wave-section:last-child { page-break-after: auto; }' +
+    '.update-banner { background: #dc2626; color: white; padding: 8px 15px; font-size: 18px; font-weight: bold; margin-bottom: 10px; }' +
+    '.header { margin-bottom: 10px; border-bottom: 2px solid #333; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }' +
+    '.header h2 { margin: 0; font-size: 28px; }' +
+    '.header h3 { margin: 4px 0 0; font-size: 22px; }' +
+    '.version { background: #374151; color: white; padding: 6px 14px; border-radius: 4px; font-weight: bold; font-size: 16px; }' +
+    '.info-row { display: flex; gap: 15px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed #999; }' +
+    '.info-item { flex: 1; }' +
+    '.info-label { font-size: 14px; color: #444; }' +
+    '.info-value { font-size: 22px; font-weight: bold; }' +
+    'table { width: 100%; border-collapse: collapse; }' +
+    'thead { display: table-header-group; }' +
+    'tr { page-break-inside: avoid; }' +
+    'th, td { border: 1px solid #333; padding: 6px 7px; text-align: left; vertical-align: middle; }' +
+    'th { background: #374151; color: white; font-size: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+    '.loc { font-weight: bold; font-size: 20px; color: #1e40af; white-space: nowrap; }' +
+    '.name { font-size: 17px; font-weight: bold; }' +
+    '.small { font-size: 15px; white-space: nowrap; }' +
+    '.qty { text-align: center; font-weight: bold; font-size: 24px; color: #c00; }' +
+    '.check { width: 36px; text-align: center; font-size: 22px; }' +
+    '.change-add { color: #16a34a; font-weight: bold; }' +
+    '.change-sub { color: #dc2626; font-weight: bold; }' +
+    '.floor-1f { background: #dbeafe; } .floor-2f { background: #fef3c7; } .floor-3f { background: #fee2e2; }' +
+    '.floor-1f, .floor-2f, .floor-3f { -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+    '.house { margin: 10px 0 6px; font-size: 22px; }' +
+    '.bt b { font-size: 15px; white-space: nowrap; } .bt .exp { font-size: 14px; white-space: nowrap; }' +
+    'tr.chg { background: #fde68a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+    'tr.del td { text-decoration: line-through; color: #666; } tr.del .chgcell { text-decoration: none; }' +
+    '.prev { font-size: 13px; color: #333; font-weight: normal; }' +
+    '.chgcell { text-align: center; font-size: 20px; font-weight: bold; }' +
+    '.timestamp { text-align: right; font-size: 13px; color: #444; margin-top: 8px; }';
+window.PICKLIST_HEAD = function(withChange) {
+    return '<thead><tr><th class="check">✓</th><th style="width:118px">儲位</th><th style="width:22%">品名</th><th>規格</th><th style="width:118px">批號／效期</th><th style="width:78px;text-align:center">數量</th><th style="width:44px">單位</th>' + (withChange ? '<th style="width:64px;text-align:center">異動</th>' : '') + '</tr></thead>';
+};
+// 跟「上一次印的」比：追加、減量、新增、刪除（wave.lastPrinted = { 品名|||規格: 件數 }）
+// 還沒記錄過的舊波次，用鼎新改單時記下的 prevQty
+window.pickListKey = function(r) { return r.productName + '|||' + (r.spec && r.spec !== '-' ? r.spec : ''); };
+window.pickListDiff = function(wave, rows) {
+    var last = wave.lastPrinted || null;
+    var changed = 0;
+    rows.forEach(function(r) {
+        var prev = last ? last[window.pickListKey(r)] : r.prevQty;
+        r.change = '';
+        if (prev === undefined || prev === null) { if (last) { r.change = 'new'; changed++; } return; }
+        r.prev = prev;
+        if (prev !== r.totalQty) { r.change = r.totalQty > prev ? 'add' : 'sub'; changed++; }
+    });
+    var removed = [];
+    if (last) Object.keys(last).forEach(function(k) {
+        if (!(last[k] > 0) || rows.some(function(r) { return window.pickListKey(r) === k; })) return;
+        var p = k.split('|||');
+        removed.push({ productName: p[0], spec: p[1] || '-', unit: '件', totalQty: 0, prev: last[k], change: 'del', location: '-', batchNo: '', expiryDate: '' });
+    });
+    return { removed: removed, changed: changed + removed.length };
+};
+window.pickListRowHtml = function(item, showChange) {
+    var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var floor = item.floor === 1 ? ' floor-1f' : item.floor === 2 ? ' floor-2f' : item.floor === 3 ? ' floor-3f' : '';
+    var chg = item.change === 'add' ? '<span class="change-add">+' + (Math.round((item.totalQty - item.prev) * 1000) / 1000) + '</span>'
+        : item.change === 'sub' ? '<span class="change-sub">−' + (Math.round((item.prev - item.totalQty) * 1000) / 1000) + '</span>'
+        : item.change === 'new' ? '<span class="change-add">新增</span>'
+        : item.change === 'del' ? '<span class="change-sub">刪除</span>' : '';
+    var bt = (item.batchNo && item.batchNo !== '-' ? '<b>' + esc(item.batchNo) + '</b>' : '<b>-</b>') +
+        (item.expiryDate && item.expiryDate !== '-' ? '<div class="exp">' + esc(item.expiryDate) + '</div>' : '');
+    return '<tr class="' + (item.change ? 'chg' : floor.trim()) + (item.change === 'del' ? ' del' : '') + '">' +
+        '<td class="check">☐</td>' +
+        '<td class="loc">' + esc(item.location) + '</td>' +
+        '<td class="name">' + esc(item.productName) + '</td>' +
+        '<td class="name">' + esc(item.spec) + '</td>' +
+        '<td class="bt">' + bt + '</td>' +
+        '<td class="qty">' + esc(item.totalQty) + (item.change && item.change !== 'new' ? '<div class="prev">原 ' + esc(item.prev) + '</div>' : '') + '</td>' +
+        '<td>' + esc(item.unit) + '</td>' +
+        (showChange ? '<td class="chgcell">' + chg + '</td>' : '') + '</tr>';
+};
+// 印完記下這一版（下次重印才比得出追加減）
+window.recordPickListPrint = function(wave, rows) {
+    var snap = {};
+    rows.forEach(function(r) { snap[window.pickListKey(r)] = r.totalQty; });
+    wave.lastPrinted = snap;
+    wave.reprintRequired = false;
+    if (wave.id && window.db) window.db.collection('waves').doc(wave.id).update({ lastPrinted: snap, printVersion: wave.printVersion || 1, reprintRequired: false }).catch(function(e) { console.warn('記錄揀貨單版次失敗', e); });
+};
+
 // 分貨標籤（一張訂單一張）：揀完才印（手機或辦公室自動印），件數用實際出貨的（缺貨的已經扣掉）；
 // 還沒完成的波次（辦公室手動補印）照訂單數量
 // 回傳 { style, body }，樣式都在 .sl 底下，跟揀貨單印在同一份也不會互相影響
@@ -471,11 +586,11 @@ window.buildSortingLabelsHtml = function(wave) {
             return '<div class="item"><span>' + esc(item.productName) + ' ' + esc(item.spec || '') + '</span><strong>' + qtyText + '</strong></div>' + shortNote;
         }).join('');
         return '<div class="label"><div class="logistics">' + esc(order.logistics || wave.logistics) + '<span style="float:right">' + esc(wave.waveNo) + '</span></div>' +
-            '<div style="font-size:14px;color:#666">📦 ' + esc(order.orderNo) + '</div>' +
-            '<div class="customer">👤 ' + esc(order.customer) + '</div>' +
+            '<div style="font-size:14px;color:#666"><span class="ic">📦 </span>' + esc(order.orderNo) + '</div>' +
+            '<div class="customer"><span class="ic">👤 </span>' + esc(order.customer) + '</div>' +
             '<div class="total">共 ' + totalPkg + ' 件</div>' +
             '<div class="items">' + itemsHtml + '</div>' +
-            (order.address ? '<div class="address">📍 ' + esc(order.address) + '</div>' : '') + '</div>';
+            (order.address ? '<div class="address"><span class="ic">📍 </span>' + esc(order.address) + '</div>' : '') + '</div>';
     }).map(function(html, i) {
         var order = (wave.orders || [])[i];
         // 整張單都是倉庫不揀的（常溫品門市出貨、現流白仁、運費…）：不印
