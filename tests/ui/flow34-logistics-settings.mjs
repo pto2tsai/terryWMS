@@ -11,6 +11,7 @@ await H.resetData(async d => {
 const { page, log } = await H.openApp(base, USERS.sup);
 await H.nav(page, 'wave-picking');
 H.check('預設名單有「裕寶饕」：備註寫裕寶饕認得出來', await page.evaluate(() => parseLogistics('裕寶饕') === '裕寶饕' && parseLogistics('裕寶') === '裕寶饕'));
+H.check('預設名單：「誠」「誠　當天到貨」算阿誠；「上泰」「上泰貨運」算上泰貨運', await page.evaluate(() => parseLogistics('誠') === '阿誠' && parseLogistics('誠　當天到貨') === '阿誠' && parseLogistics('上泰') === '上泰貨運' && parseLogistics('上泰貨運') === '上泰貨運'));
 
 await page.click('#btn-wave-settings'); await page.click('#btn-logistics-settings'); await page.waitForTimeout(300);
 H.check('設定裡有「物流商」，打開看得到名單（含裕寶饕）', await page.isVisible('#modal-logistics-settings') &&
