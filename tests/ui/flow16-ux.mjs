@@ -19,7 +19,7 @@ const num = label => { const c = cards.find(x => x.startsWith(label)); return c 
 H.check('待辦數字正確（待入帳 1、等堆高機 1、暫存區 1、待財務 1、待揀波次 1、過期 1）',
   num('待入帳入庫單') === 1 && num('等堆高機上架') === 1 && num('暫存區待上架') === 1 && num('待財務核准') === 1 && num('待揀波次') === 1 && num('過期／30 天內到期') === 1, JSON.stringify(cards));
 H.check('四個常用流程', (await page.$$eval('#home-flows > div', e => e.map(x => x.innerText.split('\n')[0].trim()))).join() === '入庫,出貨,調撥,盤點');
-await page.click('#home-todos > div:nth-child(6)'); await page.waitForTimeout(800);   // 待揀波次
+await page.click('#home-todos > div:has-text("待揀波次")'); await page.waitForTimeout(800);
 H.check('點待辦卡片直接到該畫面（波次揀貨），標題與選單同步', await page.isVisible('#view-wave-picking') && (await page.innerText('#page-title')).includes('波次揀貨'), await page.innerText('#page-title'));
 await page.click("[onclick^=\"switchTab('home'\"]"); await page.waitForTimeout(500);
 await page.click('#home-flows > div:nth-child(1)'); await page.waitForTimeout(800);

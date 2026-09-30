@@ -892,6 +892,17 @@
             if (typeof onInboundTypeChange === 'function') onInboundTypeChange();
         };
 
+        // 上方三個步驟：做完的打勾；還沒做完的第一步亮起來
+        window.renderInboundSteps = function(step1Done, locOk) {
+            [[1, step1Done, !step1Done], [2, locOk, step1Done && !locOk], [3, false, step1Done && locOk]].forEach(function(x) {
+                var el = document.getElementById('inbound-step-' + x[0]);
+                if (!el) return;
+                el.dataset.state = x[1] ? 'done' : x[2] ? 'now' : 'todo';
+                var n = el.querySelector('.ds-step-n');
+                if (n) n.innerHTML = x[1] ? '<i class="fa-solid fa-check"></i>' : x[0];
+            });
+        };
+
         window.updateInboundProgress = function() {
             var nameEl = document.getElementById('in-name');
             var expEl = document.getElementById('in-exp');
@@ -933,15 +944,10 @@
 
             var allOk = !!name && qtyOk && !!exp && locOk;
 
-            var s1 = document.getElementById('inbound-step-1');
-            var s2 = document.getElementById('inbound-step-2');
-            var s3 = document.getElementById('inbound-step-3');
 
             var step1Done = !!name && qtyOk && !!exp;
 
-            if (s1) s1.className = step1Done ? 'flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white transition-all' : 'flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white transition-all';
-            if (s2) s2.className = locOk ? 'flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white transition-all' : 'flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-slate-400 transition-all';
-            if (s3) s3.className = allOk ? 'flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-600 text-white transition-all' : 'flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 text-slate-400 transition-all';
+            window.renderInboundSteps(step1Done, locOk);
 
             btn.disabled = !allOk;
         };

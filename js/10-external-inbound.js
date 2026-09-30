@@ -925,7 +925,7 @@
                 var snapshot = await window.getDocs(q);
                 var count = snapshot.size;
                 var el = document.getElementById('approval-count');
-                if (el) el.innerText = count;
+                if (el) { el.innerText = count; el.style.display = count ? '' : 'none'; }   // 0 就不顯示
             } catch(e) {
                 console.error('更新待審核數量失敗:', e);
             }

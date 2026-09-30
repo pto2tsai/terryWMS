@@ -476,8 +476,8 @@ window.renderFavoritesList = function() {
     favorites.forEach(function(favId) {
         var func = window._allFunctions.find(function(f) { return f.id === favId; });
         if (func) {
-            html += '<div class="nav-item py-2 px-3 mx-1 rounded cursor-pointer hover:bg-slate-700/50" onclick="switchTab(\'' + func.id + '\', event)">';
-            html += '<i class="fa-solid ' + func.icon + ' w-4 text-center mr-2 ' + func.color + '"></i>';
+            html += '<div class="nav-item" onclick="switchTab(\'' + func.id + '\', event)">';
+            html += '<i class="fa-solid ' + func.icon + '"></i>';
             html += '<span class="truncate">' + func.name + '</span>';
             html += '</div>';
         }

@@ -1800,8 +1800,8 @@ function renderLabelModeToggle() {
     const sup = r === 'admin' || r === 'supervisor';
     btn.style.display = '';
     btn.disabled = !sup;
-    btn.className = 'px-3 py-2 rounded-lg font-bold mr-2 text-sm ' + (office ? 'bg-sky-700 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600');
-    btn.innerHTML = '🏷️ 標籤：' + (office ? '辦公室自動印' : '手機印');
+    btn.className = office ? 'bg-sky-600' : '';
+    btn.innerHTML = '<i class="fa-solid fa-tags mr-1"></i>標籤：' + (office ? '辦公室自動印' : '手機印');
     btn.title = office ? '手機完成波次後，勾了「這台電腦自動印標籤」的電腦會自動印出分貨標籤' : '手機完成波次後，在手機上按「印分貨標籤」直接印';
     const wrap = document.getElementById('auto-label-wrap');
     if (wrap) wrap.style.display = office ? '' : 'none';
@@ -1915,8 +1915,8 @@ function renderPracticeToggle() {
     const r = window.currentUser && window.currentUser.role;
     btn.style.display = (on || r === 'admin' || r === 'supervisor') ? '' : 'none';
     btn.disabled = !(r === 'admin' || r === 'supervisor');
-    btn.className = 'px-3 py-2 rounded-lg font-bold mr-2 text-sm ' + (on ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600');
-    btn.innerHTML = '📝 練習模式：' + (on ? '開' : '關');
+    btn.className = on ? 'bg-violet-600' : '';
+    btn.innerHTML = '<i class="fa-solid fa-flask mr-1"></i>練習模式：' + (on ? '開' : '關');
     const badge = document.getElementById('practice-badge');
     if (badge) badge.style.display = on ? '' : 'none';
     btn.title = '練習模式：揀貨單照訂單數量列出（不看庫存、不標缺貨），完成波次不扣庫存';

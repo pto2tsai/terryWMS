@@ -460,12 +460,12 @@
             }
 
             if (!name) {
-                if (list) list.innerHTML = '<div class="text-slate-500 text-xs text-center py-2">請先選擇品項</div>';
+                if (list) list.innerHTML = '<div class="ds-sug-empty">選了品項，這裡會列出最適合的儲位</div>';
                 return;
             }
 
             // 立即顯示載入狀態
-            if (list) list.innerHTML = '<div class="text-slate-500 text-xs text-center py-2"><i class="fa-solid fa-spinner fa-spin mr-1"></i>分析中...</div>';
+            if (list) list.innerHTML = '<div class="ds-sug-empty"><i class="fa-solid fa-spinner fa-spin mr-1"></i>分析中…</div>';
 
             // 短延遲後計算（確保庫存資料已載入）
             smartSuggestTimer = setTimeout(function() {
@@ -486,7 +486,7 @@
             if (!panel || !list) return;
 
             if (!targetName) {
-                list.innerHTML = '<div class="text-slate-500 text-xs text-center py-2">請先選擇品項</div>';
+                list.innerHTML = '<div class="ds-sug-empty">選了品項，這裡會列出最適合的儲位</div>';
                 return;
             }
             
@@ -747,7 +747,7 @@
                     console.error('智能建議計算錯誤:', e);
                     var list = document.getElementById('smart-suggest-list');
                     if (list) {
-                        list.innerHTML = '<div class="text-red-400 text-xs text-center py-2">計算錯誤，請重試</div>';
+                        list.innerHTML = '<div class="ds-sug-empty" style="color:var(--ds-danger)">計算錯誤，請重試</div>';
                     }
                 }
                 
@@ -761,48 +761,21 @@
             if (!list) return;
 
             if (suggestions.length === 0) {
-                list.innerHTML = '<div class="flex gap-2">' +
-                    '<div class="flex-1 bg-slate-800 border border-slate-600 rounded-lg p-2 text-center">' +
-                    '<div class="text-slate-400 text-xs">暫無建議</div>' +
-                    '<div class="text-slate-500 text-[10px]">請從地圖選擇</div>' +
-                    '</div></div>';
+                list.innerHTML = '<div class="ds-sug-empty">沒有特別建議，請從下面地圖選一個空位</div>';
                 return;
             }
 
-            var html = '<div class="flex gap-2">';
-            
+            // 第一名標「最推薦」，其他一樣大小；原因只寫兩個，太長會截掉
+            var html = '<div class="ds-sug-row">';
             suggestions.forEach(function(s, idx) {
-                var bgClass, borderClass, textClass;
-                
-                // 只有第一名使用金色漸層，其他統一使用深色背景
-                if (idx === 0) {
-                    bgClass = 'bg-gradient-to-br from-yellow-900/60 to-amber-900/40';
-                    borderClass = 'border-yellow-500';
-                    textClass = 'text-yellow-400';
-                } else {
-                    bgClass = 'bg-slate-800/80';
-                    borderClass = 'border-slate-600';
-                    textClass = 'text-slate-300';
-                }
-                
-                var rankLabel = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : '🥉');
                 var reasonText = s.reasons.slice(0, 2).join('、');
-
-                html += '<div data-location="' + s.fullLocationId + '" class="smart-suggest-card ' + bgClass + ' border ' + borderClass + ' rounded-lg p-2 cursor-pointer hover:border-emerald-400 transition-all flex-1 min-w-0" onclick="selectSmartSuggestDirect(\'' + s.fullLocationId + '\')">';
-                html += '<div class="flex items-center gap-1 mb-0.5">';
-                html += '<span class="text-sm">' + rankLabel + '</span>';
-                html += '<span class="' + textClass + ' font-bold font-mono text-sm">' + s.fullLocationId + '</span>';
-                html += '</div>';
-                html += '<div class="text-[10px] text-emerald-400 truncate">' + s.icon + ' ' + reasonText + '</div>';
-                if (s.sameNameCount > 0) {
-                    html += '<div class="text-[10px] text-cyan-400">現有 ' + s.sameNameCount + ' 板同品項</div>';
-                }
-                html += '<div class="text-[10px] text-slate-500">' + s.level + '層空' + s.levelAvailable + '位</div>';
+                html += '<div data-location="' + s.fullLocationId + '" class="smart-suggest-card ds-sug' + (idx === 0 ? ' is-best' : '') + '" onclick="selectSmartSuggestDirect(\'' + s.fullLocationId + '\')">';
+                html += '<div class="ds-sug-top"><span class="ds-sug-loc">' + s.fullLocationId + '</span>' + (idx === 0 ? '<span class="ds-pill ds-pill-primary" style="height:20px;font-size:11px">最推薦</span>' : '') + '</div>';
+                html += '<div class="ds-sug-why">' + reasonText + '</div>';
+                html += '<div class="ds-sug-meta">' + s.level + ' 層空 ' + s.levelAvailable + ' 位' + (s.sameNameCount > 0 ? '・現有 ' + s.sameNameCount + ' 板同品項' : '') + '</div>';
                 html += '</div>';
             });
-            
             html += '</div>';
-            
             list.innerHTML = html;
         }
 
@@ -818,10 +791,7 @@
             
             // 視覺反饋：標記已選擇的建議（綠色邊框）
             document.querySelectorAll('.smart-suggest-card').forEach(function(card) {
-                card.classList.remove('ring-2', 'ring-emerald-400', 'border-emerald-400');
-                if (card.getAttribute('data-location') === fullLocationId) {
-                    card.classList.add('ring-2', 'ring-emerald-400');
-                }
+                card.classList.toggle('is-picked', card.getAttribute('data-location') === fullLocationId);
             });
         };
 

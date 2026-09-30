@@ -12,12 +12,9 @@ window.STEP_BARS = {
             { t: '完成波次', h: '手機或這裡按完成，扣庫存出貨' }
         ],
         current: function() {
-            var num = function(label) {
-                var el = [].slice.call(document.querySelectorAll('#view-wave-picking .grid > div')).find(function(d) { return d.innerText.indexOf(label) === 0; });
-                return el ? parseInt(el.innerText.replace(label, '')) || 0 : 0;
-            };
-            if (num('揀貨中') > 0 || num('待揀貨') > 0) return 2;
-            if (num('待出貨訂單') > 0) return 1;
+            var num = function(id) { var el = document.getElementById('wave-stat-' + id); return el ? parseInt(el.innerText) || 0 : 0; };
+            if (num('picking') > 0 || num('pending') > 0) return 2;
+            if (num('orders') > 0) return 1;
             return 0;
         }
     },
@@ -60,13 +57,10 @@ window.renderStepBar = function(viewId) {
     el.dataset.cur = key;
     el.innerHTML = cfg.steps.map(function(s, i) {
         var state = i < cur ? 'done' : i === cur ? 'now' : 'todo';
-        var bg = state === 'now' ? 'background:#2563eb;color:#fff' : state === 'done' ? 'background:rgba(16,185,129,.15);color:#6ee7b7' : 'background:#1e293b;color:#94a3b8';
-        return (i ? '<i class="fa-solid fa-chevron-right" style="color:#475569;font-size:10px"></i>' : '') +
-            '<div class="stepbar-item" data-state="' + state + '" style="' + bg + ';border-radius:8px;padding:6px 10px;display:flex;align-items:center;gap:8px;min-width:0">' +
-            '<span style="width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;flex-shrink:0;' +
-            (state === 'now' ? 'background:#fff;color:#2563eb' : state === 'done' ? 'background:#10b981;color:#fff' : 'background:#334155;color:#94a3b8') + '">' + (state === 'done' ? '✓' : i + 1) + '</span>' +
-            '<span style="display:flex;flex-direction:column;line-height:1.2;min-width:0"><b style="font-size:13px">' + s.t + '</b>' +
-            '<span style="font-size:11px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + s.h + '</span></span></div>';
+        return (i ? '<span class="ds-step-line"></span>' : '') +
+            '<div class="stepbar-item ds-step" data-state="' + state + '">' +
+            '<span class="ds-step-n">' + (state === 'done' ? '<i class="fa-solid fa-check"></i>' : i + 1) + '</span>' +
+            '<span style="min-width:0"><b>' + s.t + '</b><small>' + s.h + '</small></span></div>';
     }).join('');
 };
 
