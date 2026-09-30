@@ -355,3 +355,8 @@ header.ds-header #page-title { font-size: 18px; font-weight: 600; color: var(--d
 .stepbar { overflow: visible !important; flex-wrap: wrap; row-gap: 6px; padding: 2px 0; }
 .ds-step b, .ds-step small { line-height: 1.4; }
 #wave-settings button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 波次揀貨：上面幾排（設定、步驟、統計）不可以被擠扁；高度不夠時整頁往下捲，只有清單可以縮 */
+#view-wave-picking { overflow-y: auto; }
+#view-wave-picking > * { flex-shrink: 0; }
+#view-wave-picking > .ds-list-wrap { flex-shrink: 1; min-height: 240px; }
