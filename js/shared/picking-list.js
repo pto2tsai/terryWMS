@@ -85,8 +85,20 @@ window.watchLabelPrintMode = function(onChange) {
     }, function() {});
 };
 // 標籤機用：一張標籤一頁（整份文件，給手機列印區或辦公室的隱藏列印框）
+window.LABEL_PAPER = { w: 80, h: 60 };   // 標籤紙 8×6 公分（橫式）
 window.sortingLabelsPrintCss = function(lb) {
-    return lb.style + '@page{margin:3mm}.sl-title{display:none}.sl .label{display:block;width:auto;margin:0;page-break-after:always;break-after:page}.sl .label:last-child{page-break-after:auto;break-after:auto}';
+    var W = window.LABEL_PAPER.w, H = window.LABEL_PAPER.h;
+    // 標籤只放：物流商、單號、客戶、共幾件、地址（明細不放，品項多也不會塞不下）
+    return lb.style + '@page{size:' + W + 'mm ' + H + 'mm;margin:0}' +
+        '.sl-title{display:none}' +
+        '.sl .label{display:block;box-sizing:border-box;width:' + W + 'mm;height:' + H + 'mm;margin:0;padding:2.5mm;border:none;overflow:hidden;page-break-after:always;break-after:page}' +
+        '.sl .label:last-child{page-break-after:auto;break-after:auto}' +
+        '.sl .logistics{margin:-2.5mm -2.5mm 1.5mm;padding:1.2mm 2.5mm;font-size:15px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+        '.sl .label > div:nth-child(2){font-size:12px !important}' +
+        '.sl .customer{font-size:21px;line-height:1.2;margin:1mm 0;max-height:13mm;overflow:hidden}' +
+        '.sl .total{font-size:24px;padding:1.2mm;margin:1.5mm 0;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+        '.sl .items,.sl .short{display:none}' +
+        '.sl .address{font-size:12px;line-height:1.35;margin-top:1mm;padding-top:1mm;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}';
 };
 
 // 大榮、黑貓、新竹物流會貼托運單（上面有客戶），不用再貼我們的分貨標籤；其他物流要貼
