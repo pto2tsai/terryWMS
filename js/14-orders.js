@@ -772,6 +772,7 @@ window.parseErpOrderRows = function(rows) {
             if (boxPerPkg > 0) pkgQty = Math.ceil(qty / boxPerPkg);
             else if (pkgCell > 0) pkgQty = pkgCell;
             else if (/^(件|箱|CTN|CS)$/i.test(unit) || window.isExcludedFromPickingList(productName)) pkgQty = qty;
+            else if (/^(KG|公斤)$/i.test(unit) && window.kgPerCase(productName) > 0) pkgQty = Math.max(1, Math.round(qty / window.kgPerCase(productName)));   // 每箱約 18 公斤，四捨五入
 
             var item = {
                 productName: productName,
