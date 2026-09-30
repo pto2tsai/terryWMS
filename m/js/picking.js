@@ -8,9 +8,21 @@ let pickingItems = [];
 // 先跳過的項目（只影響這支手機的順序）：排到最後，其他拿完再回來拿
 let skipOrder = [];
 function skipKey(i) { return i.id || (i.key + '@' + i.palletId); }
+// 在全部清單點選的那一項：排到最前面，現在就拿它
+let pickFirst = null;
 function bySkip(list) {
-    return list.slice().sort(function(a, b) { return skipOrder.indexOf(skipKey(a)) - skipOrder.indexOf(skipKey(b)); });
+    const rank = function(i) { const k = skipKey(i); return k === pickFirst ? -2 : skipOrder.indexOf(k); };
+    return list.slice().sort(function(a, b) { return rank(a) - rank(b); });
 }
+window.choosePickItem = function(k) {
+    const it = pickingItems.find(function(i) { return skipKey(i) === k && !i.completed && !i.shortage; });
+    if (!it) return;
+    pickFirst = k;
+    skipOrder = skipOrder.filter(function(x) { return x !== k; });
+    renderPickingList();
+    window.scrollTo(0, 0);
+    toast('👉 現在拿：' + it.productName);
+};
 
 window.pageInit.picking = function() {
     currentWave = null;
@@ -91,7 +103,7 @@ function renderWaveOptions() {
 window.loadPickingWave = async function() {
     const waveId = $('picking-wave-select').value;
     clearResult('picking-scan-result');
-    if (currentWave && currentWave.id !== waveId) { pickerLeave(currentWave.id); skipOrder = []; }   // 換波次：原本的波次不再顯示我在揀
+    if (currentWave && currentWave.id !== waveId) { pickerLeave(currentWave.id); skipOrder = []; pickFirst = null; }   // 換波次：原本的波次不再顯示我在揀
     if (!waveId) {
         currentWave = null; pickingItems = [];
         show('picking-scan-area', false); show('picking-actions', false);
@@ -170,7 +182,8 @@ function renderPickingList() {
             item.shortage ? '<span class="item-status shortage">缺貨</span>' :
             item.type === 'return' ? '<span class="item-status shortage">↩️ 要放回</span>' :
             '<span class="item-status pending">待揀</span>';
-        return '<div class="list-item ' + cls + '">' +
+        const canPick = !item.completed && !item.shortage;
+        return '<div class="list-item ' + cls + (canPick ? ' clickable' : '') + '"' + (canPick ? ' onclick="choosePickItem(\'' + esc(skipKey(item)).replace(/'/g, '') + '\')"' : '') + '>' +
             '<div class="item-row"><span class="item-location">' + esc(item.locationId) + '</span>' + status + '</div>' +
             '<div class="item-product">' + esc(item.productName) + ' ' + esc(item.spec || '') +
                 ' ' + companyTag(item.company) + '</div>' +
@@ -183,7 +196,7 @@ window.togglePickingList = function() {
     const l = $('picking-list'), t = $('picking-list-toggle');
     l.hidden = !l.hidden;
     t.setAttribute('aria-expanded', String(!l.hidden));
-    t.querySelector('h4').innerText = l.hidden ? '全部清單 ▾' : '全部清單 ▴';
+    t.querySelector('h4').innerText = l.hidden ? '全部清單（點一項就先拿它）▾' : '全部清單（點一項就先拿它）▴';
 };
 
 // 冷凍庫版：一次只顯示現在要拿的一項（大字），一個大按鈕「拿好了」；不夠就按「不夠」點數字
@@ -277,6 +290,7 @@ window.skipCurrentPick = function() {
     if (!n) return;
     const k = skipKey(n);
     skipOrder = skipOrder.filter(function(x) { return x !== k; }).concat([k]);
+    if (pickFirst === k) pickFirst = null;
     toast('⏭ ' + n.productName + ' 排到最後，等一下再拿');
     renderPickingList();
 };
