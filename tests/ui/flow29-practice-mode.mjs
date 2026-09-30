@@ -54,6 +54,13 @@ const other = cur0 === '白蝦' ? '透抽' : '白蝦';
 H.check('手機：按「先跳過」→ 先拿下一項，跳過的變成「下一項」', n0b.split('下一項')[0].includes(other) && n0b.includes('下一項：' + cur0), n0b);
 await mp.click('#picking-next .pk-skip'); await mp.waitForTimeout(400);
 H.check('再跳過一次：回到原本那一項', (await mp.innerText('#picking-next')).split('下一項')[0].includes(cur0));
+// 全部清單點任一項：那一項變成現在要拿的
+await mp.click('#picking-list-toggle'); await mp.waitForTimeout(200);
+await mp.click('#picking-list .list-item.clickable:has-text("' + other + '")'); await mp.waitForTimeout(400);
+H.check('全部清單點「' + other + '」：它變成現在要拿的一項', (await mp.innerText('#picking-next')).split('下一項')[0].includes(other));
+await mp.click('#picking-list .list-item.clickable:has-text("' + cur0 + '")'); await mp.waitForTimeout(400);
+H.check('再點回「' + cur0 + '」：換回來', (await mp.innerText('#picking-next')).split('下一項')[0].includes(cur0));
+await mp.click('#picking-list-toggle'); await mp.waitForTimeout(200);
 await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(800);
 const w1 = await H.one('waves', W.waveNo);
 H.check('按「拿好了」：記下揀了這一項', (w1.pickLog || []).length === 1, JSON.stringify(w1.pickLog));
