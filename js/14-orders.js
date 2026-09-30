@@ -17,7 +17,26 @@ const LOGISTICS_KEYWORDS = {
     '文生': ['文生'],
     '金東石': ['金東石'],
     '奧林': ['奧林'],
+    '裕寶饕': ['裕寶饕', '裕寶'],
     '自取': ['自取']
+};
+// 主管在「波次揀貨 → 設定 → 物流商」存過名單（settings/logistics）就用存的，沒存過用上面這份
+const DEFAULT_LOGISTICS = JSON.parse(JSON.stringify(LOGISTICS_KEYWORDS));
+function applyLogisticsList(list) {
+    Object.keys(LOGISTICS_KEYWORDS).forEach(k => { delete LOGISTICS_KEYWORDS[k]; });
+    list.forEach(x => {
+        const name = String(x.name || '').trim();
+        if (!name) return;
+        const kws = (x.keywords || []).map(k => String(k).trim()).filter(Boolean);
+        LOGISTICS_KEYWORDS[name] = kws.length ? kws : [name];
+    });
+}
+function logisticsListFromMap(m) { return Object.keys(m).map(k => ({ name: k, keywords: m[k].slice() })); }
+window.watchLogisticsList = function() {
+    return window.db.collection('settings').doc('logistics').onSnapshot(d => {
+        const list = d.exists && Array.isArray(d.data().list) && d.data().list.length ? d.data().list : logisticsListFromMap(DEFAULT_LOGISTICS);
+        applyLogisticsList(list);
+    }, () => {});
 };
 
 function parseLogistics(remark) {
@@ -593,6 +612,55 @@ function askLogistics(orders) {
         };
     });
 }
+
+// ---------- 物流商名稱設定（主管）：名稱＋備註關鍵字，由上往下比對，先對到的算 ----------
+window.openLogisticsSettings = function() {
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const r = window.currentUser && window.currentUser.role;
+    const canEdit = r === 'admin' || r === 'supervisor';
+    const rowHtml = (name, kws) => '<tr class="lgs-row border-b border-slate-700">' +
+        '<td class="p-1"><input class="lgs-name w-32 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value="' + esc(name) + '"' + (canEdit ? '' : ' disabled') + '></td>' +
+        '<td class="p-1"><input class="lgs-kw w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value="' + esc(kws.join('、')) + '" placeholder="例如：黑貓、宅急便"' + (canEdit ? '' : ' disabled') + '></td>' +
+        '<td class="p-1 text-center">' + (canEdit ? '<button class="lgs-del px-2 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-xs">刪除</button>' : '') + '</td></tr>';
+    const rows = Object.keys(LOGISTICS_KEYWORDS).map(k => rowHtml(k, LOGISTICS_KEYWORDS[k])).join('');
+    const content = '<div class="text-sm text-slate-300 mb-3">鼎新訂單的<b>備註</b>裡出現這些字，就算這家物流。由上往下比對，先對到的算。' +
+        (canEdit ? '' : '<br><span class="text-amber-300">只有主管可以修改。</span>') + '</div>' +
+        '<div class="max-h-[50vh] overflow-y-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-xs"><th class="p-1 text-left">物流商名稱</th><th class="p-1 text-left">備註裡出現這些字（用「、」分開）</th><th></th></tr></thead><tbody id="lgs-body">' + rows + '</tbody></table></div>' +
+        '<div id="lgs-msg" class="text-red-400 text-sm mt-2"></div>' +
+        (canEdit ? '<div class="flex gap-2 mt-3"><button id="lgs-add" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">＋ 新增一家</button>' +
+            '<button id="lgs-save" class="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">儲存</button></div>' : '');
+    WMS.createModal('modal-logistics-settings', { title: '物流商設定', icon: 'fa-solid fa-truck text-amber-400', content: content, width: '760px' });
+    if (!canEdit) return;
+    const body = document.getElementById('lgs-body');
+    body.addEventListener('click', e => { if (e.target.classList.contains('lgs-del')) e.target.closest('tr').remove(); });
+    document.getElementById('lgs-add').onclick = () => { body.insertAdjacentHTML('beforeend', rowHtml('', [])); body.lastElementChild.querySelector('.lgs-name').focus(); };
+    document.getElementById('lgs-save').onclick = async () => {
+        const list = [], seen = {};
+        let err = '';
+        body.querySelectorAll('.lgs-row').forEach(tr => {
+            const name = tr.querySelector('.lgs-name').value.trim();
+            const kws = tr.querySelector('.lgs-kw').value.split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean);
+            if (!name) { if (kws.length) err = '有一列沒有填物流商名稱'; return; }
+            if (seen[name]) { err = '「' + name + '」重複了'; return; }
+            seen[name] = true;
+            list.push({ name: name, keywords: kws.length ? kws : [name] });
+        });
+        if (!err && !list.length) err = '至少要有一家物流商';
+        if (err) { document.getElementById('lgs-msg').innerText = err; return; }
+        try {
+            await window.db.collection('settings').doc('logistics').set({ list: list, updatedAt: new Date().toISOString(), updatedBy: window.getOperatorName ? window.getOperatorName() : '' });
+        } catch (e) { document.getElementById('lgs-msg').innerText = '儲存失敗：' + e.message; return; }
+        applyLogisticsList(list);
+        WMS.closeModal('modal-logistics-settings');
+        // 還沒排波次、沒有物流商的單：用新名單重新比對備註
+        const fix = (window._orderData.orders || []).filter(o => window.orderWaveable(o) && (!o.logistics || o.logistics === '未指定') && parseLogistics(o.remark) !== '未指定');
+        if (fix.length && confirm('✅ 已儲存\n\n有 ' + fix.length + ' 張還沒排的訂單，備註對得上新的物流商：\n' +
+            fix.slice(0, 10).map(o => o.orderNo + ' ' + (o.customer || '') + ' → ' + parseLogistics(o.remark)).join('\n') + (fix.length > 10 ? '\n…' : '') + '\n\n要一起改好嗎？')) {
+            for (const o of fix) await window.setOrderLogistics(o.id, parseLogistics(o.remark));
+            alert('已改好 ' + fix.length + ' 張，可以按「建立波次」排進波次');
+        } else if (!fix.length) alert('✅ 已儲存');
+    };
+};
 
 // 訂單列表：未指定物流的單可以直接改物流商
 window.setOrderLogistics = async function(orderId, logistics) {
@@ -1759,6 +1827,7 @@ window.onLogin(function() {
     loadWarehouses();
     window.watchLabelPrintMode(renderLabelModeToggle);
     window.watchProductHomes();
+    window.watchLogisticsList();
     startAutoLabelPrinter();
     window.watchPracticeMode(function() {
         renderPracticeToggle();

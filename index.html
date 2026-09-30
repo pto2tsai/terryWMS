@@ -1327,7 +1327,7 @@
                         <button onclick="openCreateWaveModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold" title="把還沒排的訂單建成波次：可以依物流商自動分，也可以自己勾選">
                             <i class="fa-solid fa-plus mr-1"></i>建立波次
                         </button>
-                        <button id="btn-wave-settings" onclick="toggleWaveSettings()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg font-bold" title="練習模式、標籤誰來印、商品在哪一間">
+                        <button id="btn-wave-settings" onclick="toggleWaveSettings()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded-lg font-bold" title="練習模式、標籤誰來印、商品在哪一間、物流商">
                             <i class="fa-solid fa-gear mr-1"></i>設定
                         </button>
                     </div>
@@ -1339,6 +1339,7 @@
                     <button id="btn-label-mode" onclick="toggleLabelPrintMode()" style="display:none"></button>
                     <label id="auto-label-wrap" class="text-xs text-sky-200 mr-2 items-center gap-1 whitespace-nowrap" style="display:none"><input type="checkbox" id="chk-auto-label" onchange="setAutoLabelMachine(this.checked)"> 這台電腦自動印標籤</label>
                     <button id="btn-product-homes" onclick="openProductHomes()" class="px-3 py-2 rounded-lg font-bold mr-2 text-sm bg-slate-700 text-slate-200 hover:bg-slate-600" title="揀貨時自動記住每樣商品在哪一間倉庫，放錯可以在這裡改">📍 商品在哪一間</button>
+                    <button id="btn-logistics-settings" onclick="openLogisticsSettings()" class="px-3 py-2 rounded-lg font-bold mr-2 text-sm bg-slate-700 text-slate-200 hover:bg-slate-600" title="物流商名稱，以及鼎新備註裡出現哪些字就算這家">🚚 物流商</button>
                 </div>
 
                 <!-- 步驟列 -->
