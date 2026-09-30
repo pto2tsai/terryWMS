@@ -30,7 +30,7 @@ const rd = await page.evaluate(() => {
   const lum = ([r, g, b]) => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
   const bgOf = el => { for (let e = el; e; e = e.parentElement) { const c = rgb(getComputedStyle(e).backgroundColor); if (c.length === 3 || (c.length === 4 && c[3] > 0.9)) return c.slice(0, 3); } return [15, 23, 42]; };
   const out = [];
-  for (const sel of ['.pk-loc', '.pk-qty', '.pk-name', '.pk-spec', '.pk-next', '.item-location', '.item-product', '.item-qty', '.item-detail', '.item-status', '.co-tag', '.pid b']) {
+  for (const sel of ['.pk-loc', '.pk-qty', '.pk-name', '.pk-spec', '.pk-next', '.item-location', '.pk-li-name', '.pk-li-spec', '.item-qty', '.item-detail', '.item-status', '.co-tag', '.pid b']) {
     const el = document.querySelector('#page-picking ' + sel); if (!el) { out.push({ sel, missing: true }); continue; }
     const cs = getComputedStyle(el), a = lum(rgb(cs.color).slice(0, 3)), b = lum(bgOf(el));
     out.push({ sel, px: parseFloat(cs.fontSize), cr: Math.round((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) * 10) / 10 });

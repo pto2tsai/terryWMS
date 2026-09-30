@@ -21,7 +21,7 @@ window.choosePickItem = function(k) {
     skipOrder = skipOrder.filter(function(x) { return x !== k; });
     renderPickingList();
     window.scrollTo(0, 0);
-    toast('👉 現在拿：' + it.productName);
+    toast('現在拿：' + it.productName);
 };
 
 window.pageInit.picking = function() {
@@ -253,10 +253,10 @@ function renderNextStop() {
         (code ? '<div class="pk-loc">' + esc(code) + '</div>' : '') +
         '<div class="pk-name">' + esc(n.productName) + '</div>' +
         (n.spec ? '<div class="pk-spec">' + esc(n.spec) + '</div>' : '') +
-        '<div class="pk-qty">' + (ret ? '放回 ' : '拿 ') + esc(n.pickQty) + ' <small>件</small></div>' +
-        '<button class="pk-go' + (ret ? ' ret' : '') + '" onclick="confirmCurrentPick()">' + (ret ? '✓ 放回了' : '✓ 拿好了') + '</button>' +
-        (ret ? '' : '<button class="pk-short" onclick="shortPick()">不夠</button>') +
-        (mine.length > 1 ? '<button class="pk-skip" onclick="skipCurrentPick()">⏭ 先跳過，等一下再拿</button>' : '') +
+        // 「拿幾件」和「拿好了」合成一顆：按下去就是拿好了
+        '<button class="pk-go pk-take' + (ret ? ' ret' : '') + '" onclick="confirmCurrentPick()"><i class="fa-solid fa-check"></i> ' + (ret ? '放回 ' : '拿 ') + '<span class="pk-qty">' + esc(n.pickQty) + '</span> <small>件</small></button>' +
+        (ret ? '' : '<button class="pk-short" onclick="shortPick()"><i class="fa-solid fa-xmark"></i> 不夠</button>') +
+        (mine.length > 1 ? '<button class="pk-skip" onclick="skipCurrentPick()"><i class="fa-solid fa-forward"></i> 先跳過，等一下再拿</button>' : '') +
         '<div class="pk-next">' + (nx ? '下一項：<b>' + esc(nx.productName) + ' ' + esc(nx.spec || '') + '</b>　' + esc(nx.pickQty) + ' 件' : other ? '這間最後一項' : '這是最後一項') + '</div>' +
         '</div>';
 }
@@ -298,7 +298,7 @@ window.skipCurrentPick = function() {
     const k = skipKey(n);
     skipOrder = skipOrder.filter(function(x) { return x !== k; }).concat([k]);
     if (pickFirst === k) pickFirst = null;
-    toast('⏭ ' + n.productName + ' 排到最後，等一下再拿');
+    toast(n.productName + ' 排到最後，等一下再拿');
     renderPickingList();
 };
 window.confirmCurrentPick = async function() {

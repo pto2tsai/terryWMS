@@ -34,7 +34,7 @@ const tapPad = async n => { await mp.click('#picking-next .pk-short'); await mp.
 if (first === '透抽') { await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(800); }
 if (process.env.SHOT_DIR) await mp.screenshot({ path: process.env.SHOT_DIR + '/pick-next.png' });
 const card = await mp.innerText('#picking-next');
-H.check('手機大字卡片：品名、拿 8 件、「✓ 拿好了」大按鈕、「不夠」按鈕', card.includes('白蝦') && card.includes('拿 8') && card.includes('拿好了') && card.includes('不夠'), card);
+H.check('手機大字卡片：品名、「✓ 拿 8 件」一顆大按鈕（拿幾件和拿好了合在一起）、「✕ 不夠」', card.includes('白蝦') && (await mp.innerText('#picking-next .pk-take')).replace(/\s+/g, ' ').includes('拿 8 件') && !card.includes('拿好了') && (await mp.$$('#picking-next .pk-short .fa-xmark')).length === 1 && card.includes('不夠'), card);
 await mp.click('#picking-next .pk-short'); await mp.waitForTimeout(300);
 const padNums = await mp.$$eval('#short-pad button', bs => bs.map(b => b.innerText.trim()));
 H.check('按「不夠」跳出數字鍵 0～7（點實際拿到幾件，不用打字）', JSON.stringify(padNums.slice(0, 8)) === JSON.stringify(['0', '1', '2', '3', '4', '5', '6', '7']) && padNums.includes('取消'), JSON.stringify(padNums));
