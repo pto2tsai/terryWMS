@@ -45,24 +45,17 @@ const n0 = await mp.innerText('#picking-next');
 H.check('手機：上方「練習」標記，大字顯示品名、「✓ 拿 N 件」一顆按鈕', n0.includes('練習') && /拿\s*(10|6)\s*件/.test(await mp.innerText('#picking-next .pk-take')), n0);
 H.check('手機：拿這一項的同時，提醒「下一項」是什麼品項、幾件', /下一項：(白蝦|透抽)/.test(n0) && /下一項：.*(6|10) 件/.test(n0), n0);
 H.check('手機：練習模式不顯示掃描框', !(await mp.isVisible('#picking-scan-box')));
-// 先跳過：現在這項排到最後，先拿下一項（順序跟現場不一樣時不會卡住）
+// 沒有「先跳過」（直接點清單挑別的品項）；全部清單一開始就展開
 const nameOf = t => (t.match(/(白蝦|透抽)/) || [])[1];
 const cur0 = nameOf(n0.split('拿 ')[0].split('\n').slice(-3).join(' ')) || nameOf(n0);
-await mp.click('#picking-next .pk-skip'); await mp.waitForTimeout(400);
-const n0b = await mp.innerText('#picking-next');
 const other = cur0 === '白蝦' ? '透抽' : '白蝦';
-H.check('手機：按「先跳過」→ 先拿下一項，跳過的變成「下一項」', n0b.split('下一項')[0].includes(other) && n0b.includes('下一項：' + cur0), n0b);
-await mp.click('#picking-next .pk-skip'); await mp.waitForTimeout(400);
-H.check('再跳過一次：回到原本那一項', (await mp.innerText('#picking-next')).split('下一項')[0].includes(cur0));
-// 全部清單點任一項：那一項變成現在要拿的
-await mp.click('#picking-list-toggle'); await mp.waitForTimeout(200);
+H.check('手機：沒有「先跳過」按鈕；全部清單一開始就展開', (await mp.$$('#picking-next .pk-skip')).length === 0 && !n0.includes('先跳過') && await mp.isVisible('#picking-list .pk-li-name'));
 if (process.env.SHOT3) { await mp.evaluate(() => document.getElementById('picking-list').scrollIntoView()); await mp.screenshot({ path: process.env.SHOT3 }); }
 H.check('手機全部清單：練習模式不顯示「照訂單揀」，品名、規格分兩行', !(await mp.innerText('#picking-list')).includes('照訂單揀') && (await mp.$$('#picking-list .pk-li-name')).length === 2 && (await mp.$$('#picking-list .pk-li-spec')).length === 2);
 await mp.click('#picking-list .list-item.clickable:has-text("' + other + '")'); await mp.waitForTimeout(400);
 H.check('全部清單點「' + other + '」：它變成現在要拿的一項', (await mp.innerText('#picking-next')).split('下一項')[0].includes(other));
 await mp.click('#picking-list .list-item.clickable:has-text("' + cur0 + '")'); await mp.waitForTimeout(400);
 H.check('再點回「' + cur0 + '」：換回來', (await mp.innerText('#picking-next')).split('下一項')[0].includes(cur0));
-await mp.click('#picking-list-toggle'); await mp.waitForTimeout(200);
 await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(800);
 const w1 = await H.one('waves', W.waveNo);
 H.check('按「拿好了」：記下揀了這一項', (w1.pickLog || []).length === 1, JSON.stringify(w1.pickLog));

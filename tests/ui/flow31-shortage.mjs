@@ -39,6 +39,17 @@ await mp.click('#picking-next .pk-short'); await mp.waitForTimeout(300);
 const padNums = await mp.$$eval('#short-pad button', bs => bs.map(b => b.innerText.trim()));
 H.check('按「不夠」跳出數字鍵 0～7（點實際拿到幾件，不用打字）', JSON.stringify(padNums.slice(0, 8)) === JSON.stringify(['0', '1', '2', '3', '4', '5', '6', '7']) && padNums.includes('取消'), JSON.stringify(padNums));
 if (process.env.SHOT_DIR) await mp.screenshot({ path: process.env.SHOT_DIR + '/short-pad.png' });
+// 件數多（超過 30）：改成計算機鍵盤，也是用按的
+await mp.evaluate(() => { closeShortPad(); const n = pickingItems.find(i => !i.completed && !i.shortage && i.productName === '白蝦'); window._q0 = n.pickQty; n.pickQty = 40; shortPick(); }); await mp.waitForTimeout(300);
+H.check('件數超過 30：跳出計算機鍵盤（沒有打字框）', await mp.isVisible('#pad-val') && (await mp.$$('#short-pad input')).length === 0);
+for (const k of ['4', '5']) await mp.click(`#short-pad .pad-keys button:text-is("${k}")`);
+H.check('按 4、5 顯示 45', (await mp.innerText('#pad-val')).trim() === '45');
+await mp.click('#short-pad .pad-ok'); await mp.waitForTimeout(200);
+H.check('比要的還多：提醒、不存', (await mp.innerText('#pad-msg')).includes('要比 40 少') && await mp.isVisible('#short-pad'));
+await mp.click('#short-pad button:text-is("刪一格")');
+H.check('刪一格：剩 4', (await mp.innerText('#pad-val')).trim() === '4');
+await mp.click('#short-pad .pad-cancel');
+await mp.evaluate(() => { pickingItems.find(i => i.productName === '白蝦').pickQty = window._q0; shortPick(); }); await mp.waitForTimeout(300);
 await mp.click('#short-pad button:text-is("6")'); await mp.waitForTimeout(1500);
 const w1 = await H.one('waves', W.waveNo);
 H.check('點 6：記下拿到 6 件、不夠 2 件', (w1.shortLog || []).some(e => e.qty === 2 && e.productName === '白蝦') && (w1.pickLog || []).some(e => e.productName === '白蝦' && e.qty === 6), JSON.stringify([w1.shortLog, w1.pickLog]));

@@ -256,7 +256,6 @@ function renderNextStop() {
         // 「拿幾件」和「拿好了」合成一顆：按下去就是拿好了
         '<button class="pk-go pk-take' + (ret ? ' ret' : '') + '" onclick="confirmCurrentPick()"><i class="fa-solid fa-check"></i> ' + (ret ? '放回 ' : '拿 ') + '<span class="pk-qty">' + esc(n.pickQty) + '</span> <small>件</small></button>' +
         (ret ? '' : '<button class="pk-short" onclick="shortPick()"><i class="fa-solid fa-xmark"></i> 不夠</button>') +
-        (mine.length > 1 ? '<button class="pk-skip" onclick="skipCurrentPick()"><i class="fa-solid fa-forward"></i> 先跳過，等一下再拿</button>' : '') +
         '<div class="pk-next">' + (nx ? '下一項：<b>' + esc(nx.productName) + ' ' + esc(nx.spec || '') + '</b>　' + esc(nx.pickQty) + ' 件' : other ? '這間最後一項' : '這是最後一項') + '</div>' +
         '</div>';
 }
@@ -312,12 +311,19 @@ window.shortPick = function() {
     const n = currentItem();
     if (!n || n.type === 'return') return;
     const want = parseFloat(n.pickQty) || 0;
-    if (want > 30) {   // 件數太多，數字鍵放不下：用鍵盤
-        const ans = prompt(n.productName + ' 要拿 ' + want + ' 件\n實際拿到幾件？（沒有貨填 0）', '0');
-        if (ans === null) return;
-        const g = parseFloat(String(ans).trim());
-        if (!(g >= 0 && g < want) || String(ans).trim() === '') { alert('請填 0 到 ' + (want - 1)); return; }
-        return saveShort(n, g);
+    if (want > 30) {   // 件數太多，一個數字一顆鍵放不下：改用計算機鍵盤（還是用按的，不用打字）
+        window._shortItem = n; window._padVal = '';
+        const pad = $('short-pad');
+        pad.innerHTML = '<div class="pad-title">拿到幾件？</div>' +
+            '<div class="pad-sub">' + esc(n.productName) + ' ' + esc(n.spec || '') + '　要 ' + want + ' 件</div>' +
+            '<div class="pad-display" id="pad-val">0</div>' +
+            '<div class="pad-grid pad-keys">' + [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function(v) { return '<button onclick="padKey(' + v + ')">' + v + '</button>'; }).join('') +
+            '<button class="pad-fn" onclick="padKey(\'C\')">清除</button><button onclick="padKey(0)">0</button><button class="pad-fn" onclick="padKey(\'B\')">刪一格</button></div>' +
+            '<div id="pad-msg" class="pad-msg"></div>' +
+            '<button class="pad-ok" onclick="padOk()">確定</button>' +
+            '<button class="pad-cancel" onclick="closeShortPad()">取消</button>';
+        pad.hidden = false;
+        return;
     }
     const nums = [];
     for (let i = 0; i < want; i++) nums.push(i);
@@ -330,6 +336,23 @@ window.shortPick = function() {
     window._shortItem = n;
 };
 window.closeShortPad = function() { $('short-pad').hidden = true; window._shortItem = null; };
+window.padKey = function(k) {
+    let v = window._padVal || '';
+    if (k === 'C') v = '';
+    else if (k === 'B') v = v.slice(0, -1);
+    else if (v.length < 4) v = (v === '0' ? '' : v) + k;
+    window._padVal = v;
+    $('pad-val').innerText = v || '0';
+    $('pad-msg').innerText = '';
+};
+window.padOk = function() {
+    const n = window._shortItem;
+    if (!n) return;
+    const want = parseFloat(n.pickQty) || 0, g = parseInt(window._padVal || '0', 10);
+    if (!(g >= 0 && g < want)) { $('pad-msg').innerText = '要比 ' + want + ' 少（不夠才按這裡）'; return; }
+    window.closeShortPad();
+    return saveShort(n, g);
+};
 window.pickShortNumber = function(v) {
     const n = window._shortItem;
     window.closeShortPad();
