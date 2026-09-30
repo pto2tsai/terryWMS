@@ -1700,7 +1700,7 @@ window.clearLocalStorage = function() {
             // 揀到一半鼎新減量：多拿的要放回
             var toReturn = (list || []).filter(function(i) { return i.type === 'return' && !i.completed; });
             if (toReturn.length) {
-                html += '<h3 style="margin:14px 0 6px;color:#c00">↩️ 要放回（鼎新減量，多拿的貨）</h3><table>';
+                html += '<h3 class="house" style="border:3px solid #000;padding:4px 8px">↩️ 要放回（鼎新減量，多拿的貨）</h3><table>';
                 html += '<tr><th class="check">✓</th><th style="width:90px">放回儲位</th><th>品名</th><th>規格</th><th>板號</th><th class="qty">數量</th></tr>';
                 toReturn.forEach(function(i) {
                     html += '<tr><td class="check">☐</td><td class="loc">' + i.locationId + '</td><td>' + i.productName + '</td><td>' + (i.spec || '') + '</td><td>' + (i.palletId || '') + '</td><td class="qty">' + i.pickQty + '</td></tr>';

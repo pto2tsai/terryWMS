@@ -474,32 +474,33 @@ window.PICKLIST_STYLE =
     '@media print { .pl { width: auto; } }' +
     '.wave-section { page-break-after: always; margin-bottom: 20px; }' +
     '.wave-section:last-child { page-break-after: auto; }' +
-    '.update-banner { background: #dc2626; color: white; padding: 8px 15px; font-size: 18px; font-weight: bold; margin-bottom: 10px; }' +
+    '.update-banner { background: #000; color: #fff; padding: 8px 15px; font-size: 18px; font-weight: bold; margin-bottom: 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
     '.header { margin-bottom: 10px; border-bottom: 2px solid #333; padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }' +
     '.header h2 { margin: 0; font-size: 28px; }' +
     '.header h3 { margin: 4px 0 0; font-size: 22px; }' +
-    '.version { background: #374151; color: white; padding: 6px 14px; border-radius: 4px; font-weight: bold; font-size: 16px; }' +
+    '.version { background: #000; color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 6px 14px; border-radius: 4px; font-weight: bold; font-size: 16px; }' +
     '.info-row { display: flex; gap: 15px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed #999; }' +
     '.info-item { flex: 1; }' +
     '.info-label { font-size: 14px; color: #444; }' +
-    '.info-value { font-size: 22px; font-weight: bold; }' +
+    '.info-value { font-size: 22px; font-weight: bold; color: #000 !important; }' +
     'table { width: 100%; border-collapse: collapse; }' +
     'thead { display: table-header-group; }' +
     'tr { page-break-inside: avoid; }' +
     'th, td { border: 1px solid #333; padding: 6px 7px; text-align: left; vertical-align: middle; }' +
-    'th { background: #374151; color: white; font-size: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
-    '.loc { font-weight: bold; font-size: 20px; color: #1e40af; white-space: nowrap; }' +
+    'th { background: #000; color: #fff; font-size: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+    '.loc { font-weight: bold; font-size: 20px; color: #000; white-space: nowrap; }' +
     '.name { font-size: 17px; font-weight: bold; }' +
     '.small { font-size: 15px; white-space: nowrap; }' +
-    '.qty { text-align: center; font-weight: bold; font-size: 24px; color: #c00; }' +
+    '.qty { text-align: center; font-weight: 900; font-size: 24px; color: #000; }' +
     '.check { width: 36px; text-align: center; font-size: 22px; }' +
-    '.change-add { color: #16a34a; font-weight: bold; }' +
-    '.change-sub { color: #dc2626; font-weight: bold; }' +
-    '.floor-1f { background: #dbeafe; } .floor-2f { background: #fef3c7; } .floor-3f { background: #fee2e2; }' +
-    '.floor-1f, .floor-2f, .floor-3f { -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+    // 黑白印表機：不靠顏色，靠粗體、框線、灰底、★
+    '.change-add, .change-sub { color: #000; font-weight: 900; }' +
+    '.change-tag { border: 2px solid #000; padding: 0 4px; font-size: 16px; }' +
     '.house { margin: 10px 0 6px; font-size: 22px; }' +
     '.bt b { font-size: 15px; white-space: nowrap; } .bt .exp { font-size: 14px; white-space: nowrap; }' +
-    'tr.chg { background: #fde68a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+    'tr.chg { background: #e5e5e5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
+    'tr.chg td { border-top: 3px solid #000; border-bottom: 3px solid #000; }' +
+    'tr.chg .check::before { content: "★"; font-size: 16px; margin-right: 2px; }' +
     'tr.del td { text-decoration: line-through; color: #666; } tr.del .chgcell { text-decoration: none; }' +
     '.prev { font-size: 13px; color: #333; font-weight: normal; }' +
     '.chgcell { text-align: center; font-size: 20px; font-weight: bold; }' +
@@ -530,14 +531,13 @@ window.pickListDiff = function(wave, rows) {
 };
 window.pickListRowHtml = function(item, showChange) {
     var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
-    var floor = item.floor === 1 ? ' floor-1f' : item.floor === 2 ? ' floor-2f' : item.floor === 3 ? ' floor-3f' : '';
     var chg = item.change === 'add' ? '<span class="change-add">+' + (Math.round((item.totalQty - item.prev) * 1000) / 1000) + '</span>'
         : item.change === 'sub' ? '<span class="change-sub">−' + (Math.round((item.prev - item.totalQty) * 1000) / 1000) + '</span>'
-        : item.change === 'new' ? '<span class="change-add">新增</span>'
-        : item.change === 'del' ? '<span class="change-sub">刪除</span>' : '';
+        : item.change === 'new' ? '<span class="change-add change-tag">新增</span>'
+        : item.change === 'del' ? '<span class="change-sub change-tag">刪除</span>' : '';
     var bt = (item.batchNo && item.batchNo !== '-' ? '<b>' + esc(item.batchNo) + '</b>' : '<b>-</b>') +
         (item.expiryDate && item.expiryDate !== '-' ? '<div class="exp">' + esc(item.expiryDate) + '</div>' : '');
-    return '<tr class="' + (item.change ? 'chg' : floor.trim()) + (item.change === 'del' ? ' del' : '') + '">' +
+    return '<tr class="' + (item.change ? 'chg' : '') + (item.change === 'del' ? ' del' : '') + '">' +
         '<td class="check">☐</td>' +
         '<td class="loc">' + esc(item.location) + '</td>' +
         '<td class="name">' + esc(item.productName) + '</td>' +

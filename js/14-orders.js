@@ -331,13 +331,13 @@ window.buildPickListSectionHtml = function(wave, opts) {
     var d = window.pickListDiff(wave, rows);
     var showChange = d.changed > 0;
     var html = '';
-    if (showChange || opts.forceBanner) html += '<div class="update-banner">⚠️ 更新版 V' + version + (showChange ? '：有 ' + d.changed + ' 項異動（黃底）' : '') + '，請作廢舊版揀貨單</div>';
+    if (showChange || opts.forceBanner) html += '<div class="update-banner">⚠️ 更新版 V' + version + (showChange ? '：有 ' + d.changed + ' 項異動（灰底 ★）' : '') + '，請作廢舊版揀貨單</div>';
     html += '<div class="header"><div><h2>揀貨單</h2><h3>' + esc(wave.waveNo) + '</h3></div><span class="version">版次 V' + version + '</span></div>';
     html += '<div class="info-row">' +
         '<div class="info-item"><div class="info-label">物流商</div><div class="info-value">' + esc(wave.logistics) + '</div></div>' +
         '<div class="info-item"><div class="info-label">訂單數</div><div class="info-value">' + (wave.orders || []).length + ' 筆</div></div>' +
         '<div class="info-item"><div class="info-label">品項數</div><div class="info-value">' + rows.length + ' 項</div></div>' +
-        '<div class="info-item"><div class="info-label">總件數</div><div class="info-value" style="color:#dc2626;">' + (Math.round((wave.totalQty || 0) * 1000) / 1000) + ' 件</div></div>' +
+        '<div class="info-item"><div class="info-label">總件數</div><div class="info-value">' + (Math.round((wave.totalQty || 0) * 1000) / 1000) + ' 件</div></div>' +
         '</div>';
     // 兩間倉庫：一間一張（換頁），各自拿去揀
     var groups = window.groupRowsByHouse(rows);
@@ -346,7 +346,7 @@ window.buildPickListSectionHtml = function(wave, opts) {
         html += '<table>' + window.PICKLIST_HEAD(showChange) + '<tbody>' + g.rows.map(function(r) { return window.pickListRowHtml(r, showChange); }).join('') + '</tbody></table>';
     });
     if (d.removed.length) {
-        html += '<h3 class="house" style="color:#c00">✖ 鼎新刪掉的品項（不用拿；已經拿了要放回）</h3>';
+        html += '<h3 class="house" style="border:3px solid #000;padding:4px 8px">✖ 鼎新刪掉的品項（不用拿；已經拿了要放回）</h3>';
         html += '<table>' + window.PICKLIST_HEAD(true) + '<tbody>' + d.removed.map(function(r) { return window.pickListRowHtml(r, true); }).join('') + '</tbody></table>';
     }
     html += '<div class="timestamp">版次 V' + version + ' | 列印日期：' + new Date().toLocaleString('zh-TW') + '</div>';
