@@ -57,10 +57,12 @@ await B.page.waitForTimeout(500);
 H.check('I庫的手機現在叫人拿魷魚', (await cur(B)).includes('魷魚'), await card(B));
 await B.page.click('#picking-next .pk-go'); await B.page.waitForTimeout(1200);
 const allB = await card(B);
-H.check('兩間都拿完：I庫出現「完成出貨」', allB.includes('全部拿完') && allB.includes('完成出貨'), allB);
+H.check('兩間都拿完：I庫出現「開始分貨」（兩家一起揀）', allB.includes('全部拿完') && allB.includes('開始分貨'), allB);
 await B.page.click('#picking-next .pk-go'); await B.page.waitForTimeout(2500);
 const wd = await H.one('waves', W._id);
 H.check('波次完成、兩張單都出貨', wd.status === 'done' && (wd.shipped || []).length === 2, JSON.stringify([wd.status, wd.shipped]));
+H.check('完成後直接進分貨畫面', /分貨\s*0\s*\/ 2 家/.test(await card(B)), await card(B));
+await B.page.click('#picking-next button:has-text("回上一頁")'); await B.page.waitForTimeout(400);
 const fin = await card(B);
 H.check('黑貓：完成畫面寫「貼托運單就好，不用印標籤」，沒有印標籤按鈕；有「分貨（2 家）」', fin.includes('貼托運單就好') && !fin.includes('印標籤（') && fin.includes('分貨（2 家）'), fin);
 if (process.env.SHOT_DIR) await B.page.screenshot({ path: process.env.SHOT_DIR + '/h3-B-finish.png' });
@@ -79,7 +81,7 @@ const mid = await B.page.evaluate(() => { const c = [].slice.call(document.query
 H.check('按完一家：下一家還沒分的卡片自動移到螢幕中間', mid);
 await B.page.click('text=這家分好了'); await B.page.waitForTimeout(800);
 const allok = await card(B);
-H.check('兩家都分好：最上面寫「全部分好了」，下面直接有「回到選單」大按鈕（不是看起來像按鈕的字）', allok.trim().startsWith('全部分好了') && (await B.page.$$('#picking-next .sort-allok')).length === 1 && (await B.page.isVisible('#picking-next button.sort-home')), allok.slice(0, 120));
+H.check('兩家都分好：最上面寫「全部分好了」，下面直接有下一步的大按鈕（下一個波次／回到選單）', allok.trim().startsWith('全部分好了') && (await B.page.$$('#picking-next .sort-allok')).length === 1 && (await B.page.isVisible('#picking-next button.sort-home') || await B.page.isVisible('#picking-next button:has-text("下一個波次")')), allok.slice(0, 120));
 if (process.env.SHOT_DIR) await B.page.screenshot({ path: process.env.SHOT_DIR + '/h4b-sort-done.png' });
 
 // 電腦：揀貨單分兩間；商品在哪一間可以改

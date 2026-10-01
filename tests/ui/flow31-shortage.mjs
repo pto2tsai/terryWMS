@@ -58,7 +58,7 @@ if (first !== '透抽') { await mp.click('#picking-next .pk-go'); await mp.waitF
 
 // ---------- 全部拿完：按「完成出貨」（不再跳確認視窗）----------
 const allDone = await mp.innerText('#picking-next');
-H.check('全部拿完：顯示「有 1 項不夠」和「完成出貨」大按鈕', allDone.includes('全部拿完') && allDone.includes('有 1 項不夠') && allDone.includes('完成出貨'), allDone);
+H.check('揀完、有不夠的：寫「揀完了，有 1 項不夠」，按鈕是「開始分貨」（兩家一起揀）', allDone.includes('揀完了') && allDone.includes('有 1 項不夠') && allDone.includes('開始分貨') && !allDone.includes('全部拿完') && !allDone.includes('完成出貨'), allDone);
 const dz = M.log.dialogs.length;
 await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(800);
 const panel = await mp.innerText('#picking-next');
@@ -84,6 +84,8 @@ H.check('完成：照現場分法出貨（海霸王白蝦 3、好市多白蝦 3�
   JSON.stringify((wd.shipped || []).map(x => x.orderNo + ':' + x.items.map(i => i.productName + i.qty).join('+'))) === JSON.stringify(['A-1:白蝦3', 'A-2:白蝦3+透抽2']), JSON.stringify([wd.shipped, so['A-1'], so['A-2']]));
 H.check('海霸王標「要改鼎新」（白蝦 5→3）；好市多出齊不用改', so['A-1'].erpFixNeeded === true && so['A-1'].shortShipped[0].want === 5 && so['A-1'].shortShipped[0].got === 3 && !so['A-2'].erpFixNeeded, JSON.stringify([so['A-1'].shortShipped, so['A-2'].erpFixNeeded]));
 H.check('波次記下現場的分法和誰少出', wd.allocOverride && (wd.shortOrders || []).length === 1 && wd.shortOrders[0].customer === '海霸王' && wd.shortOrders[0].got === 3, JSON.stringify([wd.allocOverride, wd.shortOrders]));
+H.check('兩家一起揀：完成後直接進分貨畫面（不用再按「分貨」）', /分貨\s*0\s*\/ 2 家/.test(await mp.innerText('#picking-next')), await mp.innerText('#picking-next'));
+await mp.click('#picking-next button:has-text("回上一頁")'); await mp.waitForTimeout(400);
 const fin = await mp.innerText('#picking-next');
 H.check('完成畫面：大字「完成」、「印標籤（2 張）」大按鈕、小字寫缺的不補', fin.includes('完成') && fin.includes('缺的不補') && fin.includes('印標籤（2 張）'), fin);
 if (process.env.SHOT_DIR) await mp.screenshot({ path: process.env.SHOT_DIR + '/finish-panel.png' });
@@ -149,8 +151,9 @@ H.check('辦公室電腦自動印出標籤（沒有人按），件數是實際�
 H.check('沒有頁面錯誤', D.log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(D.log.errors.concat(M.log.errors)));
 // ---------- 手動標「已經改好了」 ----------
 await H.admin(async d => H.setDoc(H.doc(d, 'salesOrders', 'SO-FIX'), { orderNo: 'B-9', customer: '測試客戶', status: 'shipped', erpFixNeeded: true, shortShipped: [{ productName: '干貝', spec: 'S', want: 4, got: 1, short: 3 }], items: [] }));
-await D.page.evaluate(() => openErpFixList()); await D.page.waitForTimeout(1200);
-await D.page.click('#modal-erp-fix button:has-text("已經改好了")');
+await D.page.evaluate(() => openErpFixList());
+await D.page.waitForSelector('#modal-erp-fix .ds-pick-row:has-text("測試客戶") button:has-text("已經改好了")', { timeout: 8000 });
+await D.page.click('#modal-erp-fix .ds-pick-row:has-text("測試客戶") button:has-text("已經改好了")');
 for (let i = 0; i < 20; i++) { await D.page.waitForTimeout(300); if ((await H.one('salesOrders', 'SO-FIX')).erpFixNeeded === false && !(await D.page.innerText('#modal-erp-fix').catch(() => '')).includes('測試客戶')) break; }
 H.check('按「已經改好了」：這張單從清單拿掉（記下誰改的）', (await H.one('salesOrders', 'SO-FIX')).erpFixNeeded === false && !(await D.page.innerText('#modal-erp-fix')).includes('測試客戶'), JSON.stringify([await H.one('salesOrders', 'SO-FIX'), D.log.dialogs.slice(-3), D.log.errors]));
 await H.close(); process.exit(0);

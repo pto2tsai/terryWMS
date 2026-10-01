@@ -33,7 +33,28 @@ window.pageInit.picking = function() {
     show('picking-actions', false);
     clearResult('picking-scan-result');
     renderPickingList();
+    // 一打開就直接揀下一個波次（不用再選）；上面的選單還是可以換
+    const nx = nextOpenWave(null);
+    if (nx) window.goNextWave(nx.id);
 };
+
+// 下一個要揀的波次：同一間沒有別人在揀的，先開單的先揀
+function nextOpenWave(excludeId) {
+    return (window.waves || []).filter(function(w) { return window.isWaveOpen(w) && w.id !== excludeId && w.status !== 'done' && !otherPickers(w, true).length; })
+        .sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); })[0] || null;
+}
+window.goNextWave = function(id) {
+    renderWaveOptions();
+    $('picking-wave-select').value = id;
+    window.scrollTo(0, 0);
+    return window.loadPickingWave();
+};
+// 做完一個波次後的按鈕：還有波次就「下一個波次」，都揀完了才「回到選單」
+function nextWaveButton(doneId) {
+    const nx = nextOpenWave(doneId);
+    return nx ? '<button class="pk-go" style="background:#2f6fe8" onclick="goNextWave(\'' + esc(nx.id) + '\')"><i class="fa-solid fa-arrow-right"></i> 下一個波次<br><span style="font-size:18px;font-weight:700">' + esc(nx.waveNo) + '　' + esc(nx.logistics || '') + '（' + esc(nx.totalQty || 0) + ' 件）</span></button>'
+        : '<div class="pk-sub" style="font-size:20px;margin:10px 0;color:#3ddc97"><i class="fa-solid fa-flag-checkered"></i> 今天的波次都揀完了</div><button class="pk-link" onclick="goBack()">回到選單</button>';
+}
 
 // 誰正在揀：選波次時記下名字，每按一次「拿好了／不夠」更新時間；60 分鐘沒動作就不算
 const PICKER_ACTIVE_MS = 60 * 60 * 1000;
@@ -131,10 +152,17 @@ window.loadPickingWave = async function() {
     currentWave = w;
     if (w.status !== 'done') db.collection('waves').doc(w.id).update(pickerTouch()).catch(function() {});
     pickingItems = window.buildWavePickingList(currentWave, window.pallets);
+    pickFocus(false);
     renderPickingList();
     show('picking-scan-area', true);
     show('picking-actions', false);   // 「完成出貨」在全部拿完時出現在大卡片上
 };
+
+// 揀完以後（分缺貨、完成、分貨）：下面的全部清單和最後一次揀的結果收起來，畫面只剩現在要做的事
+function pickFocus(on) {
+    show('picking-list-section', !on);
+    if (on) clearResult('picking-scan-result');
+}
 
 // 其他裝置（桌機或別支手機）揀了，這邊即時打勾
 window.dataHooks.waves.push(function() {
@@ -159,9 +187,9 @@ window.dataHooks.waves.push(function() {
 
 function renderPickingList() {
     const list = $('picking-list');
-    const completed = pickingItems.filter(function(i) { return i.completed; }).length;
-    const total = pickingItems.filter(function(i) { return !i.shortage; }).length;
-    $('picking-progress').innerText = completed + '/' + total;
+    const total = pickingItems.filter(function(i) { return !i.shortage || i.fieldShort; }).length;
+    const left = pickingItems.filter(function(i) { return !i.completed && !i.shortage; }).length;
+    $('picking-progress').innerText = (total - left) + '/' + total;
     if (!currentWave) {
         $('picking-next').innerHTML = '';
         list.innerHTML = '<div class="empty-state"><i class="fa-solid fa-clipboard-list"></i><p>請先選擇波次</p></div>';
@@ -233,16 +261,29 @@ function renderNextStop() {
     if (!n && other) {
         const oh = window.PICK_HOUSES.filter(function(h) { return h.id !== house; }).map(function(h) { return h.name; }).join('、');
         const who = otherPickers(currentWave).filter(function(x) { return x.house && x.house !== house; });
-        box.innerHTML = top + warn + '<div class="pk-card pk-done"><div class="big">✅ 這間拿完了</div>' +
+        box.innerHTML = top + warn + '<div class="pk-card pk-done"><div class="big"><i class="fa-solid fa-circle-check"></i> 這間拿完了</div>' +
             '<div class="pk-sub" style="font-size:22px">' + esc(oh) + '還有 <b>' + other + '</b> 項' + (who.length ? '（' + esc(who.map(function(x) { return x.name; }).join('、')) + ' 揀貨中）' : '') + '</div>' +
             '<div class="pk-sub">兩間都拿完，最後一個人按「完成出貨」</div></div>';
         return;
     }
     if (!n) {
+        // 依情況說清楚下一步：全部拿到 → 完成出貨；有些不夠 → 先分缺貨給各家；一件都沒拿到 → 這次不出貨，直接結束
         const nShort = pickingItems.filter(function(i) { return i.fieldShort; }).length;
-        box.innerHTML = top + warn + '<div class="pk-card pk-done"><div class="big">✅ 全部拿完</div>' +
-            (nShort ? '<div class="pk-sub">有 ' + nShort + ' 項不夠</div>' : '') +
-            '<button class="pk-go" onclick="completePickingWave()">完成出貨</button></div>';
+        const nGot = pickingItems.filter(function(i) { return i.completed && i.type !== 'return'; }).length;
+        const goLabel = (currentWave.orders || []).length > 1 ? '開始分貨' : '完成出貨';
+        if (nShort && !nGot) {
+            box.innerHTML = top + warn + '<div class="pk-card" style="border-color:#ef4444"><div class="big" style="font-size:30px;font-weight:900;color:#fca5a5"><i class="fa-solid fa-circle-xmark"></i> 一件都沒拿到</div>' +
+                '<div class="pk-sub" style="font-size:20px">' + nShort + ' 項都不夠，這次不出貨<br><span style="font-size:16px">會列進電腦的「缺貨要改鼎新」，請業務改單</span></div>' +
+                '<button class="pk-go" style="background:#b91c1c" onclick="finishWithShortage(true)">結束這個波次（這次不出貨）</button></div>';
+        } else if (nShort) {
+            box.innerHTML = top + warn + '<div class="pk-card pk-done"><div class="big"><i class="fa-solid fa-circle-check"></i> 揀完了</div>' +
+                '<div class="pk-sub" style="font-size:20px;color:#fecaca">有 ' + nShort + ' 項不夠</div>' +
+                '<button class="pk-go" onclick="completePickingWave()">' + goLabel + '</button>' +
+                '<div class="pk-sub" style="font-size:15px;margin-top:8px">先決定不夠的給誰，再' + (goLabel === '開始分貨' ? '分貨' : '出貨') + '</div></div>';
+        } else {
+            box.innerHTML = top + warn + '<div class="pk-card pk-done"><div class="big"><i class="fa-solid fa-circle-check"></i> 全部拿完</div>' +
+                '<button class="pk-go" onclick="completePickingWave()">' + goLabel + '</button></div>';
+        }
         return;
     }
     const ret = n.type === 'return';
@@ -413,6 +454,7 @@ async function markPicked(found) {
 // 只放一顆大按鈕「改分法」：進去後預設分法已經排好，直接按「好，完成」或用－調整
 // （標籤是完成後才印、件數是實際的，不用改標籤）；缺的這次不出、之後也不補，辦公室會提醒業務改鼎新
 function renderShortfallPanel() {
+    pickFocus(true);
     const alloc = window.waveShortAllocation(currentWave, pickingItems);
     const keys = Object.keys(alloc);
     window._shortKeys = keys;
@@ -499,6 +541,7 @@ window.finishWithShortage = function(useDefault) {
 
 // 完成後：一個大按鈕「印標籤」（件數是實際出貨的）。辦公室自動印模式時，這裡只提示
 function renderFinishPanel(wave) {
+    pickFocus(true);
     show('picking-actions', false);
     show('picking-scan-box', false);
     const lb = window.buildSortingLabelsHtml(wave);
@@ -513,7 +556,7 @@ function renderFinishPanel(wave) {
             : (lb.skipped.length ? '<div class="pk-sub">不用貼標籤：' + esc(lb.skipped.join('、')) + '</div>' : '') +
               (office ? '<div class="pk-sub" style="font-size:20px"><i class="fa-solid fa-tags"></i> 標籤在辦公室自動印出（' + lb.count + ' 張）</div>'
                 : (lb.count ? '<button class="pk-go" onclick="printLabelsOnPhone()"><i class="fa-solid fa-print"></i> 印標籤（' + lb.count + ' 張）</button>' : ''))) +
-        '<button class="pk-link" onclick="goBack()">回到選單</button>' +
+        nextWaveButton(wave.id) +
         '<div class="pk-sub" style="font-size:14px;margin-top:10px">' + (window.isPracticeMode() ? '練習模式：庫存沒有扣' : '庫存已扣除') +
         (wave.shortOrders && wave.shortOrders.length ? '　・　缺的不補，辦公室會請業務改鼎新' : '') + '</div></div>';
     window._finishedWave = wave;
@@ -526,6 +569,7 @@ function sortList(wave) { return (wave.shipped || []).filter(function(o) { retur
 window.openSortPanel = function(justDone) {
     const wave = window._finishedWave;
     if (!wave) return;
+    pickFocus(true);
     const list = sortList(wave), done = wave.sortedOrders || [];
     const left = list.filter(function(o) { return done.indexOf(o.orderNo) < 0; }).length;
     // 全部分好：最上面寫「全部分好了」＋下一步的大按鈕（印標籤／回到選單），不用往下找
@@ -537,7 +581,7 @@ window.openSortPanel = function(justDone) {
         top = '<div class="sort-allok"><i class="fa-solid fa-circle-check"></i><div><b>全部分好了</b><span>' + list.length + ' 家都分好了，下一步：</span></div></div>' +
             (needLb && !office && lb.count ? '<button class="pk-go" onclick="printLabelsOnPhone()"><i class="fa-solid fa-print"></i> 印標籤（' + lb.count + ' 張）</button>' : '') +
             (needLb && office ? '<div class="pk-sub" style="font-size:18px;margin:6px 0 10px"><i class="fa-solid fa-tags"></i> 標籤在辦公室自動印出</div>' : '') +
-            '<button class="pk-go sort-home" onclick="goBack()"><i class="fa-solid fa-house"></i> 回到選單</button>';
+            nextWaveButton(wave.id).replace('class="pk-link"', 'class="pk-go sort-home"');
     } else {
         top = '<div class="pk-top"><span><i class="fa-solid fa-boxes-stacked"></i> 分貨　<b>' + (list.length - left) + '</b> / ' + list.length + ' 家</span></div>';
     }
@@ -549,7 +593,7 @@ window.openSortPanel = function(justDone) {
                     : o.items.map(function(it) { return '<div class="sort-line"><span>' + esc(it.productName) + ' ' + esc(it.spec || '') + '</span><b>' + esc(it.qty) + ' 件</b></div>'; }).join('') +
                       '<button class="pk-go" onclick="markSorted(' + i + ')"><i class="fa-solid fa-check"></i> 這家分好了</button>') + '</div>';
         }).join('') +
-        '<button class="pk-link" onclick="renderFinishPanel(window._finishedWave)">← 回上一頁</button>';
+        (left ? '<button class="pk-link" onclick="renderFinishPanel(window._finishedWave)">← 回上一頁</button>' : '');
     if (!left && justDone != null) window.scrollTo({ top: 0, behavior: 'smooth' });
     else if (justDone != null) {
         // 下一家還沒分的（優先找剛剛那家後面的）移到螢幕中間
@@ -616,6 +660,8 @@ window.completePickingWave = async function(labelsFixed) {
         currentWave.status = 'done';
         window._pendingAlloc = null;
         renderFinishPanel(currentWave);
+        // 好幾家一起揀的：直接進分貨（不用再按一次「分貨」）
+        if (sortList(currentWave).length > 1) window.openSortPanel();
     } catch (e) {
         window._justCompleted = null;
         alert('❌ 完成波次失敗：' + e.message + '\n\n庫存與訂單都沒有變動。');
