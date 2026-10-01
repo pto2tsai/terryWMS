@@ -97,15 +97,15 @@ window.sortingLabelsPrintCss = function(lb) {
         '.sl .label + .label{page-break-before:always;break-before:page}' +
         // 感熱標籤是黑白的：紅色、圖示都印不清楚 → 全部黑白、粗框
         '.sl .label{color:#000}.sl .ic{display:none}' +
-        '.sl .logistics{background:#000;color:#fff;margin:-2.5mm -2.5mm 1.5mm;padding:1.2mm 2.5mm;font-size:15px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-        '.sl .label > div:nth-child(2){font-size:13px !important;color:#000 !important;font-weight:bold}' +
+        '.sl .logistics{background:#000;color:#fff;margin:-2.5mm -2.5mm 1mm;padding:0.6mm 2.5mm;font-size:14px;line-height:1.25;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+        // 單號移到最下面跟地址同一行（空間留給客戶名、件數）
+        '.sl .label .ono{display:none}.sl .lb-ono{display:inline;font-weight:bold;margin-right:2mm}' +
         // 最重要的兩個：客戶名、件數的數字 → 最大
-        '.sl .customer{font-size:44px;font-weight:900;line-height:1.1;margin:1mm 0 1.5mm;white-space:nowrap;overflow:hidden;text-overflow:clip}' +
-        '.sl .customer[data-len="m"]{font-size:36px}.sl .customer[data-len="l"]{font-size:24px;white-space:normal;max-height:13mm}' +
-        '.sl .total{background:#fff;color:#000;border:1mm solid #000;border-radius:0;font-size:22px;font-weight:900;padding:0 1mm;margin:1mm 0;line-height:1.1}' +
-        '.sl .total b{font-size:66px;line-height:1;font-weight:900;margin:0 2mm;vertical-align:-4px;font-family:Arial,Helvetica,sans-serif}' +
+        '.sl .customer{font-size:var(--fs,40px);font-weight:900;line-height:1.08;margin:0.5mm 0 1mm;white-space:nowrap;overflow:hidden}' +
+        '.sl .total{background:#fff;color:#000;border:0.9mm solid #000;border-radius:0;font-size:24px;font-weight:900;padding:0 1mm;margin:0.5mm 0;line-height:1;display:flex;align-items:center;justify-content:center;gap:2mm}' +
+        '.sl .total b{font-size:var(--ns,80px);line-height:1;font-weight:900;font-family:Arial,Helvetica,sans-serif;letter-spacing:-1px}' +
         '.sl .items,.sl .short{display:none}' +
-        '.sl .address{color:#000;border-top:0.3mm solid #000;font-size:12px;line-height:1.35;margin-top:1mm;padding-top:1mm;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}';
+        '.sl .address{color:#000;border-top:0.3mm solid #000;font-size:12px;line-height:1.3;margin-top:0.8mm;padding-top:0.6mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
 };
 
 // 大榮、黑貓、新竹物流會貼托運單（上面有客戶），不用再貼我們的分貨標籤；其他物流要貼
@@ -568,6 +568,13 @@ window.recordPickListPrint = function(wave, rows) {
 // 分貨標籤（一張訂單一張）：揀完才印（手機或辦公室自動印），件數用實際出貨的（缺貨的已經扣掉）；
 // 還沒完成的波次（辦公室手動補印）照訂單數量
 // 回傳 { style, body }，樣式都在 .sl 底下，跟揀貨單印在同一份也不會互相影響
+// 標籤寬 8 公分（可寫字約 75mm≈280px）：中文字算 1 個字寬、英數算半個，算出一行剛好放得下的最大字
+function labelNameSize(name) {
+    var u = 0;
+    String(name || '').split('').forEach(function(c) { u += /[\u2E80-\uFFFF]/.test(c) ? 1 : 0.58; });
+    return Math.max(22, Math.min(60, Math.floor(272 / Math.max(u, 1))));
+}
+function labelNumSize(n) { var d = String(n).length; return d <= 2 ? 92 : d === 3 ? 86 : d === 4 ? 70 : 56; }
 window.buildSortingLabelsHtml = function(wave) {
     var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
     var done = wave.status === 'done' && Array.isArray(wave.shipped);
@@ -595,12 +602,12 @@ window.buildSortingLabelsHtml = function(wave) {
             return '<div class="item"><span>' + esc(item.productName) + ' ' + esc(item.spec || '') + '</span><strong>' + qtyText + '</strong></div>' + shortNote;
         }).join('');
         return '<div class="label"><div class="logistics">' + esc(order.logistics || wave.logistics) + '<span style="float:right">' + esc(wave.waveNo) + '</span></div>' +
-            '<div style="font-size:14px;color:#666"><span class="ic">📦 </span>' + esc(order.orderNo) + '</div>' +
-            // 客戶名越長字越小（標籤寬 8 公分，長的名字也要一行放得下）
-            '<div class="customer" data-len="' + (String(order.customer || '').length > 7 ? 'l' : String(order.customer || '').length > 4 ? 'm' : 's') + '"><span class="ic">👤 </span>' + esc(order.customer) + '</div>' +
-            '<div class="total">共 <b>' + totalPkg + '</b> 件</div>' +
+            '<div class="ono" style="font-size:14px;color:#666"><span class="ic">📦 </span>' + esc(order.orderNo) + '</div>' +
+            // 標籤機：客戶名照長短算出剛好塞滿一行的最大字、件數數字照位數放到最大（--fs、--ns 只有標籤機版面用）
+            '<div class="customer" style="--fs:' + labelNameSize(order.customer) + 'px"><span class="ic">👤 </span>' + esc(order.customer) + '</div>' +
+            '<div class="total" style="--ns:' + labelNumSize(totalPkg) + 'px">共 <b>' + totalPkg + '</b> 件</div>' +
             '<div class="items">' + itemsHtml + '</div>' +
-            (order.address ? '<div class="address"><span class="ic">📍 </span>' + esc(order.address) + '</div>' : '') + '</div>';
+            '<div class="address"><span class="lb-ono">' + esc(order.orderNo) + '</span>' + (order.address ? '<span class="ic">📍 </span>' + esc(order.address) : '') + '</div></div>';
     }).map(function(html, i) {
         var order = (wave.orders || [])[i];
         // 整張單都是倉庫不揀的（常溫品門市出貨、現流白仁、運費…）：不印
@@ -616,7 +623,7 @@ window.buildSortingLabelsHtml = function(wave) {
         '.sl .item{margin:5px 0;display:flex;justify-content:space-between;gap:8px}' +
         '.sl .short{color:#dc2626;font-size:12px;font-weight:bold;text-align:right}' +
         '.sl .address{font-size:12px;color:#666;margin-top:10px;border-top:1px dashed #ccc;padding-top:10px}' +
-        '.sl-title{font-size:16px;font-weight:bold;margin:0 0 10px}';
+        '.sl-title{font-size:16px;font-weight:bold;margin:0 0 10px}.sl .lb-ono{display:none}';
     var count = (wave.orders || []).length - skipped.length;
     return { style: style, count: count, skipped: skipped,
         body: '<div class="sl"><div class="sl-title">分貨標籤 ' + esc(wave.waveNo) + '（' + count + ' 張）' + (skipped.length ? '　不用貼（沒有從倉庫出貨）：' + esc(skipped.join('、')) : '') + '</div>' + body + '</div>' };
