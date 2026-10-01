@@ -409,20 +409,24 @@ async function markPicked(found) {
     focusIfNoCamera('picking-scan');
 }
 
-// 缺貨：不夠的給誰。預設先開單的先給，一個大按鈕「好，完成」；要改才按「改分法」
+// 缺貨：不夠的給誰。預設先開單的先給；依品項分組、一家一列寫「訂幾 → 給幾」，看得清楚
+// 只放一顆大按鈕「改分法」：進去後預設分法已經排好，直接按「好，完成」或用－調整
 // （標籤是完成後才印、件數是實際的，不用改標籤）；缺的這次不出、之後也不補，辦公室會提醒業務改鼎新
 function renderShortfallPanel() {
     const alloc = window.waveShortAllocation(currentWave, pickingItems);
     const keys = Object.keys(alloc);
     window._shortKeys = keys;
-    const lines = [];
-    keys.forEach(function(k) {
-        alloc[k].orders.forEach(function(o) { if (o.got < o.want) lines.push('<div style="font-size:20px;margin:6px 0"><b>' + esc(o.customer) + '</b>　' + esc(alloc[k].productName) + '　' + (o.got ? '給 ' + o.got + ' 件' : '<b style="color:#fca5a5">沒有</b>') + '</div>'); });
-    });
-    $('picking-next').innerHTML = '<div class="pk-card" style="border-color:#ef4444"><div class="pk-name" style="font-size:24px"><i class="fa-solid fa-triangle-exclamation" style="color:#fbbf24"></i> 有 ' + keys.length + ' 項不夠</div>' +
-        '<div class="pk-sub">先開單的先給，這幾家會少：</div>' + lines.join('') +
-        '<button class="pk-go" id="short-ok-btn" onclick="finishWithShortage(true)">好，完成</button>' +
-        '<button class="pk-link" id="short-edit-btn" onclick="renderShortEditor()">改分法</button></div>';
+    const groups = keys.map(function(k) {
+        const a = alloc[k];
+        const rows = a.orders.filter(function(o) { return o.got < o.want; }).map(function(o) {
+            return '<div class="sf-row"><b>' + esc(o.customer) + '</b><span>訂 ' + o.want + ' <i class="fa-solid fa-arrow-right"></i> ' +
+                (o.got ? '給 <em>' + o.got + '</em>' : '<em class="none">沒有</em>') + '</span></div>';
+        }).join('');
+        return rows ? '<div class="sf-item"><div class="sf-prod">' + esc(a.productName) + ' <small>' + esc(a.spec || '') + '</small></div>' + rows + '</div>' : '';
+    }).join('');
+    $('picking-next').innerHTML = '<div class="pk-card" style="border-color:#ef4444;text-align:left"><div class="pk-name" style="font-size:26px;text-align:center"><i class="fa-solid fa-triangle-exclamation" style="color:#fbbf24"></i> 有 ' + keys.length + ' 項不夠</div>' +
+        '<div class="pk-sub" style="text-align:center;margin-bottom:6px">先開單的先給，這幾家會少：</div>' + groups +
+        '<button class="pk-go sf-edit" id="short-edit-btn" onclick="renderShortEditor()"><i class="fa-solid fa-scale-balanced"></i> 改分法</button></div>';
     window.scrollTo(0, 0);
 }
 // 改分法：每家一個數字（加起來要等於拿到的件數）
@@ -547,6 +551,12 @@ window.openSortPanel = function(justDone) {
         }).join('') +
         '<button class="pk-link" onclick="renderFinishPanel(window._finishedWave)">← 回上一頁</button>';
     if (!left && justDone != null) window.scrollTo({ top: 0, behavior: 'smooth' });
+    else if (justDone != null) {
+        // 下一家還沒分的（優先找剛剛那家後面的）移到螢幕中間
+        const cards = [].slice.call(document.querySelectorAll('#picking-next .sort-card'));
+        const next = cards.slice(justDone + 1).concat(cards.slice(0, justDone)).find(function(c) { return !c.classList.contains('ok'); });
+        if (next) next.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 };
 window.markSorted = async function(i) {
     const wave = window._finishedWave, o = wave && sortList(wave)[i];

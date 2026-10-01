@@ -74,6 +74,9 @@ H.check('分貨畫面：海霸王 白蝦 5 件、透抽 2 件；好市多 白蝦
 if (process.env.SHOT_DIR) await B.page.screenshot({ path: process.env.SHOT_DIR + '/h4-sort.png', fullPage: true });
 await B.page.click('text=這家分好了'); await B.page.waitForTimeout(800);
 H.check('按「這家分好了」：1 / 2 家，記在波次上', /1\s*\/ 2 家/.test(await card(B)) && ((await H.one('waves', W._id)).sortedOrders || []).length === 1);
+await B.page.waitForTimeout(700);
+const mid = await B.page.evaluate(() => { const c = [].slice.call(document.querySelectorAll('#picking-next .sort-card:not(.ok)'))[0]; const r = c.getBoundingClientRect(); return Math.abs((r.top + r.bottom) / 2 - innerHeight / 2) < innerHeight * 0.25; });
+H.check('按完一家：下一家還沒分的卡片自動移到螢幕中間', mid);
 await B.page.click('text=這家分好了'); await B.page.waitForTimeout(800);
 const allok = await card(B);
 H.check('兩家都分好：最上面寫「全部分好了」，下面直接有「回到選單」大按鈕（不是看起來像按鈕的字）', allok.trim().startsWith('全部分好了') && (await B.page.$$('#picking-next .sort-allok')).length === 1 && (await B.page.isVisible('#picking-next button.sort-home')), allok.slice(0, 120));
