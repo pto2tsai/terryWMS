@@ -566,7 +566,7 @@ window.openLogisticsSettings = function() {
     const rowHtml = (name, kws) => '<tr class="lgs-row border-b border-slate-700">' +
         '<td class="p-1"><input class="lgs-name w-32 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value="' + esc(name) + '"' + (canEdit ? '' : ' disabled') + '></td>' +
         '<td class="p-1"><input class="lgs-kw w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value="' + esc(kws.join('、')) + '" placeholder="例如：黑貓、宅急便"' + (canEdit ? '' : ' disabled') + '></td>' +
-        '<td class="p-1 text-center">' + (canEdit ? '<button class="lgs-del px-2 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-xs">刪除</button>' : '') + '</td></tr>';
+        '<td class="p-1 text-center">' + (canEdit ? '<button class="lgs-del ds-icon-btn" style="border:0" title="刪除這一家"><i class="fa-solid fa-trash-can" style="pointer-events:none"></i></button>' : '') + '</td></tr>';
     const rows = Object.keys(LOGISTICS_KEYWORDS).map(k => rowHtml(k, LOGISTICS_KEYWORDS[k])).join('');
     const content = '<div class="text-sm text-slate-300 mb-3">鼎新訂單的<b>備註</b>裡出現這些字，就算這家物流。由上往下比對，先對到的算。' +
         (canEdit ? '' : '<br><span class="text-amber-300">只有主管可以修改。</span>') + '</div>' +
@@ -941,21 +941,21 @@ function renderWaveOrderList(orders) {
         const items = order.items || [];
         items.forEach((item, idx) => {
             const rowClass = idx === 0 ? 'border-t border-slate-600' : '';
-            html += `<tr class="hover:bg-slate-800/50 ${rowClass}">`;
+            html += `<tr class="${rowClass}">`;
 
             if (idx === 0) {
                 html += `<td class="p-2" rowspan="${items.length}">
                     <input type="checkbox" class="wave-order-check" data-order-id="${order.id}" data-order-no="${order.orderNo}">
                 </td>`;
-                html += `<td class="p-2 text-cyan-400 font-mono text-xs" rowspan="${items.length}">${order.orderNo}</td>`;
-                html += `<td class="p-2 text-white" rowspan="${items.length}">${order.customer}</td>`;
+                html += `<td class="p-2 t-mono text-xs" style="color:var(--ds-text-2)" rowspan="${items.length}">${order.orderNo}</td>`;
+                html += `<td class="p-2" style="color:var(--ds-text);font-weight:600" rowspan="${items.length}">${order.customer}</td>`;
                 html += `<td class="p-2" rowspan="${items.length}">
-                    <span class="px-2 py-1 rounded text-xs ${getLogisticsColor(order.logistics)}">${order.logistics}</span>
+                    <span class="ds-pill" style="background:color-mix(in srgb, ${getLogisticsColor(order.logistics)} 18%, transparent);color:${getLogisticsColor(order.logistics)}">${order.logistics}</span>
                 </td>`;
             }
 
             html += `<td class="p-2 text-slate-300">${item.productName} ${item.spec || ''}</td>`;
-            html += `<td class="p-2 text-right text-yellow-400 font-bold">${item.quantity}</td>`;
+            html += `<td class="p-2 text-right" style="color:var(--ds-text);font-weight:600">${item.quantity}</td>`;
             html += `<td class="p-2 text-slate-400 text-xs">${order.orderDate || ''}</td>`;
             html += '</tr>';
         });
@@ -968,24 +968,14 @@ function renderWaveOrderList(orders) {
     });
 }
 
+// 物流商的代表色：只用在小標籤的字和淡淡的底色（不整塊塗滿，才不會太花）
 function getLogisticsColor(logistics) {
     const colors = {
-        '全日物流': 'bg-blue-600',
-        '合順貨運': 'bg-green-600',
-        '大榮貨運': 'bg-orange-600',
-        '裕鵬物流': 'bg-purple-600',
-        '黑貓宅急便': 'bg-yellow-600 text-black',
-        '新竹物流': 'bg-red-600',
-        '崇文自送': 'bg-cyan-600',
-        '科技物流': 'bg-indigo-600',
-        '阿誠': 'bg-pink-600',
-        '文生': 'bg-teal-600',
-        '金東石': 'bg-amber-600',
-        '奧林': 'bg-lime-600',
-        '自取': 'bg-slate-600',
-        '未指定': 'bg-slate-700'
+        '全日物流': '#60a5fa', '合順貨運': '#4ade80', '大榮貨運': '#fb923c', '裕鵬物流': '#c084fc',
+        '黑貓宅急便': '#facc15', '新竹物流': '#f87171', '崇文自送': '#22d3ee', '科技物流': '#818cf8',
+        '阿誠': '#f472b6', '文生': '#2dd4bf', '金東石': '#fbbf24', '奧林': '#a3e635', '自取': '#94a3b8', '未指定': '#94a3b8'
     };
-    return colors[logistics] || 'bg-slate-600';
+    return colors[logistics] || '#94a3b8';
 }
 
 // 依物流商分組的預覽（未指定物流的單不自動排，要先指定物流商）
@@ -1873,13 +1863,13 @@ window.openProductHomes = async function() {
     if (!m) {
         m = document.createElement('div');
         m.id = 'modal-product-homes';
-        m.className = 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4';
+        m.className = 'ds-modal fixed inset-0 z-50 flex items-center justify-center p-4';
         document.body.appendChild(m);
     }
     const opts = function(cur) { return window.PICK_HOUSES.map(function(h) { return '<option value="' + h.id + '"' + (h.id === cur ? ' selected' : '') + '>' + h.name + '</option>'; }).join(''); };
     m.innerHTML = '<div class="bg-slate-800 rounded-xl p-5 w-full max-w-2xl max-h-[85vh] flex flex-col">' +
-        '<div class="flex justify-between items-center mb-2"><h3 class="text-white text-lg font-bold">📍 商品在哪一間（' + rows.length + ' 項）</h3>' +
-        '<button onclick="document.getElementById(\'modal-product-homes\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>' +
+        '<div class="flex justify-between items-center mb-2"><h3><i class="fa-solid fa-location-dot mr-2" style="color:var(--c-orange)"></i>商品在哪一間（' + rows.length + ' 項）</h3>' +
+        '<button onclick="document.getElementById(\'modal-product-homes\').remove()" class="ds-modal-x" title="關閉"><i class="fa-solid fa-xmark text-lg"></i></button></div>' +
         '<p class="text-slate-400 text-sm mb-2">揀貨時自動記住：在哪一間按「拿好了」就記那一間；這間一件都沒有，就記成另一間。記錯了在這裡改。</p>' +
         '<input id="ph-search" oninput="filterProductHomes()" placeholder="搜尋品名、規格" class="w-full bg-slate-900 text-white rounded px-3 py-2 mb-2 border border-slate-600">' +
         '<div class="overflow-y-auto flex-1"><table class="w-full text-sm"><tbody id="ph-body">' +
@@ -1888,7 +1878,7 @@ window.openProductHomes = async function() {
                 '<td class="p-2 text-white">' + esc(x.productName) + ' <span class="text-yellow-400">' + esc(x.spec || '') + '</span></td>' +
                 '<td class="p-2"><select class="bg-slate-900 text-white rounded px-2 py-1 border border-slate-600" data-id="' + esc(x.id) + '" onchange="changeProductHome(this)">' + opts(x.house) + '</select></td>' +
                 '<td class="p-2 text-slate-400 text-xs">' + esc(x.by || '') + ' ' + esc(String(x.at || '').slice(0, 10)) + '</td>' +
-                '<td class="p-2">' + (sup ? '<button class="text-red-400 hover:bg-red-500/20 rounded px-2" data-id="' + esc(x.id) + '" onclick="deleteProductHome(this)" title="刪掉：下次揀貨兩間都會出現，重新記">🗑️</button>' : '') + '</td></tr>';
+                '<td class="p-2">' + (sup ? '<button class="text-red-400 hover:bg-red-500/20 rounded px-2" data-id="' + esc(x.id) + '" onclick="deleteProductHome(this)" title="刪掉：下次揀貨兩間都會出現，重新記"><i class="fa-solid fa-trash-can"></i></button>' : '') + '</td></tr>';
         }).join('') : '<tr><td class="p-6 text-center text-slate-500">還沒有記錄。手機揀貨時按「拿好了」就會自動記起來。</td></tr>') +
         '</tbody></table></div></div>';
     window._productHomeRows = rows;

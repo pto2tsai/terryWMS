@@ -69,7 +69,7 @@ window.switchHouse = function() {
 function renderHouseChooser() {
     $('picking-next').innerHTML = '<div class="pk-card"><div class="pk-name">你在哪一間？</div>' +
         '<div class="pk-sub">選一次就記住，之後在上面可以切換</div>' +
-        window.PICK_HOUSES.map(function(h) { return '<button class="pk-go" onclick="chooseHouse(\'' + h.id + '\')">📍 ' + esc(h.name) + '</button>'; }).join('') + '</div>';
+        window.PICK_HOUSES.map(function(h) { return '<button class="pk-go" onclick="chooseHouse(\'' + h.id + '\')"><i class="fa-solid fa-location-dot"></i> ' + esc(h.name) + '</button>'; }).join('') + '</div>';
 }
 // 商品在哪一間有變（別支手機記起來的）：重畫
 window.onProductHomesChange = function() { if (currentWave && window.currentPage === 'picking') renderPickingList(); };
@@ -222,7 +222,7 @@ function renderNextStop() {
     const house = myHouse();
     const top = '<div class="pk-top"><span><b>' + done + '</b> / ' + total + ' 項</span>' +
         '<span>' + (window.isPracticeMode() ? '<span class="pk-chip">練習</span> ' : '') +
-        '<button class="pk-chip pk-house" onclick="switchHouse()">📍 ' + esc(window.houseName(house)) + ' ⇄</button></span></div>' +
+        '<button class="pk-chip pk-house" onclick="switchHouse()"><i class="fa-solid fa-location-dot"></i> ' + esc(window.houseName(house)) + ' ⇄</button></span></div>' +
         '<div class="pk-bar"><div style="width:' + pct + '%"></div></div>';
     // 只叫人拿這一間的貨；還不知道在哪一間的，兩間都會出現（先拿到的那間記起來）
     const mine = bySkip(pending.filter(function(i) { const h = window.homeOf(i.key); return !h || h === house; }));
@@ -419,7 +419,7 @@ function renderShortfallPanel() {
     keys.forEach(function(k) {
         alloc[k].orders.forEach(function(o) { if (o.got < o.want) lines.push('<div style="font-size:20px;margin:6px 0"><b>' + esc(o.customer) + '</b>　' + esc(alloc[k].productName) + '　' + (o.got ? '給 ' + o.got + ' 件' : '<b style="color:#fca5a5">沒有</b>') + '</div>'); });
     });
-    $('picking-next').innerHTML = '<div class="pk-card" style="border-color:#ef4444"><div class="pk-name" style="font-size:24px">⚠️ 有 ' + keys.length + ' 項不夠</div>' +
+    $('picking-next').innerHTML = '<div class="pk-card" style="border-color:#ef4444"><div class="pk-name" style="font-size:24px"><i class="fa-solid fa-triangle-exclamation" style="color:#fbbf24"></i> 有 ' + keys.length + ' 項不夠</div>' +
         '<div class="pk-sub">先開單的先給，這幾家會少：</div>' + lines.join('') +
         '<button class="pk-go" id="short-ok-btn" onclick="finishWithShortage(true)">好，完成</button>' +
         '<button class="pk-link" id="short-edit-btn" onclick="renderShortEditor()">改分法</button></div>';
@@ -434,8 +434,10 @@ window.renderShortEditor = function() {
         return '<div style="padding:10px 0;border-bottom:1px solid #7f1d1d;text-align:left"><div style="font-size:19px;font-weight:bold">' + esc(a.productName) + ' ' + esc(a.spec) + '</div>' +
             '<div style="color:#fecaca;margin:2px 0 6px">拿到 <b>' + a.picked + ' 件</b>，要給：</div>' +
             a.orders.map(function(o) {
-                return '<div style="display:flex;align-items:center;gap:8px;margin:6px 0"><div style="flex:1;font-size:18px"><b>' + esc(o.customer) + '</b><br><span style="font-size:14px;color:#fecaca">訂 ' + o.want + ' 件</span></div>' +
-                    '<input type="number" inputmode="numeric" class="alloc-in qty-input" style="width:90px;margin:0;font-size:26px" data-b="' + bi + '" data-id="' + esc(o.id) + '" data-want="' + o.want + '" value="' + o.got + '" oninput="checkShortPanel()"> 件</div>';
+                // 一列：客戶　訂幾件　［－］　給幾件（只有－：少的那件自動移給別家還沒給夠的）
+                return '<div class="alloc-row"><div class="alloc-who"><b>' + esc(o.customer) + '</b><span>訂 ' + o.want + '</span></div>' +
+                    '<button type="button" class="alloc-minus" onclick="allocStep(this)" aria-label="少給一件">－</button>' +
+                    '<input type="text" readonly tabindex="-1" class="alloc-in" data-b="' + bi + '" data-id="' + esc(o.id) + '" data-want="' + o.want + '" value="' + o.got + '"></div>';
             }).join('') + '<div class="alloc-sum" data-b="' + bi + '" data-picked="' + a.picked + '" style="font-size:16px"></div></div>';
     }).join('');
     $('picking-next').innerHTML = '<div class="pk-card" style="border-color:#ef4444">' + blocks +
@@ -444,12 +446,29 @@ window.renderShortEditor = function() {
     checkShortPanel();
     window.scrollTo(0, 0);
 };
+// 改分法只有「－」：這家少給 1 件，自動移給同一品項裡還沒給夠的下一家（沒有人能收就不能按）
+function allocReceiver(inp) {
+    const all = [].slice.call(document.querySelectorAll('.alloc-in[data-b="' + inp.dataset.b + '"]'));
+    const i = all.indexOf(inp);
+    const order = all.slice(i + 1).concat(all.slice(0, i));
+    return order.find(function(x) { return (parseFloat(x.value) || 0) < (parseFloat(x.dataset.want) || 0); }) || null;
+}
+window.allocStep = function(btn) {
+    const inp = btn.parentNode.querySelector('.alloc-in');
+    const v = parseFloat(inp.value) || 0;
+    const to = allocReceiver(inp);
+    if (v <= 0 || !to) return;
+    inp.value = v - 1;
+    to.value = (parseFloat(to.value) || 0) + 1;
+    window.checkShortPanel();
+};
 window.checkShortPanel = function() {
     let ok = true;
     document.querySelectorAll('.alloc-sum').forEach(function(sumEl) {
         const b = sumEl.dataset.b, picked = parseFloat(sumEl.dataset.picked) || 0;
         let total = 0;
         document.querySelectorAll('.alloc-in[data-b="' + b + '"]').forEach(function(inp) {
+            inp.parentNode.querySelector('.alloc-minus').disabled = (parseFloat(inp.value) || 0) <= 0 || !allocReceiver(inp);
             const v = parseFloat(inp.value), want = parseFloat(inp.dataset.want);
             if (!(v >= 0 && v <= want)) ok = false; else total += v;
         });
@@ -500,27 +519,41 @@ window.renderFinishPanel = renderFinishPanel;
 
 // 分貨：一家一張卡片，寫這家要幾件（實際出貨的），分好一家按一下
 function sortList(wave) { return (wave.shipped || []).filter(function(o) { return (o.items || []).length; }); }
-window.openSortPanel = function() {
+window.openSortPanel = function(justDone) {
     const wave = window._finishedWave;
     if (!wave) return;
     const list = sortList(wave), done = wave.sortedOrders || [];
     const left = list.filter(function(o) { return done.indexOf(o.orderNo) < 0; }).length;
-    $('picking-next').innerHTML = '<div class="pk-top"><span>📦 分貨　<b>' + (list.length - left) + '</b> / ' + list.length + ' 家</span></div>' +
+    // 全部分好：最上面寫「全部分好了」＋下一步的大按鈕（印標籤／回到選單），不用往下找
+    let top;
+    if (!left) {
+        const lb = window.buildSortingLabelsHtml(wave);
+        const office = window.labelPrintMode() === 'office';
+        const needLb = window.waveNeedsLabels(wave);
+        top = '<div class="sort-allok"><i class="fa-solid fa-circle-check"></i><div><b>全部分好了</b><span>' + list.length + ' 家都分好了，下一步：</span></div></div>' +
+            (needLb && !office && lb.count ? '<button class="pk-go" onclick="printLabelsOnPhone()"><i class="fa-solid fa-print"></i> 印標籤（' + lb.count + ' 張）</button>' : '') +
+            (needLb && office ? '<div class="pk-sub" style="font-size:18px;margin:6px 0 10px"><i class="fa-solid fa-tags"></i> 標籤在辦公室自動印出</div>' : '') +
+            '<button class="pk-go sort-home" onclick="goBack()"><i class="fa-solid fa-house"></i> 回到選單</button>';
+    } else {
+        top = '<div class="pk-top"><span><i class="fa-solid fa-boxes-stacked"></i> 分貨　<b>' + (list.length - left) + '</b> / ' + list.length + ' 家</span></div>';
+    }
+    $('picking-next').innerHTML = top +
         list.map(function(o, i) {
             const ok = done.indexOf(o.orderNo) >= 0;
-            return '<div class="pk-card sort-card' + (ok ? ' ok' : '') + '"><div class="pk-name" style="font-size:26px">' + esc(o.customer || o.orderNo) + '</div>' +
-                (ok ? '<div class="pk-sub">✓ 分好了</div>'
+            return '<div class="pk-card sort-card' + (ok ? ' ok' : '') + (justDone === i ? ' flash' : '') + '"><div class="pk-name" style="font-size:26px">' + esc(o.customer || o.orderNo) + '</div>' +
+                (ok ? '<div class="pk-sub"><i class="fa-solid fa-check"></i> 分好了</div>'
                     : o.items.map(function(it) { return '<div class="sort-line"><span>' + esc(it.productName) + ' ' + esc(it.spec || '') + '</span><b>' + esc(it.qty) + ' 件</b></div>'; }).join('') +
-                      '<button class="pk-go" onclick="markSorted(' + i + ')">✓ 這家分好了</button>') + '</div>';
+                      '<button class="pk-go" onclick="markSorted(' + i + ')"><i class="fa-solid fa-check"></i> 這家分好了</button>') + '</div>';
         }).join('') +
-        (left ? '' : '<div class="pk-card pk-done"><div class="big">✅ 全部分好了</div></div>') +
         '<button class="pk-link" onclick="renderFinishPanel(window._finishedWave)">← 回上一頁</button>';
+    if (!left && justDone != null) window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 window.markSorted = async function(i) {
     const wave = window._finishedWave, o = wave && sortList(wave)[i];
     if (!o) return;
     wave.sortedOrders = (wave.sortedOrders || []).concat([o.orderNo]);
-    window.openSortPanel();
+    try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) {}   // 按了有感覺（iPhone 不支援震動，會略過）
+    window.openSortPanel(i);
     try { await db.collection('waves').doc(wave.id).update({ sortedOrders: FieldValue.arrayUnion(o.orderNo) }); }
     catch (e) { console.warn('記錄分貨失敗', e); }
 };

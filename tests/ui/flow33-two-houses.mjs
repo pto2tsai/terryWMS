@@ -75,7 +75,9 @@ if (process.env.SHOT_DIR) await B.page.screenshot({ path: process.env.SHOT_DIR +
 await B.page.click('text=這家分好了'); await B.page.waitForTimeout(800);
 H.check('按「這家分好了」：1 / 2 家，記在波次上', /1\s*\/ 2 家/.test(await card(B)) && ((await H.one('waves', W._id)).sortedOrders || []).length === 1);
 await B.page.click('text=這家分好了'); await B.page.waitForTimeout(800);
-H.check('兩家都分好：「全部分好了」', (await card(B)).includes('全部分好了'));
+const allok = await card(B);
+H.check('兩家都分好：最上面寫「全部分好了」，下面直接有「回到選單」大按鈕（不是看起來像按鈕的字）', allok.trim().startsWith('全部分好了') && (await B.page.$$('#picking-next .sort-allok')).length === 1 && (await B.page.isVisible('#picking-next button.sort-home')), allok.slice(0, 120));
+if (process.env.SHOT_DIR) await B.page.screenshot({ path: process.env.SHOT_DIR + '/h4b-sort-done.png' });
 
 // 電腦：揀貨單分兩間；商品在哪一間可以改
 const groups = await D.page.evaluate(() => groupRowsByHouse([{ productName: '白蝦', spec: '50/60' }, { productName: '透抽', spec: 'L' }, { productName: '蝦仁', spec: '-' }]).map(g => g.name + ':' + g.rows.map(r => r.productName).join('+')));
@@ -97,7 +99,7 @@ await N.page.selectOption('#picking-wave-select', W2._id); await N.page.waitForT
 const ask = await card(N);
 H.check('第一次用的手機選波次：先問「你在哪一間？」兩個大按鈕', ask.includes('你在哪一間') && ask.includes('J庫') && ask.includes('I庫'), ask);
 if (process.env.SHOT_DIR) await N.page.screenshot({ path: process.env.SHOT_DIR + '/h0-choose.png' });
-await N.page.click('text=📍 I庫'); await N.page.waitForTimeout(1200);
+await N.page.click('button.pk-go:has-text("I庫")'); await N.page.waitForTimeout(1200);
 H.check('點 I庫：記住，開始揀（蝦仁 拿 1 件）', (await N.page.evaluate(() => localStorage.getItem('wms_pick_house'))) === 'I' && (await card(N)).includes('拿 1'), await card(N));
 await N.page.click('#picking-next .pk-go'); await N.page.waitForTimeout(1200);
 await N.page.click('#picking-next .pk-go'); await N.page.waitForTimeout(2500);

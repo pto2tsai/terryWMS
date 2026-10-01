@@ -360,3 +360,59 @@ header.ds-header #page-title { font-size: 18px; font-weight: 600; color: var(--d
 #view-wave-picking { overflow-y: auto; }
 #view-wave-picking > * { flex-shrink: 0; }
 #view-wave-picking > .ds-list-wrap { flex-shrink: 1; min-height: 240px; }
+
+/* ============================================================
+   視窗（波次相關的視窗、WMS.createModal 做出來的視窗）
+   外框統一：深色卡片、圓角、上方一條代表色細線（原本的漸層條換掉）；按鈕顏色保留當亮點
+   ============================================================ */
+.ds-modal { background: rgba(3, 7, 18, .72) !important; backdrop-filter: blur(4px); }
+.ds-modal > div:first-child { background: var(--ds-surface) !important; border: 1px solid var(--ds-border-strong) !important; border-radius: 16px !important; box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .8) !important; overflow: hidden; }
+.ds-modal [class*="bg-gradient-to-"] { background: transparent !important; border-bottom: 1px solid var(--ds-border) !important; box-shadow: inset 0 3px 0 var(--hl, var(--ds-primary)); padding: 18px 22px !important; border-radius: 0 !important; }
+.ds-modal [class*="from-orange"], .ds-modal [class*="from-red"], .ds-modal [class*="from-amber"] { --hl: var(--c-orange); }
+.ds-modal [class*="from-blue"], .ds-modal [class*="from-indigo"] { --hl: var(--c-blue); }
+.ds-modal [class*="from-purple"], .ds-modal [class*="from-pink"] { --hl: var(--c-purple); }
+.ds-modal [class*="from-emerald"], .ds-modal [class*="from-green"] { --hl: var(--c-green); }
+.ds-modal [class*="from-cyan"], .ds-modal [class*="from-teal"] { --hl: var(--c-sky); }
+.ds-modal h3 { color: var(--ds-text) !important; font-size: 18px !important; font-weight: 700 !important; letter-spacing: .01em; }
+.ds-modal [class*="bg-gradient-to-"] p, .ds-modal .text-blue-200, .ds-modal .text-purple-200, .ds-modal .text-orange-200 { color: var(--ds-text-2) !important; font-size: 13px !important; }
+.ds-modal .border-slate-700, .ds-modal .border-slate-600 { border-color: var(--ds-border) !important; }
+.ds-modal .bg-slate-800, .ds-modal .bg-slate-800\/30, .ds-modal .bg-slate-800\/50 { background: var(--ds-surface-2) !important; }
+.ds-modal thead, .ds-modal thead tr { background: var(--ds-surface) !important; }
+.ds-modal thead th { font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ds-text-3) !important; border-bottom: 1px solid var(--ds-border); padding-top: 10px !important; padding-bottom: 10px !important; }
+.ds-modal tbody td { border-color: var(--ds-border) !important; }
+.ds-modal tbody tr:hover { background: var(--ds-surface-2); }
+.ds-modal input[type="text"], .ds-modal input[type="number"], .ds-modal input[type="date"], .ds-modal input:not([type]), .ds-modal select, .ds-modal .scan-input { background: var(--ds-bg) !important; border: 1px solid var(--ds-border-strong) !important; border-radius: var(--ds-radius-sm) !important; color: var(--ds-text) !important; min-height: 38px; }
+.ds-modal input:focus, .ds-modal select:focus { outline: none; border-color: var(--ds-primary) !important; box-shadow: 0 0 0 3px var(--ds-primary-soft) !important; }
+.ds-modal input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--ds-primary-fill); }
+.ds-modal button[class*="rounded"] { border-radius: var(--ds-radius-sm) !important; }
+.ds-modal button.bg-slate-700, .ds-modal button.bg-slate-600 { background: var(--ds-surface-2) !important; border: 1px solid var(--ds-border-strong) !important; color: var(--ds-text) !important; }
+.ds-modal button.bg-slate-700:hover, .ds-modal button.bg-slate-600:hover { background: var(--ds-hover) !important; }
+.ds-modal label.text-slate-400, .ds-modal .text-slate-400 { color: var(--ds-text-2) !important; }
+.ds-modal .text-slate-500 { color: var(--ds-text-3) !important; }
+
+/* WMS.createModal 的外框 */
+.ds-modal-box { padding: 0 !important; display: flex; flex-direction: column; }
+.ds-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--ds-border); box-shadow: inset 0 3px 0 var(--hl, var(--ds-primary)); }
+.ds-modal-body { padding: 18px 22px; overflow-y: auto; }
+.ds-modal-foot { padding: 14px 22px; border-top: 1px solid var(--ds-border); display: flex; justify-content: flex-end; gap: 10px; }
+.ds-modal-x { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; color: var(--ds-text-3); }
+.ds-modal-x:hover { background: var(--ds-hover); color: var(--ds-text); }
+
+/* 波次明細 */
+.ds-kv { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.ds-kv > div { background: var(--ds-surface-2); border: 1px solid var(--ds-border); border-radius: 10px; padding: 12px 14px; }
+.ds-kv small { display: block; font-size: 12px; color: var(--ds-text-3); }
+.ds-kv b { display: block; font-size: 20px; color: var(--ds-text); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.ds-timeline { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; color: var(--ds-text-2); margin-bottom: 18px; }
+.ds-timeline span b { color: var(--ds-text-3); font-weight: 500; margin-right: 6px; }
+.ds-pick-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--ds-border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: border-color .15s, background .15s; }
+.ds-pick-row:hover { border-color: var(--ds-border-strong); background: var(--ds-surface-2); }
+.ds-pick-row:has(input:checked) { border-color: var(--ds-primary); background: var(--ds-primary-soft); }
+.ds-modal-body { flex: 1; min-height: 0; }
+.lgs-del:hover { color: var(--ds-danger) !important; background: var(--ds-danger-soft) !important; }
+/* 分貨作業：單號、小計不用彩色；每張單的「列印標籤」改成一般按鈕（紫色只留在圖示） */
+#modal-wave-sorting .text-cyan-400 { color: var(--ds-text-2) !important; font-family: 'Inter', ui-monospace, monospace; }
+#modal-wave-sorting .text-red-400 { color: var(--ds-text) !important; }
+#modal-wave-sorting .rounded-lg > div button.bg-purple-600 { background: var(--ds-surface-2) !important; border: 1px solid var(--ds-border-strong) !important; color: var(--ds-text) !important; padding: 5px 10px !important; }
+#modal-wave-sorting .rounded-lg > div button.bg-purple-600 i { color: var(--c-purple); }
+#modal-wave-sorting .rounded-lg > div button.bg-purple-600:hover { background: var(--ds-hover) !important; }
