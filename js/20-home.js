@@ -112,7 +112,7 @@ window.refreshHome = async function() {
         { icon: 'fa-cloud-arrow-down', color: '#0ea5e9', label: '鼎新匯入要處理', hint: '訂單檔沒收到、匯入失敗、件數待確認、沒有物流商、鼎新已取消的單',
           action: "goTab('erp-inbox')" },
         { icon: 'fa-arrow-trend-down', color: '#dc2626', label: '缺貨要改鼎新', hint: '現場不夠、少出的銷貨單（這次不出、之後不補）：請業務在鼎新改數量，改好匯入後自動消失',
-          action: "goTab('wave-picking')" }
+          action: "openErpFixList()" }
     ];
     todos[7].hint = '已過期 ' + expired + ' 板（不會被揀貨）、即將到期 ' + expiring + ' 板';
     todos[7].urgent = expired > 0;
@@ -143,9 +143,59 @@ window.refreshHome = async function() {
 async function shortOrdersToFix() {
     try {
         var snap = await window.db.collection('salesOrders').where('erpFixNeeded', '==', true).get();
-        return snap.docs.map(function(d) { return d.data(); });
+        return snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
     } catch (e) { console.warn('讀取缺貨少出的訂單失敗', e); return null; }
 }
+
+// 缺貨要改鼎新：哪幾張單、少了什麼；可以一鍵複製給業務（貼到 LINE），或手動標「已經改好了」
+var erpEsc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+function shortLines(o) {
+    return (o.shortShipped || []).map(function(x) {
+        return (x.productName || '') + (x.spec ? ' ' + x.spec : '') + '：訂 ' + x.want + ' → 出 ' + x.got + '（少 ' + (Math.round((x.want - x.got) * 1000) / 1000) + '）';
+    });
+}
+function erpFixText(list) {
+    return '【缺貨少出，請在鼎新改成實際出貨的數量】\n' + list.map(function(o) {
+        return '\n' + (o.customer || '') + '　' + (o.orderNo || '') + '\n' + shortLines(o).map(function(l) { return '・' + l; }).join('\n');
+    }).join('\n');
+}
+window.openErpFixList = async function() {
+    var list = await shortOrdersToFix();
+    if (list === null) { alert('❌ 讀取失敗，請稍後再試'); return; }
+    window._erpFixList = list;
+    var cards = list.length ? list.map(function(o, i) {
+        return '<div class="ds-pick-row" style="cursor:default;align-items:flex-start">' +
+            '<div style="flex:1;min-width:0"><div style="color:var(--ds-text);font-weight:700;font-size:16px">' + erpEsc(o.customer) + '</div>' +
+            '<div style="font-size:12px;color:var(--ds-text-3);margin:2px 0 8px">' + erpEsc(o.orderNo) + (o.waveNo ? '・波次 ' + erpEsc(o.waveNo) : '') + '</div>' +
+            shortLines(o).map(function(l) { return '<div style="font-size:14px;color:var(--ds-text-2);line-height:1.7"><i class="fa-solid fa-arrow-trend-down" style="color:var(--c-red);margin-right:6px"></i>' + erpEsc(l) + '</div>'; }).join('') + '</div>' +
+            '<div style="display:flex;flex-direction:column;gap:6px"><button class="ds-btn ds-btn-secondary ds-btn-sm" onclick="copyErpFix(' + i + ')"><i class="fa-regular fa-copy"></i>複製這張</button>' +
+            '<button class="ds-btn ds-btn-ghost ds-btn-sm" onclick="markErpFixed(' + i + ')"><i class="fa-solid fa-check"></i>已經改好了</button></div></div>';
+    }).join('') : '<div class="ds-empty" style="padding:32px"><div class="ds-empty-icon"><i class="fa-solid fa-check"></i></div><div class="ds-empty-title">沒有要改的單</div></div>';
+    WMS.closeModal('modal-erp-fix');
+    WMS.createModal('modal-erp-fix', {
+        title: '缺貨要改鼎新（' + list.length + ' 張）', icon: 'fa-solid fa-arrow-trend-down', width: '720px', maxHeight: '88vh',
+        content: '<div style="font-size:14px;color:var(--ds-text-2);line-height:1.7;margin-bottom:14px;padding:12px 14px;border-radius:10px;background:var(--ds-surface-2)">' +
+            '<b style="color:var(--ds-text)">要做的事：</b>請業務在<b style="color:var(--ds-text)">鼎新</b>把這些銷貨單改成實際出貨的數量（缺的這次不出、之後也不補）。<br>' +
+            '改好之後，鼎新的「每日客戶銷貨明細表」重新匯入時，這張單就會<b style="color:var(--ds-text)">自動從這裡消失</b>。業務說不用改的，按「已經改好了」也會消失。</div>' + cards,
+        footer: list.length ? '<button class="ds-btn ds-btn-secondary" onclick="WMS.closeModal(\'modal-erp-fix\')">關閉</button><button class="ds-btn ds-btn-primary" onclick="copyErpFix()"><i class="fa-regular fa-copy"></i>全部複製給業務（貼到 LINE）</button>' : ''
+    });
+};
+window.copyErpFix = async function(i) {
+    var list = window._erpFixList || [];
+    var text = erpFixText(i == null ? list : [list[i]]);
+    try { await navigator.clipboard.writeText(text); if (window.showToast) window.showToast('✅ 已複製，可以貼到 LINE 給業務'); else alert('✅ 已複製，可以貼到 LINE 給業務'); }
+    catch (e) { window.prompt('請全選複製這段文字：', text); }
+};
+window.markErpFixed = async function(i) {
+    var o = (window._erpFixList || [])[i];
+    if (!o || !o.id) return;
+    if (!confirm('「' + (o.customer || '') + ' ' + (o.orderNo || '') + '」已經在鼎新改好（或業務說不用改）？\n\n按確定後就從清單拿掉。')) return;
+    try {
+        await window.db.collection('salesOrders').doc(o.id).update({ erpFixNeeded: false, erpFixedAt: new Date().toISOString(), erpFixedBy: window.getOperatorName ? window.getOperatorName() : '' });
+    } catch (e) { alert('❌ 儲存失敗：' + e.message); return; }
+    window.openErpFixList();
+    if (window.refreshHome) window.refreshHome();
+};
 
 // 切到今日工作時更新數字
 (function() {
