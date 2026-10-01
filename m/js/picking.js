@@ -519,27 +519,41 @@ window.renderFinishPanel = renderFinishPanel;
 
 // 分貨：一家一張卡片，寫這家要幾件（實際出貨的），分好一家按一下
 function sortList(wave) { return (wave.shipped || []).filter(function(o) { return (o.items || []).length; }); }
-window.openSortPanel = function() {
+window.openSortPanel = function(justDone) {
     const wave = window._finishedWave;
     if (!wave) return;
     const list = sortList(wave), done = wave.sortedOrders || [];
     const left = list.filter(function(o) { return done.indexOf(o.orderNo) < 0; }).length;
-    $('picking-next').innerHTML = '<div class="pk-top"><span>📦 分貨　<b>' + (list.length - left) + '</b> / ' + list.length + ' 家</span></div>' +
+    // 全部分好：最上面寫「全部分好了」＋下一步的大按鈕（印標籤／回到選單），不用往下找
+    let top;
+    if (!left) {
+        const lb = window.buildSortingLabelsHtml(wave);
+        const office = window.labelPrintMode() === 'office';
+        const needLb = window.waveNeedsLabels(wave);
+        top = '<div class="sort-allok"><i class="fa-solid fa-circle-check"></i><div><b>全部分好了</b><span>' + list.length + ' 家都分好了，下一步：</span></div></div>' +
+            (needLb && !office && lb.count ? '<button class="pk-go" onclick="printLabelsOnPhone()"><i class="fa-solid fa-print"></i> 印標籤（' + lb.count + ' 張）</button>' : '') +
+            (needLb && office ? '<div class="pk-sub" style="font-size:18px;margin:6px 0 10px"><i class="fa-solid fa-tags"></i> 標籤在辦公室自動印出</div>' : '') +
+            '<button class="pk-go sort-home" onclick="goBack()"><i class="fa-solid fa-house"></i> 回到選單</button>';
+    } else {
+        top = '<div class="pk-top"><span><i class="fa-solid fa-boxes-stacked"></i> 分貨　<b>' + (list.length - left) + '</b> / ' + list.length + ' 家</span></div>';
+    }
+    $('picking-next').innerHTML = top +
         list.map(function(o, i) {
             const ok = done.indexOf(o.orderNo) >= 0;
-            return '<div class="pk-card sort-card' + (ok ? ' ok' : '') + '"><div class="pk-name" style="font-size:26px">' + esc(o.customer || o.orderNo) + '</div>' +
-                (ok ? '<div class="pk-sub">✓ 分好了</div>'
+            return '<div class="pk-card sort-card' + (ok ? ' ok' : '') + (justDone === i ? ' flash' : '') + '"><div class="pk-name" style="font-size:26px">' + esc(o.customer || o.orderNo) + '</div>' +
+                (ok ? '<div class="pk-sub"><i class="fa-solid fa-check"></i> 分好了</div>'
                     : o.items.map(function(it) { return '<div class="sort-line"><span>' + esc(it.productName) + ' ' + esc(it.spec || '') + '</span><b>' + esc(it.qty) + ' 件</b></div>'; }).join('') +
-                      '<button class="pk-go" onclick="markSorted(' + i + ')">✓ 這家分好了</button>') + '</div>';
+                      '<button class="pk-go" onclick="markSorted(' + i + ')"><i class="fa-solid fa-check"></i> 這家分好了</button>') + '</div>';
         }).join('') +
-        (left ? '' : '<div class="pk-card pk-done"><div class="big">✅ 全部分好了</div></div>') +
         '<button class="pk-link" onclick="renderFinishPanel(window._finishedWave)">← 回上一頁</button>';
+    if (!left && justDone != null) window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 window.markSorted = async function(i) {
     const wave = window._finishedWave, o = wave && sortList(wave)[i];
     if (!o) return;
     wave.sortedOrders = (wave.sortedOrders || []).concat([o.orderNo]);
-    window.openSortPanel();
+    try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) {}   // 按了有感覺（iPhone 不支援震動，會略過）
+    window.openSortPanel(i);
     try { await db.collection('waves').doc(wave.id).update({ sortedOrders: FieldValue.arrayUnion(o.orderNo) }); }
     catch (e) { console.warn('記錄分貨失敗', e); }
 };

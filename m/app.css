@@ -575,3 +575,11 @@ body {
 .alloc-minus:active { background: #2f6fe8; }
 .alloc-minus:disabled { opacity: .3; }
 .alloc-row .alloc-in { width: 72px; height: 64px; flex-shrink: 0; text-align: center; font-size: 36px; font-weight: 900; color: #fde047; background: #0b1120; border: 2px solid #33456b; border-radius: 14px; }
+/* 分貨：全部分好了（不是按鈕，是結果）＋下一步按鈕；按「這家分好了」那張閃一下綠色 */
+.sort-allok { display: flex; align-items: center; gap: 14px; padding: 16px 4px 14px; text-align: left; }
+.sort-allok > i { font-size: 44px; color: #3ddc97; }
+.sort-allok b { display: block; font-size: 30px; font-weight: 900; color: #3ddc97; line-height: 1.2; }
+.sort-allok span { font-size: 17px; color: #b3bfd4; }
+.pk-go.sort-home { background: #1b2844; border: 1px solid #33456b; margin-bottom: 16px; }
+.sort-card.flash { animation: sortFlash .7s ease-out; }
+@keyframes sortFlash { 0% { background: rgba(61, 220, 151, .45); border-color: #3ddc97; } 100% { } }
