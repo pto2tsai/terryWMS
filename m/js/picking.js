@@ -506,13 +506,13 @@ function renderFinishPanel(wave) {
     const needLb = window.waveNeedsLabels(wave);
     const nSort = sortList(wave).length;
     const sorted = sortList(wave).filter(function(o) { return (wave.sortedOrders || []).indexOf(o.orderNo) >= 0; }).length;
-    $('picking-next').innerHTML = '<div class="pk-card pk-done"><div class="big">✅ 完成</div>' +
+    $('picking-next').innerHTML = '<div class="pk-card pk-done"><div class="big"><i class="fa-solid fa-circle-check"></i> 完成</div>' +
         // 好幾家的貨一起揀的：要分成一家一堆
-        (nSort > 1 ? '<button class="pk-go" style="background:#2563eb" onclick="openSortPanel()">📦 分貨（' + nSort + ' 家）' + (sorted ? ' ' + sorted + '/' + nSort : '') + '</button>' : '') +
-        (!needLb ? '<div class="pk-sub" style="font-size:20px">🚚 ' + esc(wave.logistics || '') + '：貼托運單就好，不用印標籤</div>'
+        (nSort > 1 ? '<button class="pk-go" style="background:#2563eb" onclick="openSortPanel()"><i class="fa-solid fa-boxes-stacked"></i> 分貨（' + nSort + ' 家）' + (sorted ? ' ' + sorted + '/' + nSort : '') + '</button>' : '') +
+        (!needLb ? '<div class="pk-sub" style="font-size:20px"><i class="fa-solid fa-truck"></i> ' + esc(wave.logistics || '') + '：貼托運單就好，不用印標籤</div>'
             : (lb.skipped.length ? '<div class="pk-sub">不用貼標籤：' + esc(lb.skipped.join('、')) + '</div>' : '') +
-              (office ? '<div class="pk-sub" style="font-size:20px">🏷️ 標籤在辦公室自動印出（' + lb.count + ' 張）</div>'
-                : (lb.count ? '<button class="pk-go" onclick="printLabelsOnPhone()">🖨️ 印標籤（' + lb.count + ' 張）</button>' : ''))) +
+              (office ? '<div class="pk-sub" style="font-size:20px"><i class="fa-solid fa-tags"></i> 標籤在辦公室自動印出（' + lb.count + ' 張）</div>'
+                : (lb.count ? '<button class="pk-go" onclick="printLabelsOnPhone()"><i class="fa-solid fa-print"></i> 印標籤（' + lb.count + ' 張）</button>' : ''))) +
         '<button class="pk-link" onclick="goBack()">回到選單</button>' +
         '<div class="pk-sub" style="font-size:14px;margin-top:10px">' + (window.isPracticeMode() ? '練習模式：庫存沒有扣' : '庫存已扣除') +
         (wave.shortOrders && wave.shortOrders.length ? '　・　缺的不補，辦公室會請業務改鼎新' : '') + '</div></div>';

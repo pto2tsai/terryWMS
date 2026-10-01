@@ -91,7 +91,7 @@ await mp.evaluate(() => { window.print = () => { window.__printed = document.get
 await mp.click('text=印標籤（'); await mp.waitForTimeout(1200);
 const printed = await mp.evaluate(() => window.__printed || '');
 H.check('手機印標籤：一張訂單一張，件數是實際出貨的（海霸王白蝦 3 件、註明缺貨 訂 5 出 3；好市多白蝦 3 件）', (printed.match(/class="label"/g) || []).length === 2 &&
-  /白蝦 50\/60<\/span><strong>3 件/.test(printed) && printed.includes('缺貨：訂 5，出 3') && printed.includes('page-break-after:always'), printed.replace(/<style>[\s\S]*?<\/style>/, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 300));
+  /白蝦 50\/60<\/span><strong>3 件/.test(printed) && printed.includes('缺貨：訂 5，出 3') && printed.includes('break-before:page') && !printed.includes('page-break-after:always'), printed.replace(/<style>[\s\S]*?<\/style>/, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 300));
 H.check('記下標籤已經在手機印過', !!(await H.one('waves', W.waveNo)).labelsPrintedAt && (await H.one('waves', W.waveNo)).labelsPrintedOn === 'phone');
 
 // ---------- 完成後重印標籤：用實際出貨數 ----------
@@ -110,6 +110,12 @@ H.check('電視看板：缺貨少出 1 張，請業務在鼎新改銷貨單：�
 await H.nav(D.page, 'home'); await D.page.waitForTimeout(2500);
 const home = await D.page.innerText('#home-todos');
 H.check('首頁待辦：缺貨要改鼎新 1（海霸王 白蝦 5→3）', /缺貨要改鼎新\s*1/.test(home) && home.includes('海霸王（A-1）白蝦 5→3'), home);
+await D.page.click('#home-todos > div:has-text("缺貨要改鼎新")'); await D.page.waitForTimeout(1200);
+const fx = await D.page.innerText('#modal-erp-fix').catch(() => '');
+if (process.env.SHOT_DIR) await D.page.screenshot({ path: process.env.SHOT_DIR + '/erp-fix.png' });
+H.check('按「缺貨要改鼎新」：跳出清單，寫要做什麼、海霸王 A-1 白蝦 訂 5 → 出 3（少 2）、可以全部複製給業務', fx.includes('要做的事') && fx.includes('海霸王') && fx.includes('A-1') && fx.includes('訂 5 → 出 3（少 2）') && fx.includes('全部複製給業務'), fx.slice(0, 300));
+H.check('複製的文字可以直接貼給業務', (await D.page.evaluate(() => { window._copied = null; return erpFixText(window._erpFixList); })).includes('海霸王　A-1\n・白蝦 50/60：訂 5 → 出 3（少 2）'));
+await D.page.evaluate(() => WMS.closeModal('modal-erp-fix'));
 
 // ---------- 缺的不補；鼎新改好匯入後提醒消失 ----------
 const wv = await D.page.evaluate(async () => { await loadOrdersFromFirebase(); return window._orderData.orders.filter(window.orderWaveable).map(o => o.orderNo); });
@@ -141,4 +147,10 @@ const frame = await D.page.evaluate(() => { const f = document.querySelector('.a
 H.check('辦公室電腦自動印出標籤（沒有人按），件數是實際出貨的（透抽 3 件）；記下是哪台印的', !!w2.labelAutoPrintedAt && w2.labelsPrintedOn === 'office' && frame.includes('全聯') && frame.includes('3 件'), JSON.stringify([w2.labelAutoPrintedAt, frame.replace(/<[^>]+>/g, ' ').slice(0, 120)]));
 
 H.check('沒有頁面錯誤', D.log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(D.log.errors.concat(M.log.errors)));
+// ---------- 手動標「已經改好了」 ----------
+await H.admin(async d => H.setDoc(H.doc(d, 'salesOrders', 'SO-FIX'), { orderNo: 'B-9', customer: '測試客戶', status: 'shipped', erpFixNeeded: true, shortShipped: [{ productName: '干貝', spec: 'S', want: 4, got: 1, short: 3 }], items: [] }));
+await D.page.evaluate(() => openErpFixList()); await D.page.waitForTimeout(1200);
+await D.page.click('#modal-erp-fix button:has-text("已經改好了")');
+for (let i = 0; i < 20; i++) { await D.page.waitForTimeout(300); if ((await H.one('salesOrders', 'SO-FIX')).erpFixNeeded === false && !(await D.page.innerText('#modal-erp-fix').catch(() => '')).includes('測試客戶')) break; }
+H.check('按「已經改好了」：這張單從清單拿掉（記下誰改的）', (await H.one('salesOrders', 'SO-FIX')).erpFixNeeded === false && !(await D.page.innerText('#modal-erp-fix')).includes('測試客戶'), JSON.stringify([await H.one('salesOrders', 'SO-FIX'), D.log.dialogs.slice(-3), D.log.errors]));
 await H.close(); process.exit(0);

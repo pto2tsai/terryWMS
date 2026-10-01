@@ -484,6 +484,7 @@ body {
 @media print {
     body > *:not(#label-print-area) { display: none !important; }
     #label-print-area { display: block !important; background: #fff; color: #000; }
+    html, body { min-height: 0 !important; height: auto !important; background: #fff !important; }
 }
 
 /* ---------- 揀貨：冷凍庫版（戴手套、不想看字：一次只做一件事、一個大按鈕） ---------- */

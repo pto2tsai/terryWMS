@@ -91,8 +91,10 @@ window.sortingLabelsPrintCss = function(lb) {
     // 標籤只放：物流商、單號、客戶、共幾件、地址（明細不放，品項多也不會塞不下）
     return lb.style + '@page{size:' + W + 'mm ' + H + 'mm;margin:0}' +
         '.sl-title{display:none}' +
-        '.sl .label{display:block;box-sizing:border-box;width:' + W + 'mm;height:' + H + 'mm;margin:0;padding:2.5mm;border:none;overflow:hidden;page-break-after:always;break-after:page}' +
-        '.sl .label:last-child{page-break-after:auto;break-after:auto}' +
+        // 只在「兩張標籤之間」換頁（最後一張後面不換，才不會多吐一張空白標籤）；高度少 1mm，Windows 換算誤差不會擠出第二頁
+        'html,body{margin:0 !important;padding:0 !important}.sl{margin:0;padding:0}' +
+        '.sl .label{display:block;box-sizing:border-box;width:' + W + 'mm;height:' + (H - 1) + 'mm;margin:0;padding:2.5mm;border:none;overflow:hidden;page-break-after:auto;break-after:auto;page-break-inside:avoid;break-inside:avoid}' +
+        '.sl .label + .label{page-break-before:always;break-before:page}' +
         // 感熱標籤是黑白的：紅色、圖示都印不清楚 → 全部黑白、粗框
         '.sl .label{color:#000}.sl .ic{display:none}' +
         '.sl .logistics{background:#000;color:#fff;margin:-2.5mm -2.5mm 1.5mm;padding:1.2mm 2.5mm;font-size:15px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
