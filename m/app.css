@@ -595,3 +595,19 @@ body {
 .sf-row em { font-style: normal; font-size: 28px; font-weight: 900; color: #fde047; }
 .sf-row em.none { font-size: 22px; color: #fca5a5; }
 .pk-go.sf-edit { font-size: 32px; min-height: 84px; margin-top: 14px; background: #2f6fe8; }
+/* 放到哪一家（只有一家訂的品項） */
+.pk-to { margin: 10px auto 4px; display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; background: rgba(61, 220, 151, .14); border: 1px solid rgba(61, 220, 151, .45); color: #3ddc97; font-size: 22px; font-weight: 700; }
+.pk-to b { color: #fff; font-size: 26px; }
+.pk-to.shared { background: rgba(255, 255, 255, .06); border-color: #33456b; color: #b3bfd4; font-size: 18px; font-weight: 500; }
+.pk-link.pk-pause { margin-top: 12px; color: #b3bfd4; }
+/* 先揀別的波次 */
+.sw-wave { display: block; width: 100%; text-align: left; margin: 10px 0; padding: 14px 16px; border-radius: 14px; background: #111a2c; border: 1px solid #33456b; color: #fff; cursor: pointer; }
+.sw-wave.cur { border-color: #2f6fe8; }
+.sw-wave:active { background: #1b2844; }
+.sw-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sw-top b { font-size: 24px; font-weight: 900; }
+.sw-sub { margin-top: 4px; font-size: 16px; color: #b3bfd4; }
+.sw-tag { font-size: 14px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.sw-tag.now { background: rgba(91, 155, 255, .18); color: #8db8ff; }
+.sw-tag.busy { background: rgba(245, 196, 81, .16); color: #f5c451; }
+.sw-tag.pause { background: rgba(255, 255, 255, .1); color: #e2e8f0; }

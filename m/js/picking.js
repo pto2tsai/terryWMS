@@ -41,7 +41,10 @@ window.pageInit.picking = function() {
 // 下一個要揀的波次：同一間沒有別人在揀的，先開單的先揀
 function nextOpenWave(excludeId) {
     return (window.waves || []).filter(function(w) { return window.isWaveOpen(w) && w.id !== excludeId && w.status !== 'done' && !otherPickers(w, true).length; })
-        .sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); })[0] || null;
+        .sort(function(a, b) {
+            const pa = (a.completedItems || []).length || (a.shortLog || []).length ? 0 : 1, pb = (b.completedItems || []).length || (b.shortLog || []).length ? 0 : 1;
+            return pa - pb || String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+        })[0] || null;
 }
 window.goNextWave = function(id) {
     renderWaveOptions();
@@ -52,7 +55,8 @@ window.goNextWave = function(id) {
 // 做完一個波次後的按鈕：還有波次就「下一個波次」，都揀完了才「回到選單」
 function nextWaveButton(doneId) {
     const nx = nextOpenWave(doneId);
-    return nx ? '<button class="pk-go" style="background:#2f6fe8" onclick="goNextWave(\'' + esc(nx.id) + '\')"><i class="fa-solid fa-arrow-right"></i> 下一個波次<br><span style="font-size:18px;font-weight:700">' + esc(nx.waveNo) + '　' + esc(nx.logistics || '') + '（' + esc(nx.totalQty || 0) + ' 件）</span></button>'
+    const paused = nx && ((nx.completedItems || []).length || (nx.shortLog || []).length);
+    return nx ? '<button class="pk-go" style="background:#2f6fe8" onclick="goNextWave(\'' + esc(nx.id) + '\')"><i class="fa-solid ' + (paused ? 'fa-play' : 'fa-arrow-right') + '"></i> ' + (paused ? '回到暫停的波次' : '下一個波次') + '<br><span style="font-size:18px;font-weight:700">' + esc(nx.waveNo) + '　' + esc(nx.logistics || '') + '（' + esc(nx.totalQty || 0) + ' 件）</span></button>'
         : '<div class="pk-sub" style="font-size:20px;margin:10px 0;color:#3ddc97"><i class="fa-solid fa-flag-checkered"></i> 今天的波次都揀完了</div><button class="pk-link" onclick="goBack()">回到選單</button>';
 }
 
@@ -294,12 +298,72 @@ function renderNextStop() {
         (code ? '<div class="pk-loc">' + esc(code) + '</div>' : '') +
         '<div class="pk-name">' + esc(n.productName) + '</div>' +
         (n.spec ? '<div class="pk-spec">' + esc(n.spec) + '</div>' : '') +
+        (ret ? '' : putToHtml(n)) +
         // 「拿幾件」和「拿好了」合成一顆：按下去就是拿好了
         '<button class="pk-go pk-take' + (ret ? ' ret' : '') + '" onclick="confirmCurrentPick()"><i class="fa-solid fa-check"></i> ' + (ret ? '放回 ' : '拿 ') + '<span class="pk-qty">' + esc(n.pickQty) + '</span> <small>件</small></button>' +
         (ret ? '' : '<button class="pk-short" onclick="shortPick()"><i class="fa-solid fa-xmark"></i> 不夠</button>') +
         '<div class="pk-next">' + (nx ? '下一項：<b>' + esc(nx.productName) + ' ' + esc(nx.spec || '') + '</b>　' + esc(nx.pickQty) + ' 件' : other ? '這間最後一項' : '這是最後一項') + '</div>' +
-        '</div>';
+        '</div>' +
+        '<button class="pk-link pk-pause" onclick="openWaveSwitcher()"><i class="fa-solid fa-pause"></i> 先揀別的波次（這個先暫停）</button>';
 }
+
+// 這個品項只有一家訂：揀的時候直接放到那一家（之後不用再分）；好幾家訂的寫「要分給 N 家」
+function itemCustomers(n) {
+    const seen = [];
+    (n.orders || []).forEach(function(o) { const c = o.customer || o.orderNo; if (c && seen.indexOf(c) < 0) seen.push(c); });
+    return seen;
+}
+function waveCustomerCount(w) {
+    const seen = [];
+    ((w && w.orders) || []).forEach(function(o) { const c = o.customer || o.orderNo; if (c && seen.indexOf(c) < 0) seen.push(c); });
+    return seen.length;
+}
+function putToHtml(n) {
+    if (waveCustomerCount(currentWave) < 2) return '';
+    const cs = itemCustomers(n);
+    if (cs.length === 1) return '<div class="pk-to"><i class="fa-solid fa-box-open"></i> 放到：<b>' + esc(cs[0]) + '</b></div>';
+    if (cs.length > 1) return '<div class="pk-to shared"><i class="fa-solid fa-people-arrows"></i> 要分給 ' + cs.length + ' 家（最後分貨）</div>';
+    return '';
+}
+// 分貨：這家要的每一樣都只有他訂（揀的時候已經放到他那一堆）→ 不用再分
+function exclusiveOrder(wave, o) {
+    const sum = wave.summary || [];
+    return (o.items || []).every(function(it) {
+        const s = sum.find(function(x) { return x.productName === it.productName && (x.spec || '') === (it.spec || ''); });
+        if (!s) return false;
+        const cs = [];
+        (s.orders || []).forEach(function(x) { const c = x.customer || x.orderNo; if (c && cs.indexOf(c) < 0) cs.push(c); });
+        return cs.length === 1;
+    });
+}
+function sortedOrders(wave) {
+    const done = (wave.sortedOrders || []).slice();
+    sortList(wave).forEach(function(o) { if (done.indexOf(o.orderNo) < 0 && exclusiveOrder(wave, o)) done.push(o.orderNo); });
+    return done;
+}
+
+// 先揀別的波次：這個先暫停（進度都存著），列出所有波次和做到哪裡，點一個就切過去
+window.openWaveSwitcher = function() {
+    const cur = currentWave && currentWave.id;
+    const list = (window.waves || []).filter(function(w) { return window.isWaveOpen(w) && w.status !== 'done'; })
+        .sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
+    $('picking-next').innerHTML = '<div class="pk-top"><span><i class="fa-solid fa-layer-group"></i> 要先揀哪一個？</span></div>' +
+        list.map(function(w) {
+            const done = (w.completedItems || []).length, all = (w.summary || []).length;
+            const who = otherPickers(w, true);
+            const tag = w.id === cur ? '<span class="sw-tag now">正在揀</span>' : who.length ? '<span class="sw-tag busy">' + esc(who.map(function(x) { return x.name; }).join('、')) + ' 揀貨中</span>' : done ? '<span class="sw-tag pause">暫停中</span>' : '';
+            return '<button class="sw-wave' + (w.id === cur ? ' cur' : '') + '" onclick="switchToWave(\'' + esc(w.id) + '\')">' +
+                '<div class="sw-top"><b>' + esc(w.logistics || '') + '</b>' + tag + '</div>' +
+                '<div class="sw-sub">' + esc(w.waveNo) + '　' + esc(w.totalQty || 0) + ' 件' + (all ? '　・　' + done + ' / ' + all + ' 項' : '') + '</div></button>';
+        }).join('') +
+        (cur ? '<button class="pk-link" onclick="switchToWave(\'' + esc(cur) + '\')">← 不換，繼續揀這個</button>' : '');
+    pickFocus(true);
+    window.scrollTo(0, 0);
+};
+window.switchToWave = function(id) {
+    if (currentWave && currentWave.id === id) { pickFocus(false); return renderPickingList(); }
+    return window.goNextWave(id);
+};
 
 // 掃板號（或尾碼）或儲位標籤都可以
 window.confirmPickingScan = async function() {
@@ -548,7 +612,7 @@ function renderFinishPanel(wave) {
     const office = window.labelPrintMode() === 'office';
     const needLb = window.waveNeedsLabels(wave);
     const nSort = sortList(wave).length;
-    const sorted = sortList(wave).filter(function(o) { return (wave.sortedOrders || []).indexOf(o.orderNo) >= 0; }).length;
+    const sorted = sortList(wave).filter(function(o) { return sortedOrders(wave).indexOf(o.orderNo) >= 0; }).length;
     $('picking-next').innerHTML = '<div class="pk-card pk-done"><div class="big"><i class="fa-solid fa-circle-check"></i> 完成</div>' +
         // 好幾家的貨一起揀的：要分成一家一堆
         (nSort > 1 ? '<button class="pk-go" style="background:#2563eb" onclick="openSortPanel()"><i class="fa-solid fa-boxes-stacked"></i> 分貨（' + nSort + ' 家）' + (sorted ? ' ' + sorted + '/' + nSort : '') + '</button>' : '') +
@@ -570,7 +634,7 @@ window.openSortPanel = function(justDone) {
     const wave = window._finishedWave;
     if (!wave) return;
     pickFocus(true);
-    const list = sortList(wave), done = wave.sortedOrders || [];
+    const list = sortList(wave), done = sortedOrders(wave);
     const left = list.filter(function(o) { return done.indexOf(o.orderNo) < 0; }).length;
     // 全部分好：最上面寫「全部分好了」＋下一步的大按鈕（印標籤／回到選單），不用往下找
     let top;
@@ -589,7 +653,7 @@ window.openSortPanel = function(justDone) {
         list.map(function(o, i) {
             const ok = done.indexOf(o.orderNo) >= 0;
             return '<div class="pk-card sort-card' + (ok ? ' ok' : '') + (justDone === i ? ' flash' : '') + '"><div class="pk-name" style="font-size:26px">' + esc(o.customer || o.orderNo) + '</div>' +
-                (ok ? '<div class="pk-sub"><i class="fa-solid fa-check"></i> 分好了</div>'
+                (ok ? '<div class="pk-sub"><i class="fa-solid fa-check"></i> ' + ((wave.sortedOrders || []).indexOf(o.orderNo) < 0 ? '揀的時候已經放好了' : '分好了') + '</div>'
                     : o.items.map(function(it) { return '<div class="sort-line"><span>' + esc(it.productName) + ' ' + esc(it.spec || '') + '</span><b>' + esc(it.qty) + ' 件</b></div>'; }).join('') +
                       '<button class="pk-go" onclick="markSorted(' + i + ')"><i class="fa-solid fa-check"></i> 這家分好了</button>') + '</div>';
         }).join('') +
@@ -661,7 +725,8 @@ window.completePickingWave = async function(labelsFixed) {
         window._pendingAlloc = null;
         renderFinishPanel(currentWave);
         // 好幾家一起揀的：直接進分貨（不用再按一次「分貨」）
-        if (sortList(currentWave).length > 1) window.openSortPanel();
+        // 每一家都只有獨有品項（揀的時候已經放好了）就不用分，停在完成畫面
+        if (sortList(currentWave).length > 1 && sortedOrders(currentWave).length < sortList(currentWave).length) window.openSortPanel();
     } catch (e) {
         window._justCompleted = null;
         alert('❌ 完成波次失敗：' + e.message + '\n\n庫存與訂單都沒有變動。');

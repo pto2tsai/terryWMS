@@ -99,10 +99,13 @@ window.sortingLabelsPrintCss = function(lb) {
         '.sl .label{color:#000}.sl .ic{display:none}' +
         '.sl .logistics{background:#000;color:#fff;margin:-2.5mm -2.5mm 1.5mm;padding:1.2mm 2.5mm;font-size:15px;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
         '.sl .label > div:nth-child(2){font-size:13px !important;color:#000 !important;font-weight:bold}' +
-        '.sl .customer{font-size:21px;line-height:1.2;margin:1mm 0;max-height:13mm;overflow:hidden}' +
-        '.sl .total{background:#fff;color:#000;border:1mm solid #000;border-radius:0;font-size:26px;font-weight:900;padding:0.6mm;margin:1.5mm 0}' +
+        // 最重要的兩個：客戶名、件數的數字 → 最大
+        '.sl .customer{font-size:44px;font-weight:900;line-height:1.1;margin:1mm 0 1.5mm;white-space:nowrap;overflow:hidden;text-overflow:clip}' +
+        '.sl .customer[data-len="m"]{font-size:36px}.sl .customer[data-len="l"]{font-size:24px;white-space:normal;max-height:13mm}' +
+        '.sl .total{background:#fff;color:#000;border:1mm solid #000;border-radius:0;font-size:22px;font-weight:900;padding:0 1mm;margin:1mm 0;line-height:1.1}' +
+        '.sl .total b{font-size:66px;line-height:1;font-weight:900;margin:0 2mm;vertical-align:-4px;font-family:Arial,Helvetica,sans-serif}' +
         '.sl .items,.sl .short{display:none}' +
-        '.sl .address{color:#000;border-top:0.3mm solid #000;font-size:12px;line-height:1.35;margin-top:1mm;padding-top:1mm;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}';
+        '.sl .address{color:#000;border-top:0.3mm solid #000;font-size:12px;line-height:1.35;margin-top:1mm;padding-top:1mm;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}';
 };
 
 // 大榮、黑貓、新竹物流會貼托運單（上面有客戶），不用再貼我們的分貨標籤；其他物流要貼
@@ -593,8 +596,9 @@ window.buildSortingLabelsHtml = function(wave) {
         }).join('');
         return '<div class="label"><div class="logistics">' + esc(order.logistics || wave.logistics) + '<span style="float:right">' + esc(wave.waveNo) + '</span></div>' +
             '<div style="font-size:14px;color:#666"><span class="ic">📦 </span>' + esc(order.orderNo) + '</div>' +
-            '<div class="customer"><span class="ic">👤 </span>' + esc(order.customer) + '</div>' +
-            '<div class="total">共 ' + totalPkg + ' 件</div>' +
+            // 客戶名越長字越小（標籤寬 8 公分，長的名字也要一行放得下）
+            '<div class="customer" data-len="' + (String(order.customer || '').length > 7 ? 'l' : String(order.customer || '').length > 4 ? 'm' : 's') + '"><span class="ic">👤 </span>' + esc(order.customer) + '</div>' +
+            '<div class="total">共 <b>' + totalPkg + '</b> 件</div>' +
             '<div class="items">' + itemsHtml + '</div>' +
             (order.address ? '<div class="address"><span class="ic">📍 </span>' + esc(order.address) + '</div>' : '') + '</div>';
     }).map(function(html, i) {
