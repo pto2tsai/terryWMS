@@ -321,7 +321,7 @@ function waveCustomerCount(w) {
 function putToHtml(n) {
     if (waveCustomerCount(currentWave) < 2) return '';
     const cs = itemCustomers(n);
-    if (cs.length === 1) return '<div class="pk-to"><i class="fa-solid fa-box-open"></i> 放到：<b>' + esc(cs[0]) + '</b></div>';
+    if (cs.length === 1) return '<div class="pk-to"><i class="fa-solid fa-box-open"></i> 放到：<b>' + esc(window.shortCustomer(cs[0])) + '</b></div>';
     if (cs.length > 1) return '<div class="pk-to shared"><i class="fa-solid fa-people-arrows"></i> 要分給 ' + cs.length + ' 家（最後分貨）</div>';
     return '';
 }
@@ -652,7 +652,9 @@ window.openSortPanel = function(justDone) {
     $('picking-next').innerHTML = top +
         list.map(function(o, i) {
             const ok = done.indexOf(o.orderNo) >= 0;
-            return '<div class="pk-card sort-card' + (ok ? ' ok' : '') + (justDone === i ? ' flash' : '') + '"><div class="pk-name" style="font-size:26px">' + esc(o.customer || o.orderNo) + '</div>' +
+            const sn = window.shortCustomer(o.customer || o.orderNo);
+            return '<div class="pk-card sort-card' + (ok ? ' ok' : '') + (justDone === i ? ' flash' : '') + '"><div class="pk-name" style="font-size:30px">' + esc(sn) + '</div>' +
+                (sn !== (o.customer || '') && o.customer ? '<div class="pk-sub" style="font-size:14px;margin-top:-4px">' + esc(o.customer) + '</div>' : '') +
                 (ok ? '<div class="pk-sub"><i class="fa-solid fa-check"></i> ' + ((wave.sortedOrders || []).indexOf(o.orderNo) < 0 ? '揀的時候已經放好了' : '分好了') + '</div>'
                     : o.items.map(function(it) { return '<div class="sort-line"><span>' + esc(it.productName) + ' ' + esc(it.spec || '') + '</span><b>' + esc(it.qty) + ' 件</b></div>'; }).join('') +
                       '<button class="pk-go" onclick="markSorted(' + i + ')"><i class="fa-solid fa-check"></i> 這家分好了</button>') + '</div>';

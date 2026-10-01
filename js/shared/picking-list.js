@@ -84,6 +84,28 @@ window.watchLabelPrintMode = function(onChange) {
         if (onChange) onChange(window.wmsLabelMode);
     }, function() {});
 };
+// ---------- 客戶簡稱（標籤、手機「放到哪一家」、分貨用；訂單資料還是完整名稱）----------
+// 先看主管設定的簡稱（settings/customerShort）；沒設定的自動去掉「有限公司」這類字和最後的「-8」編號
+window.wmsCustomerShort = {};
+window.watchCustomerShort = function(onChange) {
+    return window.db.collection('settings').doc('customerShort').onSnapshot(function(d) {
+        window.wmsCustomerShort = (d.exists && d.data().map) || {};
+        if (onChange) onChange();
+    }, function() {});
+};
+window.autoShortName = function(name) {
+    var n = String(name || '').trim();
+    var t = n.replace(/股份有限公司|企業有限公司|有限公司|企業社|企業行|商行|實業社|實業|工作室/g, '')
+        .replace(/\s*[-－]\s*\d+\s*$/, '')       // 最後的「-8」這種編號
+        .replace(/\s+/g, ' ').trim();
+    return t || n;
+};
+window.shortCustomer = function(name) {
+    var n = String(name || '').trim();
+    var m = window.wmsCustomerShort || {};
+    return (m[n] && String(m[n]).trim()) || window.autoShortName(n);
+};
+
 // 標籤機用：一張標籤一頁（整份文件，給手機列印區或辦公室的隱藏列印框）
 window.LABEL_PAPER = { w: 80, h: 60 };   // 標籤紙 8×6 公分（橫式）
 window.sortingLabelsPrintCss = function(lb) {
@@ -93,7 +115,7 @@ window.sortingLabelsPrintCss = function(lb) {
         '.sl-title{display:none}' +
         // 只在「兩張標籤之間」換頁（最後一張後面不換，才不會多吐一張空白標籤）；高度少 1mm，Windows 換算誤差不會擠出第二頁
         'html,body{margin:0 !important;padding:0 !important}.sl{margin:0;padding:0}' +
-        '.sl .label{display:block;box-sizing:border-box;width:' + W + 'mm;height:' + (H - 1) + 'mm;margin:0;padding:2.5mm;border:none;overflow:hidden;page-break-after:auto;break-after:auto;page-break-inside:avoid;break-inside:avoid}' +
+        '.sl .label{display:flex;flex-direction:column;box-sizing:border-box;width:' + W + 'mm;height:' + (H - 1) + 'mm;margin:0;padding:2.5mm;border:none;overflow:hidden;page-break-after:auto;break-after:auto;page-break-inside:avoid;break-inside:avoid}' +
         '.sl .label + .label{page-break-before:always;break-before:page}' +
         // 感熱標籤是黑白的：紅色、圖示都印不清楚 → 全部黑白、粗框
         '.sl .label{color:#000}.sl .ic{display:none}' +
@@ -101,9 +123,10 @@ window.sortingLabelsPrintCss = function(lb) {
         // 單號移到最下面跟地址同一行（空間留給客戶名、件數）
         '.sl .label .ono{display:none}.sl .lb-ono{display:inline;font-weight:bold;margin-right:2mm}' +
         // 最重要的兩個：客戶名、件數的數字 → 最大
-        '.sl .customer{font-size:var(--fs,40px);font-weight:900;line-height:1.08;margin:0.5mm 0 1mm;white-space:nowrap;overflow:hidden}' +
-        '.sl .total{background:#fff;color:#000;border:0.9mm solid #000;border-radius:0;font-size:24px;font-weight:900;padding:0 1mm;margin:0.5mm 0;line-height:1;display:flex;align-items:center;justify-content:center;gap:2mm}' +
-        '.sl .total b{font-size:var(--ns,80px);line-height:1;font-weight:900;font-family:Arial,Helvetica,sans-serif;letter-spacing:-1px}' +
+        '.sl .customer{flex:0 0 auto;font-size:var(--fs,40px);font-weight:900;line-height:1.08;margin:0.5mm 0 1mm;white-space:nowrap;overflow:hidden}' +
+        // 件數那格撐滿剩下的高度，數字照那格的高度放到最大（每張都從上排到下，不留白）
+        '.sl .total{flex:1 1 auto;min-height:0;container-type:size;background:#fff;color:#000;border:0.9mm solid #000;border-radius:0;font-size:24px;font-weight:900;padding:0 1mm;margin:0.5mm 0;line-height:1;display:flex;align-items:center;justify-content:center;gap:2mm;overflow:hidden}' +
+        '.sl .total b{font-size:min(var(--ns,80px),96cqh);line-height:0.95;font-weight:900;font-family:Arial,Helvetica,sans-serif;letter-spacing:-1px}' +
         '.sl .items,.sl .short{display:none}' +
         '.sl .address{color:#000;border-top:0.3mm solid #000;font-size:12px;line-height:1.3;margin-top:0.8mm;padding-top:0.6mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}';
 };
@@ -574,7 +597,8 @@ function labelNameSize(name) {
     String(name || '').split('').forEach(function(c) { u += /[\u2E80-\uFFFF]/.test(c) ? 1 : 0.58; });
     return Math.max(22, Math.min(60, Math.floor(272 / Math.max(u, 1))));
 }
-function labelNumSize(n) { var d = String(n).length; return d <= 2 ? 92 : d === 3 ? 86 : d === 4 ? 70 : 56; }
+// 件數數字：寬度上限（框寬約 205px、阿拉伯數字約 0.56 個字寬）；高度上限交給版面（件數那格撐滿剩下的高度）
+function labelNumSize(n) { var d = String(n).length; return Math.min(170, Math.floor(205 / (0.56 * Math.max(d, 1)))); }
 window.buildSortingLabelsHtml = function(wave) {
     var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
     var done = wave.status === 'done' && Array.isArray(wave.shipped);
@@ -604,7 +628,7 @@ window.buildSortingLabelsHtml = function(wave) {
         return '<div class="label"><div class="logistics">' + esc(order.logistics || wave.logistics) + '<span style="float:right">' + esc(wave.waveNo) + '</span></div>' +
             '<div class="ono" style="font-size:14px;color:#666"><span class="ic">📦 </span>' + esc(order.orderNo) + '</div>' +
             // 標籤機：客戶名照長短算出剛好塞滿一行的最大字、件數數字照位數放到最大（--fs、--ns 只有標籤機版面用）
-            '<div class="customer" style="--fs:' + labelNameSize(order.customer) + 'px"><span class="ic">👤 </span>' + esc(order.customer) + '</div>' +
+            '<div class="customer" style="--fs:' + labelNameSize(window.shortCustomer(order.customer)) + 'px"><span class="ic">👤 </span>' + esc(window.shortCustomer(order.customer)) + '</div>' +
             '<div class="total" style="--ns:' + labelNumSize(totalPkg) + 'px">共 <b>' + totalPkg + '</b> 件</div>' +
             '<div class="items">' + itemsHtml + '</div>' +
             '<div class="address"><span class="lb-ono">' + esc(order.orderNo) + '</span>' + (order.address ? '<span class="ic">📍 </span>' + esc(order.address) : '') + '</div></div>';
