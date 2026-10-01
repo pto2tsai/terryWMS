@@ -96,7 +96,7 @@ await mp.screenshot({ path: SD + '/m10b-phone-alldone.png' });
 await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(1000);
 await mp.screenshot({ path: SD + '/m11-phone-short-panel.png', fullPage: true });
 note('缺貨畫面：', (await mp.innerText('#picking-next')).replace(/\s+/g, ' '));
-await mp.click('#short-ok-btn'); await mp.waitForTimeout(2500);
+await mp.click('#short-edit-btn'); await mp.waitForTimeout(300); await mp.click('#short-done-btn'); await mp.waitForTimeout(2500);
 await mp.screenshot({ path: SD + '/m12-phone-finish.png' });
 note('完成畫面：', (await mp.innerText('#picking-next')).replace(/\s+/g, ' '));
 await mp.evaluate(() => { window.print = () => {}; });

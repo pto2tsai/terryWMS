@@ -62,9 +62,9 @@ H.check('全部拿完：顯示「有 1 項不夠」和「完成出貨」大按�
 const dz = M.log.dialogs.length;
 await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(800);
 const panel = await mp.innerText('#picking-next');
-H.check('缺貨畫面：預設先開單的先給，列出會少的那家（好市多 白蝦 給 1 件），沒有跳確認視窗', panel.includes('有 1 項不夠') && panel.includes('先開單的先給') && panel.includes('好市多') && panel.includes('給 1 件') && !panel.includes('海霸王') && M.log.dialogs.length === dz, panel);
+H.check('缺貨畫面：預設先開單的先給，列出會少的那家（好市多 白蝦 給 1 件），沒有跳確認視窗', panel.includes('有 1 項不夠') && panel.includes('先開單的先給') && panel.includes('好市多') && /訂 3\s*給 1/.test(panel) && !panel.includes('海霸王') && M.log.dialogs.length === dz, panel);
 if (process.env.SHOT_DIR) await mp.screenshot({ path: process.env.SHOT_DIR + '/short-panel.png', fullPage: true });
-H.check('缺貨畫面沒有「標籤都改好了」要勾，還沒完成', !(await mp.$('#short-labels-ok')) && await mp.isVisible('#short-ok-btn') && (await H.one('waves', W.waveNo)).status !== 'done');
+H.check('缺貨畫面只有一顆大的「改分法」（沒有「好，完成」），還沒完成', !(await mp.$('#short-labels-ok')) && !(await mp.$('#short-ok-btn')) && await mp.isVisible('#short-edit-btn') && (await H.one('waves', W.waveNo)).status !== 'done');
 // 現場決定：海霸王 3、好市多 3
 await mp.click('#short-edit-btn'); await mp.waitForTimeout(300);
 H.check('按「改分法」：每家一格，預設海霸王 5、好市多 1', JSON.stringify(await mp.$$eval('.alloc-in', e => e.map(x => x.value))) === JSON.stringify(['5', '1']) && !(await mp.isDisabled('#short-done-btn')));
@@ -133,7 +133,7 @@ await mp.evaluate(() => goBack()); await mp.evaluate(() => openPage('picking'));
 await mp.selectOption('#picking-wave-select', W2.waveNo); await mp.waitForTimeout(1000);
 await tapPad(3);   // 透抽要 4 只拿到 3
 await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(800);   // 完成出貨
-await mp.click('#short-ok-btn'); await mp.waitForTimeout(3000);   // 照預設分法，好，完成
+await mp.click('#short-edit-btn'); await mp.waitForTimeout(300); await mp.click('#short-done-btn'); await mp.waitForTimeout(3000);   // 改分法裡照預設分法，好，完成
 const fin2 = await mp.innerText('#picking-next');
 H.check('辦公室模式：手機完成後寫「標籤在辦公室自動印出」，沒有手機列印按鈕', fin2.includes('辦公室自動印出') && !fin2.includes('印標籤（'), fin2);
 const w2 = await H.one('waves', W2.waveNo);
