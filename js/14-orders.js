@@ -559,6 +559,45 @@ function askLogistics(orders) {
 }
 
 // ---------- 物流商名稱設定（主管）：名稱＋備註關鍵字，由上往下比對，先對到的算 ----------
+// ---------- 客戶簡稱：標籤、手機「放到哪一家」、分貨用（訂單資料還是完整名稱）----------
+window.openCustomerShort = function() {
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const r = window.currentUser && window.currentUser.role;
+    const canEdit = r === 'admin' || r === 'supervisor';
+    const map = window.wmsCustomerShort || {};
+    // 最近訂單、波次裡名字比較長的（自動簡稱還超過 4 個字），加上已經設定過的
+    const names = [];
+    const all = ((window._orderData && window._orderData.orders) || []).slice();
+    ((window._waveData && window._waveData.waves) || []).forEach(w => (w.orders || []).forEach(o => all.push(o)));
+    all.forEach(o => { const n = String(o.customer || '').trim(); if (n && names.indexOf(n) < 0 && (window.autoShortName(n).length > 4 || window.autoShortName(n) !== n || map[n])) names.push(n); });
+    Object.keys(map).forEach(n => { if (names.indexOf(n) < 0) names.push(n); });
+    names.sort((a, b) => (map[a] ? 0 : 1) - (map[b] ? 0 : 1) || a.localeCompare(b, 'zh-TW'));
+    const rows = names.map(n => '<tr class="cs-row" data-s="' + esc(n) + '"><td class="p-2" style="color:var(--ds-text);font-weight:600">' + esc(n) + '</td>' +
+        '<td class="p-2"><input class="cs-in" data-name="' + esc(n) + '" maxlength="8" value="' + esc(map[n] || '') + '" placeholder="' + esc(window.autoShortName(n)) + '"' + (canEdit ? '' : ' disabled') + ' style="width:150px"></td></tr>').join('');
+    const content = '<div style="font-size:14px;color:var(--ds-text-2);line-height:1.7;margin-bottom:12px">標籤上的客戶名越短，字就越大。這裡設定 <b style="color:var(--ds-text)">4～5 個字</b>的簡稱，會用在<b style="color:var(--ds-text)">分貨標籤、手機的「放到哪一家」和分貨畫面</b>；訂單資料還是完整名稱。<br>' +
+        '沒填的會自動去掉「有限公司」這類字和最後的「-8」編號（灰色字就是自動的簡稱）。' + (canEdit ? '' : '<br><span style="color:var(--ds-warn)">只有主管可以修改。</span>') + '</div>' +
+        '<input id="cs-search" placeholder="搜尋客戶" style="width:100%;margin-bottom:10px;padding:0 12px">' +
+        '<div style="max-height:52vh;overflow-y:auto"><table class="w-full text-sm"><thead><tr><th class="p-2 text-left">客戶（完整名稱）</th><th class="p-2 text-left">簡稱</th></tr></thead><tbody id="cs-body">' +
+        (rows || '<tr><td colspan="2" class="p-6 text-center" style="color:var(--ds-text-3)">最近的訂單沒有名字太長的客戶</td></tr>') + '</tbody></table></div>' +
+        '<div id="cs-msg" style="color:var(--ds-danger);font-size:13px;margin-top:8px"></div>';
+    WMS.createModal('modal-customer-short', { title: '客戶簡稱', icon: 'fa-solid fa-id-badge', content: content, width: '640px', maxHeight: '88vh',
+        footer: canEdit ? '<button class="ds-btn ds-btn-secondary" onclick="WMS.closeModal(\'modal-customer-short\')">取消</button><button id="cs-save" class="ds-btn ds-btn-primary">儲存</button>' : '' });
+    document.getElementById('cs-search').oninput = function() {
+        const terms = window.searchTerms(this.value);
+        document.querySelectorAll('#cs-body tr.cs-row').forEach(tr => { tr.style.display = !terms.length || window.searchMatch(terms, [tr.dataset.s]) ? '' : 'none'; });
+    };
+    if (!canEdit) return;
+    document.getElementById('cs-save').onclick = async () => {
+        const out = {};
+        document.querySelectorAll('#modal-customer-short .cs-in').forEach(i => { const v = i.value.trim(); if (v) out[i.dataset.name] = v; });
+        try { await window.db.collection('settings').doc('customerShort').set({ map: out, updatedAt: new Date().toISOString(), updatedBy: window.getOperatorName ? window.getOperatorName() : '' }); }
+        catch (e) { document.getElementById('cs-msg').innerText = '儲存失敗：' + e.message; return; }
+        window.wmsCustomerShort = out;
+        WMS.closeModal('modal-customer-short');
+        if (window.showToast) window.showToast('✅ 客戶簡稱已儲存（' + Object.keys(out).length + ' 家）');
+    };
+};
+
 window.openLogisticsSettings = function() {
     const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const r = window.currentUser && window.currentUser.role;
@@ -1769,6 +1808,7 @@ window.onLogin(function() {
     loadOrdersFromFirebase();
     loadWarehouses();
     window.watchLabelPrintMode(renderLabelModeToggle);
+    window.watchCustomerShort();
     window.watchProductHomes();
     window.watchLogisticsList();
     startAutoLabelPrinter();
