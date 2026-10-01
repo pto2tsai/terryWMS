@@ -80,6 +80,7 @@ const so = Object.fromEntries((await H.all('salesOrders')).map(o => [o.orderNo, 
 const p1 = await H.one('pallets', 'P1');
 H.check('完成波次：兩張單都出貨完成（不會因為庫存不夠變成部分出貨）', wd.status === 'done' && wd.practice === true && so['A-1'].status === 'shipped' && so['A-2'].status === 'shipped', JSON.stringify([wd.status, wd.practice, so['A-1'].status, so['A-2'].status, M.log.dialogs.slice(dlg0).map(x => x.msg.slice(0, 120))]));
 H.check('庫存沒有扣（P1 還是 5 件）、沒有出庫異動記錄', p1 && p1.quantity === 5 && !(await H.all('inventoryLogs')).some(l => (l.note || '').includes(W.waveNo)), JSON.stringify(p1));
+if (await mp.$('#picking-next button:has-text("回上一頁")')) { await mp.click('#picking-next button:has-text("回上一頁")'); await mp.waitForTimeout(300); }   // 兩家一起揀：完成後先進分貨
 H.check('完成畫面寫「練習模式：庫存沒有扣」', (await mp.innerText('#picking-next')).includes('庫存沒有扣'));
 
 // ---------- 關掉：回到照庫存分配 ----------
