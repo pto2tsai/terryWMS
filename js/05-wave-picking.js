@@ -1383,9 +1383,31 @@
                 return;
             }
 
+            // 排法：還要處理的在上面，照物流來取貨的時間（最早要交貨的最上面）；同時間的揀貨中、待分貨先；
+            // 已出貨的放最下面（最近完成的在上）、顏色變淡
+            var nowMs = Date.now();
+            var pickupOf = {};
+            waves.forEach(function(w) { var t = window.wavePickupTime ? window.wavePickupTime(w) : null; pickupOf[w.waveNo] = t ? t.getTime() : null; });
+            var rank = { picking: 0, sorting: 0, pending: 1 };
             var sorted = waves.slice().sort(function(a, b) {
-                return new Date(b.createdAt) - new Date(a.createdAt);
+                var ad = a.status === 'done', bd = b.status === 'done';
+                if (ad !== bd) return ad ? 1 : -1;
+                if (ad) return new Date(b.completedAt || b.createdAt) - new Date(a.completedAt || a.createdAt);
+                var pa = pickupOf[a.waveNo], pb = pickupOf[b.waveNo];
+                if (pa !== pb) return pa === null ? 1 : pb === null ? -1 : pa - pb;
+                return ((rank[a.status] || 0) - (rank[b.status] || 0)) || (new Date(a.createdAt) - new Date(b.createdAt));
             });
+            // 取貨時間：快到了（1 小時內）橘色、過了紅色
+            var pickupHtml = function(w) {
+                var t = pickupOf[w.waveNo];
+                if (t === null || w.status === 'done') return '';
+                var d = new Date(t), hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+                var day = new Date(t).toDateString() === new Date(nowMs).toDateString() ? '' : (new Date(t).getDate() - new Date(nowMs).getDate() === 1 ? '明天 ' : (d.getMonth() + 1) + '/' + d.getDate() + ' ');
+                var left = Math.round((t - nowMs) / 60000);
+                if (left < 0) return '<span class="w-pickup is-late"><i class="fa-solid fa-triangle-exclamation"></i>已過 ' + day + hm + '</span>';
+                if (left <= 60) return '<span class="w-pickup is-soon"><i class="fa-regular fa-clock"></i>' + hm + ' 取貨・還有 ' + left + ' 分</span>';
+                return '<span class="w-pickup"><i class="fa-regular fa-clock"></i>' + day + hm + ' 取貨</span>';
+            };
 
             var html = '';
             sorted.forEach(function(wave) {
@@ -1412,7 +1434,7 @@
                 }
 
                 var hasChanges = wave.hasOrderChanges;
-                html += '<tr class="' + (hasChanges ? 'has-change' : '') + '">';
+                html += '<tr class="' + (hasChanges ? 'has-change' : '') + (wave.status === 'done' ? ' is-done' : '') + '">';
                 html += '<td class="t-mono t-strong">' + wave.waveNo;
                 var flags = '';
                 if (hasChanges) {
@@ -1430,7 +1452,7 @@
                 }
                 if (flags) html += '<div class="ds-flags">' + flags + '</div>';
                 html += '</td>';
-                html += '<td class="t-strong">' + (wave.logistics || '混合') + '</td>';
+                html += '<td class="t-strong">' + (wave.logistics || '混合') + pickupHtml(wave) + '</td>';
                 var prog = window.waveProgress(wave);
                 if (wave.status === 'picking' && prog.all) {
                     var pct = Math.round(prog.done / prog.all * 100);
@@ -1448,11 +1470,11 @@
                 if (wave.status === 'pending' && (!wave.lastPrinted || wave.reprintRequired)) {
                     html += big("printWavePickingList('" + no + "')", 'ds-btn-green', 'fa-print', wave.lastPrinted ? '重印揀貨單' : '印揀貨單');
                 } else if (wave.status === 'pending') {
-                    html += '<span class="ds-wait"><i class="fa-solid fa-mobile-screen-button"></i>等手機揀貨</span>';
+                    html += '<span class="w-note"><i class="fa-solid fa-mobile-screen-button"></i>等手機揀貨</span>';
                 } else if (wave.status === 'picking' && prog.all && prog.done >= prog.all) {
                     html += big("openWaveExecute('" + no + "')", 'ds-btn-orange', 'fa-check', '完成出貨');
                 } else if (wave.status === 'picking') {
-                    html += (wave.reprintRequired ? big("printWavePickingList('" + no + "')", 'ds-btn-orange', 'fa-print', '重印揀貨單') : '');
+                    html += (wave.reprintRequired ? big("printWavePickingList('" + no + "')", 'ds-btn-orange', 'fa-print', '重印揀貨單') : '<span class="w-note"><i class="fa-solid fa-person-walking"></i>手機揀貨中</span>');
                 } else if (wave.status === 'sorting') {
                     html += big("openWaveSorting('" + no + "')", 'ds-btn-purple', 'fa-tags', '分貨作業');
                 } else if (wave.status === 'done') {

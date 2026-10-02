@@ -445,3 +445,50 @@ header.ds-header #page-title { font-size: 18px; font-weight: 600; color: var(--d
 .stepbar-more, .stepbar-less { margin-left: auto; color: var(--ds-text-3); font-size: 12px; white-space: nowrap; }
 .stepbar-less { background: none; border: 0; cursor: pointer; padding: 6px 10px; }
 .stepbar-mini:hover .stepbar-more, .stepbar-less:hover { color: var(--ds-text); }
+/* 物流商下面一行小字：幾點來取貨（快到了橘、過了紅） */
+#view-wave-picking .w-pickup { display: block; margin-top: 2px; font-size: 12px; font-weight: 500; color: var(--ds-text-3); }
+#view-wave-picking .w-pickup i { margin-right: 4px; }
+#view-wave-picking .w-pickup.is-soon { color: var(--c-orange); font-weight: 700; }
+#view-wave-picking .w-pickup.is-late { color: var(--c-red); font-weight: 700; }
+/* 已出貨：放最下面、變淡（滑過去恢復） */
+#view-wave-picking tr.is-done td { opacity: .5; }
+#view-wave-picking tr.is-done:hover td { opacity: 1; }
+/* 下一步沒有要按的：跟按鈕一樣大小的灰框小字，整欄看起來一致 */
+#view-wave-picking .w-note { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; margin-right: 8px; vertical-align: middle; border: 1px dashed var(--ds-border-strong); border-radius: 8px; color: var(--ds-text-3); font-size: 13px; }
+/* 欄寬：不要中間空一大塊 */
+#view-wave-picking .ds-table th:nth-child(1) { width: 12%; }
+#view-wave-picking .ds-table th:nth-child(2) { width: 17%; }
+#view-wave-picking .ds-table th:nth-child(3), #view-wave-picking .ds-table th:nth-child(4) { width: 6%; }
+#view-wave-picking .ds-table th:nth-child(5) { width: 7%; }
+#view-wave-picking .ds-table th:nth-child(6) { width: 24%; }
+#view-wave-picking .ds-table th:nth-child(7) { width: 9%; }
+
+/* ============================================================
+   今日工作：一個畫面就看完（不用往下捲）
+   待辦卡片變成一行（名稱、提示在左，數字在右）、常用流程卡片變矮、手機版提示變一行
+   ============================================================ */
+#view-home .ds-page { padding-top: 18px; padding-bottom: 20px; }
+#view-home .ds-page-head { align-items: center; margin-bottom: 14px; }
+#view-home .ds-h1 { font-size: 22px; }
+#view-home .ds-sub { margin-top: 2px; font-size: 13px; }
+#view-home .ds-section { margin: 0 0 8px; }
+#view-home .ds-section[style*="margin-top"] { margin-top: 22px !important; }
+#view-home .ds-todo-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+#view-home .ds-todo { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; row-gap: 2px; align-items: center; padding: 12px 18px; }
+#view-home .ds-todo-head { grid-column: 1; grid-row: 1; }
+#view-home .ds-todo-head .ds-todo-icon { width: 28px; height: 28px; font-size: 13px; }
+#view-home .ds-todo-n { grid-column: 2; grid-row: 1 / span 2; font-size: 32px; margin-top: 0; }
+#view-home .ds-todo-hint { grid-column: 1; grid-row: 2; -webkit-line-clamp: 1; min-height: 0; padding-left: 38px; }
+#view-home .ds-todo-go { display: none; }
+#view-home .ds-todo:hover { transform: none; }
+#view-home .ds-clear-row { margin-top: 10px; gap: 6px; }
+#view-home .ds-flow-grid { gap: 10px; }
+#view-home .ds-flow { padding: 14px 18px; }
+#view-home .ds-flow-title { font-size: 17px; margin-bottom: 10px; }
+#view-home .ds-flow-title .ds-todo-icon { width: 30px; height: 30px; font-size: 13px; }
+#view-home .ds-flow ol { gap: 5px; }
+#view-home .ds-flow li { font-size: 13px; line-height: 1.45; padding-left: 28px; }
+#view-home .ds-flow li::before { width: 20px; height: 20px; font-size: 11px; }
+#view-home .ds-tip { margin-top: 14px !important; padding: 10px 16px; }
+#view-home .ds-tip .ds-todo-icon { width: 30px; height: 30px; font-size: 14px; }
+#view-home .ds-tip div[style*="margin-top:4px"] { margin-top: 0 !important; font-size: 13px !important; }

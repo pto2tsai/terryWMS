@@ -21,18 +21,44 @@ const LOGISTICS_KEYWORDS = {
     '上泰貨運': ['上泰貨運', '上泰'],
     '自取': ['自取']
 };
+// 每家物流幾點來取貨（波次清單照這個排：最早要交貨的在最上面）；自家司機一天兩班
+// 07:30 那班是前一天先揀好的貨：下午才建的波次就排到隔天 07:30
+const LOGISTICS_PICKUP = {
+    '崇文自送': ['07:30', '13:00'], '裕鵬物流': ['10:00'], '黑貓宅急便': ['13:00'], '大榮貨運': ['14:00'],
+    '全日物流': ['15:00'], '科技物流': ['15:00'], '金東石': ['15:00'], '文生': ['15:30'], '阿誠': ['16:30'], '裕寶饕': ['17:00']
+};
 // 主管在「波次揀貨 → 設定 → 物流商」存過名單（settings/logistics）就用存的，沒存過用上面這份
 const DEFAULT_LOGISTICS = JSON.parse(JSON.stringify(LOGISTICS_KEYWORDS));
+const DEFAULT_PICKUP = JSON.parse(JSON.stringify(LOGISTICS_PICKUP));
 function applyLogisticsList(list) {
     Object.keys(LOGISTICS_KEYWORDS).forEach(k => { delete LOGISTICS_KEYWORDS[k]; });
+    Object.keys(LOGISTICS_PICKUP).forEach(k => { delete LOGISTICS_PICKUP[k]; });
     list.forEach(x => {
         const name = String(x.name || '').trim();
         if (!name) return;
         const kws = (x.keywords || []).map(k => String(k).trim()).filter(Boolean);
         LOGISTICS_KEYWORDS[name] = kws.length ? kws : [name];
+        // 舊的名單沒有取貨時間：用預設的
+        const pk = Array.isArray(x.pickup) ? x.pickup : (DEFAULT_PICKUP[name] || []);
+        if (pk.length) LOGISTICS_PICKUP[name] = pk.slice();
     });
 }
-function logisticsListFromMap(m) { return Object.keys(m).map(k => ({ name: k, keywords: m[k].slice() })); }
+function logisticsListFromMap(m) { return Object.keys(m).map(k => ({ name: k, keywords: m[k].slice(), pickup: (DEFAULT_PICKUP[k] || []).slice() })); }
+// 這個波次的物流下一次來取貨是什麼時候（波次建立之後的第一班）；沒設定取貨時間＝null
+window.wavePickupTime = function(wave) {
+    const times = LOGISTICS_PICKUP[wave && wave.logistics] || [];
+    if (!times.length) return null;
+    const from = wave.createdAt ? new Date(wave.createdAt) : new Date();
+    for (let day = 0; day < 3; day++) {
+        const slots = times.map(t => {
+            const m = /^(\d{1,2}):(\d{2})$/.exec(t); if (!m) return null;
+            const d = new Date(from); d.setDate(d.getDate() + day); d.setHours(+m[1], +m[2], 0, 0); return d;
+        }).filter(Boolean).sort((a, b) => a - b);
+        const hit = slots.find(d => d >= from);
+        if (hit) return hit;
+    }
+    return null;
+};
 window.watchLogisticsList = function() {
     return window.db.collection('settings').doc('logistics').onSnapshot(d => {
         const list = d.exists && Array.isArray(d.data().list) && d.data().list.length ? d.data().list : logisticsListFromMap(DEFAULT_LOGISTICS);
@@ -627,14 +653,16 @@ window.openLogisticsSettings = function() {
     const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const r = window.currentUser && window.currentUser.role;
     const canEdit = r === 'admin' || r === 'supervisor';
-    const rowHtml = (name, kws) => '<tr class="lgs-row border-b border-slate-700">' +
+    const rowHtml = (name, kws, pk) => '<tr class="lgs-row border-b border-slate-700">' +
         '<td class="p-1"><input class="lgs-name w-32 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value="' + esc(name) + '"' + (canEdit ? '' : ' disabled') + '></td>' +
         '<td class="p-1"><input class="lgs-kw w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value="' + esc(kws.join('、')) + '" placeholder="例如：黑貓、宅急便"' + (canEdit ? '' : ' disabled') + '></td>' +
+        '<td class="p-1"><input class="lgs-pk w-32 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white" value="' + esc((pk || []).join('、')) + '" placeholder="例如：15:00"' + (canEdit ? '' : ' disabled') + '></td>' +
         '<td class="p-1 text-center">' + (canEdit ? '<button class="lgs-del ds-icon-btn" style="border:0" title="刪除這一家"><i class="fa-solid fa-trash-can" style="pointer-events:none"></i></button>' : '') + '</td></tr>';
-    const rows = Object.keys(LOGISTICS_KEYWORDS).map(k => rowHtml(k, LOGISTICS_KEYWORDS[k])).join('');
-    const content = '<div class="text-sm text-slate-300 mb-3">鼎新訂單的<b>備註</b>裡出現這些字，就算這家物流。由上往下比對，先對到的算。' +
+    const rows = Object.keys(LOGISTICS_KEYWORDS).map(k => rowHtml(k, LOGISTICS_KEYWORDS[k], LOGISTICS_PICKUP[k])).join('');
+    const content = '<div class="text-sm text-slate-300 mb-3">鼎新訂單的<b>備註</b>裡出現這些字，就算這家物流。由上往下比對，先對到的算。<br>' +
+        '<b>幾點來取貨</b>：波次清單會照這個時間排（最早要交貨的在最上面），快到了變橘色、過了變紅色。一天好幾班就填好幾個，例如「07:30、13:00」。' +
         (canEdit ? '' : '<br><span class="text-amber-300">只有主管可以修改。</span>') + '</div>' +
-        '<div class="max-h-[50vh] overflow-y-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-xs"><th class="p-1 text-left">物流商名稱</th><th class="p-1 text-left">備註裡出現這些字（用「、」分開）</th><th></th></tr></thead><tbody id="lgs-body">' + rows + '</tbody></table></div>' +
+        '<div class="max-h-[50vh] overflow-y-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-xs"><th class="p-1 text-left">物流商名稱</th><th class="p-1 text-left">備註裡出現這些字（用「、」分開）</th><th class="p-1 text-left">幾點來取貨</th><th></th></tr></thead><tbody id="lgs-body">' + rows + '</tbody></table></div>' +
         '<div id="lgs-msg" class="text-red-400 text-sm mt-2"></div>' +
         (canEdit ? '<div class="flex gap-2 mt-3"><button id="lgs-add" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg">＋ 新增一家</button>' +
             '<button id="lgs-save" class="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">儲存</button></div>' : '');
@@ -642,17 +670,20 @@ window.openLogisticsSettings = function() {
     if (!canEdit) return;
     const body = document.getElementById('lgs-body');
     body.addEventListener('click', e => { if (e.target.classList.contains('lgs-del')) e.target.closest('tr').remove(); });
-    document.getElementById('lgs-add').onclick = () => { body.insertAdjacentHTML('beforeend', rowHtml('', [])); body.lastElementChild.querySelector('.lgs-name').focus(); };
+    document.getElementById('lgs-add').onclick = () => { body.insertAdjacentHTML('beforeend', rowHtml('', [], [])); body.lastElementChild.querySelector('.lgs-name').focus(); };
     document.getElementById('lgs-save').onclick = async () => {
         const list = [], seen = {};
         let err = '';
         body.querySelectorAll('.lgs-row').forEach(tr => {
             const name = tr.querySelector('.lgs-name').value.trim();
             const kws = tr.querySelector('.lgs-kw').value.split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean);
+            const pk = tr.querySelector('.lgs-pk').value.replace(/：/g, ':').split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean)
+                .map(t => { const m = /^(\d{1,2}):?(\d{2})$/.exec(t); return m && +m[1] < 24 && +m[2] < 60 ? String(+m[1]).padStart(2, '0') + ':' + m[2] : (err = '「' + name + '」的取貨時間「' + t + '」看不懂，請寫成 15:00 這樣', null); })
+                .filter(Boolean).sort();
             if (!name) { if (kws.length) err = '有一列沒有填物流商名稱'; return; }
             if (seen[name]) { err = '「' + name + '」重複了'; return; }
             seen[name] = true;
-            list.push({ name: name, keywords: kws.length ? kws : [name] });
+            list.push({ name: name, keywords: kws.length ? kws : [name], pickup: pk });
         });
         if (!err && !list.length) err = '至少要有一家物流商';
         if (err) { document.getElementById('lgs-msg').innerText = err; return; }
