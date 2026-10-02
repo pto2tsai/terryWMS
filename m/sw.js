@@ -1,7 +1,7 @@
 // Terry WMS 手機版 Service Worker
 // 網路優先：有網路一律拿最新版（避免舊版卡在手機上）；沒網路才用快取，讓畫面還能打開
 // Firebase 資料不經過這裡（由 Firestore SDK 自己處理）
-const CACHE = 'wms-m-v5';   // 桌面圖示拿掉文字（2026-09-28）
+const CACHE = 'wms-m-v6';   // 一律跟網路確認最新版（2026-10-02）
 
 self.addEventListener('install', function() { self.skipWaiting(); });
 self.addEventListener('activate', function(event) {
@@ -17,7 +17,9 @@ self.addEventListener('fetch', function(event) {
     const cacheable = url.origin === self.location.origin || url.hostname === 'cdnjs.cloudflare.com' ||
         (url.hostname === 'www.gstatic.com' && url.pathname.indexOf('/firebasejs/') === 0);
     if (!cacheable) return;
-    event.respondWith(fetch(req).then(function(res) {
+    // 自己網站的檔案：不用瀏覽器暫存的舊檔，每次都跟網路確認（避免新舊檔案混在一起）
+    const fresh = url.origin === self.location.origin ? fetch(req, { cache: 'no-cache' }) : fetch(req);
+    event.respondWith(fresh.then(function(res) {
         if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then(function(c) { c.put(req, copy); }); }
         return res;
     }).catch(function() {
