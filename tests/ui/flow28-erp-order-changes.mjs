@@ -1,6 +1,6 @@
 // 鼎新改單（每天都會發生）：現場照手機做就好，不用想
 //   揀到一半：少的補揀、多拿的列「放回」，放回才能完成；庫存照實際（揀的－放回的）扣
-//   已出貨：加量自動變補出貨、排下一個波次；減量提醒開銷退
+//   已出貨：加量自動變補出貨、排下一個波次；減量（跟實際出貨對不上）請業務確認鼎新
 //   有印紙本的：波次清單標「揀貨單要重印」，印了就消失
 import * as H from './harness.mjs'; import { baseSeed, USERS } from './seed.mjs';
 import { pushReport } from './erp-gs.mjs';
@@ -79,12 +79,12 @@ const in3 = await waitInbox(D.page, r.id);
 const so2 = Object.fromEntries((await H.all('salesOrders')).map(o => [o.orderNo, o]));
 const newWave = (await H.all('waves')).find(w => w.waveNo !== W.waveNo);
 H.check('出貨後加量：多的 2 件自動變補出貨，排進新的波次', newWave && (newWave.orders || []).some(o => o.orderNo === 'A-1') && newWave.totalQty === 2 && so2['A-1'].waveNo === newWave.waveNo, JSON.stringify([newWave && newWave.totalQty, so2['A-1'].status, so2['A-1'].backorderItems]));
-H.check('出貨後減量：提醒「已經多出貨了，請在鼎新開銷退：透抽 多出 4 件」', in3.status === 'attention' && in3.issues.some(x => x.includes('開銷退') && x.includes('A-2') && x.includes('多出 4 件')), JSON.stringify([in3.status, in3.issues]));
+H.check('出貨後減量：提醒「鼎新又改少了，請業務確認鼎新：透抽 實際出了 9 件，鼎新現在寫 5 件」', in3.status === 'attention' && in3.issues.some(x => x.includes('請業務確認鼎新') && x.includes('A-2') && x.includes('實際出了 9 件，鼎新現在寫 5 件')), JSON.stringify([in3.status, in3.issues]));
 
-H.check('出貨後減量：A-2 放進「業務要改鼎新」清單（透抽 多出 4 件 → 請開銷退）', so2['A-2'].erpReturnNeeded === true && (so2['A-2'].erpReturnLines || []).some(x => x.includes('多出 4 件') && x.includes('開銷退')), JSON.stringify(so2['A-2']));
+H.check('出貨後減量：A-2 放進「業務要改鼎新」清單（請業務確認鼎新是不是改錯，不是開銷退）', so2['A-2'].erpReturnNeeded === true && (so2['A-2'].erpReturnLines || []).some(x => x.includes('多出 4 件') && x.includes('請業務確認鼎新') && !x.includes('銷退')), JSON.stringify(so2['A-2']));
 await D.page.evaluate(() => openErpFixList()); await D.page.waitForTimeout(1200);
 const fx = await D.page.textContent('#modal-erp-fix');
-H.check('電腦「業務要改鼎新」清單：A-2 透抽 多出 4 件，請開銷退', fx.includes('A-2') && fx.includes('多出 4 件') && fx.includes('開銷退'), fx.slice(0, 300));
-H.check('複製給業務的文字分兩段，有「請開銷退」', (await D.page.evaluate(() => erpFixText(window._erpFixList))).includes('【已經出貨了，鼎新才減量或取消：請開銷退'));
+H.check('電腦「業務要改鼎新」清單：A-2 透抽 實際出了 9 件、鼎新寫 5 件，請業務確認', fx.includes('A-2') && fx.includes('實際出了 9 件') && fx.includes('確認鼎新'), fx.slice(0, 300));
+H.check('複製給業務的文字：「出貨後鼎新又改了，跟實際出貨對不上」', (await D.page.evaluate(() => erpFixText(window._erpFixList))).includes('【出貨後鼎新又改了，跟實際出貨對不上'));
 H.check('沒有頁面錯誤', D.log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(D.log.errors.concat(M.log.errors)));
 await H.close(); process.exit(0);

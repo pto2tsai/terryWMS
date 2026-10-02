@@ -8,17 +8,17 @@ await H.resetData(async d => { await baseSeed(d);
   await H.setDoc(H.doc(d, 'salesOrders', 'C'), { orderNo: 'C-1', customer: '展欣偉群', status: 'shipped', erpReturnNeeded: true, erpReturnLines: ['魷魚圈 多出 2 件（已經出貨，鼎新改少了）→ 請開銷退'] });
 });
 const M = await H.openApp(base, USERS.op2, { mobile: true }); const mp = M.page;
-await mp.waitForTimeout(2500);
-const home = await mp.textContent('#home-tasks');
+let home = '';
+for (let i = 0; i < 30 && !home.includes('業務要改鼎新'); i++) { await mp.waitForTimeout(500); home = (await mp.textContent('#home-tasks')) || ''; }
 H.check('手機首頁「今天的工作」：業務要改鼎新 2 張（少 0 的不算）', home.includes('業務要改鼎新') && /業務要改鼎新.*2\s*張/.test(home.replace(/\s+/g, ' ')), home.replace(/\s+/g, ' ').slice(0, 300));
 await mp.click('.task-summary-card[onclick*="erpfix"]'); await mp.waitForTimeout(800);
 const page = await mp.textContent('#erpfix-list');
-H.check('清單：海霸王 白蝦 訂 5 → 出 3（少 2）、展欣偉群 請開銷退；老街麵線不出現', page.includes('海霸王') && page.includes('訂 5 → 出 3（少 2）') && page.includes('展欣偉群') && page.includes('開銷退') && !page.includes('老街麵線'), page.slice(0, 300));
+H.check('清單：海霸王 白蝦 訂 5 → 出 3（少 2）、展欣偉群 舊的「請開銷退」顯示成「請業務確認鼎新」；老街麵線不出現', page.includes('海霸王') && page.includes('訂 5 → 出 3（少 2）') && page.includes('展欣偉群') && page.includes('請業務確認鼎新') && !page.includes('銷退') && !page.includes('老街麵線'), page.slice(0, 300));
 // 傳給業務：手機叫出分享（這裡記下要傳的文字）
 await mp.evaluate(() => { window._shared = []; navigator.share = t => { window._shared.push(t.text); return Promise.resolve(); }; Object.defineProperty(navigator, 'userAgent', { get: () => 'iPhone' }); });
 await mp.click('#erpfix-all .ef-send-all'); await mp.waitForTimeout(400);
 const sent = await mp.evaluate(() => window._shared[0] || '');
-H.check('全部傳給業務：叫出分享，文字分兩段（缺貨少出、請開銷退）', sent.includes('【缺貨少出') && sent.includes('海霸王　A-1') && sent.includes('【已經出貨了') && sent.includes('展欣偉群'), sent);
+H.check('全部傳給業務：叫出分享，文字分兩段（缺貨少出、出貨後鼎新對不上）', sent.includes('【缺貨少出') && sent.includes('海霸王　A-1') && sent.includes('【出貨後鼎新又改了') && sent.includes('展欣偉群'), sent);
 await mp.click('#erpfix-list .ef-card:nth-child(1) .ef-done'); await mp.waitForTimeout(1500);
 const a = await H.one('salesOrders', 'A');
 H.check('按「已經改好了」：從清單拿掉（海霸王）', a.erpFixNeeded === false && !(await mp.textContent('#erpfix-list')).includes('海霸王'), JSON.stringify(a));

@@ -1,16 +1,22 @@
 // 業務要改鼎新（電腦首頁、手機、看板共用）
 //   缺貨少出要改數量（salesOrders.erpFixNeeded；鼎新改好、重新匯入後會變 false）
-//   已經出貨，鼎新才減量或刪單，要開銷退（salesOrders.erpReturnNeeded；業務開好後按「已經改好了」）
+//   出貨後鼎新又改少或刪單，跟實際出貨對不上，請業務確認鼎新（salesOrders.erpReturnNeeded；確認好按「已經改好了」）
+//   （我們都是先在鼎新改好才出貨，這種通常是鼎新改錯；只有客戶反應品質問題才會開銷退）
 (function() {
     const r3 = function(n) { return Math.round((parseFloat(n) || 0) * 1000) / 1000; };
+    // 以前存的舊說法（請開銷退）換成新的（請業務確認鼎新）
+    const newWording = function(l) {
+        return String(l).replace(/（已經出貨，鼎新改少了）→ 請開銷退$/, ' → 跟實際出貨對不上，請業務確認鼎新是不是改錯')
+            .replace(/^整張單在鼎新不見了，但貨已經出了 → .*$/, '貨已經出了，鼎新卻沒有這張單 → 請業務確認鼎新是不是刪錯');
+    };
     // 一張單要改的每一行（少 0 的不算：以前小數誤差留下來的「訂 2 → 出 1.9999999」）
     window.erpFixLines = function(o) {
         const a = o.erpFixNeeded ? (o.shortShipped || []).filter(function(x) { return r3(x.want) - r3(x.got) >= 0.001; }).map(function(x) {
             return (x.productName || '') + (x.spec ? ' ' + x.spec : '') + '：訂 ' + r3(x.want) + ' → 出 ' + r3(x.got) + '（少 ' + r3(x.want - x.got) + '）';
         }) : [];
-        return a.concat(o.erpReturnNeeded ? (o.erpReturnLines || []) : []);
+        return a.concat(o.erpReturnNeeded ? (o.erpReturnLines || []).map(newWording) : []);
     };
-    // 複製／傳給業務的文字（分兩段：缺貨少出、要開銷退）
+    // 複製／傳給業務的文字（分兩段：缺貨少出、出貨後鼎新對不上）
     window.erpFixText = function(list) {
         const group = function(title, rows) {
             return rows.length ? title + '\n' + rows.map(function(o) {
@@ -20,8 +26,8 @@
         const fix = list.filter(function(o) { return o.erpFixNeeded; })
             .map(function(o) { return { customer: o.customer, orderNo: o.orderNo, lines: window.erpFixLines(Object.assign({}, o, { erpReturnNeeded: false })) }; })
             .filter(function(o) { return o.lines.length; });
-        const ret = list.filter(function(o) { return o.erpReturnNeeded; }).map(function(o) { return { customer: o.customer, orderNo: o.orderNo, lines: o.erpReturnLines || [] }; });
-        return [group('【缺貨少出，請在鼎新改成實際出貨的數量】', fix), group('【已經出貨了，鼎新才減量或取消：請開銷退（或跟客戶確認）】', ret)].filter(Boolean).join('\n\n');
+        const ret = list.filter(function(o) { return o.erpReturnNeeded; }).map(function(o) { return { customer: o.customer, orderNo: o.orderNo, lines: (o.erpReturnLines || []).map(newWording) }; });
+        return [group('【缺貨少出，請在鼎新改成實際出貨的數量】', fix), group('【出貨後鼎新又改了，跟實際出貨對不上：請確認鼎新是不是改錯】', ret)].filter(Boolean).join('\n\n');
     };
     function merge(a, b) {
         const byId = {};
