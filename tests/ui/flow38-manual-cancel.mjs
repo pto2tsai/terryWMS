@@ -94,5 +94,17 @@ await page.setInputFiles('#order-excel-import', file('m8.xlsx', [['2026/10/01', 
 await page.waitForTimeout(2500);
 H.check('再上傳同一份：已經放進清單的不會再問', !dlg(n0).some(d => d.msg.includes('可能已在鼎新取消')), JSON.stringify(dlg(n0).map(d => d.msg.slice(0, 80))));
 
+// ---------- 件數要人工填的單：再匯入（數量沒變）不再問；只有運費的單不排波次 ----------
+const xl2 = (name, rows) => xl(name, [HEAD].concat(rows));
+const F1 = [['2026/10/03', 'E-1', '阿明便當', '蝦仁', '中 300G', 40, '包', '全日'], ['2026/10/03', 'E-2', '補收運費客戶', '運費', '', 1, '式', '黑貓']];
+await page.setInputFiles('#order-excel-import', xl2('m9.xlsx', F1)); await page.waitForTimeout(2000);
+H.check('第一次：問蝦仁要幾件', !!(await page.$('#pkg-ask-ok')));
+await page.fill('.pkg-ask-input[data-i="0"]', '4'); await page.click('#pkg-ask-ok'); await page.waitForTimeout(3000);
+so = Object.fromEntries((await H.all('salesOrders')).map(o => [o.orderNo, o]));
+H.check('只有運費的單不匯入、不排波次', !so['E-2'] && so['E-1'] && so['E-1'].items[0].packageQty === 4, JSON.stringify([so['E-2'], so['E-1'] && so['E-1'].items]));
+await page.reload(); await page.waitForTimeout(3000); await H.nav(page, 'wave-picking'); await page.waitForTimeout(800);
+await page.setInputFiles('#order-excel-import', xl2('m10.xlsx', F1)); await page.waitForTimeout(2500);
+H.check('再匯入同一份：數量沒變就沿用 4 件，不再問', !(await page.$('#pkg-ask-ok')));
+
 H.check('沒有頁面錯誤', log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(log.errors.concat(M.log.errors)));
 await H.close(); process.exit(0);

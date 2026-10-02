@@ -775,7 +775,11 @@ window.parseErpOrderRows = function(rows) {
         }
     }
 
-    return { orders: Array.from(orderMap.values()), needPkg: needPkg, storeSkipped: Object.keys(storeSkipped) };
+    // 只有運費、代工費這類費用（沒有要揀的貨）的新單：不匯入、不排波次（已經匯入過的單照常比對，才看得到鼎新把貨刪光）
+    var all = Array.from(orderMap.values()), noItems = [];
+    var known = function(o) { return ((window._orderData && window._orderData.orders) || []).some(function(x) { return x.orderNo === o.orderNo; }); };
+    all = all.filter(function(o) { if (o.items.length || known(o)) return true; noItems.push(o.orderNo); return false; });
+    return { orders: all, needPkg: needPkg, storeSkipped: Object.keys(storeSkipped), noItems: noItems };
 };
 
 // 存訂單：新單新增；已有的單比對異動（已出貨的不改）；回傳各種筆數
@@ -885,11 +889,24 @@ window.saveErpOrders = async function(orders) {
     return { savedCount: savedCount, skipCount: skipCount, modifiedCount: modifiedCount, orderChanges: orderChanges, shippedChanged: shippedChanged };
 };
 
+// 件數換算不出來的品項：之前匯入過、數量也沒變的，沿用上次填的件數（鼎新一天匯好幾次，不用每次都問）
+window.fillPkgFromExisting = function(parsed) {
+    parsed.needPkg = parsed.needPkg.filter(function(n) {
+        var ex = window._orderData.orders.find(function(o) { return o.orderNo === n.order.orderNo; });
+        var it = ex && (ex.items || []).find(function(i) {
+            return i.productName === n.item.productName && (i.spec || '') === (n.item.spec || '') && parseFloat(i.quantity) === parseFloat(n.item.quantity) && parseFloat(i.packageQty) > 0;
+        });
+        if (it) { n.item.packageQty = it.packageQty; return false; }
+        return true;
+    });
+    return parsed;
+};
+
 // 鼎新已經取消的單：檔案涵蓋的日期裡，之前匯入過、現在檔案裡不見了、還沒出貨的單
 window.findMissingErpOrders = function(parsed) {
     var fileNos = {}, fileDates = {};
     parsed.orders.forEach(function(o) { fileNos[o.orderNo] = true; if (o.orderDate) fileDates[String(o.orderDate)] = true; });
-    parsed.storeSkipped.forEach(function(no) { fileNos[no] = true; });
+    parsed.storeSkipped.concat(parsed.noItems || []).forEach(function(no) { fileNos[no] = true; });
     return window._orderData.orders.filter(function(o) {
         return o.id && o.importedAt && fileDates[String(o.orderDate || '')] && !fileNos[o.orderNo] && !o.erpGone &&
             ['pending', 'confirmed', 'inWave', 'shipped', 'partial'].indexOf(o.status) >= 0;
@@ -916,6 +933,7 @@ window.importErpOrderRows = async function(rows) {
     try {
         const parsed = window.parseErpOrderRows(rows);
         if (parsed.error) { alert('❌ 無法匯入：' + parsed.error); return false; }
+        window.fillPkgFromExisting(parsed);
         const needPkg = parsed.needPkg;
         // 換算不出件數的品項：列出來請人工填，全部填好才匯入
         if (needPkg.length > 0) {
@@ -936,7 +954,8 @@ window.importErpOrderRows = async function(rows) {
 
         const missing = window.findMissingErpOrders(parsed);
         const r = await window.saveErpOrders(orders);
-        const storeNote = parsed.storeSkipped.length ? '（門市銷貨單 ' + parsed.storeSkipped.length + ' 張不揀貨，已跳過）' : '';
+        const storeNote = (parsed.storeSkipped.length ? '（門市銷貨單 ' + parsed.storeSkipped.length + ' 張不揀貨，已跳過）' : '') +
+            (parsed.noItems.length ? '（只有運費等費用、沒有貨的 ' + parsed.noItems.length + ' 張不用揀，已跳過）' : '');
         const savedCount = r.savedCount, skipCount = r.skipCount, modifiedCount = r.modifiedCount, orderChanges = r.orderChanges, shippedChanged = r.shippedChanged;
 
         if (modifiedCount > 0) {
@@ -953,8 +972,9 @@ window.importErpOrderRows = async function(rows) {
         renderOrderList();
         refreshWaveList();
 
-        if (savedCount > 0) {
-            var plan = planWavesByLogistics();
+        // 有新單、或已出貨的單加量變成補出貨：都問要不要建波次
+        var plan = planWavesByLogistics();
+        if (savedCount > 0 || plan.count > 0) {
             var autoCreate = plan.count > 0 && confirm(
                 '✅ 匯入完成！新增 ' + savedCount + ' 筆' + storeNote +
                 (modifiedCount > 0 ? '、⚠️ 異動 ' + modifiedCount + ' 筆' : '') +
@@ -1194,7 +1214,7 @@ function buildWaveSummary(orders) {
 // ========== 建立波次（手動、依物流自動、追加訂單共用）==========
 // 可以排波次的訂單：待處理／已確認／部分出貨（欠貨），而且不在任何波次中
 window.orderWaveable = function(o) {
-    return !!o && ['pending', 'confirmed', 'partial'].indexOf(o.status) >= 0 && !o.waveNo;
+    return !!o && ['pending', 'confirmed', 'partial'].indexOf(o.status) >= 0 && !o.waveNo && window.orderOpenItems(o).length > 0;   // 沒有要揀的貨（只有費用）不排
 };
 // 還沒出貨的品項：部分出貨過的訂單只剩欠貨（backorderItems）
 window.orderOpenItems = function(o) {

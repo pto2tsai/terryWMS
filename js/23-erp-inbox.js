@@ -48,6 +48,7 @@ window.autoImportErpOrderRows = async function(rows) {
     await loadOrdersFromFirebase();
     var parsed = window.parseErpOrderRows(rows);
     if (parsed.error) throw new Error(parsed.error);
+    window.fillPkgFromExisting(parsed);   // 之前填過件數、數量沒變的沿用
     // 件數換算不出來的單先不匯入（沒有人可以回答），留給「手動匯入」
     var bad = [];
     parsed.needPkg.forEach(function(n) { if (bad.indexOf(n.order) < 0) bad.push(n.order); });
