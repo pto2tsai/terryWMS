@@ -106,5 +106,17 @@ await page.reload(); await page.waitForTimeout(3000); await H.nav(page, 'wave-pi
 await page.setInputFiles('#order-excel-import', xl2('m10.xlsx', F1)); await page.waitForTimeout(2500);
 H.check('再匯入同一份：數量沒變就沿用 4 件，不再問', !(await page.$('#pkg-ask-ok')));
 
+// ---------- 備註認物流商的陷阱 ----------
+const lg = await page.evaluate(() => ['原本全日，改黑貓', '全日 黑貓', '送到誠品信義店B1', '送科技大樓B1', '誠 下午送', '阿誠', '全日物流 早上送', '新竹物流', '崇文司機', '黑貓 下午到'].map(r => parseLogistics(r)));
+H.check('備註：「改黑貓」→黑貓；兩家沒寫改→問人；誠品、科技大樓不誤認；「誠 下午送」→阿誠', JSON.stringify(lg) === JSON.stringify(['黑貓宅急便', '未指定', '未指定', '未指定', '阿誠', '阿誠', '全日物流', '新竹物流', '崇文自送', '黑貓宅急便']), JSON.stringify(lg));
+// ---------- 全形規格、同品項多行、銷退負數 ----------
+const H2 = ['銷貨日期', '銷貨單號', '客戶全名', '品名', '規格', '銷貨數量', '單位', '銷貨包裝數量', '備註'];
+const p2 = await page.evaluate(rows => { const r = window.parseErpOrderRows(rows); return r.orders.map(o => [o.orderNo, o.items.map(i => i.productName + '|' + i.spec + '|' + i.quantity + '|' + i.packageQty)]); }, [H2,
+  ['2026/10/04', 'F-1', '老街', '白蝦', '50／60*850G*14盒', 28, '盒', 2, '全日'],
+  ['2026/10/04', 'F-2', '阿珠', '白蝦', '50/60*850G*14盒', 14, '盒', 1, '全日'], ['', 'F-2', '', '白蝦', '50/60*850G*14盒', 28, '盒', 2, ''],
+  ['2026/10/04', 'F-3', 'Kevin', '熟白蝦', '1.1KG*8盒', 16, '盒', 2, '黑貓'], ['', 'F-3', '', '熟白蝦', '1.1KG*8盒', -8, '盒', -1, ''],
+  ['2026/10/04', 'F-4', '全退', '透抽', 'L', 3, '件', 3, '黑貓'], ['', 'F-4', '', '透抽', 'L', -3, '件', -3, ''], ['', 'F-4', '', '干貝', 'S', 1, '件', 1, '']]);
+H.check('全形「50／60」變成「50/60」；同品項兩行合成 3 件；銷退扣掉（2-1=1 件）；全退的品項拿掉', JSON.stringify(p2) === JSON.stringify([['F-1', ['白蝦|50/60*850G*14盒|28|2']], ['F-2', ['白蝦|50/60*850G*14盒|42|3']], ['F-3', ['熟白蝦|1.1KG*8盒|8|1']], ['F-4', ['干貝|S|1|1']]]), JSON.stringify(p2));
+
 H.check('沒有頁面錯誤', log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(log.errors.concat(M.log.errors)));
 await H.close(); process.exit(0);

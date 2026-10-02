@@ -40,19 +40,44 @@ window.watchLogisticsList = function() {
     }, () => {});
 };
 
+// 從備註認物流商：
+//   後面緊接著地名、店名的不算（「誠品」「科技大樓」「誠信路」）；只有一個字的關鍵字（誠）前面也不能接著別的中文字
+//   認出兩家以上：有「改」就用「改」後面那家（「原本全日，改黑貓」→ 黑貓）；沒有就不猜，讓人選
+var LOGISTICS_NOT_AFTER = /^(大樓|大廈|園區|商場|百貨|品|路|街|店|館|大學|醫院|公司|門市|市場|科學)/;
+function logisticsHits(remark) {
+    var hits = [];
+    Object.keys(LOGISTICS_KEYWORDS).forEach(function(logistics) {
+        var best = -1;
+        LOGISTICS_KEYWORDS[logistics].forEach(function(kw) {
+            if (!kw) return;
+            for (var i = remark.indexOf(kw); i >= 0; i = remark.indexOf(kw, i + 1)) {
+                if (LOGISTICS_NOT_AFTER.test(remark.slice(i + kw.length))) continue;
+                if (kw.length === 1 && i > 0 && /[\u4e00-\u9fff]/.test(remark[i - 1])) continue;
+                if (best < 0 || i > best) best = i;
+            }
+        });
+        if (best >= 0) hits.push({ logistics: logistics, at: best });
+    });
+    return hits;
+}
 function parseLogistics(remark) {
     if (!remark) return '未指定';
     remark = String(remark);
-
-    for (const [logistics, keywords] of Object.entries(LOGISTICS_KEYWORDS)) {
-        for (const keyword of keywords) {
-            if (remark.includes(keyword)) {
-                return logistics;
-            }
-        }
-    }
-    return '未指定';
+    var hits = logisticsHits(remark);
+    if (hits.length === 0) return '未指定';
+    if (hits.length === 1) return hits[0].logistics;
+    var change = remark.lastIndexOf('改');
+    var after = change >= 0 ? hits.filter(function(h) { return h.at > change; }) : [];
+    return after.length === 1 ? after[0].logistics : '未指定';
 }
+window.parseLogistics = parseLogistics;
+
+// 全形英數字、符號換成半形（「50／60」跟「50/60」是同一個規格），多個空白合成一個
+function normText(v) {
+    return String(v == null ? '' : v).replace(/[\uff01-\uff5e]/g, function(c) { return String.fromCharCode(c.charCodeAt(0) - 0xfee0); })
+        .replace(/\u3000/g, ' ').replace(/\s+/g, ' ').trim();
+}
+window.normText = normText;
 
 // 品項分類（運費、包材、冷藏…）和每件幾盒的判斷在 js/shared/product-rules.js（電腦版與手機版共用）
 
@@ -94,13 +119,13 @@ function detectOrderChanges(existingOrder, newOrder) {
 
     var existingMap = {};
     existingItems.forEach(function(item) {
-        var key = item.productName + '|||' + (item.spec || '');
+        var key = normText(item.productName) + '|||' + normText(item.spec);
         existingMap[key] = item;
     });
 
     var newMap = {};
     newItems.forEach(function(item) {
-        var key = item.productName + '|||' + (item.spec || '');
+        var key = normText(item.productName) + '|||' + normText(item.spec);
         newMap[key] = item;
     });
 
@@ -672,7 +697,7 @@ window.parseErpOrderRows = function(rows) {
     let lastOrderNo = null;
     // 數字欄：去掉千分位，保留小數（2.5 公斤不會變 2）
     const num = v => parseFloat(String(v == null ? '' : v).replace(/,/g, '')) || 0;
-    const needPkg = [];  // 換算不出件數、要人工填的品項
+    let needPkg = [];  // 換算不出件數、要人工填的品項
     const storeSkipped = {};
 
     // 鼎新報表的特性（跟八方 ERP 的解析經驗一致）：
@@ -734,7 +759,7 @@ window.parseErpOrderRows = function(rows) {
         if (!currentOrder.remark && row[COL.REMARK]) currentOrder.remark = String(row[COL.REMARK]).trim();
 
         if (row[COL.PRODUCT]) {
-            var productName = String(row[COL.PRODUCT]).trim();
+            var productName = normText(row[COL.PRODUCT]);
 
             // === 過濾不需要的項目 ===
 
@@ -747,33 +772,51 @@ window.parseErpOrderRows = function(rows) {
             if (isFee) continue;
 
             var qty = num(row[COL.QTY]);
-            if (!productName || qty <= 0) continue;
+            if (!productName || !qty) continue;
+            var sign = qty < 0 ? -1 : 1;   // 負數＝銷退（客戶退回）：從同一張單的同一個品項扣掉
+            qty = Math.abs(qty);
 
             // === 件數：品名有「*N盒」就換算；否則用包裝數量欄；單位本來就是件／箱就等於數量；都沒有就要人工填 ===
             var unit = row[COL.UNIT] ? String(row[COL.UNIT]).trim() : '';
             var boxPerPkg = parseBoxPerPackage(productName);
-            var pkgCell = num(row[COL.PKG_QTY]);
+            var pkgCell = Math.abs(num(row[COL.PKG_QTY]));
             var pkgQty = null;
             if (boxPerPkg > 0) pkgQty = Math.ceil(qty / boxPerPkg);
             else if (pkgCell > 0) pkgQty = pkgCell;
             else if (/^(件|箱|CTN|CS)$/i.test(unit) || window.isExcludedFromPickingList(productName)) pkgQty = qty;
             else if (/^(KG|公斤)$/i.test(unit) && window.kgPerCase(productName) > 0) pkgQty = Math.max(1, Math.round(qty / window.kgPerCase(productName)));   // 每箱約 19 公斤，四捨五入
 
+            var spec = COL.SPEC !== undefined ? normText(row[COL.SPEC]) : '';
+            // 同一張單、同一個品項寫好幾行（或有銷退的負數行）：合成一行
+            var batchNo = row[COL.BATCH] ? String(row[COL.BATCH]).trim() : '';
+            var same = currentOrder.items.find(function(it) { return it.productName === productName && it.spec === spec && it.unit === unit && (sign < 0 || it.batchNo === batchNo); });
+            if (same) {
+                same.quantity = Math.round((same.quantity + sign * qty) * 1000) / 1000;
+                if (boxPerPkg > 0) same.packageQty = Math.ceil(same.quantity / boxPerPkg);
+                else if (same.packageQty !== null && pkgQty !== null) same.packageQty = Math.round((same.packageQty + sign * pkgQty) * 1000) / 1000;
+                else if (same.packageQty !== null) { same.packageQty = null; needPkg.push({ order: currentOrder, item: same }); }
+                continue;
+            }
+            if (sign < 0) continue;   // 單獨的銷退行（沒有對應的出貨品項）：不用揀
             var item = {
                 productName: productName,
-                spec: row[COL.SPEC] ? String(row[COL.SPEC]).trim() : '',
+                spec: spec,
                 quantity: qty,                    // 最小單位數量（盒）
                 unit: unit,
                 packageQty: pkgQty,               // 件數
                 packageUnit: '件',                // 固定為件
                 boxPerPackage: boxPerPkg,         // 每件盒數
-                batchNo: row[COL.BATCH] ? String(row[COL.BATCH]).trim() : '',
+                batchNo: batchNo,
                 price: num(row[COL.PRICE])
             };
             currentOrder.items.push(item);
             if (pkgQty === null) needPkg.push({ order: currentOrder, item: item });
         }
     }
+
+    // 銷退扣完變成 0（或更少）的品項：拿掉
+    orderMap.forEach(function(o) { o.items = o.items.filter(function(it) { return it.quantity > 0 && (it.packageQty === null || it.packageQty > 0); }); });
+    needPkg = needPkg.filter(function(n, i) { return n.order.items.indexOf(n.item) >= 0 && needPkg.indexOf(n) === i; });
 
     // 只有運費、代工費這類費用（沒有要揀的貨）的新單：不匯入、不排波次（已經匯入過的單照常比對，才看得到鼎新把貨刪光）
     var all = Array.from(orderMap.values()), noItems = [];

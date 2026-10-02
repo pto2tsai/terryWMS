@@ -52,7 +52,7 @@ const parsed = await page.evaluate(() => {
   const r = parseErpOrderRows(rows);
   return r.error ? r.error : r.orders.map(o => [o.orderNo, o.logistics, o.items.map(i => i.productName + ' ' + i.spec + ' x' + i.packageQty)]);
 });
-H.check('鼎新報表換頁：跳過每頁抬頭和重複的標題列；品名空白沿用上一列；讀得到「銷貨包裝數量」；換了單號就不沿用（SO-P2 沒有品名，不建空單）；最後的加總列不算成品項', JSON.stringify(parsed) === JSON.stringify([['SO-P1', '黑貓宅急便', ['白蝦 50/60 x10', '白蝦 50/60 x4', '透抽 L x3']]]), JSON.stringify(parsed));
+H.check('鼎新報表換頁：跳過每頁抬頭和重複的標題列；品名空白沿用上一列（同品項合成一行 10+4）；讀得到「銷貨包裝數量」；換了單號就不沿用（SO-P2 沒有品名，不建空單）；最後的加總列不算成品項', JSON.stringify(parsed) === JSON.stringify([['SO-P1', '黑貓宅急便', ['白蝦 50/60 x14', '透抽 L x3']]]), JSON.stringify(parsed));
 
 const store = await page.evaluate(() => {
   const H = ['銷貨日期', '銷貨單號', '客戶全名', '品名', '規格', '包裝數量', '銷貨數量', '單位', '備註'];
