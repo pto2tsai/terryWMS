@@ -5,6 +5,7 @@
 
 window.STEP_BARS = {
     'wave-picking': {
+        compact: true,   // 平常收成一行（只寫現在這一步），點一下才展開全部
         steps: [
             { t: '匯入訂單', h: '「匯入訂單」選 ERP Excel' },
             { t: '建立波次', h: '匯入時會問；之後按「建立波次」' },
@@ -52,16 +53,34 @@ window.renderStepBar = function(viewId) {
     var el = document.getElementById('stepbar-' + viewId);
     if (!cfg || !el) return;
     var cur = cfg.current();
-    var key = cur + '';
+    var open = cfg.compact && stepBarOpen(viewId);
+    var key = cur + '|' + open;
     if (el.dataset.cur === key) return;
     el.dataset.cur = key;
+    // 收起來：一行小字「步驟 3／4：手機揀貨 — 手機「波次揀貨」逐板掃　看全部步驟 ▾」
+    if (cfg.compact && !open) {
+        var s0 = cfg.steps[Math.min(cur, cfg.steps.length - 1)];
+        el.classList.add('is-compact');
+        el.innerHTML = '<button class="stepbar-mini" onclick="toggleStepBar(\'' + viewId + '\')" title="點一下看全部步驟">' +
+            '<span class="ds-step-n">' + (Math.min(cur, cfg.steps.length - 1) + 1) + '</span>' +
+            '<span>步驟 ' + (Math.min(cur, cfg.steps.length - 1) + 1) + '／' + cfg.steps.length + '：<b>' + s0.t + '</b>　' + s0.h + '</span>' +
+            '<span class="stepbar-more">看全部步驟 ▾</span></button>';
+        return;
+    }
+    el.classList.remove('is-compact');
     el.innerHTML = cfg.steps.map(function(s, i) {
         var state = i < cur ? 'done' : i === cur ? 'now' : 'todo';
         return (i ? '<span class="ds-step-line"></span>' : '') +
             '<div class="stepbar-item ds-step" data-state="' + state + '">' +
             '<span class="ds-step-n">' + (state === 'done' ? '<i class="fa-solid fa-check"></i>' : i + 1) + '</span>' +
             '<span style="min-width:0"><b>' + s.t + '</b><small>' + s.h + '</small></span></div>';
-    }).join('');
+    }).join('') + (cfg.compact ? '<button class="stepbar-less" onclick="toggleStepBar(\'' + viewId + '\')">收起 ▴</button>' : '');
+};
+// 步驟列展開／收起（記在這台電腦）
+function stepBarOpen(viewId) { try { return localStorage.getItem('stepbar-open-' + viewId) === '1'; } catch (e) { return false; } }
+window.toggleStepBar = function(viewId) {
+    try { localStorage.setItem('stepbar-open-' + viewId, stepBarOpen(viewId) ? '0' : '1'); } catch (e) {}
+    window.renderStepBar(viewId);
 };
 
 // 目前畫面的步驟列跟著狀態更新（畫面沒開時不做事）

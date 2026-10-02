@@ -259,10 +259,12 @@
                 <div id="home-flows" class="ds-flow-grid"></div>
 
                 <div class="ds-card ds-tip" style="margin-top:40px">
-                    <span class="ds-todo-icon"><i class="fa-solid fa-mobile-screen-button"></i></span>
+                    <!-- 新同事的手機：掃 QR code 打開手機版 -->
+                    <div id="home-mobile-qr" class="home-qr" title="用手機相機掃這個方塊"><i class="fa-solid fa-mobile-screen-button"></i></div>
                     <div style="flex:1;min-width:0">
-                        <div style="color:var(--ds-text);font-weight:600;font-size:15px">手機版（堆高機、揀貨用）</div>
-                        <div style="font-size:14px;color:var(--ds-text-2);margin-top:4px;line-height:1.6">手機開 <span class="ds-code" id="home-mobile-url">/m/</span>，登入後「加到主畫面」。入庫上架、波次揀貨、調度、盤點、移板都可以用相機掃碼完成。</div>
+                        <div style="color:var(--ds-text);font-weight:600;font-size:15px">新同事的手機（揀貨、上架、堆高機用）</div>
+                        <div class="home-qr-text" style="font-size:14px;color:var(--ds-text-2);margin-top:4px;line-height:1.6">用手機相機<b style="color:var(--ds-text)">掃左邊這個方塊</b>，就會打開手機版；登入後按「加到主畫面」，以後點手機桌面上的圖示就能用。<br>
+                        <span style="color:var(--ds-text-3);font-size:13px">掃不到的話，手機瀏覽器輸入：<span class="ds-code" id="home-mobile-url">/m/</span></span></div>
                     </div>
                 </div>
               </div>
@@ -1243,9 +1245,13 @@
             <!-- 波次揀貨 -->
             <div id="view-wave-picking" class="view-panel h-full hidden flex flex-col ds-page" style="padding-bottom:24px">
                 <div class="ds-page-head">
-                    <div>
-                        <h2 class="ds-h1" style="--c:var(--c-orange)"><i class="fa-solid fa-layer-group ds-title-icon"></i>波次揀貨</h2>
-                        <p class="ds-sub">依物流商分波次，產生揀貨單與分貨標籤</p>
+                    <!-- 波次統計（標題已經在最上面那一列，這裡不再重複） -->
+                    <div class="ds-stats ds-stats-inline">
+                        <div class="ds-card ds-stat" style="--c:var(--c-blue)"><div class="ds-stat-label">今日波次</div><div class="ds-stat-n ds-num" id="wave-stat-today">0</div></div>
+                        <div class="ds-card ds-stat" style="--c:var(--c-yellow)"><div class="ds-stat-label">待揀貨</div><div class="ds-stat-n ds-num" id="wave-stat-pending">0</div></div>
+                        <div class="ds-card ds-stat" style="--c:var(--c-orange)"><div class="ds-stat-label">揀貨中</div><div class="ds-stat-n ds-num" id="wave-stat-picking">0</div></div>
+                        <div class="ds-card ds-stat" style="--c:var(--c-green)"><div class="ds-stat-label">已完成</div><div class="ds-stat-n ds-num" id="wave-stat-done">0</div></div>
+                        <div class="ds-card ds-stat" style="--c:var(--c-purple)"><div class="ds-stat-label">待出貨訂單</div><div class="ds-stat-n ds-num" id="wave-stat-orders">0</div></div>
                     </div>
                     <div class="flex flex-wrap justify-end gap-2 items-center">
                         <span id="practice-badge" class="ds-pill ds-pill-warn" style="display:none"><i class="fa-solid fa-flask"></i>練習模式中</span>
@@ -1274,14 +1280,6 @@
 
                 <!-- 步驟列 -->
                 <div id="stepbar-wave-picking" class="stepbar"></div>
-                <!-- 波次統計 -->
-                <div class="ds-stats">
-                    <div class="ds-card ds-stat" style="--c:var(--c-blue)"><div class="ds-stat-label">今日波次</div><div class="ds-stat-n ds-num" id="wave-stat-today">0</div></div>
-                    <div class="ds-card ds-stat" style="--c:var(--c-yellow)"><div class="ds-stat-label">待揀貨</div><div class="ds-stat-n ds-num" id="wave-stat-pending">0</div></div>
-                    <div class="ds-card ds-stat" style="--c:var(--c-orange)"><div class="ds-stat-label">揀貨中</div><div class="ds-stat-n ds-num" id="wave-stat-picking">0</div></div>
-                    <div class="ds-card ds-stat" style="--c:var(--c-green)"><div class="ds-stat-label">已完成</div><div class="ds-stat-n ds-num" id="wave-stat-done">0</div></div>
-                    <div class="ds-card ds-stat" style="--c:var(--c-purple)"><div class="ds-stat-label">待出貨訂單</div><div class="ds-stat-n ds-num" id="wave-stat-orders">0</div></div>
-                </div>
 
                 <!-- 波次清單 -->
                 <div class="ds-list-wrap min-h-0 flex flex-col" style="flex:0 1 auto">

@@ -416,3 +416,77 @@ header.ds-header #page-title { font-size: 18px; font-weight: 600; color: var(--d
 #modal-wave-sorting .rounded-lg > div button.bg-purple-600 { background: var(--ds-surface-2) !important; border: 1px solid var(--ds-border-strong) !important; color: var(--ds-text) !important; padding: 5px 10px !important; }
 #modal-wave-sorting .rounded-lg > div button.bg-purple-600 i { color: var(--c-purple); }
 #modal-wave-sorting .rounded-lg > div button.bg-purple-600:hover { background: var(--ds-hover) !important; }
+
+/* ============================================================
+   波次揀貨：一次看得到 8 個以上的波次
+   每一列變矮、統計卡片變矮、步驟列收成一行、清單拉到螢幕最底
+   ============================================================ */
+#view-wave-picking.ds-page { padding-top: 16px; }
+#view-wave-picking .ds-page-head { align-items: center; margin-bottom: 10px; gap: 10px; }
+/* 狀態數字：窄窄的一排，跟按鈕放同一行（標題已經在最上面那一列） */
+.ds-stats-inline { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.ds-stats-inline .ds-stat { padding: 5px 14px; display: flex; align-items: center; gap: 10px; border-top-width: 2px !important; border-radius: 10px; }
+.ds-stats-inline .ds-stat-label { font-size: 13px; }
+.ds-stats-inline .ds-stat-n { font-size: 20px; margin-top: 0; }
+#view-wave-picking .ds-table thead th { padding: 9px 14px; }
+#view-wave-picking .ds-table tbody td { padding: 7px 14px; }
+#view-wave-picking .ds-table .ds-btn { height: 32px; padding: 0 12px; font-size: 13px; }
+#view-wave-picking .ds-table .ds-flags { margin-top: 3px; }
+#view-wave-picking .w-time { font-size: 12px; color: var(--ds-text-3); margin-left: 8px; }
+#view-wave-picking .w-prog { display: inline-flex; vertical-align: middle; margin: 0 0 0 10px; }
+#view-wave-picking .w-prog .ds-progress-bar { width: 70px; }
+#view-wave-picking > .ds-list-wrap { flex: 1 1 auto !important; min-height: 240px; }
+#view-wave-picking > .ds-list-wrap > .ds-table-card { flex: 1 1 auto; min-height: 0; }
+/* 步驟列收起來時：一行小字，點了展開 */
+.stepbar.is-compact { margin-bottom: 10px; }
+.stepbar-mini { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--ds-primary-soft); color: var(--ds-text-2); font-size: 13px; text-align: left; border: 0; cursor: pointer; }
+.stepbar-mini b { color: var(--ds-text); font-weight: 600; }
+.stepbar-mini .ds-step-n { background: var(--ds-primary-fill); border-color: var(--ds-primary-fill); color: #fff; width: 22px; height: 22px; font-size: 11px; }
+.stepbar-more, .stepbar-less { margin-left: auto; color: var(--ds-text-3); font-size: 12px; white-space: nowrap; }
+.stepbar-less { background: none; border: 0; cursor: pointer; padding: 6px 10px; }
+.stepbar-mini:hover .stepbar-more, .stepbar-less:hover { color: var(--ds-text); }
+/* 物流商下面一行小字：幾點來取貨（快到了橘、過了紅） */
+#view-wave-picking .w-pickup { display: block; margin-top: 2px; font-size: 12px; font-weight: 500; color: var(--ds-text-3); }
+#view-wave-picking .w-pickup i { margin-right: 4px; }
+#view-wave-picking .w-pickup.is-soon { color: var(--c-orange); font-weight: 700; }
+#view-wave-picking .w-pickup.is-late { color: var(--c-red); font-weight: 700; }
+/* 已出貨：放最下面、變淡（滑過去恢復） */
+#view-wave-picking tr.is-done td { opacity: .5; }
+#view-wave-picking tr.is-done:hover td { opacity: 1; }
+/* 下一步沒有要按的：跟按鈕一樣大小的灰框小字，整欄看起來一致 */
+#view-wave-picking .w-note { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; margin-right: 8px; vertical-align: middle; border: 1px dashed var(--ds-border-strong); border-radius: 8px; color: var(--ds-text-3); font-size: 13px; }
+/* 欄寬：不要中間空一大塊 */
+#view-wave-picking .ds-table th:nth-child(1) { width: 12%; }
+#view-wave-picking .ds-table th:nth-child(2) { width: 17%; }
+#view-wave-picking .ds-table th:nth-child(3), #view-wave-picking .ds-table th:nth-child(4) { width: 6%; }
+#view-wave-picking .ds-table th:nth-child(5) { width: 7%; }
+#view-wave-picking .ds-table th:nth-child(6) { width: 24%; }
+#view-wave-picking .ds-table th:nth-child(7) { width: 9%; }
+
+/* ============================================================
+   今日工作：一個畫面就看完（不用往下捲）
+   待辦卡片變成一行（名稱、提示在左，數字在右）；常用流程卡片維持原本大小
+   ============================================================ */
+#view-home .ds-page { padding-top: 18px; padding-bottom: 20px; }
+#view-home .ds-page-head { align-items: center; margin-bottom: 14px; }
+#view-home .ds-h1 { font-size: 22px; }
+#view-home .ds-sub { margin-top: 2px; font-size: 13px; }
+#view-home .ds-section { margin: 0 0 8px; }
+#view-home .ds-section[style*="margin-top"] { margin-top: 22px !important; }
+#view-home .ds-todo-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+#view-home .ds-todo { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; row-gap: 2px; align-items: center; padding: 12px 18px; }
+#view-home .ds-todo-head { grid-column: 1; grid-row: 1; }
+#view-home .ds-todo-head .ds-todo-icon { width: 28px; height: 28px; font-size: 13px; }
+#view-home .ds-todo-n { grid-column: 2; grid-row: 1 / span 2; font-size: 32px; margin-top: 0; }
+#view-home .ds-todo-hint { grid-column: 1; grid-row: 2; -webkit-line-clamp: 1; min-height: 0; padding-left: 38px; }
+#view-home .ds-todo-go { display: none; }
+#view-home .ds-todo:hover { transform: none; }
+#view-home .ds-clear-row { margin-top: 10px; gap: 6px; }
+#view-home .ds-tip { margin-top: 14px !important; padding: 10px 16px; }
+/* 手機版 QR code（白底，手機才掃得到） */
+.home-qr { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; background: var(--ds-primary-soft); color: var(--ds-primary); font-size: 20px; flex-shrink: 0; }
+.home-qr.is-qr { width: 108px; height: 108px; background: #fff; padding: 6px; border-radius: 10px; }
+.home-qr.is-qr img, .home-qr.is-qr canvas { width: 96px !important; height: 96px !important; display: block; }
+.ds-clear-row { align-items: center; }
+.ds-clear-label { font-size: 13px; color: var(--ds-text-3); margin-right: 2px; }
+#view-home .ds-clear { height: 28px; padding: 0 10px; font-size: 12px; opacity: .8; }
