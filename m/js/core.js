@@ -44,32 +44,99 @@ function toast(msg) {
     toastTimer = setTimeout(function() { el.classList.remove('show'); }, 2500);
 }
 
-// 震動＋嗶聲
-function beep(type) {
+// ---------- 聲音、語音 ----------
+// 同一個發聲器（iPhone 有數量限制，不能每次新開）；手機要先碰過螢幕才能出聲：第一次點畫面時準備好
+let audioCtx = null, voiceReady = false;
+function unlockAudio() {
     try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator(); const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = type === 'error' ? 220 : 880;
-        gain.gain.value = 0.25;
-        osc.start();
-        setTimeout(function() { osc.stop(); ctx.close(); }, type === 'error' ? 300 : 120);
+        if (!audioCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) audioCtx = new AC(); }
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        if (!voiceReady && window.speechSynthesis) { voiceReady = true; window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); }   // iPhone：第一次要在點畫面時說話
     } catch (e) {}
 }
-function feedback(ok) {
-    if (navigator.vibrate) navigator.vibrate(ok ? 80 : [150, 80, 150]);
-    beep(ok ? 'success' : 'error');
+document.addEventListener('touchstart', unlockAudio, { passive: true });
+document.addEventListener('click', unlockAudio);
+function prefOn(k) { try { return localStorage.getItem(k) !== 'off'; } catch (e) { return true; } }
+window.soundOn = function() { return prefOn('tw-sound'); };
+window.voiceOn = function() { return prefOn('tw-voice'); };
+// 每個聲音：[頻率, 秒數, 波形, 音量]，依序播放
+const SOUNDS = {
+    ok: [[1600, 0.08, 'square', 0.35]],                                              // 掃對了：嗶
+    err: [[200, 0.22, 'sawtooth', 0.7], [0, 0.08], [200, 0.22, 'sawtooth', 0.7]],      // 掃錯了：嗡—嗡
+    done: [[1320, 0.18, 'sine', 0.8]],                                               // 一項揀完：叮
+    short: [[660, 0.16, 'triangle', 0.8], [440, 0.26, 'triangle', 0.8]],             // 不夠：咚—咚（往下）
+    sorted: [[1046, 0.12, 'sine', 0.5]],                                             // 這家分好了：輕的叮
+    finish: [[784, 0.13, 'sine', 0.8], [988, 0.13, 'sine', 0.8], [1318, 0.32, 'sine', 0.9]],   // 完成：叮—咚—咚（往上）
+    alarm: [[1000, 0.4, 'square', 1], [0, 0.15], [1000, 0.4, 'square', 1]]           // 鼎新改單：大聲響兩次（不能關）
+};
+const VIBRATE = { err: [150, 80, 150], short: [120, 60, 120], finish: [80, 60, 80, 60, 160], alarm: [400, 150, 400] };
+window.sfx = function(name) {
+    const isAlarm = name === 'alarm';
+    try { if (navigator.vibrate) navigator.vibrate(VIBRATE[name] || 60); } catch (e) {}   // iPhone 不支援震動，會略過
+    if (!isAlarm && !window.soundOn()) return;
+    unlockAudio();
+    if (!audioCtx || !SOUNDS[name]) return;
+    try {
+        let t = audioCtx.currentTime + 0.03;
+        SOUNDS[name].forEach(function(n) {
+            const f = n[0], d = n[1];
+            if (f) {
+                const o = audioCtx.createOscillator(), g = audioCtx.createGain(), v = n[3] || 0.5;
+                o.type = n[2] || 'sine'; o.frequency.value = f;
+                g.gain.setValueAtTime(0.0001, t);
+                g.gain.exponentialRampToValueAtTime(v, t + 0.015);
+                g.gain.setValueAtTime(v, t + Math.max(0.02, d - 0.05));
+                g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+                o.connect(g); g.connect(audioCtx.destination);
+                o.start(t); o.stop(t + d + 0.02);
+            }
+            t += d + 0.03;
+        });
+    } catch (e) {}
+};
+// 語音：用手機內建的中文念出來（開關在主選單右上角）
+window.speak = function(text, force) {
+    if (!text || !window.speechSynthesis || (!force && !window.voiceOn())) return;
+    try {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'zh-TW'; u.rate = 1.05; u.volume = 1;
+        const v = window.speechSynthesis.getVoices().find(function(x) { return /zh[-_]TW/i.test(x.lang); }) ||
+            window.speechSynthesis.getVoices().find(function(x) { return /^zh/i.test(x.lang); });
+        if (v) u.voice = v;
+        setTimeout(function() { window.speechSynthesis.speak(u); }, 250);   // 等提示音響完
+    } catch (e) {}
+};
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+function renderSoundToggles() {
+    const s = $('snd-toggle'), v = $('voice-toggle');
+    if (s) { s.innerHTML = '<i class="fa-solid ' + (window.soundOn() ? 'fa-volume-high' : 'fa-volume-xmark') + '"></i>'; s.classList.toggle('off', !window.soundOn()); s.setAttribute('aria-label', window.soundOn() ? '聲音：開' : '聲音：關'); }
+    if (v) { v.innerHTML = '<i class="fa-solid ' + (window.voiceOn() ? 'fa-comment-dots' : 'fa-comment-slash') + '"></i>'; v.classList.toggle('off', !window.voiceOn()); v.setAttribute('aria-label', window.voiceOn() ? '語音：開' : '語音：關'); }
 }
+window.toggleSound = function() {
+    try { localStorage.setItem('tw-sound', window.soundOn() ? 'off' : 'on'); } catch (e) {}
+    renderSoundToggles();
+    if (window.soundOn()) { window.sfx('done'); toast('🔊 聲音：開' + (isIOS ? '（iPhone 側邊靜音鍵要關掉才聽得到）' : '')); }
+    else toast('🔇 聲音：關（鼎新改單的警示還是會響）');
+};
+window.toggleVoice = function() {
+    try { localStorage.setItem('tw-voice', window.voiceOn() ? 'off' : 'on'); } catch (e) {}
+    renderSoundToggles();
+    if (window.voiceOn()) { window.speak('語音已開啟', true); toast('🗣️ 語音：開（揀貨時念出下一項）' + (isIOS ? '，iPhone 側邊靜音鍵要關掉' : '')); }
+    else { try { window.speechSynthesis.cancel(); } catch (e) {} toast('語音：關'); }
+};
+document.addEventListener('DOMContentLoaded', renderSoundToggles);
+function feedback(ok) { window.sfx(ok ? 'ok' : 'err'); }
 
 // 結果訊息：kind = 'success' | 'error' | 'info'；相機畫面會顯示最後一則
 let lastResult = null;
-function setResult(id, kind, text) {
+function setResult(id, kind, text, quiet) {   // quiet：呼叫的地方自己放別的聲音
     if (kind === true) kind = 'success';
     if (kind === false) kind = 'error';
     const el = $(id);
     if (el) { el.className = 'scan-result ' + kind; el.innerText = text; }
     lastResult = { ok: kind !== 'error', text: text };
-    if (kind !== 'info') feedback(kind === 'success');
+    if (kind !== 'info' && !quiet) feedback(kind === 'success');
 }
 function clearResult(id) { const el = $(id); if (el) { el.className = 'scan-result'; el.innerHTML = ''; } }
 
