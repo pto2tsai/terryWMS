@@ -52,14 +52,7 @@ window.autoImportErpOrderRows = async function(rows) {
     var bad = [];
     parsed.needPkg.forEach(function(n) { if (bad.indexOf(n.order) < 0) bad.push(n.order); });
     var orders = parsed.orders.filter(function(o) { return bad.indexOf(o) < 0; });
-    // 鼎新已經取消的單：檔案涵蓋的日期裡，之前匯入過、現在檔案裡不見了、還沒出貨的單
-    var fileNos = {}, fileDates = {};
-    parsed.orders.forEach(function(o) { fileNos[o.orderNo] = true; if (o.orderDate) fileDates[String(o.orderDate)] = true; });
-    parsed.storeSkipped.forEach(function(no) { fileNos[no] = true; });
-    var missing = window._orderData.orders.filter(function(o) {
-        return o.id && o.importedAt && fileDates[String(o.orderDate || '')] && !fileNos[o.orderNo] &&
-            ['pending', 'confirmed', 'inWave'].indexOf(o.status) >= 0;
-    });
+    var missing = window.findMissingErpOrders(parsed);   // 鼎新已經取消的單
     var r = await window.saveErpOrders(orders);
     var w = await autoCreateWavesByLogistics({ skipConfirm: true, silent: true });
     renderOrderList();
