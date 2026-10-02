@@ -226,7 +226,7 @@
         if (noLogistics) msgs.push('🚚 ' + noLogistics + ' 張訂單沒有物流商，還沒排波次');
         // 缺貨少出的銷貨單：這次不出、之後不補，要請業務在鼎新改數量（鼎新改好、匯入後自動消失）
         if (erpFix.length) msgs.push('🧾 缺貨少出 ' + erpFix.length + ' 張，請業務在鼎新改銷貨單：' + erpFix.slice(0, 3).map(function(o) {
-            return o.customer + ' ' + (o.shortShipped || []).map(function(x) { return x.productName + ' ' + x.want + '→' + x.got; }).join('、');
+            return o.customer + ' ' + (o.shortShipped || []).filter(function(x) { return (x.want - x.got) >= 0.001; }).map(function(x) { return x.productName + ' ' + Math.round(x.want * 1000) / 1000 + '→' + Math.round(x.got * 1000) / 1000; }).join('、');
         }).join('；') + (erpFix.length > 3 ? ' 等' : ''));
         // 已經出貨，鼎新才減量或刪單：請業務開銷退（業務開好後在電腦按「已經改好了」）
         if (erpRet.length) msgs.push('↩️ 已出貨的單鼎新減量或取消 ' + erpRet.length + ' 張，請業務開銷退：' + erpRet.slice(0, 3).map(function(o) {
@@ -241,7 +241,7 @@
         var ym = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 7);   // 台灣時間的年-月（跟 Google 自動程式寫入的 month 一致）
         listen(db.collection('erpInbox').where('month', '==', ym).where('sensitive', '==', false), function(rows) { erpDocs = rows; drawErpAlert(); });
         unsubs.push(db.collection('settings').doc('erpImport').onSnapshot(function(d) { erpSched = d.exists ? d.data() : null; drawErpAlert(); }, function() {}));
-        listen(db.collection('salesOrders').where('erpFixNeeded', '==', true), function(rows) { erpFix = rows; drawErpAlert(); });
+        listen(db.collection('salesOrders').where('erpFixNeeded', '==', true), function(rows) { erpFix = rows.filter(function(o) { return (o.shortShipped || []).some(function(x) { return (x.want - x.got) >= 0.001; }); }); drawErpAlert(); });
         listen(db.collection('salesOrders').where('erpReturnNeeded', '==', true), function(rows) { erpRet = rows; drawErpAlert(); });
         listen(db.collection('salesOrders').where('logistics', '==', '未指定'), function(rows) {
             noLogistics = rows.filter(function(o) { return ['pending', 'confirmed', 'partial'].indexOf(o.status) >= 0 && !o.waveNo; }).length;
