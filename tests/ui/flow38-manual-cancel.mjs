@@ -66,6 +66,7 @@ const items = await mp.evaluate(() => pickingItems.filter(i => !i.completed).map
 const top = await mp.textContent('#picking-next');
 H.check('手機自動列「放回白蝦 4 件 → I-A-01-1F」', JSON.stringify(items) === JSON.stringify([['return', '白蝦', 4, 'I-A-01-1F']]), JSON.stringify(items));
 const al = await mp.evaluate(() => { const d = document.getElementById('pk-change-alert'); return d ? d.textContent : ''; });
+if (process.env.SHOT) await mp.screenshot({ path: process.env.SHOT + '/手機改單提醒.png' });
 H.check('手機響、跳大框：D-2 黃建宏 整張取消，要放回白蝦 4 件', al.includes('黃建宏') && al.includes('整張取消') && al.includes('4 件'), al.slice(0, 200));
 await mp.click('#pk-alert-ok'); await mp.waitForTimeout(300);
 const B = await ctx.newPage();

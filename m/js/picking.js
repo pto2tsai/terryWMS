@@ -224,7 +224,11 @@ function seenNotes(waveId) { try { return parseInt(localStorage.getItem('pk-seen
 function checkChangeAlert() {
     if (!currentWave || currentWave.status === 'done') return;
     const notes = currentWave.changeNotes || [];
-    if (notes.length <= seenNotes(currentWave.id) || $('pk-change-alert')) return;
+    if (notes.length <= seenNotes(currentWave.id)) return;
+    // 框開著時又來新的改單：換成最新內容（一起列出來），有新的才再響
+    const old = $('pk-change-alert');
+    if (old && old.dataset.wave === currentWave.id && +old.dataset.n === notes.length) return;
+    if (old) old.remove();
     const rets = pickingItems.filter(function(i) { return i.type === 'return' && !i.completed; });
     const div = document.createElement('div');
     div.id = 'pk-change-alert'; div.className = 'pad-overlay pk-alert';
@@ -232,10 +236,11 @@ function checkChangeAlert() {
         '<div class="pk-alert-wave">' + esc(currentWave.waveNo) + '　' + esc(currentWave.logistics || '') + '</div>' +
         notes.slice(seenNotes(currentWave.id)).map(function(n) { return '<div class="pk-alert-note">' + esc(n) + '</div>'; }).join('') +
         (rets.length ? '<div class="pk-alert-sub">要放回：</div>' + rets.map(function(i) {
-            return '<div class="pk-alert-ret">↩️ ' + esc(i.productName) + ' ' + esc(i.spec || '') + '　<b>' + esc(i.pickQty) + ' 件</b> → <b>' + esc(i.locationId) + '</b></div>';
+            return '<div class="pk-alert-ret">↩️ ' + esc(i.productName) + ' ' + esc(i.spec || '') + '　<b>' + esc(i.pickQty) + ' 件</b> → <b style="white-space:nowrap">' + esc(i.locationId) + '</b></div>';
         }).join('') : '') +
         '<div class="pk-alert-tip">清單已經自動調整，照清單做就好</div>' +
         '<button id="pk-alert-ok" class="pk-go pk-alert-ok">知道了</button></div>';
+    div.dataset.wave = currentWave.id; div.dataset.n = notes.length;
     document.body.appendChild(div);
     const waveId = currentWave.id, n = notes.length;
     $('pk-alert-ok').onclick = function() {
