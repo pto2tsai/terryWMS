@@ -1399,7 +1399,7 @@
                     statusBadge = '<span class="badge badge-blue"><span class="ds-dot"></span>揀貨中</span>';
                     if (wave.startedAt) {
                         var mins = Math.round((new Date() - new Date(wave.startedAt)) / 60000);
-                        timeInfo = '<div style="font-size:12px;color:var(--ds-text-3);margin-top:4px">已進行 ' + mins + ' 分鐘</div>';
+                        timeInfo = '<span class="w-time">已進行 ' + mins + ' 分鐘</span>';
                     }
                 } else if (wave.status === 'sorting') {
                     statusBadge = '<span class="badge badge-purple"><span class="ds-dot"></span>待分貨</span>';
@@ -1407,7 +1407,7 @@
                     statusBadge = '<span class="badge badge-green"><i class="fa-solid fa-check"></i>已出貨</span>';
                     if (wave.completedAt && wave.createdAt) {
                         var mins = Math.round((new Date(wave.completedAt) - new Date(wave.createdAt)) / 60000);
-                        timeInfo = '<div style="font-size:12px;color:var(--ds-text-3);margin-top:4px">耗時 ' + mins + ' 分鐘</div>';
+                        timeInfo = '<span class="w-time">耗時 ' + mins + ' 分鐘</span>';
                     }
                 }
 
@@ -1434,7 +1434,7 @@
                 var prog = window.waveProgress(wave);
                 if (wave.status === 'picking' && prog.all) {
                     var pct = Math.round(prog.done / prog.all * 100);
-                    timeInfo = '<div class="ds-progress' + (prog.done >= prog.all ? ' is-done' : '') + '" style="display:flex;margin:8px 0 0"><span class="ds-progress-bar"><div style="width:' + pct + '%"></div></span><span>' + prog.done + '/' + prog.all + ' 項</span></div>' + timeInfo;
+                    timeInfo = '<span class="w-prog ds-progress' + (prog.done >= prog.all ? ' is-done' : '') + '"><span class="ds-progress-bar"><div style="width:' + pct + '%"></div></span><span>' + prog.done + '/' + prog.all + ' 項</span></span>' + timeInfo;
                 }
                 html += '<td class="t-right ds-num">' + (wave.orders ? wave.orders.length : 0) + '</td>';
                 html += '<td class="t-right ds-num">' + (wave.itemCount || 0) + ' 項</td>';
