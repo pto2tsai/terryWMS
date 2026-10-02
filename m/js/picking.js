@@ -225,6 +225,7 @@ function checkChangeAlert() {
     const waveId = currentWave.id, n = notes.length;
     $('pk-alert-ok').onclick = function() {
         try { localStorage.setItem('pk-seen-notes-' + waveId, String(n)); } catch (e) {}
+        window.stopFlash();   // 外框停止閃
         div.remove();
     };
     window.sfx('alarm');
