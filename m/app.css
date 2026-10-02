@@ -626,3 +626,4 @@ body {
 /* 聲音、語音開關（主選單右上角） */
 .snd-btn { -webkit-appearance: none; appearance: none; background: #1b2844; border: 1px solid #33456b; color: #7dd3fc; width: 48px; height: 44px; border-radius: 10px; font-size: 22px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 .snd-btn.off { color: #64748b; border-color: #2a3550; }
+

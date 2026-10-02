@@ -50,6 +50,36 @@ const osc = await mp.evaluate(() => {
   AC.prototype.createOscillator = function() { n++; return o.call(this); };
   window.sfx('done'); const quietN = n; window.sfx('alarm'); return [quietN, n];
 });
-H.check('關掉後一般聲音不響，但鼎新改單的警示照樣響兩聲', osc[0] === 0 && osc[1] === 2, JSON.stringify(osc));
+H.check('關掉後一般聲音不響，但鼎新改單的警示照樣響（8 聲交替的鈴）', osc[0] === 0 && osc[1] === 40, JSON.stringify(osc));
+// ---------- 螢幕外框閃光 ----------
+const fl = await mp.evaluate(async () => {
+  const st = () => { const el = document.getElementById('edge-flash'); return el ? [el.classList.contains('on'), el.style.getPropertyValue('--fc')] : null; };
+  window.stopFlash(); window.sfx('err'); await new Promise(r => setTimeout(r, 60)); const err = st();
+  window.stopFlash(); window.sfx('done'); await new Promise(r => setTimeout(r, 60)); const ok = st();
+  window.sfx('alarm'); await new Promise(r => setTimeout(r, 1200)); const alarmRunning = !!document.getElementById('edge-flash');
+  window.sfx('done'); await new Promise(r => setTimeout(r, 300)); const keep = st()[1];
+  window.stopFlash(); await new Promise(r => setTimeout(r, 400)); const stopped = st()[0];
+  return { err, ok, alarmRunning, keep, stopped };
+});
+H.check('外框閃光：錯＝紅、對＝綠；聲音關掉也會閃', JSON.stringify(fl.err) === '[true,"#ef4444"]' && JSON.stringify(fl.ok) === '[true,"#22c55e"]', JSON.stringify(fl));
+H.check('改單警示一直閃（其他的不會蓋掉它），按「知道了」才停', fl.alarmRunning && ['#ef4444', '#f97316'].includes(fl.keep) && fl.stopped === false, JSON.stringify(fl));
+// ---------- 每支手機自己選聲音（聲音試聽頁存的） ----------
+const st = await mp.evaluate(() => {
+  const AC = window.AudioContext || window.webkitAudioContext; let n = 0; const o = AC.prototype.createOscillator;
+  AC.prototype.createOscillator = function() { n++; return o.call(this); };
+  localStorage.setItem('tw-sound', 'on');
+  const count = f => { n = 0; f(); return n; };
+  const dflt = count(() => window.sfx('done'));
+  window.setSoundStyle('done', 'A'); const gameStyle = count(() => window.sfx('done'));
+  window.resetSoundStyles(); const back = count(() => window.sfx('done'));
+  window.stopFlash(); window.setFlashOn(false); window.sfx('err'); const el = document.getElementById('edge-flash'); const noFlash = !el.classList.contains('on');
+  window.sfx('alarm'); const alarmFlash = true; window.stopFlash(); window.setFlashOn(true);
+  return { dflt, gameStyle, back, noFlash };
+});
+H.check('沒選＝B 鐘聲；在試聽頁選了 A，揀貨就用 A；恢復後又是 B', st.dflt === 10 && st.gameStyle === 4 && st.back === 10, JSON.stringify(st));
+H.check('外框閃光關掉後，一般的不閃', st.noFlash, JSON.stringify(st));
+await mp.goto(base + '/m/sounds.html'); await mp.waitForTimeout(800);
+await mp.click(`button[onclick="choose('ok','C')"]`); await mp.waitForTimeout(200);
+H.check('聲音試聽頁：點了就記在這支手機', await mp.evaluate(() => window.soundStyles().ok === 'C') && (await mp.textContent('#sum')).includes('掃對了 C'));
 H.check('沒有頁面錯誤', M.log.errors.length === 0 && D.log.errors.length === 0, JSON.stringify(M.log.errors.concat(D.log.errors)));
 await H.close(); process.exit(0);

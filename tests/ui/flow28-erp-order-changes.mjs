@@ -44,6 +44,7 @@ H.check('手機上方藍色提醒：鼎新改了什麼、清單已自動調整�
 const al = await mp.evaluate(() => { const d = document.getElementById('pk-change-alert'); return d ? d.textContent : ''; });
 H.check('手機跳大框「鼎新改單了」：寫改了什麼、要放回白蝦 3 件 → I-A-01-1F，要按「知道了」', al.includes('鼎新改單了') && al.includes('10→7') && al.includes('白蝦') && al.includes('3 件') && al.includes('I-A-01-1F') && al.includes('知道了'), al.slice(0, 300));
 await mp.click('#pk-alert-ok'); await mp.waitForTimeout(300);
+H.check('按「知道了」外框也停止閃', !(await mp.evaluate(() => { const el = document.getElementById('edge-flash'); return el && el.classList.contains('on'); })));
 H.check('按「知道了」框就關掉；同一個提醒不會再跳', !(await mp.$('#pk-change-alert')) && await mp.evaluate(async () => { window.dataHooks.waves.forEach(f => f()); await new Promise(r => setTimeout(r, 300)); return !document.getElementById('pk-change-alert'); }));
 await H.nav(D.page, 'wave-picking'); await D.page.waitForTimeout(1500);
 H.check('電腦的波次清單紅字：要放回 白蝦 3 件', (await D.page.textContent('#wave-list-body')).includes('要放回：白蝦 3 件'));

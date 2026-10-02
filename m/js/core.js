@@ -44,69 +44,7 @@ function toast(msg) {
     toastTimer = setTimeout(function() { el.classList.remove('show'); }, 2500);
 }
 
-// ---------- 聲音、語音 ----------
-// 同一個發聲器（iPhone 有數量限制，不能每次新開）；手機要先碰過螢幕才能出聲：第一次點畫面時準備好
-let sndCtx = null, voiceReady = false;
-function unlockAudio() {
-    try {
-        if (!sndCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) sndCtx = new AC(); }
-        if (sndCtx && sndCtx.state === 'suspended') sndCtx.resume();
-        if (!voiceReady && window.speechSynthesis) { voiceReady = true; window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); }   // iPhone：第一次要在點畫面時說話
-    } catch (e) {}
-}
-document.addEventListener('touchstart', unlockAudio, { passive: true });
-document.addEventListener('click', unlockAudio);
-function prefOn(k) { try { return localStorage.getItem(k) !== 'off'; } catch (e) { return true; } }
-window.soundOn = function() { return prefOn('tw-sound'); };
-window.voiceOn = function() { return prefOn('tw-voice'); };
-// 每個聲音：[頻率, 秒數, 波形, 音量]，依序播放
-const SOUNDS = {
-    ok: [[1600, 0.08, 'square', 0.35]],                                              // 掃對了：嗶
-    err: [[200, 0.22, 'sawtooth', 0.7], [0, 0.08], [200, 0.22, 'sawtooth', 0.7]],      // 掃錯了：嗡—嗡
-    done: [[1320, 0.18, 'sine', 0.8]],                                               // 一項揀完：叮
-    short: [[660, 0.16, 'triangle', 0.8], [440, 0.26, 'triangle', 0.8]],             // 不夠：咚—咚（往下）
-    sorted: [[1046, 0.12, 'sine', 0.5]],                                             // 這家分好了：輕的叮
-    finish: [[784, 0.13, 'sine', 0.8], [988, 0.13, 'sine', 0.8], [1318, 0.32, 'sine', 0.9]],   // 完成：叮—咚—咚（往上）
-    alarm: [[1000, 0.4, 'square', 1], [0, 0.15], [1000, 0.4, 'square', 1]]           // 鼎新改單：大聲響兩次（不能關）
-};
-const VIBRATE = { err: [150, 80, 150], short: [120, 60, 120], finish: [80, 60, 80, 60, 160], alarm: [400, 150, 400] };
-window.sfx = function(name) {
-    const isAlarm = name === 'alarm';
-    try { if (navigator.vibrate) navigator.vibrate(VIBRATE[name] || 60); } catch (e) {}   // iPhone 不支援震動，會略過
-    if (!isAlarm && !window.soundOn()) return;
-    unlockAudio();
-    if (!sndCtx || !SOUNDS[name]) return;
-    try {
-        let t = sndCtx.currentTime + 0.03;
-        SOUNDS[name].forEach(function(n) {
-            const f = n[0], d = n[1];
-            if (f) {
-                const o = sndCtx.createOscillator(), g = sndCtx.createGain(), v = n[3] || 0.5;
-                o.type = n[2] || 'sine'; o.frequency.value = f;
-                g.gain.setValueAtTime(0.0001, t);
-                g.gain.exponentialRampToValueAtTime(v, t + 0.015);
-                g.gain.setValueAtTime(v, t + Math.max(0.02, d - 0.05));
-                g.gain.exponentialRampToValueAtTime(0.0001, t + d);
-                o.connect(g); g.connect(sndCtx.destination);
-                o.start(t); o.stop(t + d + 0.02);
-            }
-            t += d + 0.03;
-        });
-    } catch (e) {}
-};
-// 語音：用手機內建的中文念出來（開關在主選單右上角）
-window.speak = function(text, force) {
-    if (!text || !window.speechSynthesis || (!force && !window.voiceOn())) return;
-    try {
-        window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'zh-TW'; u.rate = 1.05; u.volume = 1;
-        const v = window.speechSynthesis.getVoices().find(function(x) { return /zh[-_]TW/i.test(x.lang); }) ||
-            window.speechSynthesis.getVoices().find(function(x) { return /^zh/i.test(x.lang); });
-        if (v) u.voice = v;
-        setTimeout(function() { window.speechSynthesis.speak(u); }, 250);   // 等提示音響完
-    } catch (e) {}
-};
+// ---------- 聲音、語音、外框閃光：在 js/sound.js（跟「聲音試聽」頁共用）；這裡只有右上角的開關 ----------
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
 function renderSoundToggles() {
     const s = $('snd-toggle'), v = $('voice-toggle');

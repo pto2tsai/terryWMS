@@ -28,9 +28,6 @@
   .sum b { color: var(--pick); }
   .all { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
   .all button { -webkit-appearance: none; appearance: none; min-height: 46px; border-radius: 12px; border: 1px solid #33456b; background: #1b2844; color: #7dd3fc; font-size: 15px; font-weight: 700; }
-  /* 螢幕外框閃光：一根手指寬的彩色邊框，不擋字 */
-  #flash { position: fixed; inset: 0; pointer-events: none; z-index: 50; border-radius: 0; box-shadow: inset 0 0 0 14px var(--fc, transparent); opacity: 0; }
-  #flash.on { opacity: 1; }
   .opt { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 14px; font-size: 16px; }
   .opt input { width: 24px; height: 24px; }
   .opt small { color: var(--sub); font-size: 13px; }
@@ -38,14 +35,14 @@
 </head>
 <body>
 <header><a href="./" aria-label="回到選單">←</a><h1>聲音試聽</h1></header>
-<p class="tip">每一列點 A、B、C 聽聽看，<b>點了就是選它</b>（綠色打勾），螢幕外框也會跟著閃顏色。選好後，把最下面那行告訴我（或截圖），我再換上去。<br>
-iPhone：<b>側邊靜音鍵要關掉</b>，音量開大。這頁只是試聽，不會影響現場作業。</p>
+<p class="tip">每一列點 A、B、C 聽聽看，<b>點了就是選它</b>（綠色打勾），<b>馬上存在這支手機</b>，揀貨時就用你選的聲音；沒選的用 B 鐘聲。每個人的手機可以選不一樣的。<br>
+iPhone：<b>側邊靜音鍵要關掉</b>，音量開大。</p>
 <div class="styles">
   <div><b>A 遊戲風</b>對錯分很開，一聽就懂</div>
   <div><b>B 鐘聲風</b>清脆、不刺耳，吵的地方也聽得到</div>
   <div><b>C 說話風</b>手機直接說「好」「錯了」</div>
 </div>
-<label class="opt"><input type="checkbox" id="flash-on" checked> <b style="white-space:nowrap">螢幕外框閃光</b> <small>（綠＝對、紅＝錯、橘＝不夠、藍＝分好；改單警示會一直閃，點一下畫面停）</small></label>
+<label class="opt"><input type="checkbox" id="flash-on" checked> <b style="white-space:nowrap">螢幕外框閃光</b> <small>（綠＝對、紅＝錯、橘＝不夠、藍＝分好；改單警示一定會閃，揀貨時按「知道了」才停）</small></label>
 <div class="all">
   <button onclick="playAll('A')">▶ A 全部聽</button>
   <button onclick="playAll('B')">▶ B 全部聽</button>
@@ -53,131 +50,36 @@ iPhone：<b>側邊靜音鍵要關掉</b>，音量開大。這頁只是試聽，�
 </div>
 <div id="rows"></div>
 <div class="sum" id="sum"></div>
-<div id="flash"></div>
+
+<script src="js/sound.js?v=20261002c"></script>
 <script>
-// ---------- 發聲 ----------
-let ctx = null;
-function ac() {
-  if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; ctx = new AC(); }
-  if (ctx.state === 'suspended') ctx.resume();
-  return ctx;
-}
-// 一個音：頻率 f（可以滑到 f2）、從 t 開始、長 d 秒
-function tone(f, t, d, type, vol, f2) {
-  const c = ac(), o = c.createOscillator(), g = c.createGain(), t0 = c.currentTime + 0.03 + t;
-  o.type = type || 'sine'; o.frequency.setValueAtTime(f, t0);
-  if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + d);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.exponentialRampToValueAtTime(vol || 0.5, t0 + 0.012);
-  g.gain.setValueAtTime(vol || 0.5, t0 + Math.max(0.02, d - 0.04));
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
-  o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + d + 0.02);
-}
-// 鐘聲：幾個泛音一起響、慢慢消失
-function bell(f, t, d, vol) {
-  const c = ac(), t0 = c.currentTime + 0.03 + t, v = vol || 0.6;
-  [[1, 1], [2.0, 0.55], [3.01, 0.35], [4.2, 0.22], [5.43, 0.15]].forEach(function(p) {
-    const o = c.createOscillator(), g = c.createGain();
-    o.type = 'sine'; o.frequency.value = f * p[0];
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(v * p[1], t0 + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d / p[0] * 1.5);
-    o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + d * 1.6);
-  });
-}
-function say(text) {
-  if (!window.speechSynthesis) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text); u.lang = 'zh-TW'; u.rate = 1.1; u.volume = 1;
-  const v = speechSynthesis.getVoices().find(function(x) { return /zh[-_]TW/i.test(x.lang); }) || speechSynthesis.getVoices().find(function(x) { return /^zh/i.test(x.lang); });
-  if (v) u.voice = v;
-  speechSynthesis.speak(u);
-}
-function vib(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
-
-// ---------- 螢幕外框閃光 ----------
-const FLASH = {   // [顏色, 閃幾次, 每次亮多久（毫秒）]；alarm 一直閃到點畫面
-  ok: ['#22c55e', 1, 160], done: ['#22c55e', 1, 260], err: ['#ef4444', 2, 180], short: ['#f97316', 2, 220],
-  sorted: ['#3b82f6', 1, 260], finish: ['#22c55e', 2, 450], alarm: ['#f97316', 0, 250]
-};
-let flashTimers = [], alarmLoop = null;
-function stopFlash() { flashTimers.forEach(clearTimeout); flashTimers = []; if (alarmLoop) { clearInterval(alarmLoop); alarmLoop = null; } document.getElementById('flash').classList.remove('on'); }
-function flash(ev) {
-  if (!document.getElementById('flash-on').checked) return;
-  stopFlash();
-  const f = FLASH[ev], el = document.getElementById('flash');
-  if (ev === 'alarm') {   // 紅、橘交替一直閃
-    let i = 0;
-    alarmLoop = setInterval(function() { el.style.setProperty('--fc', i % 2 ? '#ef4444' : '#f97316'); el.classList.toggle('on'); i++; }, f[2]);
-    return;
-  }
-  el.style.setProperty('--fc', f[0]);
-  for (let i = 0; i < f[1]; i++) {
-    flashTimers.push(setTimeout(function() { el.classList.add('on'); }, i * f[2] * 2));
-    flashTimers.push(setTimeout(function() { el.classList.remove('on'); }, i * f[2] * 2 + f[2]));
-  }
-}
-document.addEventListener('pointerdown', function(e) { if (alarmLoop && !e.target.closest('button')) stopFlash(); });
-
-// ---------- 三種風格 ----------
-const SETS = {
-  A: {   // 遊戲風
-    ok: function() { tone(988, 0, 0.07, 'square', 0.35); tone(1319, 0.07, 0.2, 'square', 0.35); },
-    err: function() { tone(110, 0, 0.5, 'sawtooth', 0.6); tone(117, 0, 0.5, 'sawtooth', 0.5); vib([150, 80, 150]); },
-    done: function() { tone(523, 0, 0.06, 'square', 0.3); tone(659, 0.06, 0.06, 'square', 0.3); tone(784, 0.12, 0.06, 'square', 0.3); tone(1047, 0.18, 0.16, 'square', 0.3); },
-    short: function() { tone(523, 0, 0.18, 'triangle', 0.8, 494); tone(392, 0.22, 0.32, 'triangle', 0.8, 330); vib([120, 60, 120]); },
-    sorted: function() { tone(700, 0, 0.09, 'sine', 0.7, 1500); },
-    finish: function() { [[523, 0], [659, 0.11], [784, 0.22], [1047, 0.33]].forEach(function(n) { tone(n[0], n[1], 0.1, 'square', 0.3); }); tone(784, 0.48, 0.12, 'square', 0.3); tone(1047, 0.62, 0.45, 'square', 0.35); tone(1319, 0.62, 0.45, 'square', 0.2); },
-    alarm: function() { for (let i = 0; i < 4; i++) { tone(700, i * 0.45, 0.22, 'square', 0.8, 1300); tone(1300, i * 0.45 + 0.22, 0.22, 'square', 0.8, 700); } vib([400, 150, 400, 150, 400]); }
-  },
-  B: {   // 鐘聲風
-    ok: function() { bell(1568, 0, 0.6, 0.6); },
-    err: function() { bell(196, 0, 0.9, 0.8); bell(277, 0, 0.9, 0.6); bell(196, 0.35, 0.9, 0.8); bell(277, 0.35, 0.9, 0.6); vib([150, 80, 150]); },
-    done: function() { bell(1047, 0, 0.6, 0.6); bell(1568, 0.14, 0.8, 0.6); },
-    short: function() { bell(784, 0, 0.7, 0.7); bell(622, 0.22, 0.7, 0.7); bell(523, 0.44, 1, 0.7); vib([120, 60, 120]); },
-    sorted: function() { bell(2093, 0, 0.4, 0.4); },
-    finish: function() { [[659, 0], [523, 0.32], [587, 0.64], [392, 0.96]].forEach(function(n) { bell(n[0], n[1], 1, 0.7); }); bell(392, 1.5, 1, 0.7); bell(587, 1.82, 1, 0.7); bell(659, 2.14, 1, 0.7); bell(523, 2.46, 1.6, 0.8); },
-    alarm: function() { for (let i = 0; i < 8; i++) bell(i % 2 ? 988 : 1319, i * 0.18, 0.5, 0.9); vib([400, 150, 400, 150, 400]); }
-  },
-  C: {   // 說話風（前面加一個很短的提示音，聽得出是系統在說話）
-    ok: function() { tone(1800, 0, 0.04, 'sine', 0.3); say('好'); },
-    err: function() { tone(220, 0, 0.12, 'square', 0.4); say('錯了'); vib([150, 80, 150]); },
-    done: function() { tone(1800, 0, 0.04, 'sine', 0.3); say('拿好了'); },
-    short: function() { tone(440, 0, 0.08, 'triangle', 0.5); say('不夠'); vib([120, 60, 120]); },
-    sorted: function() { tone(1800, 0, 0.04, 'sine', 0.3); say('分好了'); },
-    finish: function() { tone(1047, 0, 0.1, 'sine', 0.4); tone(1319, 0.1, 0.18, 'sine', 0.4); say('完成'); },
-    alarm: function() { tone(1000, 0, 0.3, 'square', 0.9); tone(1000, 0.4, 0.3, 'square', 0.9); setTimeout(function() { say('注意，鼎新改單'); }, 800); vib([400, 150, 400]); }
-  }
-};
-const EVENTS = [
-  ['ok', '掃對了', '儲位、板號掃對'],
-  ['err', '掃錯了', '拿錯板、走錯儲位'],
-  ['done', '一項拿好了', '按「拿好了」或掃完一項'],
-  ['short', '不夠', '按「不夠」記下缺貨'],
-  ['sorted', '這家分好了', '分貨時一家好了'],
-  ['finish', '全部完成', '全部拿完、全部分好、波次完成'],
-  ['alarm', '鼎新改單警示', '要放回、改了數量（這個不能關）']
-];
-const pick = {};
+// 每一列點 A、B、C：馬上播、馬上記在這支手機（揀貨時就用它）；沒選的用 B 鐘聲
+const NAMES = { A: '遊戲', B: '鐘聲', C: '說話' };
 function draw() {
-  document.getElementById('rows').innerHTML = EVENTS.map(function(e) {
+  const pick = window.soundStyles();
+  document.getElementById('rows').innerHTML = window.SOUND_EVENTS.map(function(e) {
+    const cur = pick[e[0]] || 'B';
     return '<div class="row"><h2>' + e[1] + '</h2><p>' + e[2] + '</p><div class="btns">' +
-      ['A', 'B', 'C'].map(function(s) { return '<button class="' + (pick[e[0]] === s ? 'on' : '') + '" onclick="play(\'' + e[0] + '\',\'' + s + '\')">' + s + '<small>' + { A: '遊戲', B: '鐘聲', C: '說話' }[s] + '</small></button>'; }).join('') +
+      ['A', 'B', 'C'].map(function(s) { return '<button class="' + (cur === s ? 'on' : '') + '" onclick="choose(\'' + e[0] + '\',\'' + s + '\')">' + s + '<small>' + NAMES[s] + (s === 'B' ? '（預設）' : '') + '</small></button>'; }).join('') +
       '</div></div>';
   }).join('');
-  const done = EVENTS.filter(function(e) { return pick[e[0]]; });
-  document.getElementById('sum').innerHTML = done.length ? '我的選擇：<b>' + done.map(function(e) { return e[1] + ' ' + pick[e[0]]; }).join('、') + '</b>' + (done.length < EVENTS.length ? '（還有 ' + (EVENTS.length - done.length) + ' 個沒選）' : '') : '還沒選：點上面的 A、B、C 試聽';
+  document.getElementById('sum').innerHTML = '✅ 已存在這支手機，揀貨時就用：<b>' + window.SOUND_EVENTS.map(function(e) { return e[1] + ' ' + (pick[e[0]] || 'B'); }).join('、') + '</b>' +
+    ' <button onclick="resetAll()" style="margin-left:6px;-webkit-appearance:none;border:1px solid #33456b;background:#1b2844;color:#7dd3fc;border-radius:8px;padding:4px 10px;font-size:13px">全部恢復 B</button>';
 }
-window.play = function(ev, s) { SETS[s][ev](); flash(ev); pick[ev] = s; draw(); };
+window.choose = function(ev, s) { window.playSound(ev, s); window.edgeFlash(ev); window.setSoundStyle(ev, s === 'B' ? null : s); draw(); };
+window.resetAll = function() { window.resetSoundStyles(); draw(); };
 let busy = false;
 window.playAll = function(s) {
   if (busy) return; busy = true;
-  const gap = s === 'C' ? 1700 : 1400;
-  EVENTS.forEach(function(e, i) { setTimeout(function() { SETS[s][e[0]](); flash(e[0]); }, i * gap); });
-  setTimeout(stopFlash, EVENTS.length * gap + 1500);   // 最後的改單警示閃一下就停
-  setTimeout(function() { busy = false; }, EVENTS.length * gap);
+  const gap = s === 'C' ? 1700 : s === 'B' ? 1800 : 1400;
+  window.SOUND_EVENTS.forEach(function(e, i) { setTimeout(function() { window.playSound(e[0], s); window.edgeFlash(e[0]); }, i * gap); });
+  setTimeout(function() { busy = false; window.stopFlash(); }, window.SOUND_EVENTS.length * gap + 1500);
 };
-if (window.speechSynthesis) speechSynthesis.getVoices();
+const fo = document.getElementById('flash-on');
+fo.checked = window.flashOn();
+fo.onchange = function() { window.setFlashOn(fo.checked); if (fo.checked) window.edgeFlash('done'); };
+// 改單警示的閃光：點一下畫面（按鈕以外）就停
+document.addEventListener('pointerdown', function(e) { if (!e.target.closest('button')) window.stopFlash(); });
 draw();
 </script>
 </body>
