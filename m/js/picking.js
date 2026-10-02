@@ -25,6 +25,13 @@ window.choosePickItem = function(k) {
 };
 
 window.pageInit.picking = function() {
+    // iPhone：側邊靜音鍵打開時網頁不會出聲，第一次揀貨提醒一次
+    try {
+        if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !localStorage.getItem('tw-ios-mute-tip')) {
+            localStorage.setItem('tw-ios-mute-tip', '1');
+            alert('🔊 揀貨時手機會出聲、念出下一項\n\niPhone 請把側邊的「靜音鍵」關掉（看不到橘色），音量開大，才聽得到。\n\n不要聲音、語音的話，可以在主選單右上角關掉。');
+        }
+    } catch (e) {}
     currentWave = null;
     pickingItems = [];
     renderWaveOptions();
@@ -192,34 +199,7 @@ window.dataHooks.waves.push(function() {
 });
 
 // ---------- 鼎新改單提醒：手機響兩聲、震動、跳大框，按「知道了」才關 ----------
-// 看過的提醒數記在這支手機（每個波次各記各的）；新來的才會再響
-let audioCtx = null;
-function unlockAudio() {   // 手機瀏覽器要先碰過螢幕才能發聲：第一次點畫面時先準備好
-    try {
-        if (!audioCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) audioCtx = new AC(); }
-        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-    } catch (e) {}
-}
-document.addEventListener('touchstart', unlockAudio, { passive: true });
-document.addEventListener('click', unlockAudio);
-function alarmBeep() {
-    try { if (navigator.vibrate) navigator.vibrate([400, 150, 400]); } catch (e) {}   // iPhone 不支援震動，會略過
-    unlockAudio();
-    if (!audioCtx) return;
-    try {
-        const t0 = audioCtx.currentTime + 0.05;
-        [0, 0.55].forEach(function(dt) {   // 響兩次、大聲
-            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-            o.type = 'square'; o.frequency.value = 1000;
-            g.gain.setValueAtTime(0.0001, t0 + dt);
-            g.gain.exponentialRampToValueAtTime(1, t0 + dt + 0.02);
-            g.gain.setValueAtTime(1, t0 + dt + 0.38);
-            g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + 0.42);
-            o.connect(g); g.connect(audioCtx.destination);
-            o.start(t0 + dt); o.stop(t0 + dt + 0.45);
-        });
-    } catch (e) {}
-}
+// 看過的提醒數記在這支手機（每個波次各記各的）；新來的才會再響（聲音在 core.js 的 sfx）
 function seenNotes(waveId) { try { return parseInt(localStorage.getItem('pk-seen-notes-' + waveId), 10) || 0; } catch (e) { return 0; } }
 function checkChangeAlert() {
     if (!currentWave || currentWave.status === 'done') return;
@@ -247,7 +227,8 @@ function checkChangeAlert() {
         try { localStorage.setItem('pk-seen-notes-' + waveId, String(n)); } catch (e) {}
         div.remove();
     };
-    alarmBeep();
+    window.sfx('alarm');
+    window.speak('鼎新改單。' + notes.slice(seenNotes(waveId)).join('。') + (rets.length ? '。要放回' + rets.map(function(i) { return i.productName + i.pickQty + '件'; }).join('、') : ''));
 }
 
 function renderPickingList() {
@@ -299,6 +280,19 @@ window.togglePickingList = function() {
     t.querySelector('h4').innerText = l.hidden ? '全部清單（點一項就先拿它）▾' : '全部清單（點一項就先拿它）▴';
 };
 
+// 語音念出現在要拿的那一項（換了一項才念）：「白蝦 50/60，4 件，I A 01 1F」；獨有的加「放到 開心麵館」
+let lastSpoken = '';
+function speakNext(n) {
+    const key = n ? (currentWave && currentWave.id) + '|' + n.id + '|' + n.pickQty : '';
+    if (!n || key === lastSpoken) { if (!n) lastSpoken = ''; return; }
+    lastSpoken = key;
+    const spec = String(n.spec || '').split(/[*＊\s]/)[0];
+    const loc = n.practice || n.locationId === window.PRACTICE_LOC ? '' : String(n.locationId || '').replace(/-/g, ' ');
+    const cs = waveCustomerCount(currentWave) >= 2 ? itemCustomers(n) : [];
+    window.speak((n.type === 'return' ? '放回，' : '') + n.productName + (spec ? ' ' + spec : '') + '，' + n.pickQty + '件' + (loc ? '，' + loc : '') +
+        (n.type !== 'return' && cs.length === 1 ? '，放到' + window.shortCustomer(cs[0]) : ''));
+}
+
 // 冷凍庫版：一次只顯示現在要拿的一項（大字），一個大按鈕「拿好了」；不夠就按「不夠」點數字
 function renderNextStop() {
     const box = $('picking-next');
@@ -323,6 +317,7 @@ function renderNextStop() {
     // 有板號可以掃的才顯示掃描框（練習模式沒有板號）
     const n = mine[0];
     show('picking-scan-box', !!(n && !n.practice));
+    speakNext(n);
     if (!n && other) {
         const oh = window.PICK_HOUSES.filter(function(h) { return h.id !== house; }).map(function(h) { return h.name; }).join('、');
         const who = otherPickers(currentWave).filter(function(x) { return x.house && x.house !== house; });
@@ -550,7 +545,8 @@ async function saveShort(n, got) {
     const snap = await db.collection('waves').doc(currentWave.id).get();
     currentWave = Object.assign({ id: snap.id }, snap.data());
     pickingItems = window.buildWavePickingList(currentWave, window.pallets);
-    setResult('picking-scan-result', 'error', '⚠️ ' + n.productName + ' 拿 ' + got + '，不夠 ' + (want - got));
+    setResult('picking-scan-result', 'error', '⚠️ ' + n.productName + ' 拿 ' + got + '，不夠 ' + (want - got), true);
+    window.sfx('short');   // 記到缺貨：咚—咚
     renderPickingList();
 }
 
@@ -569,7 +565,10 @@ async function markPicked(found) {
     }
     found.completed = true;
     learnHome(found);
-    setResult('picking-scan-result', true, (found.type === 'return' ? '↩️ 已放回 ' : '✓ ') + found.productName + ' ' + found.pickQty + ' 件');
+    setResult('picking-scan-result', true, (found.type === 'return' ? '↩️ 已放回 ' : '✓ ') + found.productName + ' ' + found.pickQty + ' 件', true);
+    const allDone = !pickingItems.some(function(i) { return !i.completed && !i.shortage; });
+    window.sfx(allDone ? 'finish' : 'done');   // 一項好了：叮；全部拿完：叮咚咚
+    if (allDone) { lastSpoken = ''; window.speak('全部拿完了'); }
     renderPickingList();
     input.value = '';
     focusIfNoCamera('picking-scan');
@@ -733,7 +732,9 @@ window.markSorted = async function(i) {
     const wave = window._finishedWave, o = wave && sortList(wave)[i];
     if (!o) return;
     wave.sortedOrders = (wave.sortedOrders || []).concat([o.orderNo]);
-    try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) {}   // 按了有感覺（iPhone 不支援震動，會略過）
+    const all = sortedOrders(wave).length >= sortList(wave).length;
+    window.sfx(all ? 'finish' : 'sorted');   // 這家分好了：輕的叮；全部分好：叮咚咚
+    if (all) window.speak('全部分好了');
     window.openSortPanel(i);
     try { await db.collection('waves').doc(wave.id).update({ sortedOrders: FieldValue.arrayUnion(o.orderNo) }); }
     catch (e) { console.warn('記錄分貨失敗', e); }
@@ -786,6 +787,8 @@ window.completePickingWave = async function(labelsFixed) {
         await window.completeWaveTx(currentWave, pickingItems, window.pallets);
         currentWave.status = 'done';
         window._pendingAlloc = null;
+        window.sfx('finish');
+        lastSpoken = '';
         renderFinishPanel(currentWave);
         // 好幾家一起揀的：直接進分貨（不用再按一次「分貨」）
         // 每一家都只有獨有品項（揀的時候已經放好了）就不用分，停在完成畫面
