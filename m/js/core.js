@@ -46,11 +46,11 @@ function toast(msg) {
 
 // ---------- 聲音、語音 ----------
 // 同一個發聲器（iPhone 有數量限制，不能每次新開）；手機要先碰過螢幕才能出聲：第一次點畫面時準備好
-let audioCtx = null, voiceReady = false;
+let sndCtx = null, voiceReady = false;
 function unlockAudio() {
     try {
-        if (!audioCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) audioCtx = new AC(); }
-        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        if (!sndCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) sndCtx = new AC(); }
+        if (sndCtx && sndCtx.state === 'suspended') sndCtx.resume();
         if (!voiceReady && window.speechSynthesis) { voiceReady = true; window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); }   // iPhone：第一次要在點畫面時說話
     } catch (e) {}
 }
@@ -75,19 +75,19 @@ window.sfx = function(name) {
     try { if (navigator.vibrate) navigator.vibrate(VIBRATE[name] || 60); } catch (e) {}   // iPhone 不支援震動，會略過
     if (!isAlarm && !window.soundOn()) return;
     unlockAudio();
-    if (!audioCtx || !SOUNDS[name]) return;
+    if (!sndCtx || !SOUNDS[name]) return;
     try {
-        let t = audioCtx.currentTime + 0.03;
+        let t = sndCtx.currentTime + 0.03;
         SOUNDS[name].forEach(function(n) {
             const f = n[0], d = n[1];
             if (f) {
-                const o = audioCtx.createOscillator(), g = audioCtx.createGain(), v = n[3] || 0.5;
+                const o = sndCtx.createOscillator(), g = sndCtx.createGain(), v = n[3] || 0.5;
                 o.type = n[2] || 'sine'; o.frequency.value = f;
                 g.gain.setValueAtTime(0.0001, t);
                 g.gain.exponentialRampToValueAtTime(v, t + 0.015);
                 g.gain.setValueAtTime(v, t + Math.max(0.02, d - 0.05));
                 g.gain.exponentialRampToValueAtTime(0.0001, t + d);
-                o.connect(g); g.connect(audioCtx.destination);
+                o.connect(g); g.connect(sndCtx.destination);
                 o.start(t); o.stop(t + d + 0.02);
             }
             t += d + 0.03;
