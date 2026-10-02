@@ -81,6 +81,8 @@ export async function openApp(base, email, { mobile = false, fakeVideo = null, h
       const body = execFileSync('curl', ['-sS', '-A', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36', u], { maxBuffer: 1 << 26 });
       return r.fulfill({ body, contentType: u.includes('googleapis') ? 'text/css' : 'font/woff2', headers: { 'access-control-allow-origin': '*' } });
     }
+    // 截圖看版面時可用 QR_JS=qrcode.min.js 的位置，畫出手機版的 QR code
+    if (process.env.QR_JS && u.includes('qrcodejs')) return r.fulfill({ body: fs.readFileSync(process.env.QR_JS), contentType: 'text/javascript' });
     for (const k in LIBS) if (u.includes(k)) return r.fulfill({ body: fs.readFileSync(path.join(NM, LIBS[k])), contentType: 'text/javascript' });
     return r.fulfill({ body: '', contentType: u.endsWith('.css') ? 'text/css' : 'text/javascript' });
   });

@@ -52,8 +52,9 @@ function renderHomeTodos(todos) {
     }).join('');
     if (!open.length) el.innerHTML = '<div class="ds-card ds-allclear" style="grid-column:1/-1"><span class="ds-allclear-icon"><i class="fa-solid fa-check"></i></span>' +
         '<div><div style="color:var(--ds-text);font-weight:600;font-size:16px">今天的待辦都處理完了</div><div style="color:var(--ds-text-3);font-size:14px;margin-top:2px">有新的訂單或入庫單進來，會自動出現在這裡</div></div></div>';
-    if (clearEl) clearEl.innerHTML = clear.map(function(t) {
-        return '<button onclick="' + t.action + '" class="ds-clear" title="' + t.label + '：沒有待辦"><i class="fa-solid fa-check"></i>' + t.label + '</button>';
+    // 這些事目前都沒有要處理（打勾）；有事時會變成上面的大卡片
+    if (clearEl) clearEl.innerHTML = (clear.length ? '<span class="ds-clear-label">目前都沒有要處理：</span>' : '') + clear.map(function(t) {
+        return '<button onclick="' + t.action + '" class="ds-clear" title="' + t.label + '：目前沒有要處理的（點了可以進去看）"><i class="fa-solid fa-check"></i>' + t.label + '</button>';
     }).join('');
     var sum = document.getElementById('home-summary');
     if (sum) {
@@ -79,6 +80,7 @@ window.refreshHome = async function() {
     if (d) d.innerText = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
     var m = document.getElementById('home-mobile-url');
     if (m) m.innerText = location.origin + location.pathname.replace(/[^/]*$/, '') + 'm/';
+    drawMobileQr(location.origin + location.pathname.replace(/[^/]*$/, '') + 'm/');
     renderHomeFlows();
 
     var pallets = window.currentPallets ? window.currentPallets() : [];
@@ -211,6 +213,24 @@ window.markErpFixed = async function(i) {
     window.openErpFixList();
     if (window.refreshHome) window.refreshHome();
 };
+
+// 手機版的 QR code（用到才去載入產生 QR code 的小工具；載不到就只顯示網址）
+function drawMobileQr(url) {
+    var box = document.getElementById('home-mobile-qr');
+    if (!box || box.dataset.url === url) return;
+    var draw = function() {
+        if (typeof window.QRCode !== 'function') return;
+        box.innerHTML = '';
+        try { new window.QRCode(box, { text: url, width: 96, height: 96, correctLevel: window.QRCode.CorrectLevel.M }); box.dataset.url = url; box.classList.add('is-qr'); }
+        catch (e) { console.warn('QR code 產生失敗', e); }
+    };
+    if (typeof window.QRCode === 'function') return draw();
+    if (document.getElementById('qrcode-lib')) return;
+    var sc = document.createElement('script');
+    sc.id = 'qrcode-lib'; sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    sc.onload = draw;
+    document.head.appendChild(sc);
+}
 
 // 切到今日工作時更新數字
 (function() {

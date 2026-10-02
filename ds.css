@@ -465,7 +465,7 @@ header.ds-header #page-title { font-size: 18px; font-weight: 600; color: var(--d
 
 /* ============================================================
    今日工作：一個畫面就看完（不用往下捲）
-   待辦卡片變成一行（名稱、提示在左，數字在右）、常用流程卡片變矮、手機版提示變一行
+   待辦卡片變成一行（名稱、提示在左，數字在右）；常用流程卡片維持原本大小
    ============================================================ */
 #view-home .ds-page { padding-top: 18px; padding-bottom: 20px; }
 #view-home .ds-page-head { align-items: center; margin-bottom: 14px; }
@@ -482,13 +482,11 @@ header.ds-header #page-title { font-size: 18px; font-weight: 600; color: var(--d
 #view-home .ds-todo-go { display: none; }
 #view-home .ds-todo:hover { transform: none; }
 #view-home .ds-clear-row { margin-top: 10px; gap: 6px; }
-#view-home .ds-flow-grid { gap: 10px; }
-#view-home .ds-flow { padding: 14px 18px; }
-#view-home .ds-flow-title { font-size: 17px; margin-bottom: 10px; }
-#view-home .ds-flow-title .ds-todo-icon { width: 30px; height: 30px; font-size: 13px; }
-#view-home .ds-flow ol { gap: 5px; }
-#view-home .ds-flow li { font-size: 13px; line-height: 1.45; padding-left: 28px; }
-#view-home .ds-flow li::before { width: 20px; height: 20px; font-size: 11px; }
 #view-home .ds-tip { margin-top: 14px !important; padding: 10px 16px; }
-#view-home .ds-tip .ds-todo-icon { width: 30px; height: 30px; font-size: 14px; }
-#view-home .ds-tip div[style*="margin-top:4px"] { margin-top: 0 !important; font-size: 13px !important; }
+/* 手機版 QR code（白底，手機才掃得到） */
+.home-qr { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; background: var(--ds-primary-soft); color: var(--ds-primary); font-size: 20px; flex-shrink: 0; }
+.home-qr.is-qr { width: 108px; height: 108px; background: #fff; padding: 6px; border-radius: 10px; }
+.home-qr.is-qr img, .home-qr.is-qr canvas { width: 96px !important; height: 96px !important; display: block; }
+.ds-clear-row { align-items: center; }
+.ds-clear-label { font-size: 13px; color: var(--ds-text-3); margin-right: 2px; }
+#view-home .ds-clear { height: 28px; padding: 0 10px; font-size: 12px; opacity: .8; }
