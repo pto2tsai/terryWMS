@@ -69,6 +69,7 @@ r = await pushReport('每日客戶銷貨明細表_1100.xlsx', file([['A-1', '白
 await waitInbox(D.page, r.id); await mp.waitForTimeout(1500);
 const n1 = await mp.innerText('#picking-next');
 H.check('鼎新減量：手機出現「✓ 放回 N 件」按鈕', /放回\s*\d+\s*件/.test(n1) && (await mp.$$('#picking-next .pk-take.ret')).length === 1, n1);
+if (await mp.$('#pk-alert-ok')) { await mp.click('#pk-alert-ok'); await mp.waitForTimeout(300); }   // 鼎新改單的大框：按「知道了」
 for (let i = 0; i < 3; i++) { const b = await mp.$('#picking-next button[onclick^="confirmCurrentPick"]'); if (!b) break; await b.click(); await mp.waitForTimeout(800); }
 H.check('全部按完：顯示「全部拿完」', (await mp.innerText('#picking-next')).includes('全部拿完'));
 
