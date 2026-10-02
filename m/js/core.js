@@ -251,6 +251,12 @@ function initData() {
     // 分貨標籤誰來印（手機／辦公室自動印）
     unsubs.push(window.watchLabelPrintMode());
     unsubs.push(window.watchCustomerShort());
+    // 業務要改鼎新（缺貨少出、要開銷退）：首頁卡片和清單即時更新
+    unsubs.push(window.watchErpFix(db, function(list) {
+        window.erpFixList = list;
+        renderHomeTasks();
+        if (window.currentPage === 'erpfix' && window.renderErpFix) window.renderErpFix();
+    }));
     // 商品在哪一間倉庫（揀貨時自動記起來）
     unsubs.push(window.watchProductHomes(function() { if (window.onProductHomesChange) window.onProductHomesChange(); }));
 }
@@ -427,7 +433,8 @@ function renderHomeTasks() {
     const wavesOpen = window.waves.filter(window.isWaveOpen);
     const dispatchOpen = window.dispatchOrders.filter(window.isDispatchOpen);
 
-    if (inboundOpen.length === 0 && wavesOpen.length === 0 && dispatchOpen.length === 0) {
+    const erpFix = window.erpFixList || [];
+    if (inboundOpen.length === 0 && wavesOpen.length === 0 && dispatchOpen.length === 0 && erpFix.length === 0) {
         container.style.display = 'none';
         return;
     }
@@ -460,6 +467,12 @@ function renderHomeTasks() {
         cards.push({ page: 'dispatch', color: '#f59e0b', icon: 'fa-arrows-rotate',
             label: '調度工單', count: dispatchOpen.length, unit: '筆',
             preview: preview + extra });
+    }
+
+    if (erpFix.length > 0) {
+        cards.push({ page: 'erpfix', color: '#ef4444', icon: 'fa-arrow-trend-down',
+            label: '業務要改鼎新', count: erpFix.length, unit: '張',
+            preview: erpFix.slice(0, 3).map(function(o) { return o.customer || o.orderNo; }).join(' · ') + '：傳 LINE 給業務' });
     }
 
     container.style.display = '';

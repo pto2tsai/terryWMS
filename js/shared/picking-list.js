@@ -417,7 +417,7 @@ window.waveOrderOutcomes = function(wave, pickingList) {
     (pickingList || []).forEach(i => {
         if (!i.completed || i.shortage) return;
         const k = i.key || keyOf(i.productName, i.spec);
-        pickedByKey[k] = (pickedByKey[k] || 0) + (parseFloat(i.pickQty) || 0) * (i.type === 'return' ? -1 : 1);
+        pickedByKey[k] = Math.round(((pickedByKey[k] || 0) + (parseFloat(i.pickQty) || 0) * (i.type === 'return' ? -1 : 1)) * 1000) / 1000;
     });
     const shippedTo = {};  // 訂單 ID 或單號 → { 品項 key: 件數 }
     const override = wave.allocOverride || {};   // 不夠時現場指定給誰：{ 品項 key: { 訂單 ID 或單號: 件數 } }
@@ -429,7 +429,7 @@ window.waveOrderOutcomes = function(wave, pickingList) {
             (sm.orders || []).forEach(o => {
                 const ok = o.orderId || o.orderNo;
                 const q = Math.max(0, Math.min(parseFloat(o.quantity) || 0, parseFloat(ov[ok]) || 0, avail));
-                avail -= q;
+                avail = Math.round((avail - q) * 1000) / 1000;
                 shippedTo[ok] = shippedTo[ok] || {};
                 shippedTo[ok][k] = (shippedTo[ok][k] || 0) + q;
             });
@@ -438,7 +438,7 @@ window.waveOrderOutcomes = function(wave, pickingList) {
         (sm.orders || []).forEach(o => {
             const want = parseFloat(o.quantity) || 0;
             const q = excluded(sm.productName) ? want : Math.max(0, Math.min(avail, want));
-            if (!excluded(sm.productName)) avail -= q;
+            if (!excluded(sm.productName)) avail = Math.round((avail - q) * 1000) / 1000;
             const ok = o.orderId || o.orderNo;
             shippedTo[ok] = shippedTo[ok] || {};
             shippedTo[ok][k] = (shippedTo[ok][k] || 0) + q;
@@ -454,10 +454,11 @@ window.waveOrderOutcomes = function(wave, pickingList) {
         (entry.items || []).forEach(it => {
             const k = keyOf(it.productName, it.spec);
             const need = parseFloat(it.packageQty) || 1;
-            const g = Math.min(need, got[k] || 0);
-            got[k] = (got[k] || 0) - g;
+            // 四捨五入到小數三位：半件（0.5）加加減減會變成 1.9999999，被當成少了一點點
+            const g = Math.round(Math.min(need, got[k] || 0) * 1000) / 1000;
+            got[k] = Math.round(((got[k] || 0) - g) * 1000) / 1000;
             if (g > 0) { any = true; sent.push({ productName: it.productName || '', spec: it.spec || '', qty: g }); }
-            if (need - g > 0) {
+            if (need - g > 0.0005) {
                 const b = Object.assign({}, it, { packageQty: need - g });
                 if (parseFloat(it.quantity) > 0) b.quantity = Math.round(parseFloat(it.quantity) * (need - g) / need * 100) / 100;
                 back.push(JSON.parse(JSON.stringify(b)));
@@ -797,7 +798,7 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
                     // 缺貨：這次不出、之後也不補（使用者決定），訂單結案；記下少出多少，請業務在鼎新改銷貨單數量
                     const prev = Array.isArray(cur.shortShipped) ? cur.shortShipped : [];
                     data = { status: 'shipped', shippedAt: completedAt, waveNo: wave.waveNo, backorderItems: FV.delete(),
-                        shortShipped: prev.concat(r.short.map(x => ({ productName: x.productName, spec: x.spec, want: x.want, got: x.got, short: x.want - x.got, waveNo: wave.waveNo }))),
+                        shortShipped: prev.concat(r.short.map(x => ({ productName: x.productName, spec: x.spec, want: x.want, got: x.got, short: Math.round((x.want - x.got) * 1000) / 1000, waveNo: wave.waveNo }))),
                         erpFixNeeded: true };
                 }
                 wave.orderResults[oid] = { status: data.status, backorderItems: null, short: r.short };
