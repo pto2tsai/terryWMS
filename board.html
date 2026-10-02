@@ -203,7 +203,17 @@
     setInterval(function() { Object.keys(lastDraw).forEach(function(k) { lastDraw[k](); }); }, 60000);
 
     // 鼎新匯入的狀況：匯入失敗／要處理、訂單檔等太久沒人處理、訂單沒有物流商
-    var erpDocs = [], noLogistics = 0, erpSched = null, erpFix = [];
+    var erpDocs = [], noLogistics = 0, erpSched = null, erpFix = [], erpRet = [], waveRets = [];
+    // 鼎新改單後，已經揀了但現在用不到、要放回架上的（跟電腦版 waveReturnsPending 同樣算法）
+    function waveReturns(w) {
+        var log = w.pickLog;
+        if (!Array.isArray(log) || !(w.completedItems || []).every(function(id) { return log.some(function(e) { return e.id === id; }); })) return [];
+        var net = {}, names = {}, need = {};
+        log.forEach(function(e) { net[e.key] = (net[e.key] || 0) + (e.type === 'return' ? -e.qty : e.qty); names[e.key] = e; });
+        (w.summary || []).forEach(function(sm) { var k = sm.productName + '|||' + (sm.spec || ''); need[k] = (need[k] || 0) + (parseFloat(sm.totalQty) || 0); });
+        return Object.keys(net).filter(function(k) { return net[k] - (need[k] || 0) > 0.0001; })
+            .map(function(k) { return names[k].productName + ' ' + (Math.round((net[k] - (need[k] || 0)) * 1000) / 1000) + ' 件'; });
+    }
     function drawErpAlert() {
         var msgs = [];
         var bad = erpDocs.filter(function(r) { return r.status === 'attention' || r.status === 'error'; }).length;
@@ -212,11 +222,16 @@
         if (missed) msgs.push('📭 ' + missed + ' 的鼎新訂單檔還沒收到：請檢查鼎新輸出、雲端硬碟同步');
         if (waiting) msgs.push('⏳ 鼎新訂單檔等了超過 15 分鐘還沒匯入：請打開電腦版 WMS');
         if (bad) msgs.push('⚠️ 鼎新匯入有 ' + bad + ' 份要處理：請到電腦版「ERP 報表」');
+        waveRets.forEach(function(x) { msgs.push('↩️ ' + x.waveNo + ' 鼎新改單，要放回：' + x.rets.join('、') + '（揀貨員照手機做）'); });
         if (noLogistics) msgs.push('🚚 ' + noLogistics + ' 張訂單沒有物流商，還沒排波次');
         // 缺貨少出的銷貨單：這次不出、之後不補，要請業務在鼎新改數量（鼎新改好、匯入後自動消失）
         if (erpFix.length) msgs.push('🧾 缺貨少出 ' + erpFix.length + ' 張，請業務在鼎新改銷貨單：' + erpFix.slice(0, 3).map(function(o) {
             return o.customer + ' ' + (o.shortShipped || []).map(function(x) { return x.productName + ' ' + x.want + '→' + x.got; }).join('、');
         }).join('；') + (erpFix.length > 3 ? ' 等' : ''));
+        // 已經出貨，鼎新才減量或刪單：請業務開銷退（業務開好後在電腦按「已經改好了」）
+        if (erpRet.length) msgs.push('↩️ 已出貨的單鼎新減量或取消 ' + erpRet.length + ' 張，請業務開銷退：' + erpRet.slice(0, 3).map(function(o) {
+            return o.customer + ' ' + (o.erpReturnLines || []).join('、');
+        }).join('；') + (erpRet.length > 3 ? ' 等' : ''));
         $('erp-alert').innerHTML = msgs.map(esc).join('<br>');
         $('erp-alert').classList.toggle('show', msgs.length > 0);
     }
@@ -227,6 +242,7 @@
         listen(db.collection('erpInbox').where('month', '==', ym).where('sensitive', '==', false), function(rows) { erpDocs = rows; drawErpAlert(); });
         unsubs.push(db.collection('settings').doc('erpImport').onSnapshot(function(d) { erpSched = d.exists ? d.data() : null; drawErpAlert(); }, function() {}));
         listen(db.collection('salesOrders').where('erpFixNeeded', '==', true), function(rows) { erpFix = rows; drawErpAlert(); });
+        listen(db.collection('salesOrders').where('erpReturnNeeded', '==', true), function(rows) { erpRet = rows; drawErpAlert(); });
         listen(db.collection('salesOrders').where('logistics', '==', '未指定'), function(rows) {
             noLogistics = rows.filter(function(o) { return ['pending', 'confirmed', 'partial'].indexOf(o.status) >= 0 && !o.waveNo; }).length;
             drawErpAlert();
@@ -243,6 +259,8 @@
         // 揀貨波次：待揀、揀貨中、待分貨
         listen(db.collection('waves').where('status', 'in', ['pending', 'picking', 'sorting']), function(rows) {
             // 揀貨中的排最前面，其次待揀貨、待分貨；同狀態先來先做（等最久的在上面）
+            waveRets = rows.map(function(w) { return { waveNo: w.waveNo, rets: waveReturns(w) }; }).filter(function(x) { return x.rets.length; });
+            drawErpAlert();
             var rank = { picking: 0, pending: 1, sorting: 2 };
             rows.sort(function(a, b) { return (rank[a.status] - rank[b.status]) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.waveNo || '').localeCompare(String(b.waveNo || '')); });
             render('l-waves', 'c-waves', rows, function(w) {
@@ -252,6 +270,7 @@
                 var a = ageClass('waves', w);
                 return '<div class="card' + a.cls + '" style="--c:#ea580c"><div class="t"><span class="name">' + esc(w.waveNo) + '　' + esc(w.logistics || '') + '</span><span class="qty">' + esc(w.totalQty || 0) + ' 件</span></div>' +
                     '<div class="sub"><span>' + st + '　' + (w.orderCount || (w.orders || []).length) + ' 單　' + a.age + '</span><span>' + done + '/' + all + ' 項</span></div>' +
+                    (waveReturns(w).length ? '<div class="sub" style="color:#f87171;font-weight:700">↩️ 要放回：' + esc(waveReturns(w).join('、')) + '</div>' : '') +
                     '<div class="bar"><div style="width:' + pct + '%"></div></div></div>';
             }, '目前沒有要揀的波次', 'waves');
         });

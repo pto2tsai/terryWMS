@@ -805,6 +805,12 @@ window.saveErpOrders = async function(orders) {
                 var upd = { items: order.items, modifiedAt: new Date().toISOString(), hasChanges: true };
                 upd.backorderItems = rc.open.length ? rc.open : firebase.firestore.FieldValue.delete();
                 if (rc.erpFixed) { upd.erpFixNeeded = false; existing.erpFixNeeded = false; }
+                // 已經多出貨了（鼎新減量）：放進「業務要改鼎新」清單，請業務開銷退
+                if (rc.over.length) {
+                    upd.erpReturnNeeded = true; upd.erpReturnAt = new Date().toISOString();
+                    upd.erpReturnLines = rc.over.map(function(x) { return x + '（已經出貨，鼎新改少了）→ 請開銷退'; });
+                    existing.erpReturnNeeded = true; existing.erpReturnLines = upd.erpReturnLines;
+                } else if (existing.erpReturnNeeded && !existing.erpGone) { upd.erpReturnNeeded = false; existing.erpReturnNeeded = false; }
                 if (!inWave) upd.status = rc.open.length ? 'partial' : 'shipped';
                 // 變成補出貨：離開原本（已完成）的波次，才能排進新的波次
                 if (!inWave && rc.open.length && existing.waveNo) { upd.waveNo = null; upd.lastWaveNo = existing.waveNo; }
@@ -885,19 +891,24 @@ window.findMissingErpOrders = function(parsed) {
     parsed.orders.forEach(function(o) { fileNos[o.orderNo] = true; if (o.orderDate) fileDates[String(o.orderDate)] = true; });
     parsed.storeSkipped.forEach(function(no) { fileNos[no] = true; });
     return window._orderData.orders.filter(function(o) {
-        return o.id && o.importedAt && fileDates[String(o.orderDate || '')] && !fileNos[o.orderNo] &&
-            ['pending', 'confirmed', 'inWave'].indexOf(o.status) >= 0;
+        return o.id && o.importedAt && fileDates[String(o.orderDate || '')] && !fileNos[o.orderNo] && !o.erpGone &&
+            ['pending', 'confirmed', 'inWave', 'shipped', 'partial'].indexOf(o.status) >= 0;
     });
 };
+window.isShippedOrder = function(o) { return o.status === 'shipped' || o.status === 'partial' || Array.isArray(o.backorderItems); };
 
 // 人工匯入：問要不要把檔案裡不見的單也取消（不確定就按取消，單會留著）
 async function askCancelMissing(missing) {
     if (!missing.length) return;
-    var list = missing.map(function(o) { return '・' + o.orderNo + '　' + (o.customer || '') + (o.waveNo ? '（已排波次 ' + o.waveNo + '）' : ''); }).join('\n');
-    if (!confirm('⚠️ 這份檔案裡沒有下面 ' + missing.length + ' 張單（之前匯入過、還沒出貨），可能已在鼎新取消：\n\n' + list +
-        '\n\n按「確定」：在 WMS 也取消，還沒開始揀的波次會把它們移出。\n按「取消」：先不動（例如這份檔案只匯出部分客戶）。')) return;
+    var line = function(o) { return '・' + o.orderNo + '　' + (o.customer || '') + (o.waveNo && !window.isShippedOrder(o) ? '（已排波次 ' + o.waveNo + '）' : ''); };
+    var open = missing.filter(function(o) { return !window.isShippedOrder(o); }), shipped = missing.filter(window.isShippedOrder);
+    if (!confirm('⚠️ 這份檔案裡沒有下面 ' + missing.length + ' 張單（之前匯入過），可能已在鼎新取消：\n' +
+        (open.length ? '\n還沒出貨（WMS 也取消，還沒開始揀的波次會移出；揀到一半的，揀貨員手機會響、列「放回」）：\n' + open.map(line).join('\n') + '\n' : '') +
+        (shipped.length ? '\n已經出貨（放進「業務要改鼎新」清單，請業務開銷退）：\n' + shipped.map(line).join('\n') + '\n' : '') +
+        '\n按「確定」照上面處理。\n按「取消」：先不動（例如這份檔案只匯出部分客戶）。')) return;
     var out = await window.cancelSalesOrders(missing.map(function(o) { return o.id; }), '鼎新已取消（手動匯入發現）');
-    alert('✅ 已取消 ' + out.cancelled.length + ' 張' + (out.skipped.length ? '\n\n⚠️ 沒有取消（請到現場處理）：\n' + out.skipped.join('\n') : ''));
+    alert('✅ 已取消 ' + out.cancelled.length + ' 張' + (out.flagged.length ? '\n\n↩️ 已經出貨的 ' + out.flagged.length + ' 張放進「業務要改鼎新」清單：' + out.flagged.join('、') : '') +
+        (out.skipped.length ? '\n\n⚠️ 沒有取消（請到現場處理）：\n' + out.skipped.join('\n') : ''));
 }
 
 // 人工匯入（按按鈕選檔、或在 ERP 報表頁按「手動匯入」）：會跳視窗問件數、物流商、要不要建波次
@@ -1296,7 +1307,7 @@ window.addOrdersToWaveTx = async function(wave, orders) {
 // 取消訂單（鼎新已經取消的單）：還沒出貨才能取消；在還沒開始揀的波次裡會一起移出（波次空了就刪掉）；
 // 波次已經開始揀或分貨：手機會列「放回」；舊的沒有揀貨記錄的波次、或波次只剩這張單，就不取消，請到現場處理。回傳 { cancelled: [單號], skipped: ['單號：原因'] }
 window.cancelSalesOrders = async function(orderIds, reason) {
-    var db = window.db, out = { cancelled: [], skipped: [] };
+    var db = window.db, out = { cancelled: [], skipped: [], flagged: [] };
     var who = (window.currentUser && (window.currentUser.name || window.currentUser.email)) || '';
     for (var i = 0; i < orderIds.length; i++) {
         var oref = db.collection('salesOrders').doc(orderIds[i]);
@@ -1306,7 +1317,16 @@ window.cancelSalesOrders = async function(orderIds, reason) {
                 if (!os.exists) throw new Error('找不到這張單');
                 var o = os.data();
                 if (o.status === 'cancelled') throw new Error('已經取消過');
-                if (o.status === 'shipped' || o.status === 'partial' || Array.isArray(o.backorderItems)) throw new Error('已經出貨，請在鼎新處理');
+                if (o.erpGone) throw new Error('已經放進「業務要改鼎新」清單');
+                // 已經出貨（全部或部分）：貨已經送出去，不能取消；放進「業務要改鼎新」清單請業務開銷退，還沒補的欠貨不再補
+                if (window.isShippedOrder(o)) {
+                    if (o.status === 'inWave') throw new Error('補出貨在波次 ' + (o.waveNo || '') + ' 裡，請到現場處理');
+                    var gone = { erpReturnNeeded: true, erpGone: true, erpReturnAt: new Date().toISOString(),
+                        erpReturnLines: ['整張單在鼎新不見了，但貨已經出了 → 請跟客戶確認，開銷退（或補回銷貨單）'] };
+                    if (Array.isArray(o.backorderItems)) { gone.backorderItems = firebase.firestore.FieldValue.delete(); gone.status = 'shipped'; }
+                    tx.update(oref, gone);
+                    return { no: o.orderNo, flagged: true };
+                }
                 var wref = null, w = null;
                 if (o.waveNo) {
                     wref = db.collection('waves').doc(o.waveNo);
@@ -1333,10 +1353,15 @@ window.cancelSalesOrders = async function(orderIds, reason) {
                     }
                 }
                 tx.update(oref, { status: 'cancelled', waveNo: '', cancelReason: reason || '', cancelledBy: who, cancelledAt: new Date().toISOString() });
-                return o.orderNo;
+                return { no: o.orderNo };
             });
-            out.cancelled.push(no);
             var local = window._orderData.orders.find(function(x) { return x.id === oref.id; });
+            if (no.flagged) {
+                out.flagged.push(no.no);
+                if (local) { local.erpGone = true; local.erpReturnNeeded = true; if (Array.isArray(local.backorderItems)) { delete local.backorderItems; local.status = 'shipped'; } }
+                continue;
+            }
+            out.cancelled.push(no.no);
             if (local) { local.status = 'cancelled'; local.waveNo = ''; }
         } catch (e) {
             var lo = window._orderData.orders.find(function(x) { return x.id === oref.id; });

@@ -9,7 +9,7 @@ await H.resetData(async d => { await baseSeed(d);
 const xl = (name, aoa) => { const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'S'); const f = path.join(os.tmpdir(), name); fs.writeFileSync(f, XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })); return f; };
 const HEAD = ['銷貨日期', '銷貨單號', '客戶全名', '品名', '規格', '銷貨數量', '單位', '備註'];
 const file = (name, lines) => xl(name, [HEAD].concat(lines.map(([d, no, cust, lg, q]) => [d, no, cust, '白蝦', '50/60', q || 3, '件', lg])));
-const { page, log } = await H.openApp(base, USERS.op);
+const { page, log, ctx } = await H.openApp(base, USERS.op);
 await H.nav(page, 'wave-picking'); await page.waitForTimeout(500);
 const dlg = n => log.dialogs.slice(n);
 
@@ -65,7 +65,33 @@ await mp.waitForTimeout(2000);
 const items = await mp.evaluate(() => pickingItems.filter(i => !i.completed).map(i => [i.type || 'pick', i.productName, i.pickQty, i.locationId]));
 const top = await mp.textContent('#picking-next');
 H.check('手機自動列「放回白蝦 4 件 → I-A-01-1F」', JSON.stringify(items) === JSON.stringify([['return', '白蝦', 4, 'I-A-01-1F']]), JSON.stringify(items));
+const al = await mp.evaluate(() => { const d = document.getElementById('pk-change-alert'); return d ? d.textContent : ''; });
+H.check('手機響、跳大框：D-2 黃建宏 整張取消，要放回白蝦 4 件', al.includes('黃建宏') && al.includes('整張取消') && al.includes('4 件'), al.slice(0, 200));
+await mp.click('#pk-alert-ok'); await mp.waitForTimeout(300);
+const B = await ctx.newPage();
+await B.goto(base + '/board.html?night=off'); await B.waitForTimeout(3500);
+const bt = await B.textContent('body');
+H.check('現場看板紅字：' + WD.waveNo + ' 鼎新改單，要放回白蝦 4 件', bt.includes(WD.waveNo + ' 鼎新改單，要放回：白蝦 4 件') && bt.includes('↩️ 要放回：白蝦 4 件'), bt.slice(0, 300));
+await B.close();
 H.check('手機上方提醒：黃建宏整張取消', top.includes('D-2') && top.includes('黃建宏') && top.includes('整張取消'), top.slice(0, 200));
+
+// ---------- 已經出貨的單，鼎新整張刪掉：放進「業務要改鼎新」清單 ----------
+await H.admin(async d => { const { updateDoc } = await import('firebase/firestore'); await updateDoc(H.doc(d, 'salesOrders', so['C-1']._id), { status: 'shipped' }); });
+await page.evaluate(() => loadOrdersFromFirebase()); await page.waitForTimeout(500);
+n0 = log.dialogs.length;
+await page.setInputFiles('#order-excel-import', file('m7.xlsx', [['2026/10/01', 'C-2', '好市多', '黑貓']]));
+await page.waitForTimeout(3000);
+const ask2 = dlg(n0).find(d => d.type === 'confirm' && d.msg.includes('可能已在鼎新取消'));
+H.check('已出貨的 C-1 不見了：問的時候分開寫「已經出貨（請業務開銷退）」', ask2 && ask2.msg.includes('已經出貨') && ask2.msg.includes('C-1'), JSON.stringify(dlg(n0).map(d => d.msg.slice(0, 200))));
+so = Object.fromEntries((await H.all('salesOrders')).map(o => [o.orderNo, o]));
+H.check('C-1 沒被取消（貨已經出了），放進「業務要改鼎新」清單', so['C-1'].status === 'shipped' && so['C-1'].erpReturnNeeded === true && so['C-1'].erpGone === true, JSON.stringify(so['C-1']));
+await H.nav(page, 'home'); await page.waitForTimeout(1500);
+const home = await page.textContent('#home-todos');
+H.check('首頁待辦「業務要改鼎新」寫 C-1 要開銷退', home.includes('業務要改鼎新') && home.includes('C-1') && home.includes('要開銷退'), home.slice(0, 400));
+n0 = log.dialogs.length;
+await page.setInputFiles('#order-excel-import', file('m8.xlsx', [['2026/10/01', 'C-2', '好市多', '黑貓']]));
+await page.waitForTimeout(2500);
+H.check('再上傳同一份：已經放進清單的不會再問', !dlg(n0).some(d => d.msg.includes('可能已在鼎新取消')), JSON.stringify(dlg(n0).map(d => d.msg.slice(0, 80))));
 
 H.check('沒有頁面錯誤', log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(log.errors.concat(M.log.errors)));
 await H.close(); process.exit(0);
