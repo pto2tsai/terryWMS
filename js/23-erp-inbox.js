@@ -48,18 +48,12 @@ window.autoImportErpOrderRows = async function(rows) {
     await loadOrdersFromFirebase();
     var parsed = window.parseErpOrderRows(rows);
     if (parsed.error) throw new Error(parsed.error);
+    window.fillPkgFromExisting(parsed);   // 之前填過件數、數量沒變的沿用
     // 件數換算不出來的單先不匯入（沒有人可以回答），留給「手動匯入」
     var bad = [];
     parsed.needPkg.forEach(function(n) { if (bad.indexOf(n.order) < 0) bad.push(n.order); });
     var orders = parsed.orders.filter(function(o) { return bad.indexOf(o) < 0; });
-    // 鼎新已經取消的單：檔案涵蓋的日期裡，之前匯入過、現在檔案裡不見了、還沒出貨的單
-    var fileNos = {}, fileDates = {};
-    parsed.orders.forEach(function(o) { fileNos[o.orderNo] = true; if (o.orderDate) fileDates[String(o.orderDate)] = true; });
-    parsed.storeSkipped.forEach(function(no) { fileNos[no] = true; });
-    var missing = window._orderData.orders.filter(function(o) {
-        return o.id && o.importedAt && fileDates[String(o.orderDate || '')] && !fileNos[o.orderNo] &&
-            ['pending', 'confirmed', 'inWave'].indexOf(o.status) >= 0;
-    });
+    var missing = window.findMissingErpOrders(parsed);   // 鼎新已經取消的單
     var r = await window.saveErpOrders(orders);
     var w = await autoCreateWavesByLogistics({ skipConfirm: true, silent: true });
     renderOrderList();
@@ -87,14 +81,15 @@ window.autoImportErpOrderRows = async function(rows) {
     if (updated.length) notes.push('鼎新改單，波次已自動更新：' + updated.join('；'));
     if (adjusted.length) notes.push('鼎新改單，揀貨中的清單已自動調整：' + adjusted.join('；'));
     if (started.length) issues.push('鼎新改了已經開始揀貨的單（舊波次，沒辦法自動調整），請到現場處理：' + started.join('；'));
-    if (missing.length) issues.push(ERP_MISSING_PREFIX + '（' + missing.length + ' 張）：' + missing.map(function(o) { return o.orderNo; }).join('、') + '。確定鼎新已取消，請按「在 WMS 也取消」');
+    if (missing.length) issues.push(ERP_MISSING_PREFIX + '（' + missing.length + ' 張）：' + missing.map(function(o) { return o.orderNo + (window.isShippedOrder(o) ? '（已出貨）' : ''); }).join('、') +
+        '。確定鼎新已取消，請按「在 WMS 也取消」（已出貨的會放進「業務要改鼎新」清單請業務開銷退）');
 
     var result = '新增 ' + r.savedCount + ' 張訂單' + (parsed.storeSkipped.length ? '（門市 ' + parsed.storeSkipped.length + ' 張跳過）' : '') + (r.modifiedCount ? '、異動 ' + r.modifiedCount + ' 張' : '') + (r.skipCount ? '、' + r.skipCount + ' 張沒變' : '') +
         '；建立 ' + w.created.length + ' 個波次' + (w.created.length ? '（' + w.created.map(function(x) { return x.logistics + ' ' + x.orderCount + ' 單'; }).join('、') + '）' : '') +
         (notes.length ? '。' + notes.join('。') : '');
     return { result: result, issues: issues, missingOrders: missing.map(function(o) { return { id: o.id, orderNo: o.orderNo }; }) };
 };
-var ERP_MISSING_PREFIX = '鼎新的最新檔案裡沒有這些單（可能已在鼎新取消），還沒出貨';
+var ERP_MISSING_PREFIX = '鼎新的最新檔案裡沒有這些單（可能已在鼎新取消）';
 
 // ---------- 接手處理：一次處理一份，多台電腦同時開著也只會有一台處理 ----------
 var erpBusy = false, erpAgain = false;
@@ -287,16 +282,17 @@ window.cancelMissingErpOrders = async function(id) {
     var r = erpList.find(function(x) { return x.id === id; });
     if (!r || !(r.missingOrders || []).length) return;
     if (!confirm('確定這些單在鼎新已經取消了嗎？\n\n' + r.missingOrders.map(function(o) { return o.orderNo; }).join('、') +
-        '\n\nWMS 也會取消；還沒開始揀的波次會把它們移出。')) return;
+        '\n\nWMS 也會取消；還沒開始揀的波次會把它們移出；已出貨的放進「業務要改鼎新」清單。')) return;
     await loadOrdersFromFirebase();
     var out = await window.cancelSalesOrders(r.missingOrders.map(function(o) { return o.id; }), '鼎新已取消（自動匯入發現）');
     var issues = (r.issues || []).filter(function(x) { return x.indexOf(ERP_MISSING_PREFIX) !== 0; });
     if (out.skipped.length) issues.push('這些單沒有取消：' + out.skipped.join('；'));
     await window.db.collection('erpInbox').doc(id).update({
         missingOrders: [], issues: issues, status: issues.length ? 'attention' : 'done',
-        result: (r.result || '') + '；已取消 ' + out.cancelled.length + ' 張（鼎新已取消）'
+        result: (r.result || '') + '；已取消 ' + out.cancelled.length + ' 張（鼎新已取消）' + (out.flagged.length ? '、已出貨 ' + out.flagged.length + ' 張請業務開銷退' : '')
     });
-    alert('✅ 已取消 ' + out.cancelled.length + ' 張' + (out.skipped.length ? '\n\n⚠️ 沒有取消：\n' + out.skipped.join('\n') : ''));
+    alert('✅ 已取消 ' + out.cancelled.length + ' 張' + (out.flagged.length ? '\n\n↩️ 已經出貨的 ' + out.flagged.length + ' 張放進「業務要改鼎新」清單：' + out.flagged.join('、') : '') +
+        (out.skipped.length ? '\n\n⚠️ 沒有取消：\n' + out.skipped.join('\n') : ''));
     if (window.refreshWaveList) refreshWaveList();
     await window.loadErpInbox();
 };

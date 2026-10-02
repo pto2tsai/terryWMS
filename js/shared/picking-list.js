@@ -198,6 +198,16 @@ window.waveHasPickLog = function(wave) {
     return (wave.completedItems || []).every(id => log.some(e => e.id === id));
 };
 
+// 鼎新改單後，已經揀了但現在用不到、要放回架上的：[{ productName, spec, qty }]（看板、電腦清單用）
+window.waveReturnsPending = function(wave) {
+    if (!wave || wave.status === 'done' || !Array.isArray(wave.pickLog) || !window.waveHasPickLog(wave)) return [];
+    const net = {}, names = {}, need = {};
+    wave.pickLog.forEach(e => { net[e.key] = (net[e.key] || 0) + (e.type === 'return' ? -e.qty : e.qty); names[e.key] = e; });
+    (wave.summary || []).forEach(sm => { const k = sm.productName + '|||' + (sm.spec || ''); need[k] = (need[k] || 0) + (parseFloat(sm.totalQty) || 0); });
+    return Object.keys(net).filter(k => net[k] - (need[k] || 0) > 0.0001)
+        .map(k => ({ productName: names[k].productName, spec: names[k].spec || '', qty: Math.round((net[k] - (need[k] || 0)) * 1000) / 1000 }));
+};
+
 window.buildWavePickingList = function(wave, pallets, consignments) {
     const pickingList = [];
     const useLog = window.waveHasPickLog(wave);

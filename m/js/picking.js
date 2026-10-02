@@ -160,6 +160,7 @@ window.loadPickingWave = async function() {
     renderPickingList();
     show('picking-scan-area', true);
     show('picking-actions', false);   // 「完成出貨」在全部拿完時出現在大卡片上
+    checkChangeAlert();
 };
 
 // 揀完以後（分缺貨、完成、分貨）：下面的全部清單和最後一次揀的結果收起來，畫面只剩現在要做的事
@@ -187,7 +188,67 @@ window.dataHooks.waves.push(function() {
     // 重算整份清單（鼎新改單時數量會跟著變；已經揀的照記錄，不會被改）
     pickingItems = window.buildWavePickingList(currentWave, window.pallets);
     renderPickingList();
+    checkChangeAlert();
 });
+
+// ---------- 鼎新改單提醒：手機響兩聲、震動、跳大框，按「知道了」才關 ----------
+// 看過的提醒數記在這支手機（每個波次各記各的）；新來的才會再響
+let audioCtx = null;
+function unlockAudio() {   // 手機瀏覽器要先碰過螢幕才能發聲：第一次點畫面時先準備好
+    try {
+        if (!audioCtx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) audioCtx = new AC(); }
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) {}
+}
+document.addEventListener('touchstart', unlockAudio, { passive: true });
+document.addEventListener('click', unlockAudio);
+function alarmBeep() {
+    try { if (navigator.vibrate) navigator.vibrate([400, 150, 400]); } catch (e) {}   // iPhone 不支援震動，會略過
+    unlockAudio();
+    if (!audioCtx) return;
+    try {
+        const t0 = audioCtx.currentTime + 0.05;
+        [0, 0.55].forEach(function(dt) {   // 響兩次、大聲
+            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.type = 'square'; o.frequency.value = 1000;
+            g.gain.setValueAtTime(0.0001, t0 + dt);
+            g.gain.exponentialRampToValueAtTime(1, t0 + dt + 0.02);
+            g.gain.setValueAtTime(1, t0 + dt + 0.38);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + 0.42);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(t0 + dt); o.stop(t0 + dt + 0.45);
+        });
+    } catch (e) {}
+}
+function seenNotes(waveId) { try { return parseInt(localStorage.getItem('pk-seen-notes-' + waveId), 10) || 0; } catch (e) { return 0; } }
+function checkChangeAlert() {
+    if (!currentWave || currentWave.status === 'done') return;
+    const notes = currentWave.changeNotes || [];
+    if (notes.length <= seenNotes(currentWave.id)) return;
+    // 框開著時又來新的改單：換成最新內容（一起列出來），有新的才再響
+    const old = $('pk-change-alert');
+    if (old && old.dataset.wave === currentWave.id && +old.dataset.n === notes.length) return;
+    if (old) old.remove();
+    const rets = pickingItems.filter(function(i) { return i.type === 'return' && !i.completed; });
+    const div = document.createElement('div');
+    div.id = 'pk-change-alert'; div.className = 'pad-overlay pk-alert';
+    div.innerHTML = '<div class="pk-alert-box"><div class="pk-alert-title">🔔 鼎新改單了</div>' +
+        '<div class="pk-alert-wave">' + esc(currentWave.waveNo) + '　' + esc(currentWave.logistics || '') + '</div>' +
+        notes.slice(seenNotes(currentWave.id)).map(function(n) { return '<div class="pk-alert-note">' + esc(n) + '</div>'; }).join('') +
+        (rets.length ? '<div class="pk-alert-sub">要放回：</div>' + rets.map(function(i) {
+            return '<div class="pk-alert-ret">↩️ ' + esc(i.productName) + ' ' + esc(i.spec || '') + '　<b>' + esc(i.pickQty) + ' 件</b> → <b style="white-space:nowrap">' + esc(i.locationId) + '</b></div>';
+        }).join('') : '') +
+        '<div class="pk-alert-tip">清單已經自動調整，照清單做就好</div>' +
+        '<button id="pk-alert-ok" class="pk-go pk-alert-ok">知道了</button></div>';
+    div.dataset.wave = currentWave.id; div.dataset.n = notes.length;
+    document.body.appendChild(div);
+    const waveId = currentWave.id, n = notes.length;
+    $('pk-alert-ok').onclick = function() {
+        try { localStorage.setItem('pk-seen-notes-' + waveId, String(n)); } catch (e) {}
+        div.remove();
+    };
+    alarmBeep();
+}
 
 function renderPickingList() {
     const list = $('picking-list');

@@ -1422,6 +1422,12 @@
                 if (wave.reprintRequired && wave.status !== 'done') {
                     flags += '<span class="erp-reprint ds-flag" title="鼎新改單，波次數量已自動更新"><i class="fa-solid fa-print"></i>揀貨單和標籤要重印</span>';
                 }
+                // 鼎新改單，揀了的貨現在用不到：揀貨員的手機會響、列「放回」
+                var rets = window.waveReturnsPending ? window.waveReturnsPending(wave) : [];
+                if (rets.length) {
+                    flags += '<span class="erp-return ds-flag" style="color:var(--c-red)" title="鼎新改單，揀貨員的手機已經提醒"><i class="fa-solid fa-rotate-left"></i>要放回：' +
+                        rets.map(function(r) { return escapeHtml(r.productName + ' ' + r.qty + ' 件'); }).join('、') + '</span>';
+                }
                 if (flags) html += '<div class="ds-flags">' + flags + '</div>';
                 html += '</td>';
                 html += '<td class="t-strong">' + (wave.logistics || '混合') + '</td>';

@@ -611,3 +611,14 @@ body {
 .sw-tag.now { background: rgba(91, 155, 255, .18); color: #8db8ff; }
 .sw-tag.busy { background: rgba(245, 196, 81, .16); color: #f5c451; }
 .sw-tag.pause { background: rgba(255, 255, 255, .1); color: #e2e8f0; }
+
+/* 鼎新改單提醒（揀貨中） */
+.pk-alert { z-index: 400; display: flex; align-items: center; justify-content: center; }
+.pk-alert-box { width: 100%; max-width: 480px; background: #0f172a; border: 3px solid #f97316; border-radius: 18px; padding: 20px; color: #fff; }
+.pk-alert-title { font-size: 28px; font-weight: 800; color: #fb923c; margin-bottom: 4px; }
+.pk-alert-wave { font-size: 14px; color: #94a3b8; margin-bottom: 12px; }
+.pk-alert-note { font-size: 20px; font-weight: 700; line-height: 1.5; padding: 8px 0; border-bottom: 1px solid #1e293b; }
+.pk-alert-sub { margin-top: 14px; font-size: 15px; color: #94a3b8; }
+.pk-alert-ret { font-size: 20px; line-height: 1.6; color: #fde68a; }
+.pk-alert-tip { margin-top: 14px; font-size: 15px; color: #cbd5e1; }
+.pk-go.pk-alert-ok { min-height: 64px; font-size: 24px; margin-top: 16px; }

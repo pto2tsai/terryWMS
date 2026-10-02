@@ -41,6 +41,12 @@ const n1 = await next();
 const items = await mp.evaluate(() => pickingItems.filter(i => !i.completed).map(i => [i.type || 'pick', i.productName, i.pickQty, i.locationId]));
 H.check('手機清單自動調整：多拿的白蝦「放回 3 件 → I-A-01-1F」排最上面；透抽「再揀 3 件」', JSON.stringify(items) === JSON.stringify([['return', '白蝦', 3, 'I-A-01-1F'], ['pick', '透抽', 3, 'I-B-01-1F']]), JSON.stringify(items));
 H.check('手機上方藍色提醒：鼎新改了什麼、清單已自動調整，照清單做就好', n1.includes('鼎新改了') && n1.includes('10→7') && n1.includes('照清單做就好') && n1.includes('放回 3 件'), n1.slice(0, 300));
+const al = await mp.evaluate(() => { const d = document.getElementById('pk-change-alert'); return d ? d.textContent : ''; });
+H.check('手機跳大框「鼎新改單了」：寫改了什麼、要放回白蝦 3 件 → I-A-01-1F，要按「知道了」', al.includes('鼎新改單了') && al.includes('10→7') && al.includes('白蝦') && al.includes('3 件') && al.includes('I-A-01-1F') && al.includes('知道了'), al.slice(0, 300));
+await mp.click('#pk-alert-ok'); await mp.waitForTimeout(300);
+H.check('按「知道了」框就關掉；同一個提醒不會再跳', !(await mp.$('#pk-change-alert')) && await mp.evaluate(async () => { window.dataHooks.waves.forEach(f => f()); await new Promise(r => setTimeout(r, 300)); return !document.getElementById('pk-change-alert'); }));
+await H.nav(D.page, 'wave-picking'); await D.page.waitForTimeout(1500);
+H.check('電腦的波次清單紅字：要放回 白蝦 3 件', (await D.page.textContent('#wave-list-body')).includes('要放回：白蝦 3 件'));
 H.check('自動處理好的不算「要處理」（收件紀錄是完成，結果寫著已自動調整）', in2.status === 'done' && in2.result.includes('已自動調整'), JSON.stringify([in2.status, in2.result, in2.issues]));
 
 await H.nav(D.page, 'wave-picking'); await D.page.waitForTimeout(1500);
@@ -74,5 +80,10 @@ const newWave = (await H.all('waves')).find(w => w.waveNo !== W.waveNo);
 H.check('出貨後加量：多的 2 件自動變補出貨，排進新的波次', newWave && (newWave.orders || []).some(o => o.orderNo === 'A-1') && newWave.totalQty === 2 && so2['A-1'].waveNo === newWave.waveNo, JSON.stringify([newWave && newWave.totalQty, so2['A-1'].status, so2['A-1'].backorderItems]));
 H.check('出貨後減量：提醒「已經多出貨了，請在鼎新開銷退：透抽 多出 4 件」', in3.status === 'attention' && in3.issues.some(x => x.includes('開銷退') && x.includes('A-2') && x.includes('多出 4 件')), JSON.stringify([in3.status, in3.issues]));
 
+H.check('出貨後減量：A-2 放進「業務要改鼎新」清單（透抽 多出 4 件 → 請開銷退）', so2['A-2'].erpReturnNeeded === true && (so2['A-2'].erpReturnLines || []).some(x => x.includes('多出 4 件') && x.includes('開銷退')), JSON.stringify(so2['A-2']));
+await D.page.evaluate(() => openErpFixList()); await D.page.waitForTimeout(1200);
+const fx = await D.page.textContent('#modal-erp-fix');
+H.check('電腦「業務要改鼎新」清單：A-2 透抽 多出 4 件，請開銷退', fx.includes('A-2') && fx.includes('多出 4 件') && fx.includes('開銷退'), fx.slice(0, 300));
+H.check('複製給業務的文字分兩段，有「請開銷退」', (await D.page.evaluate(() => erpFixText(window._erpFixList))).includes('【已經出貨了，鼎新才減量或取消：請開銷退'));
 H.check('沒有頁面錯誤', D.log.errors.length === 0 && M.log.errors.length === 0, JSON.stringify(D.log.errors.concat(M.log.errors)));
 await H.close(); process.exit(0);
