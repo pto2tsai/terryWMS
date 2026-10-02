@@ -53,7 +53,8 @@ H.check('關閉相機', !(await page.isVisible('#cam-overlay')));
 await page.fill('#picking-scan', '9001'); await page.press('#picking-scan', 'Enter'); await page.waitForTimeout(1200);
 wv = await H.one('waves', 'WV1');
 H.check('手打尾碼 9001 → 對到 T-9001', (wv.completedItems || []).includes('T-9001-透抽'), JSON.stringify(wv.completedItems) + ' ' + await page.innerText('#picking-scan-result'));
-await page.fill('#picking-scan', 't-9001'); await page.press('#picking-scan', 'Enter'); await page.waitForTimeout(800);
+// 全部拿完後掃描框會收起來（畫面只剩下一步）：直接送同一個板號，看會不會擋下
+await page.evaluate(() => { document.getElementById('picking-scan').value = 't-9001'; confirmPickingScan(); }); await page.waitForTimeout(800);
 H.check('重複掃提示「已揀過」', (await page.innerText('#picking-scan-result')).includes('已揀過'), await page.innerText('#picking-scan-result'));
 
 // 3) 尾碼有兩板符合 → 列出讓使用者選

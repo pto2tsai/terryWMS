@@ -4,10 +4,11 @@ cd "$(dirname "$0")"
 fail=0; pass=0
 for f in flow0-slow-login flow1-inbound flow1b-orders flow1c-external flow2-container flow3-wave flow4-rm flow5-transfer flow6-palletchange flow7-dispatch flow8-external flow9-edit flow10-stocktake flow11-xss flow12-mobile-camera flow13-mobile-ops flow14-acceptance flow15-logic-fixes flow16-ux flow17-reports flow18-consign-rent flow19-orders-stock-fixes flow20-dispatch-container-reports flow21-location-shortcode flow22-restore-approval-mobile flow23-simplify flow24-mobile-layout flow25-board-mobile-switch flow26-erp-import flow27-erp-auto flow28-erp-order-changes flow29-practice-mode flow30-practice-stock flow31-shortage flow32-who-picking flow33-two-houses flow34-logistics-settings flow35-clear-test-data flow36-zero-picked flow37-put-to-pause flow38-manual-cancel flow39-sound flow40-erpfix-mobile; do
   echo "===== $f ====="
-  out=$(timeout 300 node $f.mjs 2>&1)
+  out=$(timeout 300 node $f.mjs 2>&1); rc=$?
   echo "$out" | grep -E "^(✔|✘)"
   p=$(echo "$out" | grep -c "^✔"); x=$(echo "$out" | grep -c "^✘")
-  if [ "$p" -eq 0 ]; then echo "$out" | tail -5; x=$((x+1)); fi
+  # 一項都沒過、或中途當掉（程式沒有正常結束）都算失敗，不能只看有沒有 ✘
+  if [ "$p" -eq 0 ] || [ "$rc" -ne 0 ]; then echo "✘ $f 沒有正常結束（結束代碼 $rc）"; echo "$out" | grep -vE "^(✔|✘)" | tail -8; x=$((x+1)); fi
   pass=$((pass+p)); fail=$((fail+x))
 done
 echo "UI 走查：pass $pass fail $fail"

@@ -228,8 +228,8 @@
         if (erpFix.length) msgs.push('🧾 缺貨少出 ' + erpFix.length + ' 張，請業務在鼎新改銷貨單：' + erpFix.slice(0, 3).map(function(o) {
             return o.customer + ' ' + (o.shortShipped || []).filter(function(x) { return (x.want - x.got) >= 0.001; }).map(function(x) { return x.productName + ' ' + Math.round(x.want * 1000) / 1000 + '→' + Math.round(x.got * 1000) / 1000; }).join('、');
         }).join('；') + (erpFix.length > 3 ? ' 等' : ''));
-        // 已經出貨，鼎新才減量或刪單：請業務開銷退（業務開好後在電腦按「已經改好了」）
-        if (erpRet.length) msgs.push('↩️ 已出貨的單鼎新減量或取消 ' + erpRet.length + ' 張，請業務開銷退：' + erpRet.slice(0, 3).map(function(o) {
+        // 出貨後鼎新又改少或刪單：跟實際出貨對不上，請業務確認鼎新（確認好在電腦或手機按「已經改好了」）
+        if (erpRet.length) msgs.push('⚠️ 出貨後鼎新又改了 ' + erpRet.length + ' 張（跟實際出貨對不上），請業務確認鼎新：' + erpRet.slice(0, 3).map(function(o) {
             return o.customer + ' ' + (o.erpReturnLines || []).join('、');
         }).join('；') + (erpRet.length > 3 ? ' 等' : ''));
         $('erp-alert').innerHTML = msgs.map(esc).join('<br>');

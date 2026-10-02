@@ -67,7 +67,7 @@ window.autoImportErpOrderRows = async function(rows) {
     var notes = [];
     var shipMore = r.shippedChanged.filter(function(x) { return x.kind === 'more'; }), shipOver = r.shippedChanged.filter(function(x) { return x.kind === 'over'; });
     if (shipMore.length) notes.push('已出貨的單在鼎新加量，已自動變成補出貨：' + shipMore.map(function(x) { return x.text; }).join('；'));
-    if (shipOver.length) issues.push('已出貨的單在鼎新減量，已經多出貨了，請在鼎新開銷退：' + shipOver.map(function(x) { return x.text; }).join('；'));
+    if (shipOver.length) issues.push('已經出貨的單，鼎新又改少了（跟實際出貨對不上），請業務確認鼎新：' + shipOver.map(function(x) { return x.text; }).join('；'));
     if (w.failed && w.failed.length) issues.push('波次建立失敗：' + w.failed.join('；'));
     // 鼎新改了已匯入的單：沒排波次的直接改好；還沒開始揀的波次自動更新；已經開始揀的要現場處理
     var desc = window.describeOrderChanges(r.orderChanges);
@@ -82,7 +82,7 @@ window.autoImportErpOrderRows = async function(rows) {
     if (adjusted.length) notes.push('鼎新改單，揀貨中的清單已自動調整：' + adjusted.join('；'));
     if (started.length) issues.push('鼎新改了已經開始揀貨的單（舊波次，沒辦法自動調整），請到現場處理：' + started.join('；'));
     if (missing.length) issues.push(ERP_MISSING_PREFIX + '（' + missing.length + ' 張）：' + missing.map(function(o) { return o.orderNo + (window.isShippedOrder(o) ? '（已出貨）' : ''); }).join('、') +
-        '。確定鼎新已取消，請按「在 WMS 也取消」（已出貨的會放進「業務要改鼎新」清單請業務開銷退）');
+        '。確定鼎新已取消，請按「在 WMS 也取消」（已出貨的不會取消，放進「業務要改鼎新」清單請業務確認）');
 
     var result = '新增 ' + r.savedCount + ' 張訂單' + (parsed.storeSkipped.length ? '（門市 ' + parsed.storeSkipped.length + ' 張跳過）' : '') + (r.modifiedCount ? '、異動 ' + r.modifiedCount + ' 張' : '') + (r.skipCount ? '、' + r.skipCount + ' 張沒變' : '') +
         '；建立 ' + w.created.length + ' 個波次' + (w.created.length ? '（' + w.created.map(function(x) { return x.logistics + ' ' + x.orderCount + ' 單'; }).join('、') + '）' : '') +
@@ -289,7 +289,7 @@ window.cancelMissingErpOrders = async function(id) {
     if (out.skipped.length) issues.push('這些單沒有取消：' + out.skipped.join('；'));
     await window.db.collection('erpInbox').doc(id).update({
         missingOrders: [], issues: issues, status: issues.length ? 'attention' : 'done',
-        result: (r.result || '') + '；已取消 ' + out.cancelled.length + ' 張（鼎新已取消）' + (out.flagged.length ? '、已出貨 ' + out.flagged.length + ' 張請業務開銷退' : '')
+        result: (r.result || '') + '；已取消 ' + out.cancelled.length + ' 張（鼎新已取消）' + (out.flagged.length ? '、已出貨 ' + out.flagged.length + ' 張請業務確認鼎新' : '')
     });
     alert('✅ 已取消 ' + out.cancelled.length + ' 張' + (out.flagged.length ? '\n\n↩️ 已經出貨的 ' + out.flagged.length + ' 張放進「業務要改鼎新」清單：' + out.flagged.join('、') : '') +
         (out.skipped.length ? '\n\n⚠️ 沒有取消：\n' + out.skipped.join('\n') : ''));

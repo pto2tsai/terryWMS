@@ -874,7 +874,7 @@ window.saveErpOrders = async function(orders) {
                     if (freshSnap.exists) Object.assign(existing, freshSnap.data());
                 } catch (err) { console.warn('讀取訂單最新狀態失敗', err); }
             }
-            // 已經出過貨（全部或部分）的單：多的自動變補出貨，少的提醒開銷退
+            // 已經出過貨（全部或部分）的單：多的自動變補出貨；少的（鼎新跟實際出貨對不上）請業務確認鼎新
             if (existing.status === 'shipped' || existing.status === 'partial' || Array.isArray(existing.backorderItems)) {
                 var chg = detectOrderChanges(existing, order);
                 if (chg.length === 0) { skipCount++; continue; }
@@ -883,10 +883,10 @@ window.saveErpOrders = async function(orders) {
                 var upd = { items: order.items, modifiedAt: new Date().toISOString(), hasChanges: true };
                 upd.backorderItems = rc.open.length ? rc.open : firebase.firestore.FieldValue.delete();
                 if (rc.erpFixed) { upd.erpFixNeeded = false; existing.erpFixNeeded = false; }
-                // 已經多出貨了（鼎新減量）：放進「業務要改鼎新」清單，請業務開銷退
+                // 出貨後鼎新又改少（我們都是改好才出貨，通常是鼎新改錯）：放進「業務要改鼎新」清單，請業務確認
                 if (rc.over.length) {
                     upd.erpReturnNeeded = true; upd.erpReturnAt = new Date().toISOString();
-                    upd.erpReturnLines = rc.over.map(function(x) { return x + '（已經出貨，鼎新改少了）→ 請開銷退'; });
+                    upd.erpReturnLines = rc.over.map(function(x) { return x + ' → 請業務確認鼎新是不是改錯'; });
                     existing.erpReturnNeeded = true; existing.erpReturnLines = upd.erpReturnLines;
                 } else if (existing.erpReturnNeeded && !existing.erpGone) { upd.erpReturnNeeded = false; existing.erpReturnNeeded = false; }
                 if (!inWave) upd.status = rc.open.length ? 'partial' : 'shipped';
@@ -995,7 +995,7 @@ async function askCancelMissing(missing) {
     var open = missing.filter(function(o) { return !window.isShippedOrder(o); }), shipped = missing.filter(window.isShippedOrder);
     if (!confirm('⚠️ 這份檔案裡沒有下面 ' + missing.length + ' 張單（之前匯入過），可能已在鼎新取消：\n' +
         (open.length ? '\n還沒出貨（WMS 也取消，還沒開始揀的波次會移出；揀到一半的，揀貨員手機會響、列「放回」）：\n' + open.map(line).join('\n') + '\n' : '') +
-        (shipped.length ? '\n已經出貨（放進「業務要改鼎新」清單，請業務開銷退）：\n' + shipped.map(line).join('\n') + '\n' : '') +
+        (shipped.length ? '\n已經出貨（不會取消，放進「業務要改鼎新」清單，請業務確認鼎新是不是刪錯）：\n' + shipped.map(line).join('\n') + '\n' : '') +
         '\n按「確定」照上面處理。\n按「取消」：先不動（例如這份檔案只匯出部分客戶）。')) return;
     var out = await window.cancelSalesOrders(missing.map(function(o) { return o.id; }), '鼎新已取消（手動匯入發現）');
     alert('✅ 已取消 ' + out.cancelled.length + ' 張' + (out.flagged.length ? '\n\n↩️ 已經出貨的 ' + out.flagged.length + ' 張放進「業務要改鼎新」清單：' + out.flagged.join('、') : '') +
@@ -1038,7 +1038,7 @@ window.importErpOrderRows = async function(rows) {
         var shipMore = shippedChanged.filter(function(x) { return x.kind === 'more'; }), shipOver = shippedChanged.filter(function(x) { return x.kind === 'over'; });
         if (shipMore.length || shipOver.length) {
             alert((shipMore.length ? '📦 已出貨的單在鼎新加量，多的部分自動變成補出貨（會排進下一個波次）：\n' + shipMore.map(function(x) { return x.text; }).join('\n') + '\n\n' : '') +
-                (shipOver.length ? '↩️ 已出貨的單在鼎新減量，已經多出貨了，請在鼎新開銷退：\n' + shipOver.map(function(x) { return x.text; }).join('\n') : ''));
+                (shipOver.length ? '⚠️ 已經出貨的單，鼎新又改少了（跟實際出貨對不上），已放進「業務要改鼎新」請業務確認：\n' + shipOver.map(function(x) { return x.text; }).join('\n') : ''));
         }
 
         await askCancelMissing(missing);
@@ -1412,11 +1412,11 @@ window.cancelSalesOrders = async function(orderIds, reason) {
                 var o = os.data();
                 if (o.status === 'cancelled') throw new Error('已經取消過');
                 if (o.erpGone) throw new Error('已經放進「業務要改鼎新」清單');
-                // 已經出貨（全部或部分）：貨已經送出去，不能取消；放進「業務要改鼎新」清單請業務開銷退，還沒補的欠貨不再補
+                // 已經出貨（全部或部分）：貨已經送出去，不能取消；放進「業務要改鼎新」清單請業務確認，還沒補的欠貨不再補
                 if (window.isShippedOrder(o)) {
                     if (o.status === 'inWave') throw new Error('補出貨在波次 ' + (o.waveNo || '') + ' 裡，請到現場處理');
                     var gone = { erpReturnNeeded: true, erpGone: true, erpReturnAt: new Date().toISOString(),
-                        erpReturnLines: ['整張單在鼎新不見了，但貨已經出了 → 請跟客戶確認，開銷退（或補回銷貨單）'] };
+                        erpReturnLines: ['貨已經出了，鼎新卻沒有這張單 → 請業務確認鼎新是不是刪錯'] };
                     if (Array.isArray(o.backorderItems)) { gone.backorderItems = firebase.firestore.FieldValue.delete(); gone.status = 'shipped'; }
                     tx.update(oref, gone);
                     return { no: o.orderNo, flagged: true };
@@ -1507,7 +1507,7 @@ window.syncOrderIntoWave = async function(order, note) {
 
 // 已經出過貨的單（全部或部分），鼎新又改了：
 //   已出貨件數＝原本的件數－還欠的件數；新數量比已出貨多 → 多的變成欠貨（補出貨，會自動排下一個波次）
-//   新數量比已出貨少 → 已經多出貨了，要在鼎新開銷退
+//   新數量比已出貨少 → 跟實際出貨對不上，請業務確認鼎新
 window.recomputeShippedOrder = function(existing, newItems) {
     var key = function(it) { return it.productName + '|||' + (it.spec || ''); };
     var pkg = function(it) { return parseFloat(it.packageQty) || 1; };
@@ -1537,11 +1537,11 @@ window.recomputeShippedOrder = function(existing, newItems) {
             var wasOpen = back[k] || 0;
             if (need > wasOpen) more.push(it.productName + (it.spec ? ' ' + it.spec : '') + ' +' + (need - wasOpen));
         } else if (need < 0) {
-            over.push(it.productName + (it.spec ? ' ' + it.spec : '') + ' 多出 ' + (-need) + ' 件');
+            over.push(it.productName + (it.spec ? ' ' + it.spec : '') + '：實際出了 ' + (shipped[k] || 0) + ' 件，鼎新現在寫 ' + pkg(it) + ' 件（多出 ' + (-need) + ' 件）');
         }
     });
     Object.keys(shipped).forEach(function(k) {
-        if (!seen[k] && shipped[k] > 0) over.push(names[k].productName + (names[k].spec ? ' ' + names[k].spec : '') + ' 多出 ' + shipped[k] + ' 件');
+        if (!seen[k] && shipped[k] > 0) over.push(names[k].productName + (names[k].spec ? ' ' + names[k].spec : '') + '：實際出了 ' + shipped[k] + ' 件，鼎新現在沒有這一項（多出 ' + shipped[k] + ' 件）');
     });
     // 鼎新已經改成實際出貨的件數（或更少）：不用再提醒改鼎新
     var fixed = Object.keys(shortBy).every(function(k) {

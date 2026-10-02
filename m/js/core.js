@@ -251,7 +251,7 @@ function initData() {
     // 分貨標籤誰來印（手機／辦公室自動印）
     unsubs.push(window.watchLabelPrintMode());
     unsubs.push(window.watchCustomerShort());
-    // 業務要改鼎新（缺貨少出、要開銷退）：首頁卡片和清單即時更新
+    // 業務要改鼎新（缺貨少出、出貨後鼎新對不上）：首頁卡片和清單即時更新
     unsubs.push(window.watchErpFix(db, function(list) {
         window.erpFixList = list;
         renderHomeTasks();

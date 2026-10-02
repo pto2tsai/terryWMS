@@ -113,7 +113,7 @@ window.refreshHome = async function() {
           action: "goTab('expiry-management')" },
         { icon: 'fa-cloud-arrow-down', color: '#0ea5e9', label: '鼎新匯入要處理', hint: '訂單檔沒收到、匯入失敗、件數待確認、沒有物流商、鼎新已取消的單',
           action: "goTab('erp-inbox')" },
-        { icon: 'fa-arrow-trend-down', color: '#dc2626', label: '業務要改鼎新', hint: '缺貨少出要改數量、已出貨後鼎新減量或刪單要開銷退：請業務在鼎新處理',
+        { icon: 'fa-arrow-trend-down', color: '#dc2626', label: '業務要改鼎新', hint: '缺貨少出要改數量、出貨後鼎新又改了要確認：請業務在鼎新處理',
           action: "openErpFixList()" }
     ];
     todos[7].hint = '已過期 ' + expired + ' 板（不會被揀貨）、即將到期 ' + expiring + ' 板';
@@ -136,7 +136,7 @@ window.refreshHome = async function() {
         todos[9].count = r[7].length;
         if (r[7].length) todos[9].hint = r[7].slice(0, 3).map(function(o) {
             return o.customer + '（' + o.orderNo + '）' + (o.erpFixNeeded ? (o.shortShipped || []).filter(function(x) { return (x.want - x.got) >= 0.001; }).map(function(x) { return x.productName + ' ' + Math.round(x.want * 1000) / 1000 + '→' + Math.round(x.got * 1000) / 1000; }).join('、') : '') +
-                (o.erpReturnNeeded ? (o.erpFixNeeded ? '、' : '') + '要開銷退' : '');
+                (o.erpReturnNeeded ? (o.erpFixNeeded ? '、' : '') + '鼎新對不上要確認' : '');
         }).join('；') + (r[7].length > 3 ? ' 等' : '') + '：請業務在鼎新處理';
     }
     renderHomeTodos(todos);
@@ -157,7 +157,7 @@ window.openErpFixList = async function() {
         return '<div class="ds-pick-row" style="cursor:default;align-items:flex-start">' +
             '<div style="flex:1;min-width:0"><div style="color:var(--ds-text);font-weight:700;font-size:16px">' + erpEsc(o.customer) + '</div>' +
             '<div style="font-size:12px;color:var(--ds-text-3);margin:2px 0 8px">' + erpEsc(o.orderNo) + (o.waveNo ? '・波次 ' + erpEsc(o.waveNo) : '') + '</div>' +
-            shortLines(o).map(function(l) { return '<div style="font-size:14px;color:var(--ds-text-2);line-height:1.7"><i class="fa-solid ' + (/銷退|不見/.test(l) ? 'fa-rotate-left' : 'fa-arrow-trend-down') + '" style="color:var(--c-red);margin-right:6px"></i>' + erpEsc(l) + '</div>'; }).join('') + '</div>' +
+            shortLines(o).map(function(l) { return '<div style="font-size:14px;color:var(--ds-text-2);line-height:1.7"><i class="fa-solid ' + (/確認|不見|沒有這張/.test(l) ? 'fa-circle-question' : 'fa-arrow-trend-down') + '" style="color:var(--c-red);margin-right:6px"></i>' + erpEsc(l) + '</div>'; }).join('') + '</div>' +
             '<div style="display:flex;flex-direction:column;gap:6px"><button class="ds-btn ds-btn-secondary ds-btn-sm" onclick="copyErpFix(' + i + ')"><i class="fa-regular fa-copy"></i>複製這張</button>' +
             '<button class="ds-btn ds-btn-ghost ds-btn-sm" onclick="markErpFixed(' + i + ')"><i class="fa-solid fa-check"></i>已經改好了</button></div></div>';
     }).join('') : '<div class="ds-empty" style="padding:32px"><div class="ds-empty-icon"><i class="fa-solid fa-check"></i></div><div class="ds-empty-title">沒有要改的單</div></div>';
@@ -166,7 +166,7 @@ window.openErpFixList = async function() {
         title: '業務要改鼎新（' + list.length + ' 張）', icon: 'fa-solid fa-arrow-trend-down', width: '720px', maxHeight: '88vh',
         content: '<div style="font-size:14px;color:var(--ds-text-2);line-height:1.7;margin-bottom:14px;padding:12px 14px;border-radius:10px;background:var(--ds-surface-2)">' +
             '<b style="color:var(--ds-text)">要做的事：</b><br>・<b style="color:var(--ds-text)">缺貨少出</b>：請業務在鼎新把銷貨單改成實際出貨的數量（缺的這次不出、之後也不補）。改好、重新匯入後會<b style="color:var(--ds-text)">自動消失</b>。<br>' +
-            '・<b style="color:var(--ds-text)">已經出貨，鼎新才減量或取消</b>：貨已經送出去了，請業務在鼎新開<b style="color:var(--ds-text)">銷退</b>（或跟客戶確認）。開好後按「已經改好了」。<br>' +
+            '・<b style="color:var(--ds-text)">出貨後鼎新又改了</b>：我們都是改好才出貨，這種通常是鼎新改錯或刪錯，請業務<b style="color:var(--ds-text)">確認鼎新</b>。確認好後按「已經改好了」。<br>' +
             '業務說不用改的，按「已經改好了」也會消失。</div>' + cards,
         footer: list.length ? '<button class="ds-btn ds-btn-secondary" onclick="WMS.closeModal(\'modal-erp-fix\')">關閉</button><button class="ds-btn ds-btn-primary" onclick="copyErpFix()"><i class="fa-regular fa-copy"></i>全部複製給業務（貼到 LINE）</button>' : ''
     });
