@@ -28,17 +28,24 @@
   .sum b { color: var(--pick); }
   .all { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
   .all button { -webkit-appearance: none; appearance: none; min-height: 46px; border-radius: 12px; border: 1px solid #33456b; background: #1b2844; color: #7dd3fc; font-size: 15px; font-weight: 700; }
+  /* 螢幕外框閃光：一根手指寬的彩色邊框，不擋字 */
+  #flash { position: fixed; inset: 0; pointer-events: none; z-index: 50; border-radius: 0; box-shadow: inset 0 0 0 14px var(--fc, transparent); opacity: 0; }
+  #flash.on { opacity: 1; }
+  .opt { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 14px; font-size: 16px; }
+  .opt input { width: 24px; height: 24px; }
+  .opt small { color: var(--sub); font-size: 13px; }
 </style>
 </head>
 <body>
 <header><a href="./" aria-label="回到選單">←</a><h1>聲音試聽</h1></header>
-<p class="tip">每一列點 A、B、C 聽聽看，<b>點了就是選它</b>（綠色打勾）。選好後，把最下面那行告訴我（或截圖），我再換上去。<br>
+<p class="tip">每一列點 A、B、C 聽聽看，<b>點了就是選它</b>（綠色打勾），螢幕外框也會跟著閃顏色。選好後，把最下面那行告訴我（或截圖），我再換上去。<br>
 iPhone：<b>側邊靜音鍵要關掉</b>，音量開大。這頁只是試聽，不會影響現場作業。</p>
 <div class="styles">
   <div><b>A 遊戲風</b>對錯分很開，一聽就懂</div>
   <div><b>B 鐘聲風</b>清脆、不刺耳，吵的地方也聽得到</div>
   <div><b>C 說話風</b>手機直接說「好」「錯了」</div>
 </div>
+<label class="opt"><input type="checkbox" id="flash-on" checked> <b style="white-space:nowrap">螢幕外框閃光</b> <small>（綠＝對、紅＝錯、橘＝不夠、藍＝分好；改單警示會一直閃，點一下畫面停）</small></label>
 <div class="all">
   <button onclick="playAll('A')">▶ A 全部聽</button>
   <button onclick="playAll('B')">▶ B 全部聽</button>
@@ -46,6 +53,7 @@ iPhone：<b>側邊靜音鍵要關掉</b>，音量開大。這頁只是試聽，�
 </div>
 <div id="rows"></div>
 <div class="sum" id="sum"></div>
+<div id="flash"></div>
 <script>
 // ---------- 發聲 ----------
 let ctx = null;
@@ -86,6 +94,30 @@ function say(text) {
   speechSynthesis.speak(u);
 }
 function vib(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
+
+// ---------- 螢幕外框閃光 ----------
+const FLASH = {   // [顏色, 閃幾次, 每次亮多久（毫秒）]；alarm 一直閃到點畫面
+  ok: ['#22c55e', 1, 160], done: ['#22c55e', 1, 260], err: ['#ef4444', 2, 180], short: ['#f97316', 2, 220],
+  sorted: ['#3b82f6', 1, 260], finish: ['#22c55e', 2, 450], alarm: ['#f97316', 0, 250]
+};
+let flashTimers = [], alarmLoop = null;
+function stopFlash() { flashTimers.forEach(clearTimeout); flashTimers = []; if (alarmLoop) { clearInterval(alarmLoop); alarmLoop = null; } document.getElementById('flash').classList.remove('on'); }
+function flash(ev) {
+  if (!document.getElementById('flash-on').checked) return;
+  stopFlash();
+  const f = FLASH[ev], el = document.getElementById('flash');
+  if (ev === 'alarm') {   // 紅、橘交替一直閃
+    let i = 0;
+    alarmLoop = setInterval(function() { el.style.setProperty('--fc', i % 2 ? '#ef4444' : '#f97316'); el.classList.toggle('on'); i++; }, f[2]);
+    return;
+  }
+  el.style.setProperty('--fc', f[0]);
+  for (let i = 0; i < f[1]; i++) {
+    flashTimers.push(setTimeout(function() { el.classList.add('on'); }, i * f[2] * 2));
+    flashTimers.push(setTimeout(function() { el.classList.remove('on'); }, i * f[2] * 2 + f[2]));
+  }
+}
+document.addEventListener('pointerdown', function(e) { if (alarmLoop && !e.target.closest('button')) stopFlash(); });
 
 // ---------- 三種風格 ----------
 const SETS = {
@@ -136,12 +168,13 @@ function draw() {
   const done = EVENTS.filter(function(e) { return pick[e[0]]; });
   document.getElementById('sum').innerHTML = done.length ? '我的選擇：<b>' + done.map(function(e) { return e[1] + ' ' + pick[e[0]]; }).join('、') + '</b>' + (done.length < EVENTS.length ? '（還有 ' + (EVENTS.length - done.length) + ' 個沒選）' : '') : '還沒選：點上面的 A、B、C 試聽';
 }
-window.play = function(ev, s) { SETS[s][ev](); pick[ev] = s; draw(); };
+window.play = function(ev, s) { SETS[s][ev](); flash(ev); pick[ev] = s; draw(); };
 let busy = false;
 window.playAll = function(s) {
   if (busy) return; busy = true;
   const gap = s === 'C' ? 1700 : 1400;
-  EVENTS.forEach(function(e, i) { setTimeout(function() { SETS[s][e[0]](); }, i * gap); });
+  EVENTS.forEach(function(e, i) { setTimeout(function() { SETS[s][e[0]](); flash(e[0]); }, i * gap); });
+  setTimeout(stopFlash, EVENTS.length * gap + 1500);   // 最後的改單警示閃一下就停
   setTimeout(function() { busy = false; }, EVENTS.length * gap);
 };
 if (window.speechSynthesis) speechSynthesis.getVoices();
