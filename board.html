@@ -73,7 +73,9 @@
         .card.late .age { color: #fca5a5; animation: blink 1.2s step-end infinite; }
         .card.fresh { animation: fresh 2.5s ease-out; }
         @keyframes blink { 50% { opacity: .35; } }
-        /* 剛出現的紅色小方塊：外框紅光一閃一閃約 30 秒，之後停在紅色 */
+        /* 紅色小方塊：還沒處理就一直慢慢閃（處理好自動停）；剛出現的快閃 30 秒 */
+        #erp-alert .chip.red { animation: chipSlow 2s ease-in-out infinite; }
+        @keyframes chipSlow { 50% { background: #b91c1c; box-shadow: 0 0 1.5vw .3vw rgba(239,68,68,.55); } }
         #erp-alert .chip.pulse { animation: chipPulse 1s ease-in-out infinite; }
         @keyframes chipPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } 50% { box-shadow: 0 0 0 .7vw rgba(239,68,68,.85), 0 0 2.5vw .8vw rgba(239,68,68,.6); background: #dc2626; border-color: #fecaca; } }
         /* 整個螢幕外框閃紅光 3 下（倉庫另一頭也看得到） */
@@ -246,6 +248,10 @@
     }
     // ---------- 剛發生的紅色提醒：閃、外框閃、響一聲 ----------
     var pulseUntil = {}, seenRed = {}, lastUnsent = 0, pulseTimer = null, boardStart = Date.now();
+    // 還有紅色沒處理：看板剛打開先提醒一次，之後每 10 分鐘再提醒（外框閃＋響一聲），不一直盯著螢幕也不會漏掉
+    function remindIfRed() { if (document.querySelector('#erp-alert .chip.red')) attention(); }
+    setTimeout(remindIfRed, 9000);
+    setInterval(remindIfRed, 10 * 60000);
     function attention() {
         var e = $('edge'); e.classList.remove('on'); void e.offsetWidth; e.classList.add('on');
         if (soundOn) chime();
