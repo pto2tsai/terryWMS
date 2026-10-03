@@ -817,6 +817,10 @@ window.completeWaveTx = async function(wave, pickingList, pallets) {
                     data = { status: 'shipped', shippedAt: completedAt, waveNo: wave.waveNo, backorderItems: FV.delete(),
                         shortShipped: prev.concat(r.short.map(x => ({ productName: x.productName, spec: x.spec, want: x.want, got: x.got, short: Math.round((x.want - x.got) * 1000) / 1000, waveNo: wave.waveNo }))),
                         erpFixNeeded: true };
+                    // 業務在揀貨時已經接手／回覆的，記錄跟著搬到銷貨單（業務看板接著顯示誰在處理）
+                    const sc = wave.salesCases || {};
+                    const hit = r.short.map(x => sc[encodeURIComponent(x.productName + '|||' + (x.spec || ''))]).find(Boolean);
+                    if (hit) data.salesCase = hit;
                 }
                 wave.orderResults[oid] = { status: data.status, backorderItems: null, short: r.short };
                 ups.push({ ref: orderRefs[idx], data: data });

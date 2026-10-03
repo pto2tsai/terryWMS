@@ -203,6 +203,7 @@ window.dataHooks.waves.push(function() {
     pickingItems = window.buildWavePickingList(currentWave, window.pallets);
     renderPickingList();
     checkChangeAlert();
+    checkSalesReply();
 });
 
 // ---------- 鼎新改單提醒：手機響兩聲、震動、跳大框，按「知道了」才關 ----------
@@ -315,7 +316,7 @@ function renderNextStop() {
     } else if (currentWave && currentWave.hasOrderChanges && (currentWave.changedOrders || []).length) {
         warn = '<div class="pk-warn" style="background:#7f1d1d">⚠️ 鼎新改了這個波次的單：' + currentWave.changedOrders.map(esc).join('、') + '<br>清單上的數量沒有跟著改，請找主管確認再揀</div>';
     }
-    warn = askStripHtml() + warn;   // 剛按「不夠」：問業務的提示在最上面
+    warn = askStripHtml() + salesReplyHtml() + warn;   // 剛按「不夠」：問業務的提示在最上面；下面是業務的回覆
     const house = myHouse();
     const top = '<div class="pk-top"><span><b>' + done + '</b> / ' + total + ' 項</span>' +
         '<span>' + (window.isPracticeMode() ? '<span class="pk-chip">練習</span> ' : '') +
@@ -634,9 +635,34 @@ function askSalesBox(n, want, got) {
 function askStripHtml() {
     const a = window._askPending;
     if (!a || !currentWave || a.waveId !== currentWave.id) return '';
-    return '<div class="ask-strip"><div class="ask-head"><i class="fa-solid fa-triangle-exclamation"></i> 缺貨：' + esc(a.head) + '</div>' +
-        '<div class="ask-btns"><button class="ask-send" onclick="sendAskSales()"><i class="fa-brands fa-line"></i> 傳 LINE 問業務</button>' +
-        '<button class="ask-x" onclick="closeAskSales()" aria-label="先不用">先不用</button></div></div>';
+    // 按「不夠」就已經自動出現在業務的「業務看板」（會響、跳通知）；LINE 只是想多說的時候用
+    return '<div class="ask-strip"><div class="ask-head"><i class="fa-solid fa-triangle-exclamation"></i> 缺貨：' + esc(a.head) + '<br><b style="color:#86efac">✅ 已自動通知業務</b>，業務回覆會出現在這裡</div>' +
+        '<div class="ask-btns"><button class="ask-x" onclick="closeAskSales()" aria-label="好">好</button>' +
+        '<button class="ask-send" onclick="sendAskSales()"><i class="fa-brands fa-line"></i> 也傳 LINE</button></div></div>';
+}
+// 這個波次不夠的每一樣：業務處理到哪裡（等業務處理／業務處理中／業務回覆了什麼）
+function salesReplyHtml() {
+    if (!currentWave || !window.waveSalesCases) return '';
+    const cs = window.waveSalesCases(currentWave);
+    if (!cs.length) return '';
+    return '<div class="ask-reply">' + cs.map(function(c) {
+        const st = window.salesCaseStatus(c.info);
+        return '<div class="ask-reply-line ' + st + '">' + (st === 'replied' ? '💬 ' : '⏳ ') + esc(shortItemName(c.productName, c.spec)) + '：<b>' + esc(window.salesCaseLabel(c.info)) + '</b></div>';
+    }).join('') + '</div>';
+}
+// 業務回覆了：手機響一聲、念出來（每個回覆只響一次）
+function checkSalesReply() {
+    if (!currentWave || !window.waveSalesCases) return;
+    const k = 'pk-seen-replies-' + currentWave.id;
+    let seen = {};
+    try { seen = JSON.parse(localStorage.getItem(k) || '{}'); } catch (e) {}
+    const fresh = window.waveSalesCases(currentWave).filter(function(c) { return c.info.reply && seen[c.id] !== c.info.replyAt; });
+    if (!fresh.length) return;
+    fresh.forEach(function(c) { seen[c.id] = c.info.replyAt; });
+    try { localStorage.setItem(k, JSON.stringify(seen)); } catch (e) {}
+    window.sfx('done');
+    toast('💬 業務回覆：' + fresh.map(function(c) { return c.productName + ' ' + c.info.reply; }).join('、'));
+    window.speak('業務回覆。' + fresh.map(function(c) { return c.productName + '，' + c.info.reply; }).join('。'));
 }
 window.closeAskSales = function() { window._askPending = null; renderPickingList(); };
 // 傳出去就記在波次上（salesAsked：問過業務的品項），看板的波次卡片會寫「已問業務」
