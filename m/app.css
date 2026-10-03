@@ -628,25 +628,29 @@ body {
 .snd-btn.off { color: #64748b; border-color: #2a3550; }
 
 
-/* 業務要改鼎新（手機） */
-.ef-tip { margin: 12px 16px; padding: 12px 14px; border-radius: 12px; background: #13203a; color: #b8c4da; font-size: 14px; line-height: 1.7; }
+/* 業務要改鼎新（手機）：一張單一張小卡，客戶、單號、一行要改什麼、兩個按鈕 */
+.ef-tip { margin: 10px 16px 4px; padding: 8px 12px; border-radius: 10px; background: #13203a; color: #b8c4da; font-size: 14px; line-height: 1.5; }
 .ef-tip b { color: #fff; }
-.ef-card { margin: 0 16px 12px; padding: 14px; border-radius: 14px; background: #111a2e; border: 1px solid #26324d; border-left: 4px solid #ef4444; }
-.ef-name { font-size: 20px; font-weight: 800; color: #fff; }
-.ef-no { font-size: 13px; color: #8ea0bf; margin: 2px 0 8px; }
-.ef-line { font-size: 16px; color: #fde68a; line-height: 1.6; }
-.ef-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
-.ef-btns button { -webkit-appearance: none; appearance: none; min-height: 48px; border-radius: 12px; font-size: 16px; font-weight: 700; border: 0; }
+.ef-sec { display: flex; align-items: center; gap: 8px; margin: 14px 16px 8px; font-size: 16px; font-weight: 800; color: #fdba74; }
+.ef-sec.ret { color: #fca5a5; }
+.ef-sec span { background: #1b2844; color: #fff; border-radius: 999px; padding: 0 10px; font-size: 15px; }
+.ef-card { margin: 0 16px 8px; padding: 10px 12px; border-radius: 12px; background: #111a2e; border: 1px solid #26324d; border-left: 4px solid #f97316; }
+.ef-card.ef-ret { border-left-color: #ef4444; }
+.ef-card.ef-sent { border-left-color: #64748b; }
+.ef-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ef-name { font-size: 18px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ef-sent-tag { flex: none; font-size: 13px; color: #94a3b8; background: #1b2844; border-radius: 8px; padding: 1px 8px; }
+.ef-no { font-size: 13px; color: #8ea0bf; margin: 0 0 4px; }
+.ef-line { font-size: 16px; color: #fde68a; line-height: 1.5; }
+.ef-line b { color: #fb923c; white-space: nowrap; }
+.ef-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.ef-btns button { -webkit-appearance: none; appearance: none; min-height: 40px; border-radius: 10px; font-size: 15px; font-weight: 700; border: 0; }
 .ef-send { background: #06c755; color: #fff; }
 .ef-done { background: #1b2844; color: #cbd5e1; border: 1px solid #33456b !important; }
-.ef-card { position: relative; }
-.ef-card.ef-sent { border-left-color: #64748b; }
-.ef-sent .ef-name { padding-right: 100px; }
-.ef-sent-tag { position: absolute; top: 12px; right: 12px; font-size: 13px; color: #94a3b8; background: #1b2844; border-radius: 8px; padding: 2px 8px; }
 .ef-sent .ef-send { background: #1b2844; color: #86efac; border: 1px solid #33456b !important; }
 .pk-go.ef-send-all:disabled { background: #1b2844; color: #94a3b8; }
 .ef-all { padding: 4px 16px 24px; }
-.pk-go.ef-send-all { background: #06c755; font-size: 22px; min-height: 64px; }
+.pk-go.ef-send-all { background: #06c755; font-size: 20px; min-height: 56px; }
 
 /* 揀貨時按「不夠」：最上面一條橘色提示，一鍵問業務（不擋畫面） */
 .ask-strip { text-align: left; margin-bottom: 10px; padding: 10px 12px; border-radius: 12px; background: #431407; border: 1px solid #f97316; }

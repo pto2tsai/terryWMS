@@ -14,18 +14,21 @@ window.renderErpFix = function() {
         all.innerHTML = '';
         return;
     }
-    box.innerHTML = list.map(function(o, i) {
-        const sent = window.erpSentLabel(o);
-        return '<div class="ef-card' + (sent ? ' ef-sent' : '') + '">' +
-            (sent ? '<div class="ef-sent-tag">' + esc(sent) + '</div>' : '') +
-            '<div class="ef-name">' + esc(o.customer || '') + '</div>' +
-            '<div class="ef-no">' + esc(o.orderNo || '') + (o.waveNo ? '・波次 ' + esc(o.waveNo) : '') + '</div>' +
-            window.erpFixLines(o).map(function(l) { return '<div class="ef-line">' + esc(l) + '</div>'; }).join('') +
+    // 分兩段：缺貨少出（請改數量）、鼎新對不上（請確認）；一張卡片：客戶＋已傳、單號、短短一行、兩個按鈕
+    const card = function(o) {
+        const i = list.indexOf(o), sent = window.erpSentLabel(o);
+        return '<div class="ef-card' + (sent ? ' ef-sent' : '') + (o.erpFixNeeded ? '' : ' ef-ret') + '">' +
+            '<div class="ef-top"><span class="ef-name">' + esc(o.customer || '') + '</span>' + (sent ? '<span class="ef-sent-tag">' + esc(sent) + '</span>' : '') + '</div>' +
+            '<div class="ef-no">' + esc(o.orderNo || '') + '</div>' +
+            window.erpFixCardLines(o).map(function(l) { return '<div class="ef-line">' + esc(l.text) + (l.short ? ' <b>' + esc(l.short) + '</b>' : '') + '</div>'; }).join('') +
             '<div class="ef-btns">' +
-                '<button class="ef-send" onclick="sendErpFix(' + i + ')"><i class="fa-brands fa-line"></i> ' + (sent ? '再傳一次' : '傳給業務') + '</button>' +
-                '<button class="ef-done" onclick="markErpFixDone(' + i + ')"><i class="fa-solid fa-check"></i> 已經改好了</button>' +
+                '<button class="ef-send" onclick="sendErpFix(' + i + ')"><i class="fa-brands fa-line"></i> ' + (sent ? '再傳' : '傳業務') + '</button>' +
+                '<button class="ef-done" onclick="markErpFixDone(' + i + ')"><i class="fa-solid fa-check"></i> 改好了</button>' +
             '</div></div>';
-    }).join('');
+    };
+    const fix = list.filter(function(o) { return o.erpFixNeeded; }), ret = list.filter(function(o) { return !o.erpFixNeeded; });
+    const sec = function(cls, title, rows) { return rows.length ? '<div class="ef-sec ' + cls + '">' + title + '<span>' + rows.length + '</span></div>' + rows.map(card).join('') : ''; };
+    box.innerHTML = sec('fix', '缺貨少出・請業務改數量', fix) + sec('ret', '鼎新對不上・請業務確認', ret);
     const fresh = list.filter(function(o) { return !window.erpIsSent(o); }).length;
     all.innerHTML = fresh
         ? '<button class="pk-go ef-send-all" onclick="sendErpFix()"><i class="fa-brands fa-line"></i> 傳新的給業務（' + fresh + ' 張）</button>'
