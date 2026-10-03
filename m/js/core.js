@@ -251,6 +251,11 @@ function initData() {
     // 分貨標籤誰來印（手機／辦公室自動印）
     unsubs.push(window.watchLabelPrintMode());
     unsubs.push(window.watchCustomerShort());
+    // 物流取貨時間（電腦「設定 → 物流商」改的）：選波次時照這個排
+    unsubs.push(db.collection('settings').doc('logistics').onSnapshot(function(d) {
+        if (d.exists && Array.isArray(d.data().list) && d.data().list.length) window.applyPickupList(d.data().list);
+        if (window.currentPage === 'picking' && window.renderWaveButton) window.renderWaveButton();
+    }, function() {}));
     // 業務要改鼎新（缺貨少出、出貨後鼎新對不上）：首頁卡片和清單即時更新
     unsubs.push(window.watchErpFix(db, function(list) {
         window.erpFixList = list;

@@ -45,12 +45,18 @@ window.pageInit.picking = function() {
     if (nx) window.goNextWave(nx.id);
 };
 
-// 下一個要揀的波次：同一間沒有別人在揀的，先開單的先揀
+// 照物流來取貨的時間排（最早要交貨的在前面；沒設定時間的放後面），同時間先開單的先
+function byPickup(a, b) {
+    const ta = window.wavePickupTime ? window.wavePickupTime(a) : null, tb = window.wavePickupTime ? window.wavePickupTime(b) : null;
+    if ((ta && ta.getTime()) !== (tb && tb.getTime())) return !ta ? 1 : !tb ? -1 : ta - tb;
+    return String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+}
+// 下一個要揀的波次：同一間沒有別人在揀的；揀到一半的先，再來照取貨時間
 function nextOpenWave(excludeId) {
     return (window.waves || []).filter(function(w) { return window.isWaveOpen(w) && w.id !== excludeId && w.status !== 'done' && !otherPickers(w, true).length; })
         .sort(function(a, b) {
             const pa = (a.completedItems || []).length || (a.shortLog || []).length ? 0 : 1, pb = (b.completedItems || []).length || (b.shortLog || []).length ? 0 : 1;
-            return pa - pb || String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+            return pa - pb || byPickup(a, b);
         })[0] || null;
 }
 window.goNextWave = function(id) {
@@ -130,6 +136,7 @@ function renderWaveOptions() {
                 (w.status === 'sorting' ? '【已揀完】' : who.length ? '【' + who.map(pickerLabel).join('、') + ' 揀貨中】' : done ? '【進行中】' : '') + '</option>';
         }).join('');
     if (keep && list.some(function(w) { return w.id === keep; })) select.value = keep;
+    window.renderWaveButton();
 }
 
 window.loadPickingWave = async function() {
@@ -233,6 +240,7 @@ function checkChangeAlert() {
 }
 
 function renderPickingList() {
+    window.renderWaveButton();   // 上面的選波次按鈕跟著換
     const list = $('picking-list');
     const total = pickingItems.filter(function(i) { return !i.shortage || i.fieldShort; }).length;
     const left = pickingItems.filter(function(i) { return !i.completed && !i.shortage; }).length;
@@ -401,22 +409,36 @@ function sortedOrders(wave) {
 }
 
 // 先揀別的波次：這個先暫停（進度都存著），列出所有波次和做到哪裡，點一個就切過去
+// 選波次（上面的大按鈕、「先揀別的波次」都用這個）：一個波次一張大卡片，照物流取貨時間排
 window.openWaveSwitcher = function() {
     const cur = currentWave && currentWave.id;
-    const list = (window.waves || []).filter(function(w) { return window.isWaveOpen(w) && w.status !== 'done'; })
-        .sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
-    $('picking-next').innerHTML = '<div class="pk-top"><span><i class="fa-solid fa-layer-group"></i> 要先揀哪一個？</span></div>' +
-        list.map(function(w) {
+    const list = (window.waves || []).filter(function(w) { return window.isWaveOpen(w) && w.status !== 'done'; }).sort(byPickup);
+    show('picking-scan-area', true);
+    $('picking-next').innerHTML = '<div class="pk-top"><span><i class="fa-solid fa-layer-group"></i> ' + (cur ? '要先揀哪一個？' : '選一個波次開始揀') + '</span><span>' + list.length + ' 個</span></div>' +
+        (list.length ? list.map(function(w) {
             const done = (w.completedItems || []).length, all = (w.summary || []).length;
             const who = otherPickers(w, true);
-            const tag = w.id === cur ? '<span class="sw-tag now">正在揀</span>' : who.length ? '<span class="sw-tag busy">' + esc(who.map(function(x) { return x.name; }).join('、')) + ' 揀貨中</span>' : done ? '<span class="sw-tag pause">暫停中</span>' : '';
+            const tag = w.id === cur ? '<span class="sw-tag now">正在揀</span>' : w.status === 'sorting' ? '<span class="sw-tag pause">已揀完・待分貨</span>' :
+                who.length ? '<span class="sw-tag busy">' + esc(who.map(function(x) { return x.name; }).join('、')) + ' 揀貨中</span>' : done ? '<span class="sw-tag pause">暫停中</span>' : '';
+            const pk = window.pickupInfo ? window.pickupInfo(w) : null;
             return '<button class="sw-wave' + (w.id === cur ? ' cur' : '') + '" onclick="switchToWave(\'' + esc(w.id) + '\')">' +
                 '<div class="sw-top"><b>' + esc(w.logistics || '') + '</b>' + tag + '</div>' +
+                (pk ? '<div class="sw-pickup' + (pk.level ? ' ' + pk.level : '') + '"><i class="fa-regular fa-clock"></i> ' + esc(pk.text) + '</div>' : '') +
                 '<div class="sw-sub">' + esc(w.waveNo) + '　' + esc(w.totalQty || 0) + ' 件' + (all ? '　・　' + done + ' / ' + all + ' 項' : '') + '</div></button>';
-        }).join('') +
+        }).join('') : '<div class="empty-state"><i class="fa-solid fa-circle-check"></i><p>目前沒有要揀的波次</p></div>') +
         (cur ? '<button class="pk-link" onclick="switchToWave(\'' + esc(cur) + '\')">← 不換，繼續揀這個</button>' : '');
     pickFocus(true);
     window.scrollTo(0, 0);
+};
+// 上面那顆選波次的大按鈕：寫現在揀哪一個、幾點取貨
+window.renderWaveButton = function() {
+    const b = $('picking-wave-btn');
+    if (!b) return;
+    const n = (window.waves || []).filter(function(w) { return window.isWaveOpen(w) && w.status !== 'done'; }).length;
+    if (!currentWave) { b.innerHTML = '<span class="wb-main"><i class="fa-solid fa-layer-group"></i> 選擇波次</span><span class="wb-side">' + n + ' 個待揀 ▾</span>'; return; }
+    const pk = window.pickupInfo ? window.pickupInfo(currentWave) : null;
+    b.innerHTML = '<span class="wb-main"><b>' + esc(currentWave.logistics || '') + '</b><small>' + esc(currentWave.waveNo || '') + (pk ? '・<em class="' + pk.level + '">' + esc(pk.text) + '</em>' : '') + '</small></span>' +
+        '<span class="wb-side">換波次 ▾</span>';
 };
 window.switchToWave = function(id) {
     if (currentWave && currentWave.id === id) { pickFocus(false); return renderPickingList(); }
