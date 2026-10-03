@@ -137,9 +137,26 @@ window.waveNeedsLabels = function(wave) { return !/大榮|黑貓|新竹/.test(St
 // ---------- 兩間倉庫：每樣商品固定放在其中一間 ----------
 // 還沒有儲位，所以不用先建清單：揀貨時誰在哪一間按了「拿好了」，就記住這樣商品在那一間（productHome/{品項 key}）
 // 手機只叫人拿自己這間的貨；還不知道在哪一間的，兩間的手機都會出現，先拿到的那間就記起來
-window.PICK_HOUSES = [{ id: 'J', name: 'J庫' }, { id: 'I', name: 'I庫' }];
+window.PICK_HOUSES = [{ id: 'J', name: 'J庫' }, { id: 'I', name: 'I庫' }, { id: 'K', name: 'K庫' }];
 window.houseName = function(id) { const h = window.PICK_HOUSES.find(x => x.id === id); return h ? h.name : ''; };
-window.productHomes = {};   // { 品項 key: 'J' | 'I' }
+window.productHomes = {};   // { 品項 key: 'J' | 'I' | 'K' }
+// 儲位第一個字就是哪一間（I-A-01-1F → I）；練習模式、還沒指定儲位的看不出來
+window.houseOfLocation = function(loc) { const m = /^([A-Z])-/.exec(String(loc || '').trim().toUpperCase()); return m && window.houseName(m[1]) ? m[1] : ''; };
+// K 庫在另一棟：儲位是 K 開頭的一定是 K 庫；I、J 庫照舊用揀貨時記起來的「商品在哪一間」
+// 這一項在哪一間（看不出來＝''）
+window.itemHouse = function(item) {
+    if (!item) return '';
+    return window.homeOf(item.key) || (window.houseOfLocation(item.locationId) === 'K' ? 'K' : '');
+};
+// 這一項要不要叫這一間的人拿：記起來的照記的；K 庫儲位只給 K 庫；I、J 庫儲位不給 K 庫；看不出來的每一間都出現（先拿到的那間記起來）
+window.itemInHouse = function(item, house) {
+    const h = window.homeOf(item && item.key);
+    if (h) return h === house;
+    const lw = window.houseOfLocation(item && item.locationId);
+    if (!lw) return true;
+    if (lw === 'K' || house === 'K') return lw === house;
+    return true;
+};
 window.productHomeId = function(key) { return encodeURIComponent(key); };
 window.homeOf = function(key) { return window.productHomes[key] || ''; };
 window.watchProductHomes = function(onChange) {
@@ -162,7 +179,7 @@ window.groupRowsByHouse = function(rows) {
     const groups = window.PICK_HOUSES.map(h => ({ house: h.id, name: h.name, rows: [] })).concat([{ house: '', name: '還不知道在哪一間（先找到的那間記起來）', rows: [] }]);
     rows.forEach(r => {
         const k = r.key || (r.productName + '|||' + (r.spec && r.spec !== '-' ? r.spec : ''));
-        const g = groups.find(x => x.house === window.homeOf(k)) || groups[groups.length - 1];
+        const g = groups.find(x => x.house === window.itemHouse({ key: k, locationId: r.locationId })) || groups[groups.length - 1];
         g.rows.push(r);
     });
     return groups.filter(g => g.rows.length);

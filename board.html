@@ -9,7 +9,7 @@
       - 沒有選單、全螢幕、大字（3～5 公尺外看得清楚）
       - 資料即時更新（Firestore 即時監聽，不是定時整頁重新整理），斷線會自動重新連線
       - 建議用「唯讀」角色的專用帳號登入：螢幕只能看、不能改資料；登入一次就會記住
-      - 晚上 20:00～隔天 06:30 自動調暗（網址加 ?night=off 可關閉）
+      - 晚上 20:00～隔天 06:30、而且沒有工作時自動調暗（有工作照常亮；網址加 ?night=off 可關閉）
     -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -25,7 +25,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; background: #0b1120; color: #e2e8f0; font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif; overflow: hidden; }
-        body.night #board { filter: brightness(0.35); }
+        body.night #board { filter: brightness(0.6); }
         #board { height: 100%; display: flex; flex-direction: column; padding: 1.2vw 1.4vw; gap: 1vw; transition: filter 1s; }
         header { display: flex; align-items: center; gap: 1.5vw; }
         header h1 { font-size: 2.6vw; font-weight: 900; color: #fff; }
@@ -158,6 +158,12 @@
     // 儲位看不出是哪一庫（還沒指定、練習模式）的，放在 I、J 庫的看板
     function isMine(loc) { var w = whOf(loc); return w ? MY.indexOf(w) >= 0 : MAIN; }
     function isOther(loc) { return !isMine(loc); }
+    // 揀貨項目在哪一庫：跟手機一樣（K 開頭儲位＝K 庫；其他看手機記起來的「商品在哪一間」；看不出來的放 I、J 庫）
+    function itemMine(i) {
+        var h = window.homeOf ? window.homeOf(i.key) : '';
+        if (h) return MY.indexOf(h) >= 0;
+        return whOf(i.locationId) === 'K' ? !MAIN : MAIN;
+    }
     var OTHER_NAME = WH === 'K' ? 'I、J 庫' : 'K 庫';
     document.title = WH_NAME + ' 現場看板';
     setTimeout(function() { $('board-title').textContent = '📋 ' + WH_NAME + '現場看板'; }, 0);
@@ -240,6 +246,7 @@
         draw();
         while (n > 1 && el.scrollHeight > el.clientHeight + 1) { n--; draw(); }
         if (kind) remember(kind, rows);
+        checkNight();
     }
     // 每分鐘更新等待時間（不用等資料變動）
     setInterval(function() { Object.keys(lastDraw).forEach(function(k) { lastDraw[k](); }); }, 60000);
@@ -316,6 +323,14 @@
         } catch (e) {}
     }
     // 上方提醒：一件事一個小方塊（紅＝現在要處理、橙＝要注意、灰＝處理了在等別人），明細在手機、電腦看
+    // 晚上沒事做才調暗；有波次、待上架、調度或紅色提醒就照常亮（晚上也會先揀隔天早上的貨）
+    // 資料一有變就重新看一次（不用等下一次時鐘）
+    function checkNight() {
+        var d = new Date(), mins = d.getHours() * 60 + d.getMinutes();
+        var busy = !!document.querySelector('#l-waves .card, #l-tasks .card, #l-dispatch .card, #erp-alert .chip.red');
+        var night = !/[?&]night=off/.test(location.search) && (mins >= 20 * 60 || mins < 6 * 60 + 30) && !busy;
+        document.body.classList.toggle('night', night);
+    }
     function drawErpAlert() {
         var items = [];
         // key：同一件事同一個 key（紅色的新 key＝剛發生，要閃）
@@ -334,7 +349,7 @@
         var byId = {};
         erpFix.concat(erpRet).forEach(function(o) { byId[o.id] = o; });
         var ids = Object.keys(byId), unsent = ids.filter(function(k) { return !window.erpIsSent(byId[k]); }).length;
-        if (ids.length) chip(unsent ? 'red' : 'gray', '🧾', '要改鼎新 ' + num(ids.length) + ' 張・' + (unsent ? num(unsent) + ' 張還沒傳給業務' : '都傳了，等業務改'), unsent ? 'erp-unsent' : '');
+        if (ids.length) chip(unsent ? 'red' : 'gray', '📝', '要改鼎新 ' + num(ids.length) + ' 張・' + (unsent ? num(unsent) + ' 張還沒傳給業務' : '都傳了，等業務改'), unsent ? 'erp-unsent' : '');
         // 剛發生的紅色（新出現、或還沒傳的張數變多）：閃 30 秒＋螢幕外框閃 3 下＋（開了聲音）響一聲
         // 剛打開看板的前幾秒是在載入舊資料，不算
         var reds = {}, fresh = [];
@@ -350,6 +365,7 @@
             return '<span class="chip ' + c.lvl + (c.key && pulseUntil[c.key] > now ? ' pulse' : '') + '">' + c.icon + ' ' + c.html + '</span>';
         }).join('');
         $('erp-alert').classList.toggle('show', items.length > 0);
+        checkNight();
         // 閃完 30 秒重畫一次（停在紅色）
         clearTimeout(pulseTimer);
         var left = Object.keys(pulseUntil).map(function(k) { return pulseUntil[k] - now; }).filter(function(t) { return t > 0; });
@@ -390,11 +406,12 @@
         });
         // 練習模式（不看庫存、照訂單揀）跟手機一樣
         if (window.watchPracticeMode) unsubs.push(window.watchPracticeMode(function() { drawWaves(); }));
+        if (window.watchProductHomes) unsubs.push(window.watchProductHomes(function() { drawWaves(); }));
         function mineOfWave(w) {
             var list = [];
             try { list = window.buildWavePickingList(w, allPallets, consigns) || []; } catch (e) { console.warn('揀貨清單算不出來', w.waveNo, e); }
             if (!list.length) return MAIN ? { items: [], all: w.itemCount || (w.summary || []).length || 0, done: (w.completedItems || []).length, keys: null } : null;
-            var mine = list.filter(function(i) { return isMine(i.locationId); });
+            var mine = list.filter(itemMine);
             if (!mine.length) return null;
             var q = 0; mine.forEach(function(i) { if (i.type !== 'return' && !i.shortage) q += parseFloat(i.pickQty) || 0; });
             return { items: mine, all: mine.length, done: mine.filter(function(i) { return i.completed; }).length, qty: Math.round(q * 1000) / 1000, both: mine.length < list.length,
@@ -407,7 +424,7 @@
                 var m = mineOfWave(w); if (m) rows.push(Object.assign({}, w, { _mine: m }));
                 if (w.status === 'sorting') return;
                 var list = []; try { list = window.buildWavePickingList(w, allPallets, consigns) || []; } catch (e) {}
-                var o = list.filter(function(i) { return isOther(i.locationId) && !i.completed; });
+                var o = list.filter(function(i) { return !itemMine(i) && !i.completed; });
                 if (o.length) { if (w.status === 'picking') op++; else oq++; }
             });
             otherStat.picking = op; otherStat.pending = oq; drawOther();
@@ -495,9 +512,7 @@
         var d = new Date();
         $('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
         $('date').textContent = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-        var mins = d.getHours() * 60 + d.getMinutes();
-        var night = !/[?&]night=off/.test(location.search) && (mins >= 20 * 60 || mins < 6 * 60 + 30);
-        document.body.classList.toggle('night', night);
+        checkNight();
         if (d.toLocalYMD() !== startDay) location.reload();
     }
     tick(); setInterval(tick, 15000);

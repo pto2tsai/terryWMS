@@ -138,13 +138,9 @@ window.confirmInboundLocation = async function() {
             return;
         } else if (e.code === 'ORDER_MISSING') {
             if (camScanner) await closeCameraScan();
-            if (confirm('此任務的入庫單已不存在（可能已取消）\n\n要把這個任務移除嗎？')) {
-                await taskRef.update({ status: 'cancelled', confirmedAt: new Date().toISOString(), confirmedBy: who, note: '入庫單已不存在' });
-                setResult('inbound-result', 'info', '已移除任務');
-            } else {
-                setResult('inbound-result', false, '❌ ' + e.message);
-                return;
-            }
+            // 入庫單已經不在了（被取消）：任務直接拿掉，不用再問
+            await taskRef.update({ status: 'cancelled', confirmedAt: new Date().toISOString(), confirmedBy: who, note: '入庫單已不存在' }).catch(function() {});
+            setResult('inbound-result', 'info', '這張入庫單已經取消，任務已拿掉');
         } else {
             setResult('inbound-result', false, '❌ 入庫失敗：' + e.message);
             return;

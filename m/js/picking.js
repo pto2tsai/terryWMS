@@ -321,19 +321,26 @@ function renderNextStop() {
         '<span>' + (window.isPracticeMode() ? '<span class="pk-chip">練習</span> ' : '') +
         '<button class="pk-chip pk-house" onclick="switchHouse()"><i class="fa-solid fa-location-dot"></i> ' + esc(window.houseName(house)) + ' ⇄</button></span></div>' +
         '<div class="pk-bar"><div style="width:' + pct + '%"></div></div>';
-    // 只叫人拿這一間的貨；還不知道在哪一間的，兩間都會出現（先拿到的那間記起來）
-    const mine = bySkip(pending.filter(function(i) { const h = window.homeOf(i.key); return !h || h === house; }));
+    // 剛按「不夠」又一件都沒有：先問在哪一間
+    if (window._whereItem) {
+        const wc = whereCardHtml();
+        if (wc) { show('picking-scan-box', false); box.innerHTML = top + warn + wc; return; }
+    }
+    // 只叫人拿這一間的貨；還不知道在哪一間的，每一間都會出現（先拿到的那間記起來）
+    const mine = bySkip(pending.filter(function(i) { return window.itemInHouse(i, house); }));
     const other = pending.length - mine.length;
     // 有板號可以掃的才顯示掃描框（練習模式沒有板號）
     const n = mine[0];
     show('picking-scan-box', !!(n && !n.practice));
     speakNext(n);
     if (!n && other) {
-        const oh = window.PICK_HOUSES.filter(function(h) { return h.id !== house; }).map(function(h) { return h.name; }).join('、');
+        // 還有貨的是哪幾間（看不出來的寫其他間）
+        const left = {}; pending.forEach(function(i) { const h = window.itemHouse(i); if (h && h !== house) left[h] = true; });
+        const oh = (Object.keys(left).length ? window.PICK_HOUSES.filter(function(h) { return left[h.id]; }) : window.PICK_HOUSES.filter(function(h) { return h.id !== house; })).map(function(h) { return h.name; }).join('、');
         const who = otherPickers(currentWave).filter(function(x) { return x.house && x.house !== house; });
         box.innerHTML = top + warn + '<div class="pk-card pk-done"><div class="big"><i class="fa-solid fa-circle-check"></i> 這間拿完了</div>' +
             '<div class="pk-sub" style="font-size:22px">' + esc(oh) + '還有 <b>' + other + '</b> 項' + (who.length ? '（' + esc(who.map(function(x) { return x.name; }).join('、')) + ' 揀貨中）' : '') + '</div>' +
-            '<div class="pk-sub">兩間都拿完，最後一個人按「完成出貨」</div></div>';
+            '<div class="pk-sub">每一間都拿完，最後一個人按「完成出貨」</div></div>';
         return;
     }
     if (!n) {
@@ -474,7 +481,7 @@ window.confirmPickingScan = async function() {
 // 現在這支手機要拿的那一項（這一間的，或還不知道在哪一間的）
 function currentItem() {
     const h = myHouse();
-    return bySkip(pickingItems.filter(function(i) { const x = window.homeOf(i.key); return !i.completed && !i.shortage && (!x || x === h); }))[0];
+    return bySkip(pickingItems.filter(function(i) { return !i.completed && !i.shortage && window.itemInHouse(i, h); }))[0];
 }
 window.skipCurrentPick = function() {
     const n = currentItem();
@@ -546,11 +553,11 @@ window.pickShortNumber = function(v) {
 async function saveShort(n, got) {
     const want = parseFloat(n.pickQty) || 0;
     // 還不知道在哪一間的商品，這間一件都沒有：應該在另一間，交給另一間的人拿（不算缺貨）
-    const others = window.PICK_HOUSES.filter(function(h) { return h.id !== myHouse(); });
-    if (got === 0 && !window.homeOf(n.key) && myHouse() && others.length === 1) {
-        try { await window.setProductHome(n, others[0].id); }
-        catch (e) { setResult('picking-scan-result', false, '❌ 儲存失敗：' + e.message); return; }
-        setResult('picking-scan-result', 'info', '↪️ ' + n.productName + ' 這間沒有，交給 ' + others[0].name);
+    // I、J 庫在同一棟：這間沒有就交給隔壁那間；K 庫在另一棟：問是 J 庫還是 I 庫（都沒有才算缺貨）
+    const pair = { J: 'I', I: 'J' }[myHouse()];
+    if (got === 0 && !window.itemHouse(n) && myHouse() && !n._notElsewhere) {
+        if (pair) return handOver(n, pair);
+        window._whereItem = Object.assign({}, n, { _waveId: currentWave.id });
         return renderPickingList();
     }
     const by = window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : '';
@@ -574,6 +581,31 @@ async function saveShort(n, got) {
     renderPickingList();
     askSalesBox(n, want, got);
 }
+
+// 這間一件都沒有、又還不知道在哪一間：問在哪一間（點了就交給那一間的人拿）
+async function handOver(n, id) {
+    try { await window.setProductHome(n, id); }
+    catch (e) { setResult('picking-scan-result', false, '❌ 儲存失敗：' + e.message); return; }
+    setResult('picking-scan-result', 'info', '↪️ ' + n.productName + ' 這間沒有，交給 ' + window.houseName(id));
+    renderPickingList();
+}
+function whereCardHtml() {
+    const n = window._whereItem;
+    if (!n || !currentWave || n._waveId !== currentWave.id) return '';
+    return '<div class="pk-card"><div class="pk-name">' + esc(n.productName) + ' ' + esc(n.spec || '') + '</div>' +
+        '<div class="pk-sub" style="font-size:22px">這間沒有，在哪一間？</div>' +
+        window.PICK_HOUSES.filter(function(h) { return h.id !== myHouse(); }).map(function(h) {
+            return '<button class="pk-go" onclick="pickWhere(\'' + h.id + '\')"><i class="fa-solid fa-location-dot"></i> ' + esc(h.name) + '</button>';
+        }).join('') +
+        '<button class="pk-go" style="background:#7f1d1d" onclick="pickWhere(\'\')"><i class="fa-solid fa-ban"></i> 都沒有（缺貨）</button></div>';
+}
+window.pickWhere = function(id) {
+    const n = window._whereItem;
+    window._whereItem = null;
+    if (!n) return;
+    if (id) return handOver(n, id);
+    return saveShort(Object.assign({}, n, { _notElsewhere: true }), 0);
+};
 
 // ---------- 問業務：揀貨時不夠，當下一鍵傳 LINE 問業務要怎麼處理 ----------
 function pickerName() { return window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : ''; }

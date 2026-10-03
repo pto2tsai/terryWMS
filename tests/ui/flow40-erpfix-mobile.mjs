@@ -41,7 +41,8 @@ await mp.click('#erpfix-list .ef-card .ef-done'); await mp.waitForTimeout(1500);
 const a = await H.one('salesOrders', 'A');
 H.check('按「已經改好了」：從清單拿掉（海霸王）', a.erpFixNeeded === false && !(await mp.textContent('#erpfix-list')).includes('海霸王'), JSON.stringify(a));
 H.check('不用再問（沒有確認視窗），下面出現「已拿掉［復原］」', M.log.dialogs.length === 0 && (await mp.isVisible('#ef-undo')) && (await mp.textContent('#ef-undo')).includes('已拿掉：海霸王'), JSON.stringify(M.log.dialogs));
-await mp.click('#ef-undo button'); await mp.waitForTimeout(1500);
+await mp.click('#ef-undo button');
+for (let i = 0; i < 30 && !(await mp.textContent('#erpfix-list')).includes('海霸王'); i++) await mp.waitForTimeout(200);   // 畫面跟著資料庫更新（機器忙時會慢一點）
 const a2 = await H.one('salesOrders', 'A');
 H.check('按「復原」：海霸王回到清單（還是要改鼎新、已傳記錄也在）', a2.erpFixNeeded === true && (await mp.textContent('#erpfix-list')).includes('海霸王') && !!a2.erpSentKey, JSON.stringify(a2));
 const D = await H.openApp(base, USERS.op); await D.page.waitForTimeout(1500);
@@ -49,6 +50,6 @@ await D.page.evaluate(() => openErpFixList()); await D.page.waitForTimeout(1200)
 const fx = await D.page.textContent('#modal-erp-fix');
 H.check('電腦版清單一樣：老街麵線（少 0）不出現', fx.includes('展欣偉群') && !fx.includes('老街麵線') && !fx.includes('1.9999'), fx.slice(0, 300));
 const setup = await D.page.evaluate(async () => ({ cmd: boardSetupCommand(), txt: await (await fetch('tools/board-setup.txt')).text() }));
-H.check('首頁「設定看板電腦」：複製的指令會下載自動設定小程式（建捷徑、電視全螢幕、可出聲）', setup.cmd.includes("irm ($u+'tools/board-setup.txt')|iex") && setup.cmd.startsWith('powershell') && setup.txt.includes('--kiosk') && setup.txt.includes('--autoplay-policy=no-user-gesture-required') && /^[\x00-\x7f]*$/.test(setup.txt), setup.cmd);
+H.check('首頁「設定看板電腦」：複製的指令會下載自動設定小程式（建捷徑、電視全螢幕、可出聲）', setup.cmd.includes("DownloadString($u+'tools/board-setup.txt')") && setup.cmd.includes('SecurityProtocol=3072') && setup.cmd.startsWith('powershell') && setup.txt.includes('--kiosk') && setup.txt.includes('--autoplay-policy=no-user-gesture-required') && /^[\x00-\x7f]*$/.test(setup.txt), setup.cmd);
 H.check('沒有頁面錯誤', M.log.errors.length === 0 && D.log.errors.length === 0, JSON.stringify(M.log.errors.concat(D.log.errors)));
 await H.close(); process.exit(0);
