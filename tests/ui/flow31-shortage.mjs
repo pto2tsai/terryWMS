@@ -108,7 +108,7 @@ if (lb) await lb.close().catch(() => {});
 const B = await D.ctx.newPage();
 await B.goto(base + '/board.html?night=off'); await B.waitForTimeout(3500);
 const alertTxt = await B.innerText('#erp-alert');
-H.check('電視看板：缺貨少出 1 張，請業務在鼎新改銷貨單：海霸王 白蝦 5→3', alertTxt.includes('缺貨少出 1 張') && alertTxt.includes('海霸王 白蝦 5→3'), alertTxt);
+H.check('電視看板：要改鼎新 1 張・1 張還沒傳給業務（明細在手機、電腦看）', alertTxt.includes('要改鼎新 1 張・1 張還沒傳給業務'), alertTxt);
 await H.nav(D.page, 'home'); await D.page.waitForTimeout(2500);
 const home = await D.page.innerText('#home-todos');
 H.check('首頁待辦：業務要改鼎新 1（海霸王 白蝦 5→3）', /業務要改鼎新\s*1/.test(home) && home.includes('海霸王（A-1）白蝦 5→3'), home);
@@ -125,7 +125,7 @@ H.check('缺的貨不會再排波次', !wv.includes('A-1'), JSON.stringify(wv));
 const r2 = await pushReport('每日客戶銷貨明細表_1100.xlsx', [HEAD, ['2026/09/28', 'A-1', '海霸王', '白蝦', '50/60', 3, '件', '全日'], rows[2], rows[3]]);
 for (let i = 0; i < 30; i++) { await D.page.waitForTimeout(500); const x = await H.one('erpInbox', r2.id); if (x && ['done', 'attention', 'error'].includes(x.status)) break; }
 await B.waitForTimeout(1500);
-H.check('業務在鼎新把海霸王改成 3 件、匯入後：提醒自動消失（看板不再顯示）', (await H.all('salesOrders')).find(o => o.orderNo === 'A-1').erpFixNeeded === false && !(await B.innerText('#erp-alert')).includes('缺貨少出'), await B.innerText('#erp-alert'));
+H.check('業務在鼎新把海霸王改成 3 件、匯入後：提醒自動消失（看板不再顯示）', (await H.all('salesOrders')).find(o => o.orderNo === 'A-1').erpFixNeeded === false && !(await B.innerText('#erp-alert')).includes('要改鼎新'), await B.innerText('#erp-alert'));
 
 // ---------- 辦公室自動印（手機連不上標籤機時）----------
 await H.nav(D.page, 'wave-picking'); await D.page.waitForTimeout(800);

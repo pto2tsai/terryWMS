@@ -72,7 +72,7 @@ await mp.click('#pk-alert-ok'); await mp.waitForTimeout(300);
 const B = await ctx.newPage();
 await B.goto(base + '/board.html?night=off'); await B.waitForTimeout(3500);
 const bt = await B.textContent('body');
-H.check('現場看板紅字：' + WD.waveNo + ' 鼎新改單，要放回白蝦 4 件', bt.includes(WD.waveNo + ' 鼎新改單，要放回：白蝦 4 件') && bt.includes('↩️ 要放回：白蝦 4 件'), bt.slice(0, 300));
+H.check('現場看板紅字：' + WD.waveNo + ' 鼎新改單，要放回白蝦 4 件', bt.includes(WD.waveNo + ' 要放回：白蝦 4 件') && bt.includes('↩️ 要放回：白蝦 4 件'), bt.slice(0, 300));
 await B.close();
 H.check('手機上方提醒：黃建宏整張取消', top.includes('D-2') && top.includes('黃建宏') && top.includes('整張取消'), top.slice(0, 200));
 

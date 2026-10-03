@@ -18,7 +18,7 @@ H.check('清單：海霸王 白蝦 訂 5 → 出 3（少 2）、展欣偉群 舊
 const B = await M.ctx.newPage();
 await B.goto(base + '/board.html?night=off'); await B.waitForTimeout(3000);
 let ba = await B.innerText('#erp-alert');
-H.check('看板：「2 張還沒傳給業務」', ba.includes('業務要改鼎新：2 張還沒傳給業務'), ba);
+H.check('看板：「要改鼎新 2 張・2 張還沒傳給業務」（紅色）', ba.includes('要改鼎新 2 張・2 張還沒傳給業務') && await B.$('#erp-alert .chip.red'), ba);
 await mp.evaluate(() => { window._shared = []; navigator.share = t => { window._shared.push(t.text); return Promise.resolve(); }; Object.defineProperty(navigator, 'userAgent', { get: () => 'iPhone' }); });
 await mp.click('#erpfix-all .ef-send-all'); await mp.waitForTimeout(400);
 const sent = await mp.evaluate(() => window._shared[0] || '');
@@ -27,7 +27,7 @@ let ef = '';
 for (let i = 0; i < 20 && !ef.includes('都傳過了'); i++) { await mp.waitForTimeout(300); ef = await mp.textContent('#page-erpfix'); }
 H.check('傳完：卡片寫「已傳 時:分」、按鈕變「再傳一次」，大按鈕變「都傳過了」', /已傳 \d\d:\d\d/.test(ef) && ef.includes('再傳一次') && ef.includes('都傳過了') && await mp.isDisabled('#erpfix-all .ef-send-all'), ef.slice(0, 400));
 for (let i = 0; i < 20 && ba.includes('還沒傳給業務'); i++) { await B.waitForTimeout(300); ba = await B.innerText('#erp-alert'); }
-H.check('傳完：看板不再寫「還沒傳給業務」，缺貨少出照樣顯示', !ba.includes('還沒傳給業務') && ba.includes('缺貨少出'), ba);
+H.check('傳完：看板變灰色「要改鼎新 2 張・都傳了，等業務改」', ba.includes('要改鼎新 2 張・都傳了，等業務改') && await B.$('#erp-alert .chip.gray'), ba);
 const a0 = await H.one('salesOrders', 'A');
 H.check('資料庫記下已傳（時間、內容）', !!a0.erpSentAt && a0.erpSentKey === '白蝦 50/60：訂 5 → 出 3（少 2）', JSON.stringify(a0));
 // 鼎新又改、多一樣缺貨：內容變了＝算新的，要再傳
