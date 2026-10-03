@@ -663,6 +663,10 @@ body {
 .ask-btns { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin-top: 8px; }
 .ask-btns button { -webkit-appearance: none; appearance: none; min-height: 44px; border-radius: 10px; font-size: 16px; font-weight: 700; border: 0; }
 .ask-send { background: #06c755; color: #fff; }
+.ask-reply { text-align: left; margin-bottom: 10px; padding: 8px 12px; border-radius: 12px; background: #0f1d33; border: 1px solid #1e3a5f; }
+.ask-reply-line { font-size: 16px; line-height: 1.6; color: #cbd5e1; }
+.ask-reply-line.replied b { color: #7dd3fc; font-size: 18px; }
+.ask-reply-line.new b, .ask-reply-line.claimed b { color: #fbbf24; }
 .ask-x { background: transparent; color: #fdba74; border: 1px solid #9a3412 !important; }
 
 /* 選波次：大按鈕（原本的下拉選單字小、會斷行，藏起來） */

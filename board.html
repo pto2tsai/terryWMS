@@ -18,6 +18,7 @@
     <script src="js/shared/data-format.js"></script>
     <script src="js/shared/erp-schedule.js"></script>
     <script src="js/shared/erp-fix.js"></script>
+    <script src="js/shared/sales-case.js"></script>
     <script src="js/shared/rack-config.js"></script>
     <script src="js/shared/stock-core.js"></script>
     <script src="js/shared/product-rules.js"></script>
@@ -265,17 +266,15 @@
     }
     // 揀貨時按「不夠」的品項：問過業務了沒（手機按「傳 LINE 問業務」會記在波次 salesAsked）
     function waveAsk(w) {
-        var keys = {}, asked = w.salesAsked || [];
+        // 按「不夠」當下就自動通知業務（業務看板）；這裡寫業務處理到哪裡：等業務處理／業務處理中／業務回覆了什麼
         var m = w._mine;
-        (w.shortLog || []).forEach(function(x) {
-            if (!x.key) return;
-            var here = !m || !m.keys || m.keys.indexOf(x.key) >= 0 || (MAIN && m.allKeys.indexOf(x.key) < 0);
-            if (here) keys[x.key] = true;
+        var cs = (window.waveSalesCases ? window.waveSalesCases(w) : []).filter(function(c) {
+            return !m || !m.keys || m.keys.indexOf(c.key) >= 0 || (MAIN && m.allKeys.indexOf(c.key) < 0);
         });
-        var all = Object.keys(keys), n = all.length;
-        if (!n) return '';
-        var not = all.filter(function(k) { return asked.indexOf(k) < 0; }).length;
-        return '<div class="sub' + (not ? ' ask-not' : '') + '" style="color:#fb923c;font-weight:700">⚠️ 缺 ' + n + ' 項・' + (not ? (not === n ? '還沒問業務' : not + ' 項還沒問業務') : '已問業務') + '</div>';
+        if (!cs.length) return '';
+        var waiting = cs.some(function(c) { return window.salesCaseStatus(c.info) !== 'replied'; });
+        return '<div class="sub' + (cs.some(function(c) { return window.salesCaseStatus(c.info) === 'new'; }) ? ' ask-not' : '') + '" style="color:' + (waiting ? '#fb923c' : '#7dd3fc') + ';font-weight:700;display:block">⚠️ 缺 ' + cs.length + ' 項・' +
+            cs.slice(0, 2).map(function(c) { return esc(c.productName) + '：' + esc(window.salesCaseLabel(c.info)); }).join('；') + (cs.length > 2 ? ' 等' : '') + '</div>';
     }
     // ---------- 剛發生的紅色提醒：閃、外框閃、響一聲 ----------
     var pulseUntil = {}, seenRed = {}, lastUnsent = 0, pulseTimer = null, boardStart = Date.now();

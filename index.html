@@ -152,6 +152,7 @@
             <div class="nav-group-items" id="grp-outbound">
                 <div class="nav-item" onclick="switchTab('wave-picking', event)"><i class="fa-solid fa-layer-group w-4 text-center mr-2 text-orange-400"></i>波次揀貨</div>
                 <div class="nav-item" onclick="switchTab('picking-rm', event)"><i class="fa-solid fa-fish w-4 text-center mr-2 text-red-400"></i>原料領用</div>
+                <div class="nav-item" onclick="switchTab('sales-board', event)"><i class="fa-solid fa-headset w-4 text-center mr-2 text-rose-400"></i>業務看板<span id="nav-sales-badge" class="ds-pill ds-pill-danger" style="display:none;margin-left:auto;height:20px;padding:0 8px"></span></div>
             </div>
 
             <div class="nav-group-header" onclick="toggleNavGroup('grp-warehouse')">
@@ -2731,6 +2732,21 @@
 
             <!-- 標籤列印頁面 -->
             <!-- 鼎新報表收件匣：Google 雲端自動程式送進來的報表；訂單會自動匯入並建好波次 -->
+            <!-- 業務看板：現場揀貨按「不夠」當下就出現，業務接手、回覆現場、去鼎新改（js/25-sales-board.js） -->
+            <div id="view-sales-board" class="view-panel h-full hidden flex flex-col overflow-y-auto">
+              <div class="ds-page" style="max-width:1100px;width:100%">
+                <div class="ds-page-head">
+                    <div>
+                        <div class="ds-h1">業務看板</div>
+                        <div class="ds-sub">現場揀貨不夠會馬上出現在這裡。最急的（物流快來了）在最上面。按「我來處理」→ 回覆現場 → 去鼎新改，重新匯入後自動消失。</div>
+                    </div>
+                    <div id="sales-board-notify" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
+                </div>
+                <div id="sales-board-list"></div>
+              </div>
+              <div id="sb-undo" style="display:none"></div>
+            </div>
+
             <div id="view-erp-inbox" class="view-panel h-full hidden flex flex-col p-4 overflow-y-auto">
                 <div class="glass-panel p-4 mb-3">
                     <div class="text-white text-lg font-bold mb-1"><i class="fa-solid fa-cloud-arrow-down text-sky-400 mr-2"></i>鼎新報表自動匯入</div>
@@ -4739,6 +4755,7 @@
     <script src="js/shared/product-rules.js"></script>
     <script src="js/shared/picking-list.js"></script>
     <script src="js/shared/erp-fix.js"></script>
+    <script src="js/shared/sales-case.js"></script>
     <script src="js/shared/pickup.js"></script>
     <script src="js/shared/erp-schedule.js"></script>
     
@@ -4768,5 +4785,6 @@
     <script src="js/22-report-print.js"></script>
     <script src="js/23-erp-inbox.js"></script>
     <script src="js/24-practice-stock.js"></script>
+    <script src="js/25-sales-board.js"></script>
 </body>
 </html>
