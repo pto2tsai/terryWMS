@@ -246,12 +246,9 @@ window.rcpConfirmTaskLoc = async function() {
             showTaskErr('❌ ' + e.message);
         } else if (e.code === 'ORDER_MISSING') {
             if (btn) btn.disabled = false;
-            if (confirm('此任務的入庫單已不存在，要把這個任務移除嗎？')) {
-                await taskRef.update({ status: 'cancelled', confirmedAt: new Date().toISOString(), confirmedBy: who, note: '入庫單已不存在' });
-                taskDone('已移除任務');
-            } else {
-                showTaskErr('❌ ' + e.message);
-            }
+            // 入庫單已經不在了（被取消）：任務直接拿掉，不用再問
+            await taskRef.update({ status: 'cancelled', confirmedAt: new Date().toISOString(), confirmedBy: who, note: '入庫單已不存在' }).catch(function() {});
+            taskDone('這張入庫單已經取消，任務已拿掉');
         } else {
             showTaskErr('❌ 入庫失敗：' + e.message);
         }
