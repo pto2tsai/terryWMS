@@ -22,8 +22,15 @@ await mp.evaluate(() => pickShortNumber(1)); await mp.waitForTimeout(1800);
 let top = await mp.textContent('#picking-next');
 H.check('按「不夠」（白蝦 要 3 只有 1）：最上面出現橘色提示和「傳 LINE 問業務」', top.includes('缺貨：白蝦 50/60｜要 3 有 1（少 2）') && top.includes('傳 LINE 問業務'), top.slice(0, 300));
 H.check('提示不擋畫面：下面照樣顯示下一項可以繼續揀', !(await mp.$('#ask-sales')) && top.includes('透抽'), top.slice(0, 300));
+const B = await D.ctx.newPage();
+await B.goto(base + '/board.html?night=off'); await B.waitForTimeout(3000);
+let bw = await B.innerText('#l-waves');
+H.check('看板：波次卡片寫「缺 1 項・還沒問業務」', bw.includes('缺 1 項・還沒問業務'), bw);
 await mp.click('#picking-next .ask-send'); await mp.waitForTimeout(500);
 let sent = await mp.evaluate(() => window._shared.splice(0));
+for (let i = 0; i < 20 && !bw.includes('已問業務') ; i++) { await B.waitForTimeout(300); bw = await B.innerText('#l-waves'); }
+const wv = (await H.all('waves'))[0];
+H.check('傳出去後：波次記下問過業務（白蝦），看板變「缺 1 項・已問業務」', (wv.salesAsked || []).includes('白蝦|||50/60') && bw.includes('缺 1 項・已問業務') && !bw.includes('還沒問業務'), JSON.stringify(wv.salesAsked) + bw);
 H.check('傳出去的文字：每張單一塊先寫白蝦共要 3 有 1（少 2），再每張單一塊（單號／客戶／訂幾件）', sent[0] === '⚠️ 缺貨・黑貓\n──────────\n白蝦 50/60 共要 3 有 1（少 2）\n\nS-1\n海霸王\n訂 2 件 →\n\nS-2\n好市多\n訂 1 件 →\n\n要怎麼處理？', JSON.stringify(sent));
 const one = await mp.evaluate(() => { askSalesBox({ productName: '魷魚圈A', spec: '1KG*12包(阿魷,傳鮮)', orders: [{ orderNo: '231-20261005009', customer: '竹北好食堂', quantity: 3 }] }, 3, 2); const t = window._askPending.text; closeAskSales(); return t; });
 H.check('只有一家：先寫缺什麼，再寫單號、客戶', one === '⚠️ 缺貨・黑貓\n──────────\n魷魚圈A 1KG｜要 3 有 2（少 1）\n\n231-20261005009\n竹北好食堂\n訂 3 件 →\n\n要怎麼處理？', JSON.stringify(one));

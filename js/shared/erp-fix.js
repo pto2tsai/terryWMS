@@ -24,6 +24,17 @@
         });
     };
     const LINE = '──────────';
+    // 手機卡片用的短句：{ text, short }（規格只留前段；對不上的拿掉後面「請業務確認…」那串，標題已經寫了）
+    window.erpFixCardLines = function(o) {
+        const a = o.erpFixNeeded ? (o.shortShipped || []).filter(function(x) { return r3(x.want) - r3(x.got) >= 0.001; }).map(function(x) {
+            return { text: (x.productName || '') + shortSpec(x.spec) + '　訂 ' + r3(x.want) + ' → 出 ' + r3(x.got), short: '少 ' + r3(x.want - x.got) };
+        }) : [];
+        const b = o.erpReturnNeeded ? (o.erpReturnLines || []).map(newWording).map(function(l) {
+            if (/鼎新卻沒有這張單/.test(l)) return { text: '鼎新沒有這張單（貨已出）', short: '' };
+            return { text: String(l).split(' → ')[0].replace(/(\S)[*＊]\S*/g, '$1'), short: '' };
+        }) : [];
+        return a.concat(b);
+    };
     // 複製／傳給業務的文字（分兩段：缺貨少出、出貨後鼎新對不上）；每張單上面一條分隔線，單號／客戶／要改什麼
     window.erpFixText = function(list) {
         const group = function(title, rows) {

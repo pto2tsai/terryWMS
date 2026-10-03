@@ -596,7 +596,7 @@ function askSalesBox(n, want, got) {
     // 先寫缺什麼，再寫影響哪幾張單（單號／客戶／訂幾件 →：業務直接在箭頭後面回要給幾件）
     const first = orders.length <= 1 ? head : item + ' 共要 ' + want + ' 有 ' + got + '（少 ' + short + '）';
     const text = askSalesText([[first, orders.map(function(o) { return [o.orderNo, custName(o.customer), '訂 ' + o.quantity + ' 件 →']; })]]);
-    window._askPending = { waveId: currentWave.id, head: head, text: text };
+    window._askPending = { waveId: currentWave.id, head: head, text: text, keys: [n.key] };
     renderPickingList();
 }
 function askStripHtml() {
@@ -607,27 +607,37 @@ function askStripHtml() {
         '<button class="ask-x" onclick="closeAskSales()" aria-label="先不用">先不用</button></div></div>';
 }
 window.closeAskSales = function() { window._askPending = null; renderPickingList(); };
-window.sendAskSales = async function(textIn) {
-    const text = textIn || (window._askPending && window._askPending.text);
+// 傳出去就記在波次上（salesAsked：問過業務的品項），看板的波次卡片會寫「已問業務」
+window.sendAskSales = async function(textIn, keysIn) {
+    const p = window._askPending;
+    const text = textIn || (p && p.text), keys = (keysIn || (p && p.keys) || []).filter(Boolean);
+    const waveId = currentWave && currentWave.id;
     if (!textIn) window.closeAskSales();
     if (!text) return;
-    const r = await window.sendToSales(text);
+    const mark = function() {
+        if (!waveId || !keys.length) return Promise.resolve();
+        return db.collection('waves').doc(waveId).update({ salesAsked: FieldValue.arrayUnion.apply(FieldValue, keys), salesAskedAt: new Date().toISOString() });
+    };
+    const r = await window.sendToSales(text, mark);
+    if (r === 'cancel' || r === 'line') return;
     if (r === 'copied') toast('✅ 已複製，可以貼到 LINE 給業務');
+    try { await mark(); } catch (e) { console.warn('記下已問業務失敗', e); }
 };
 // 完成前「有 N 項不夠」：全部一起問
 window.askSalesAll = function() {
     const alloc = window.waveShortAllocation(currentWave, pickingItems);
     // 每一樣缺的：先一行「品項 有幾件」，下面每張少給的單一塊（單號／客戶／訂幾件 → 給幾）
-    const groups = [];
+    const groups = [], keys = [];
     Object.keys(alloc).forEach(function(k) {
         const a = alloc[k];
         const short = a.orders.filter(function(o) { return o.got < o.want; });
         if (!short.length) return;
+        keys.push(k);
         groups.push([shortItemName(a.productName, a.spec) + ' 只有 ' + a.picked + ' 件',
             short.map(function(o) { return [o.orderNo, custName(o.customer), '訂 ' + o.want + ' 件 → 給 ' + o.got]; })]);
     });
     if (!groups.length) return;
-    window.sendAskSales(askSalesText(groups));
+    window.sendAskSales(askSalesText(groups), keys);
 };
 
 async function markPicked(found) {

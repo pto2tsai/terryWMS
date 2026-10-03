@@ -17,6 +17,7 @@
     <script src="js/shared/firebase-config.js"></script>
     <script src="js/shared/data-format.js"></script>
     <script src="js/shared/erp-schedule.js"></script>
+    <script src="js/shared/erp-fix.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; background: #0b1120; color: #e2e8f0; font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif; overflow: hidden; }
@@ -29,8 +30,14 @@
         #conn { font-size: 1.2vw; padding: .3vw .8vw; border-radius: 99px; background: #14532d; color: #bbf7d0; }
         #conn.bad { background: #7f1d1d; color: #fecaca; }
         /* 鼎新匯入有狀況：看板上方紅條（沒事就不顯示） */
-        #erp-alert { display: none; background: #7f1d1d; border: .2vw solid #ef4444; color: #fff; border-radius: .8vw; padding: .6vw 1vw; font-size: 1.6vw; font-weight: 800; margin-bottom: 1vw; }
-        #erp-alert.show { display: block; }
+        #erp-alert { display: none; flex-wrap: wrap; gap: .7vw; margin-bottom: 1vw; }
+        #erp-alert.show { display: flex; }
+        #erp-alert .chip { display: inline-block; padding: .45vw 1.1vw; border-radius: .7vw; font-size: 1.75vw; font-weight: 800; color: #fff; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; border: .18vw solid; }
+        #erp-alert .chip b { font-size: 2.2vw; color: #fde047; }
+        #erp-alert .chip.red { background: #7f1d1d; border-color: #ef4444; }
+        #erp-alert .chip.org { background: #7c2d12; border-color: #f97316; }
+        #erp-alert .chip.gray { background: #1e293b; border-color: #475569; color: #cbd5e1; }
+        #erp-alert .chip.gray b { color: #e2e8f0; }
         .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1vw; }
         .stat { background: #111827; border-radius: 1vw; padding: .8vw 1vw; border-top: .35vw solid var(--c); }
         .stat .n { font-size: 3.6vw; font-weight: 900; color: #fff; line-height: 1.1; }
@@ -214,26 +221,36 @@
         return Object.keys(net).filter(function(k) { return net[k] - (need[k] || 0) > 0.0001; })
             .map(function(k) { return names[k].productName + ' ' + (Math.round((net[k] - (need[k] || 0)) * 1000) / 1000) + ' 件'; });
     }
+    // 揀貨時按「不夠」的品項：問過業務了沒（手機按「傳 LINE 問業務」會記在波次 salesAsked）
+    function waveAsk(w) {
+        var keys = {}, asked = w.salesAsked || [];
+        (w.shortLog || []).forEach(function(x) { if (x.key) keys[x.key] = true; });
+        var all = Object.keys(keys), n = all.length;
+        if (!n) return '';
+        var not = all.filter(function(k) { return asked.indexOf(k) < 0; }).length;
+        return '<div class="sub" style="color:#fb923c;font-weight:700">⚠️ 缺 ' + n + ' 項・' + (not ? (not === n ? '還沒問業務' : not + ' 項還沒問業務') : '已問業務') + '</div>';
+    }
+    // 上方提醒：一件事一個小方塊（紅＝現在要處理、橙＝要注意、灰＝處理了在等別人），明細在手機、電腦看
     function drawErpAlert() {
-        var msgs = [];
+        var chips = [];
+        var chip = function(lvl, icon, html) { chips.push('<span class="chip ' + lvl + '">' + icon + ' ' + html + '</span>'); };
+        var num = function(n) { return '<b>' + esc(n) + '</b>'; };
         var bad = erpDocs.filter(function(r) { return r.status === 'attention' || r.status === 'error'; }).length;
         var waiting = erpDocs.filter(function(r) { return r.status === 'pending' && Date.now() - Date.parse(r.receivedAt) > 15 * 60000; }).length;
         var missed = window.erpMissedSlot(erpDocs, erpSched, new Date());
-        if (missed) msgs.push('📭 ' + missed + ' 的鼎新訂單檔還沒收到：請檢查鼎新輸出、雲端硬碟同步');
-        if (waiting) msgs.push('⏳ 鼎新訂單檔等了超過 15 分鐘還沒匯入：請打開電腦版 WMS');
-        if (bad) msgs.push('⚠️ 鼎新匯入有 ' + bad + ' 份要處理：請到電腦版「ERP 報表」');
-        waveRets.forEach(function(x) { msgs.push('↩️ ' + x.waveNo + ' 鼎新改單，要放回：' + x.rets.join('、') + '（揀貨員照手機做）'); });
-        if (noLogistics) msgs.push('🚚 ' + noLogistics + ' 張訂單沒有物流商，還沒排波次');
-        // 缺貨少出的銷貨單：這次不出、之後不補，要請業務在鼎新改數量（鼎新改好、匯入後自動消失）
-        if (erpFix.length) msgs.push('🧾 缺貨少出 ' + erpFix.length + ' 張，請業務在鼎新改銷貨單：' + erpFix.slice(0, 3).map(function(o) {
-            return o.customer + ' ' + (o.shortShipped || []).filter(function(x) { return (x.want - x.got) >= 0.001; }).map(function(x) { return x.productName + ' ' + Math.round(x.want * 1000) / 1000 + '→' + Math.round(x.got * 1000) / 1000; }).join('、');
-        }).join('；') + (erpFix.length > 3 ? ' 等' : ''));
-        // 出貨後鼎新又改少或刪單：跟實際出貨對不上，請業務確認鼎新（確認好在電腦或手機按「已經改好了」）
-        if (erpRet.length) msgs.push('⚠️ 出貨後鼎新又改了 ' + erpRet.length + ' 張（跟實際出貨對不上），請業務確認鼎新：' + erpRet.slice(0, 3).map(function(o) {
-            return o.customer + ' ' + (o.erpReturnLines || []).join('、');
-        }).join('；') + (erpRet.length > 3 ? ' 等' : ''));
-        $('erp-alert').innerHTML = msgs.map(esc).join('<br>');
-        $('erp-alert').classList.toggle('show', msgs.length > 0);
+        if (missed) chip('red', '📭', num(missed) + ' 訂單檔沒收到');
+        if (waiting) chip('org', '⏳', '訂單檔超過 ' + num(15) + ' 分沒匯入');
+        if (bad) chip('red', '⚠️', '鼎新匯入 ' + num(bad) + ' 份要處理');
+        // 鼎新改單，已經揀了要放回架上的（揀貨員照手機做）
+        waveRets.forEach(function(x) { chip('red', '↩️', esc(x.waveNo) + ' 要放回：' + esc(x.rets.join('、'))); });
+        if (noLogistics) chip('org', '🚚', num(noLogistics) + ' 張訂單沒有物流商');
+        // 業務要改鼎新（缺貨少出＋出貨後鼎新對不上）：還沒傳給業務的紅色，都傳了灰色（等業務改好、匯入後自動消失）
+        var byId = {};
+        erpFix.concat(erpRet).forEach(function(o) { byId[o.id] = o; });
+        var ids = Object.keys(byId), unsent = ids.filter(function(k) { return !window.erpIsSent(byId[k]); }).length;
+        if (ids.length) chip(unsent ? 'red' : 'gray', '🧾', '要改鼎新 ' + num(ids.length) + ' 張・' + (unsent ? num(unsent) + ' 張還沒傳給業務' : '都傳了，等業務改'));
+        $('erp-alert').innerHTML = chips.join('');
+        $('erp-alert').classList.toggle('show', chips.length > 0);
     }
     lastDraw.erpAlert = drawErpAlert;
 
@@ -270,6 +287,7 @@
                 var a = ageClass('waves', w);
                 return '<div class="card' + a.cls + '" style="--c:#ea580c"><div class="t"><span class="name">' + esc(w.waveNo) + '　' + esc(w.logistics || '') + '</span><span class="qty">' + esc(w.totalQty || 0) + ' 件</span></div>' +
                     '<div class="sub"><span>' + st + '　' + (w.orderCount || (w.orders || []).length) + ' 單　' + a.age + '</span><span>' + done + '/' + all + ' 項</span></div>' +
+                    waveAsk(w) +
                     (waveReturns(w).length ? '<div class="sub" style="color:#f87171;font-weight:700">↩️ 要放回：' + esc(waveReturns(w).join('、')) + '</div>' : '') +
                     '<div class="bar"><div style="width:' + pct + '%"></div></div></div>';
             }, '目前沒有要揀的波次', 'waves');
