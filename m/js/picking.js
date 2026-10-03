@@ -578,17 +578,23 @@ async function saveShort(n, got) {
 // ---------- 問業務：揀貨時不夠，當下一鍵傳 LINE 問業務要怎麼處理 ----------
 function pickerName() { return window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : ''; }
 // 傳給業務的文字：越短越好，一眼看懂（物流、品項、要幾有幾、哪幾家）
-function askSalesText(lines) {
-    return '⚠️ 缺貨・' + (currentWave.logistics || '').replace(/宅急便|貨運|物流$/g, '') + '\n' + lines.join('\n') + '\n要怎麼處理？';
+// blocks：每張單一塊（單號／客戶／品名規格），中間空一行；tail：最後補一句（可以不給）
+function askSalesText(blocks, tail) {
+    return '⚠️ 缺貨・' + (currentWave.logistics || '').replace(/宅急便|貨運|物流$/g, '') + '\n\n' +
+        blocks.map(function(b) { return b.filter(Boolean).join('\n'); }).join('\n\n') + '\n\n' + (tail ? tail + '\n' : '') + '要怎麼處理？';
 }
 function shortItemName(name, spec) { return name + (spec ? ' ' + String(spec).split(/[*＊(（\s]/)[0] : ''); }
 function custName(c) { return window.shortCustomer ? window.shortCustomer(c || '') : (c || ''); }
 // 按「不夠」之後：揀貨畫面最上面出現一條橘色提示（不擋畫面，可以繼續揀），一鍵傳給業務
 function askSalesBox(n, want, got) {
     const orders = (n.orders || []).filter(function(o) { return parseFloat(o.quantity) > 0; });
-    const head = shortItemName(n.productName, n.spec) + '｜要 ' + want + ' 有 ' + got + '（少 ' + Math.round((want - got) * 1000) / 1000 + '）';
-    const lines = [head].concat(orders.map(function(o) { return custName(o.customer) + (o.orderNo ? ' ' + o.orderNo : '') + '　' + o.quantity + ' 件'; }));
-    window._askPending = { waveId: currentWave.id, head: head, text: askSalesText(lines) };
+    const item = shortItemName(n.productName, n.spec), short = Math.round((want - got) * 1000) / 1000;
+    const head = item + '｜要 ' + want + ' 有 ' + got + '（少 ' + short + '）';
+    // 只有一家：單號／客戶／品項 要幾有幾；好幾家：每家一塊寫訂幾，最後寫總共少幾件
+    const text = orders.length <= 1
+        ? askSalesText([[orders[0] && orders[0].orderNo, orders[0] && custName(orders[0].customer), head]])
+        : askSalesText(orders.map(function(o) { return [o.orderNo, custName(o.customer), item + '｜訂 ' + o.quantity]; }), item + ' 共要 ' + want + ' 有 ' + got + '（少 ' + short + '）');
+    window._askPending = { waveId: currentWave.id, head: head, text: text };
     renderPickingList();
 }
 function askStripHtml() {
@@ -609,16 +615,15 @@ window.sendAskSales = async function(textIn) {
 // 完成前「有 N 項不夠」：全部一起問
 window.askSalesAll = function() {
     const alloc = window.waveShortAllocation(currentWave, pickingItems);
-    const lines = [];
+    const blocks = [];
     Object.keys(alloc).forEach(function(k) {
         const a = alloc[k];
-        const short = a.orders.filter(function(o) { return o.got < o.want; });
-        if (!short.length) return;
-        lines.push((lines.length ? '\n' : '') + shortItemName(a.productName, a.spec) + '｜有 ' + a.picked);
-        short.forEach(function(o) { lines.push(custName(o.customer) + (o.orderNo ? ' ' + o.orderNo : '') + '　訂 ' + o.want + ' → 給 ' + o.got); });
+        a.orders.filter(function(o) { return o.got < o.want; }).forEach(function(o) {
+            blocks.push([o.orderNo, custName(o.customer), shortItemName(a.productName, a.spec) + '｜訂 ' + o.want + ' 給 ' + o.got]);
+        });
     });
-    if (!lines.length) return;
-    window.sendAskSales(askSalesText(lines));
+    if (!blocks.length) return;
+    window.sendAskSales(askSalesText(blocks));
 };
 
 async function markPicked(found) {
