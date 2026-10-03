@@ -246,6 +246,7 @@
         draw();
         while (n > 1 && el.scrollHeight > el.clientHeight + 1) { n--; draw(); }
         if (kind) remember(kind, rows);
+        checkNight();
     }
     // 每分鐘更新等待時間（不用等資料變動）
     setInterval(function() { Object.keys(lastDraw).forEach(function(k) { lastDraw[k](); }); }, 60000);
@@ -322,6 +323,14 @@
         } catch (e) {}
     }
     // 上方提醒：一件事一個小方塊（紅＝現在要處理、橙＝要注意、灰＝處理了在等別人），明細在手機、電腦看
+    // 晚上沒事做才調暗；有波次、待上架、調度或紅色提醒就照常亮（晚上也會先揀隔天早上的貨）
+    // 資料一有變就重新看一次（不用等下一次時鐘）
+    function checkNight() {
+        var d = new Date(), mins = d.getHours() * 60 + d.getMinutes();
+        var busy = !!document.querySelector('#l-waves .card, #l-tasks .card, #l-dispatch .card, #erp-alert .chip.red');
+        var night = !/[?&]night=off/.test(location.search) && (mins >= 20 * 60 || mins < 6 * 60 + 30) && !busy;
+        document.body.classList.toggle('night', night);
+    }
     function drawErpAlert() {
         var items = [];
         // key：同一件事同一個 key（紅色的新 key＝剛發生，要閃）
@@ -340,7 +349,7 @@
         var byId = {};
         erpFix.concat(erpRet).forEach(function(o) { byId[o.id] = o; });
         var ids = Object.keys(byId), unsent = ids.filter(function(k) { return !window.erpIsSent(byId[k]); }).length;
-        if (ids.length) chip(unsent ? 'red' : 'gray', '🧾', '要改鼎新 ' + num(ids.length) + ' 張・' + (unsent ? num(unsent) + ' 張還沒傳給業務' : '都傳了，等業務改'), unsent ? 'erp-unsent' : '');
+        if (ids.length) chip(unsent ? 'red' : 'gray', '📝', '要改鼎新 ' + num(ids.length) + ' 張・' + (unsent ? num(unsent) + ' 張還沒傳給業務' : '都傳了，等業務改'), unsent ? 'erp-unsent' : '');
         // 剛發生的紅色（新出現、或還沒傳的張數變多）：閃 30 秒＋螢幕外框閃 3 下＋（開了聲音）響一聲
         // 剛打開看板的前幾秒是在載入舊資料，不算
         var reds = {}, fresh = [];
@@ -356,6 +365,7 @@
             return '<span class="chip ' + c.lvl + (c.key && pulseUntil[c.key] > now ? ' pulse' : '') + '">' + c.icon + ' ' + c.html + '</span>';
         }).join('');
         $('erp-alert').classList.toggle('show', items.length > 0);
+        checkNight();
         // 閃完 30 秒重畫一次（停在紅色）
         clearTimeout(pulseTimer);
         var left = Object.keys(pulseUntil).map(function(k) { return pulseUntil[k] - now; }).filter(function(t) { return t > 0; });
@@ -502,11 +512,7 @@
         var d = new Date();
         $('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
         $('date').textContent = d.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-        var mins = d.getHours() * 60 + d.getMinutes();
-        // 晚上沒事做才調暗；有波次、待上架、調度或紅色提醒就照常亮（晚上也會先揀隔天早上的貨）
-        var busy = !!document.querySelector('#l-waves .card, #l-tasks .card, #l-dispatch .card, #erp-alert .chip.red');
-        var night = !/[?&]night=off/.test(location.search) && (mins >= 20 * 60 || mins < 6 * 60 + 30) && !busy;
-        document.body.classList.toggle('night', night);
+        checkNight();
         if (d.toLocalYMD() !== startDay) location.reload();
     }
     tick(); setInterval(tick, 15000);

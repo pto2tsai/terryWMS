@@ -49,6 +49,6 @@ await D.page.evaluate(() => openErpFixList()); await D.page.waitForTimeout(1200)
 const fx = await D.page.textContent('#modal-erp-fix');
 H.check('電腦版清單一樣：老街麵線（少 0）不出現', fx.includes('展欣偉群') && !fx.includes('老街麵線') && !fx.includes('1.9999'), fx.slice(0, 300));
 const setup = await D.page.evaluate(async () => ({ cmd: boardSetupCommand(), txt: await (await fetch('tools/board-setup.txt')).text() }));
-H.check('首頁「設定看板電腦」：複製的指令會下載自動設定小程式（建捷徑、電視全螢幕、可出聲）', setup.cmd.includes("irm ($u+'tools/board-setup.txt')|iex") && setup.cmd.startsWith('powershell') && setup.txt.includes('--kiosk') && setup.txt.includes('--autoplay-policy=no-user-gesture-required') && /^[\x00-\x7f]*$/.test(setup.txt), setup.cmd);
+H.check('首頁「設定看板電腦」：複製的指令會下載自動設定小程式（建捷徑、電視全螢幕、可出聲）', setup.cmd.includes("DownloadString($u+'tools/board-setup.txt')") && setup.cmd.includes('SecurityProtocol=3072') && setup.cmd.startsWith('powershell') && setup.txt.includes('--kiosk') && setup.txt.includes('--autoplay-policy=no-user-gesture-required') && /^[\x00-\x7f]*$/.test(setup.txt), setup.cmd);
 H.check('沒有頁面錯誤', M.log.errors.length === 0 && D.log.errors.length === 0, JSON.stringify(M.log.errors.concat(D.log.errors)));
 await H.close(); process.exit(0);

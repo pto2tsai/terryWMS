@@ -221,7 +221,8 @@ function drawMobileQr(url) {
 // wh：'K'＝K 庫的看板，不給＝I、J 庫
 window.boardSetupCommand = function(wh) {
     var base = location.origin + location.pathname.replace(/[^/]*$/, '');
-    return 'powershell -NoExit -ep bypass -c "$u=\'' + base + '\';$w=\'' + (wh === 'K' ? 'K' : '') + '\';irm ($u+\'tools/board-setup.txt\')|iex"';
+    // 舊電腦（Windows 7 的 PowerShell 2）也能跑：不用 irm，先開 TLS 1.2 再下載
+    return 'powershell -NoExit -ExecutionPolicy Bypass -c "[Net.ServicePointManager]::SecurityProtocol=3072;$u=\'' + base + '\';$w=\'' + (wh === 'K' ? 'K' : '') + '\';iex (New-Object Net.WebClient).DownloadString($u+\'tools/board-setup.txt\')"';
 };
 window.openBoardSetup = function() {
     var step = function(n, html) { return '<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px"><span style="flex:none;width:28px;height:28px;border-radius:50%;background:var(--ds-primary,#2563eb);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">' + n + '</span><div style="font-size:15px;line-height:1.7;color:var(--ds-text-2)">' + html + '</div></div>'; };

@@ -1,5 +1,6 @@
 # WMS board kiosk setup (Windows PowerShell; served as .txt so it downloads as plain text). Usage (Win+R):
-#   powershell -NoExit -ep bypass -c "$u='https://<site>/';$w='K';irm ($u+'tools/board-setup.txt')|iex"
+#   powershell -NoExit -ExecutionPolicy Bypass -c "[Net.ServicePointManager]::SecurityProtocol=3072;$u='https://<site>/';$w='K';iex (New-Object Net.WebClient).DownloadString($u+'tools/board-setup.txt')"
+# (Works on Windows 7 / PowerShell 2: no Invoke-RestMethod, TLS 1.2 switched on first.)
 # $w: which warehouse board (K = K warehouse; empty = I/J).
 # Creates a desktop + startup shortcut that opens board.html full-screen on the TV (second screen),
 # with sound allowed without a click, and stops the laptop from sleeping while plugged in.
