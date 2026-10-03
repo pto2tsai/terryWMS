@@ -577,22 +577,30 @@ async function saveShort(n, got) {
 
 // ---------- 問業務：揀貨時不夠，當下一鍵傳 LINE 問業務要怎麼處理 ----------
 function pickerName() { return window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : ''; }
-function askSalesText(lines) {
-    return '【揀貨不夠，請問要怎麼處理？】\n波次 ' + (currentWave.waveNo || '') + '（' + (currentWave.logistics || '') + '）\n' + lines.join('\n') +
-        '\n\n請回覆：① 少出就好　② 換別的品項　③ 從別的倉／別的地方調貨' + (pickerName() ? '\n— 揀貨：' + pickerName() : '');
+// 傳給業務的文字：越短越好，一眼看懂（物流、品項、要幾有幾、哪幾家）
+// blocks：一塊一塊（第一塊是缺什麼，接著每張單：單號／客戶），中間空一行
+function askSalesText(blocks) {
+    return '⚠️ 缺貨・' + (currentWave.logistics || '').replace(/宅急便|貨運|物流$/g, '') + '\n\n' +
+        blocks.map(function(b) { return b.filter(Boolean).join('\n'); }).join('\n\n') + '\n\n要怎麼處理？';
 }
+function shortItemName(name, spec) { return name + (spec ? ' ' + String(spec).split(/[*＊(（\s]/)[0] : ''); }
+function custName(c) { return window.shortCustomer ? window.shortCustomer(c || '') : (c || ''); }
 // 按「不夠」之後：揀貨畫面最上面出現一條橘色提示（不擋畫面，可以繼續揀），一鍵傳給業務
 function askSalesBox(n, want, got) {
     const orders = (n.orders || []).filter(function(o) { return parseFloat(o.quantity) > 0; });
-    const head = n.productName + (n.spec ? ' ' + n.spec : '') + '：要 ' + want + ' 件，只有 ' + got + ' 件（少 ' + Math.round((want - got) * 1000) / 1000 + '）';
-    const lines = [head].concat(orders.length ? ['這些單有訂：'].concat(orders.map(function(o) { return '・' + (o.customer || '') + ' ' + (o.orderNo || '') + '：' + o.quantity + ' 件'; })) : []);
-    window._askPending = { waveId: currentWave.id, head: head, text: askSalesText(lines) };
+    const item = shortItemName(n.productName, n.spec), short = Math.round((want - got) * 1000) / 1000;
+    const head = item + '｜要 ' + want + ' 有 ' + got + '（少 ' + short + '）';
+    // 先寫缺什麼，再寫影響哪幾張單（單號／客戶）；好幾家時每家寫訂幾件
+    const text = orders.length <= 1
+        ? askSalesText([[head]].concat(orders.map(function(o) { return [o.orderNo, custName(o.customer)]; })))
+        : askSalesText([[item + ' 共要 ' + want + ' 有 ' + got + '（少 ' + short + '）']].concat(orders.map(function(o) { return [o.orderNo, custName(o.customer), '訂 ' + o.quantity + ' 件']; })));
+    window._askPending = { waveId: currentWave.id, head: head, text: text };
     renderPickingList();
 }
 function askStripHtml() {
     const a = window._askPending;
     if (!a || !currentWave || a.waveId !== currentWave.id) return '';
-    return '<div class="ask-strip"><div class="ask-head"><i class="fa-solid fa-triangle-exclamation"></i> 不夠：' + esc(a.head) + '</div>' +
+    return '<div class="ask-strip"><div class="ask-head"><i class="fa-solid fa-triangle-exclamation"></i> 缺貨：' + esc(a.head) + '</div>' +
         '<div class="ask-btns"><button class="ask-send" onclick="sendAskSales()"><i class="fa-brands fa-line"></i> 傳 LINE 問業務</button>' +
         '<button class="ask-x" onclick="closeAskSales()" aria-label="先不用">先不用</button></div></div>';
 }
@@ -607,16 +615,17 @@ window.sendAskSales = async function(textIn) {
 // 完成前「有 N 項不夠」：全部一起問
 window.askSalesAll = function() {
     const alloc = window.waveShortAllocation(currentWave, pickingItems);
-    const lines = [];
+    // 每一樣缺的：先一行「品項 有幾件」，下面每張少給的單一塊（單號／客戶／訂幾 給幾）
+    const blocks = [];
     Object.keys(alloc).forEach(function(k) {
         const a = alloc[k];
         const short = a.orders.filter(function(o) { return o.got < o.want; });
         if (!short.length) return;
-        lines.push((lines.length ? '\n' : '') + a.productName + (a.spec ? ' ' + a.spec : '') + '：只拿到 ' + a.picked + ' 件');
-        short.forEach(function(o) { lines.push('・' + (o.customer || '') + '：訂 ' + o.want + ' → 給 ' + o.got); });
+        blocks.push([shortItemName(a.productName, a.spec) + ' 只有 ' + a.picked + ' 件']);
+        short.forEach(function(o) { blocks.push([o.orderNo, custName(o.customer), '訂 ' + o.want + ' 給 ' + o.got]); });
     });
-    if (!lines.length) return;
-    window.sendAskSales(askSalesText(lines));
+    if (!blocks.length) return;
+    window.sendAskSales(askSalesText(blocks));
 };
 
 async function markPicked(found) {

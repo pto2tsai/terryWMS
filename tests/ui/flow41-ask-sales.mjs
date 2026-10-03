@@ -20,11 +20,13 @@ const first = await mp.evaluate(() => pickingItems.find(i => !i.completed).produ
 await mp.evaluate(() => { const n = pickingItems.find(i => i.productName === '白蝦' && !i.completed); window._shortItem = n; });
 await mp.evaluate(() => pickShortNumber(1)); await mp.waitForTimeout(1800);
 let top = await mp.textContent('#picking-next');
-H.check('按「不夠」（白蝦 要 3 只有 1）：最上面出現橘色提示和「傳 LINE 問業務」', top.includes('不夠：白蝦 50/60：要 3 件，只有 1 件（少 2）') && top.includes('傳 LINE 問業務'), top.slice(0, 300));
+H.check('按「不夠」（白蝦 要 3 只有 1）：最上面出現橘色提示和「傳 LINE 問業務」', top.includes('缺貨：白蝦 50/60｜要 3 有 1（少 2）') && top.includes('傳 LINE 問業務'), top.slice(0, 300));
 H.check('提示不擋畫面：下面照樣顯示下一項可以繼續揀', !(await mp.$('#ask-sales')) && top.includes('透抽'), top.slice(0, 300));
 await mp.click('#picking-next .ask-send'); await mp.waitForTimeout(500);
 let sent = await mp.evaluate(() => window._shared.splice(0));
-H.check('傳出去的文字：波次、白蝦要 3 只有 1、哪幾張單有訂、請業務回覆怎麼處理', sent[0] && sent[0].includes('【揀貨不夠，請問要怎麼處理？】') && sent[0].includes('要 3 件，只有 1 件') && sent[0].includes('海霸王 S-1：2 件') && sent[0].includes('好市多 S-2：1 件') && sent[0].includes('少出就好'), JSON.stringify(sent));
+H.check('傳出去的文字：每張單一塊先寫白蝦共要 3 有 1（少 2），再每張單一塊（單號／客戶／訂幾件）', sent[0] === '⚠️ 缺貨・黑貓\n\n白蝦 50/60 共要 3 有 1（少 2）\n\nS-1\n海霸王\n訂 2 件\n\nS-2\n好市多\n訂 1 件\n\n要怎麼處理？', JSON.stringify(sent));
+const one = await mp.evaluate(() => { askSalesBox({ productName: '魷魚圈A', spec: '1KG*12包(阿魷,傳鮮)', orders: [{ orderNo: '231-20261005009', customer: '竹北好食堂', quantity: 3 }] }, 3, 2); const t = window._askPending.text; closeAskSales(); return t; });
+H.check('只有一家：先寫缺什麼，再寫單號、客戶', one === '⚠️ 缺貨・黑貓\n\n魷魚圈A 1KG｜要 3 有 2（少 1）\n\n231-20261005009\n竹北好食堂\n\n要怎麼處理？', JSON.stringify(one));
 H.check('傳完提示就收起來', !(await mp.textContent('#picking-next')).includes('傳 LINE 問業務'));
 // 透抽揀完 → 完成：有 1 項不夠，可以一起問
 await mp.fill('#picking-scan', 'P3'); await mp.press('#picking-scan', 'Enter'); await mp.waitForTimeout(1500);
@@ -32,6 +34,6 @@ await mp.evaluate(() => completePickingWave()); await mp.waitForTimeout(1500);
 H.check('完成前「有 1 項不夠」畫面有「傳 LINE 問業務」', !!(await mp.$('#short-ask-btn')));
 await mp.click('#short-ask-btn'); await mp.waitForTimeout(500);
 sent = await mp.evaluate(() => window._shared.splice(0));
-H.check('一起問：白蝦 只拿到 1 件、哪一家訂幾給幾', sent[0] && sent[0].includes('白蝦 50/60：只拿到 1 件') && /訂 \d → 給 \d/.test(sent[0]), JSON.stringify(sent));
+H.check('一起問：每張單一塊先寫白蝦只有 1 件，再每張少給的單一塊（單號／客戶／訂幾 給幾）', sent[0] && /^⚠️ 缺貨・黑貓\n\n白蝦 50\/60 只有 1 件\n\nS-\d\n(海霸王|好市多)\n訂 \d 給 \d/.test(sent[0]) && sent[0].endsWith('要怎麼處理？'), JSON.stringify(sent));
 H.check('沒有頁面錯誤', M.log.errors.length === 0 && D.log.errors.length === 0, JSON.stringify(M.log.errors.concat(D.log.errors)));
 await H.close(); process.exit(0);
