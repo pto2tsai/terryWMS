@@ -307,6 +307,7 @@ function renderNextStop() {
     } else if (currentWave && currentWave.hasOrderChanges && (currentWave.changedOrders || []).length) {
         warn = '<div class="pk-warn" style="background:#7f1d1d">⚠️ 鼎新改了這個波次的單：' + currentWave.changedOrders.map(esc).join('、') + '<br>清單上的數量沒有跟著改，請找主管確認再揀</div>';
     }
+    warn = askStripHtml() + warn;   // 剛按「不夠」：問業務的提示在最上面
     const house = myHouse();
     const top = '<div class="pk-top"><span><b>' + done + '</b> / ' + total + ' 項</span>' +
         '<span>' + (window.isPracticeMode() ? '<span class="pk-chip">練習</span> ' : '') +
@@ -549,7 +550,52 @@ async function saveShort(n, got) {
     setResult('picking-scan-result', 'error', '⚠️ ' + n.productName + ' 拿 ' + got + '，不夠 ' + (want - got), true);
     window.sfx('short');   // 記到缺貨：咚—咚
     renderPickingList();
+    askSalesBox(n, want, got);
 }
+
+// ---------- 問業務：揀貨時不夠，當下一鍵傳 LINE 問業務要怎麼處理 ----------
+function pickerName() { return window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : ''; }
+function askSalesText(lines) {
+    return '【揀貨不夠，請問要怎麼處理？】\n波次 ' + (currentWave.waveNo || '') + '（' + (currentWave.logistics || '') + '）\n' + lines.join('\n') +
+        '\n\n請回覆：① 少出就好　② 換別的品項　③ 從別的倉／別的地方調貨' + (pickerName() ? '\n— 揀貨：' + pickerName() : '');
+}
+// 按「不夠」之後：揀貨畫面最上面出現一條橘色提示（不擋畫面，可以繼續揀），一鍵傳給業務
+function askSalesBox(n, want, got) {
+    const orders = (n.orders || []).filter(function(o) { return parseFloat(o.quantity) > 0; });
+    const head = n.productName + (n.spec ? ' ' + n.spec : '') + '：要 ' + want + ' 件，只有 ' + got + ' 件（少 ' + Math.round((want - got) * 1000) / 1000 + '）';
+    const lines = [head].concat(orders.length ? ['這些單有訂：'].concat(orders.map(function(o) { return '・' + (o.customer || '') + ' ' + (o.orderNo || '') + '：' + o.quantity + ' 件'; })) : []);
+    window._askPending = { waveId: currentWave.id, head: head, text: askSalesText(lines) };
+    renderPickingList();
+}
+function askStripHtml() {
+    const a = window._askPending;
+    if (!a || !currentWave || a.waveId !== currentWave.id) return '';
+    return '<div class="ask-strip"><div class="ask-head"><i class="fa-solid fa-triangle-exclamation"></i> 不夠：' + esc(a.head) + '</div>' +
+        '<div class="ask-btns"><button class="ask-send" onclick="sendAskSales()"><i class="fa-brands fa-line"></i> 傳 LINE 問業務</button>' +
+        '<button class="ask-x" onclick="closeAskSales()" aria-label="先不用">先不用</button></div></div>';
+}
+window.closeAskSales = function() { window._askPending = null; renderPickingList(); };
+window.sendAskSales = async function(textIn) {
+    const text = textIn || (window._askPending && window._askPending.text);
+    if (!textIn) window.closeAskSales();
+    if (!text) return;
+    const r = await window.sendToSales(text);
+    if (r === 'copied') toast('✅ 已複製，可以貼到 LINE 給業務');
+};
+// 完成前「有 N 項不夠」：全部一起問
+window.askSalesAll = function() {
+    const alloc = window.waveShortAllocation(currentWave, pickingItems);
+    const lines = [];
+    Object.keys(alloc).forEach(function(k) {
+        const a = alloc[k];
+        const short = a.orders.filter(function(o) { return o.got < o.want; });
+        if (!short.length) return;
+        lines.push((lines.length ? '\n' : '') + a.productName + (a.spec ? ' ' + a.spec : '') + '：只拿到 ' + a.picked + ' 件');
+        short.forEach(function(o) { lines.push('・' + (o.customer || '') + '：訂 ' + o.want + ' → 給 ' + o.got); });
+    });
+    if (!lines.length) return;
+    window.sendAskSales(askSalesText(lines));
+};
 
 async function markPicked(found) {
     const input = $('picking-scan');
@@ -593,7 +639,8 @@ function renderShortfallPanel() {
     }).join('');
     $('picking-next').innerHTML = '<div class="pk-card" style="border-color:#ef4444;text-align:left"><div class="pk-name" style="font-size:26px;text-align:center"><i class="fa-solid fa-triangle-exclamation" style="color:#fbbf24"></i> 有 ' + keys.length + ' 項不夠</div>' +
         '<div class="pk-sub" style="text-align:center;margin-bottom:6px">先開單的先給，這幾家會少：</div>' + groups +
-        '<button class="pk-go sf-edit" id="short-edit-btn" onclick="renderShortEditor()"><i class="fa-solid fa-scale-balanced"></i> 改分法</button></div>';
+        '<button class="pk-go sf-edit" id="short-edit-btn" onclick="renderShortEditor()"><i class="fa-solid fa-scale-balanced"></i> 改分法</button>' +
+        '<button class="pk-go ef-send-all" id="short-ask-btn" style="margin-top:10px;font-size:22px" onclick="askSalesAll()"><i class="fa-brands fa-line"></i> 傳 LINE 問業務</button></div>';
     window.scrollTo(0, 0);
 }
 // 改分法：每家一個數字（加起來要等於拿到的件數）

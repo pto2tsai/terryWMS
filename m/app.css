@@ -641,3 +641,12 @@ body {
 .ef-done { background: #1b2844; color: #cbd5e1; border: 1px solid #33456b !important; }
 .ef-all { padding: 4px 16px 24px; }
 .pk-go.ef-send-all { background: #06c755; font-size: 22px; min-height: 64px; }
+
+/* 揀貨時按「不夠」：最上面一條橘色提示，一鍵問業務（不擋畫面） */
+.ask-strip { text-align: left; margin-bottom: 10px; padding: 10px 12px; border-radius: 12px; background: #431407; border: 1px solid #f97316; }
+.ask-head { color: #fed7aa; font-size: 15px; line-height: 1.5; }
+.ask-head i { color: #fb923c; margin-right: 4px; display: inline; }
+.ask-btns { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin-top: 8px; }
+.ask-btns button { -webkit-appearance: none; appearance: none; min-height: 44px; border-radius: 10px; font-size: 16px; font-weight: 700; border: 0; }
+.ask-send { background: #06c755; color: #fff; }
+.ask-x { background: transparent; color: #fdba74; border: 1px solid #9a3412 !important; }
