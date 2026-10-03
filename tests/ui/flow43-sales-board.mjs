@@ -18,7 +18,7 @@ await sp.evaluate(() => { window._notes = []; window.Notification = function(t, 
 await sp.evaluate(() => switchTab('sales-board')); await sp.waitForTimeout(800);
 let sb = await sp.textContent('#sales-board-list');
 H.check('業務看板一開始：目前沒有要處理的', sb.includes('目前沒有要處理的'), sb.slice(0, 200));
-H.check('業務、主管的電腦預設會響、跳通知', (await sp.textContent('#sales-board-notify')).includes('這台電腦會響、跳通知'));
+H.check('電腦預設會響、跳通知（系統的聲音一律預設開著）', (await sp.textContent('#sales-board-notify')).includes('這台電腦會響、跳通知'));
 const r = await pushReport('每日客戶銷貨明細表_0900.xlsx', [HEAD, ['2026/10/01', 'S-1', '海霸王', '白蝦', '50/60', 2, '件', '黑貓'], ['2026/10/01', 'S-2', '好市多', '白蝦', '50/60', 1, '件', '黑貓'], ['2026/10/01', 'S-2', '', '透抽', 'L', 2, '件', '']]);
 for (let i = 0; i < 30; i++) { await D.page.waitForTimeout(500); const x = await H.one('erpInbox', r.id); if (x && ['done', 'attention', 'error'].includes(x.status)) break; }
 await mp.evaluate(() => openPage('picking')); await mp.waitForTimeout(2000);

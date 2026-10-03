@@ -12,11 +12,9 @@
     function hm(iso) { if (!iso) return ''; var d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
     function shortName(n, sp) { return (n || '') + (sp ? ' ' + String(sp).split(/[*＊(（\s]/)[0] : ''); }
 
-    // ---------- 通知：這台電腦要不要收（業務、主管預設要） ----------
+    // ---------- 通知：這台電腦要不要收（系統的聲音一律預設開著，關掉才記下來） ----------
     function notifyOn() {
-        try { var v = localStorage.getItem('wms-sales-notify'); if (v) return v === '1'; } catch (e) {}
-        var r = (window.currentUser || {}).role;
-        return r === 'sales' || r === 'supervisor' || r === 'admin';
+        try { return localStorage.getItem('wms-sales-notify') !== '0'; } catch (e) { return true; }
     }
     window.toggleSalesNotify = function() {
         var on = !notifyOn();

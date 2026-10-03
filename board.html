@@ -287,7 +287,9 @@
         if (soundOn) chime();
     }
     var soundOn = false, actx = null;
-    try { soundOn = localStorage.getItem('board-sound') === '1'; } catch (e) {}
+    // 預設開著（關掉才記 '0'）
+    soundOn = true;
+    try { soundOn = localStorage.getItem('board-sound') !== '0'; } catch (e) {}
     // 網頁規定：打開後要先有人點一下才能出聲（看板電腦用「不用點也能出聲」的捷徑打開就不受限）
     // 按鈕照「現在真的能不能出聲」寫：記得要開、但還不能出聲 → 寫「點一下開聲音」
     function audioReady() {
