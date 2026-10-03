@@ -18,6 +18,10 @@
     <script src="js/shared/data-format.js"></script>
     <script src="js/shared/erp-schedule.js"></script>
     <script src="js/shared/erp-fix.js"></script>
+    <script src="js/shared/rack-config.js"></script>
+    <script src="js/shared/stock-core.js"></script>
+    <script src="js/shared/product-rules.js"></script>
+    <script src="js/shared/picking-list.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; background: #0b1120; color: #e2e8f0; font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif; overflow: hidden; }
@@ -30,6 +34,8 @@
         #conn { font-size: 1.2vw; padding: .3vw .8vw; border-radius: 99px; background: #14532d; color: #bbf7d0; }
         #conn.bad { background: #7f1d1d; color: #fecaca; }
         /* 鼎新匯入有狀況：看板上方紅條（沒事就不顯示） */
+        #other-wh { font-size: 1.5vw; color: #94a3b8; margin: -.4vw 0 .8vw; }
+        #other-wh b { color: #e2e8f0; font-size: 1.8vw; }
         #erp-alert { display: none; flex-wrap: wrap; gap: .7vw; margin-bottom: 1vw; }
         #erp-alert.show { display: flex; }
         #erp-alert .chip { display: inline-block; padding: .45vw 1.1vw; border-radius: .7vw; font-size: 1.75vw; font-weight: 800; color: #fff; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; border: .18vw solid; }
@@ -73,6 +79,20 @@
         .card.late .age { color: #fca5a5; animation: blink 1.2s step-end infinite; }
         .card.fresh { animation: fresh 2.5s ease-out; }
         @keyframes blink { 50% { opacity: .35; } }
+        /* 紅色小方塊：還沒處理就一直慢慢閃（處理好自動停）；剛出現的快閃 30 秒 */
+        #erp-alert .chip.red { animation: chipSlow 2s ease-in-out infinite; }
+        @keyframes chipSlow { 50% { background: #b91c1c; box-shadow: 0 0 1.5vw .3vw rgba(239,68,68,.55); } }
+        #erp-alert .chip.pulse { animation: chipPulse 1s ease-in-out infinite; }
+        @keyframes chipPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } 50% { box-shadow: 0 0 0 .7vw rgba(239,68,68,.85), 0 0 2.5vw .8vw rgba(239,68,68,.6); background: #dc2626; border-color: #fecaca; } }
+        /* 整個螢幕外框閃紅光 3 下（倉庫另一頭也看得到） */
+        #edge { position: fixed; inset: 0; pointer-events: none; z-index: 50; box-shadow: inset 0 0 0 1.2vw #ef4444, inset 0 0 6vw 2vw rgba(239,68,68,.7); opacity: 0; }
+        #edge.on { animation: edgeFlash .6s ease-in-out 3; }
+        @keyframes edgeFlash { 50% { opacity: 1; } }
+        /* 波次卡片「還沒問業務」：慢慢閃，問過就停 */
+        .ask-not { animation: blink 1.6s ease-in-out infinite; }
+        /* 開聲音的小按鈕（網頁規定要先按一下才能出聲） */
+        #snd { margin-left: 1vw; font-size: 1.2vw; padding: .3vw .9vw; border-radius: 99px; border: .15vw solid #475569; background: #1e293b; color: #cbd5e1; cursor: pointer; }
+        #snd.on { border-color: #16a34a; color: #86efac; }
         @keyframes fresh { 0% { box-shadow: 0 0 0 .4vw #fff; } 100% { box-shadow: 0 0 0 0 transparent; } }
         .more { text-align: center; color: #94a3b8; font-size: 1.3vw; }
         #login { position: fixed; inset: 0; background: #0b1120; display: flex; align-items: center; justify-content: center; z-index: 10; }
@@ -98,14 +118,17 @@
 
     <div id="board">
         <header>
-            <h1>📋 倉庫現場看板</h1>
+            <h1 id="board-title">📋 倉庫現場看板</h1>
             <span id="conn">● 即時更新中</span>
+            <button id="snd" onclick="toggleBoardSound()">🔇 點一下開聲音</button>
             <div style="margin-left:auto;text-align:right">
                 <div id="clock">--:--</div>
                 <div id="date"></div>
             </div>
         </header>
+        <div id="other-wh"></div>
         <div id="erp-alert"></div>
+        <div id="edge"></div>
         <div class="stats">
             <div class="stat" style="--c:#f97316"><div class="n" id="s-wave">0</div><div class="l">今天完成波次</div></div>
             <div class="stat" style="--c:#fb923c"><div class="n" id="s-out">0</div><div class="l">今天出貨（件）</div></div>
@@ -126,6 +149,18 @@
     var db = firebase.firestore(), auth = firebase.auth();
     window.db = db;
     var unsubs = [];
+    // ---------- 哪個倉庫的看板：網址 ?wh=K 是 K 庫，沒寫是 I、J 庫 ----------
+    // 只顯示這個倉庫要做的事（待上架、揀貨、調度看儲位第一個字）；辦公室的提醒（要改鼎新、訂單檔）兩邊都顯示
+    var WH = String(new URLSearchParams(location.search).get('wh') || '').toUpperCase() === 'K' ? 'K' : 'IJ';
+    var MY = WH === 'K' ? ['K'] : ['I', 'J'], MAIN = WH !== 'K';
+    var WH_NAME = WH === 'K' ? 'K 庫' : 'I、J 庫';
+    function whOf(loc) { var m = /^([A-Z])-/.exec(String(loc || '').trim().toUpperCase()); return m && /[IJK]/.test(m[1]) ? m[1] : ''; }
+    // 儲位看不出是哪一庫（還沒指定、練習模式）的，放在 I、J 庫的看板
+    function isMine(loc) { var w = whOf(loc); return w ? MY.indexOf(w) >= 0 : MAIN; }
+    function isOther(loc) { return !isMine(loc); }
+    var OTHER_NAME = WH === 'K' ? 'I、J 庫' : 'K 庫';
+    document.title = WH_NAME + ' 現場看板';
+    setTimeout(function() { $('board-title').textContent = '📋 ' + WH_NAME + '現場看板'; }, 0);
     // 等待時間超過幾分鐘變黃、變紅（揀貨波次、待上架、調度工單）
     var AGE_LIMIT = { waves: [30, 60], tasks: [60, 120], dispatch: [120, 240] };
     var seen = {}, lastDraw = {};
@@ -224,33 +259,101 @@
     // 揀貨時按「不夠」的品項：問過業務了沒（手機按「傳 LINE 問業務」會記在波次 salesAsked）
     function waveAsk(w) {
         var keys = {}, asked = w.salesAsked || [];
-        (w.shortLog || []).forEach(function(x) { if (x.key) keys[x.key] = true; });
+        var m = w._mine;
+        (w.shortLog || []).forEach(function(x) {
+            if (!x.key) return;
+            var here = !m || !m.keys || m.keys.indexOf(x.key) >= 0 || (MAIN && m.allKeys.indexOf(x.key) < 0);
+            if (here) keys[x.key] = true;
+        });
         var all = Object.keys(keys), n = all.length;
         if (!n) return '';
         var not = all.filter(function(k) { return asked.indexOf(k) < 0; }).length;
-        return '<div class="sub" style="color:#fb923c;font-weight:700">⚠️ 缺 ' + n + ' 項・' + (not ? (not === n ? '還沒問業務' : not + ' 項還沒問業務') : '已問業務') + '</div>';
+        return '<div class="sub' + (not ? ' ask-not' : '') + '" style="color:#fb923c;font-weight:700">⚠️ 缺 ' + n + ' 項・' + (not ? (not === n ? '還沒問業務' : not + ' 項還沒問業務') : '已問業務') + '</div>';
+    }
+    // ---------- 剛發生的紅色提醒：閃、外框閃、響一聲 ----------
+    var pulseUntil = {}, seenRed = {}, lastUnsent = 0, pulseTimer = null, boardStart = Date.now();
+    // 還有紅色沒處理：看板剛打開先提醒一次，之後每 10 分鐘再提醒（外框閃＋響一聲），不一直盯著螢幕也不會漏掉
+    function remindIfRed() { if (document.querySelector('#erp-alert .chip.red')) attention(); }
+    setTimeout(remindIfRed, 9000);
+    setInterval(remindIfRed, 10 * 60000);
+    function attention() {
+        var e = $('edge'); e.classList.remove('on'); void e.offsetWidth; e.classList.add('on');
+        if (soundOn) chime();
+    }
+    var soundOn = false, actx = null;
+    try { soundOn = localStorage.getItem('board-sound') === '1'; } catch (e) {}
+    // 網頁規定：打開後要先有人點一下才能出聲（看板電腦用「不用點也能出聲」的捷徑打開就不受限）
+    // 按鈕照「現在真的能不能出聲」寫：記得要開、但還不能出聲 → 寫「點一下開聲音」
+    function audioReady() {
+        try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return false; }
+        return actx.state === 'running';
+    }
+    window.toggleBoardSound = function() {
+        if (soundOn && !audioReady()) { actx.resume().then(function() { drawSndBtn(); chime(); }); return; }
+        soundOn = !soundOn;
+        try { localStorage.setItem('board-sound', soundOn ? '1' : '0'); } catch (e) {}
+        if (soundOn) { audioReady(); actx.resume().then(function() { drawSndBtn(); chime(); }); }
+        drawSndBtn();
+    };
+    setTimeout(drawSndBtn, 0);
+    setTimeout(drawSndBtn, 1500);
+    function drawSndBtn() {
+        var on = soundOn && audioReady(), b = $('snd');
+        b.textContent = on ? '🔊 聲音開著' : '🔇 點一下開聲音';
+        b.classList.toggle('on', on);
+    }
+    // 叮咚（兩個音）：跟手機鐘聲同一種感覺
+    function chime() {
+        try {
+            actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+            if (actx.state === 'suspended') actx.resume();
+            [[880, 0], [660, .35]].forEach(function(n) {
+                var o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + n[1];
+                o.type = 'sine'; o.frequency.value = n[0]; o.connect(g); g.connect(actx.destination);
+                g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.6, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+                o.start(t); o.stop(t + 1.3);
+            });
+        } catch (e) {}
     }
     // 上方提醒：一件事一個小方塊（紅＝現在要處理、橙＝要注意、灰＝處理了在等別人），明細在手機、電腦看
     function drawErpAlert() {
-        var chips = [];
-        var chip = function(lvl, icon, html) { chips.push('<span class="chip ' + lvl + '">' + icon + ' ' + html + '</span>'); };
+        var items = [];
+        // key：同一件事同一個 key（紅色的新 key＝剛發生，要閃）
+        var chip = function(lvl, icon, html, key) { items.push({ lvl: lvl, icon: icon, html: html, key: key || '' }); };
         var num = function(n) { return '<b>' + esc(n) + '</b>'; };
         var bad = erpDocs.filter(function(r) { return r.status === 'attention' || r.status === 'error'; }).length;
         var waiting = erpDocs.filter(function(r) { return r.status === 'pending' && Date.now() - Date.parse(r.receivedAt) > 15 * 60000; }).length;
         var missed = window.erpMissedSlot(erpDocs, erpSched, new Date());
-        if (missed) chip('red', '📭', num(missed) + ' 訂單檔沒收到');
+        if (missed) chip('red', '📭', num(missed) + ' 訂單檔沒收到', 'missed:' + missed);
         if (waiting) chip('org', '⏳', '訂單檔超過 ' + num(15) + ' 分沒匯入');
-        if (bad) chip('red', '⚠️', '鼎新匯入 ' + num(bad) + ' 份要處理');
+        if (bad) chip('red', '⚠️', '鼎新匯入 ' + num(bad) + ' 份要處理', 'bad:' + bad);
         // 鼎新改單，已經揀了要放回架上的（揀貨員照手機做）
-        waveRets.forEach(function(x) { chip('red', '↩️', esc(x.waveNo) + ' 要放回：' + esc(x.rets.join('、'))); });
+        waveRets.forEach(function(x) { chip('red', '↩️', esc(x.waveNo) + ' 要放回：' + esc(x.rets.join('、')), 'ret:' + x.waveNo + ':' + x.rets.join('、')); });
         if (noLogistics) chip('org', '🚚', num(noLogistics) + ' 張訂單沒有物流商');
         // 業務要改鼎新（缺貨少出＋出貨後鼎新對不上）：還沒傳給業務的紅色，都傳了灰色（等業務改好、匯入後自動消失）
         var byId = {};
         erpFix.concat(erpRet).forEach(function(o) { byId[o.id] = o; });
         var ids = Object.keys(byId), unsent = ids.filter(function(k) { return !window.erpIsSent(byId[k]); }).length;
-        if (ids.length) chip(unsent ? 'red' : 'gray', '🧾', '要改鼎新 ' + num(ids.length) + ' 張・' + (unsent ? num(unsent) + ' 張還沒傳給業務' : '都傳了，等業務改'));
-        $('erp-alert').innerHTML = chips.join('');
-        $('erp-alert').classList.toggle('show', chips.length > 0);
+        if (ids.length) chip(unsent ? 'red' : 'gray', '🧾', '要改鼎新 ' + num(ids.length) + ' 張・' + (unsent ? num(unsent) + ' 張還沒傳給業務' : '都傳了，等業務改'), unsent ? 'erp-unsent' : '');
+        // 剛發生的紅色（新出現、或還沒傳的張數變多）：閃 30 秒＋螢幕外框閃 3 下＋（開了聲音）響一聲
+        // 剛打開看板的前幾秒是在載入舊資料，不算
+        var reds = {}, fresh = [];
+        items.forEach(function(c) { if (c.lvl === 'red' && c.key) { reds[c.key] = true; if (c.key !== 'erp-unsent' && !seenRed[c.key]) fresh.push(c.key); } });
+        if (unsent > lastUnsent) fresh.push('erp-unsent');
+        seenRed = reds; lastUnsent = unsent;
+        if (Date.now() - boardStart > 8000 && fresh.length) {
+            fresh.forEach(function(k) { pulseUntil[k] = Date.now() + 30000; });
+            attention();
+        }
+        var now = Date.now();
+        $('erp-alert').innerHTML = items.map(function(c) {
+            return '<span class="chip ' + c.lvl + (c.key && pulseUntil[c.key] > now ? ' pulse' : '') + '">' + c.icon + ' ' + c.html + '</span>';
+        }).join('');
+        $('erp-alert').classList.toggle('show', items.length > 0);
+        // 閃完 30 秒重畫一次（停在紅色）
+        clearTimeout(pulseTimer);
+        var left = Object.keys(pulseUntil).map(function(k) { return pulseUntil[k] - now; }).filter(function(t) { return t > 0; });
+        if (left.length) pulseTimer = setTimeout(drawErpAlert, Math.min.apply(null, left) + 200);
     }
     lastDraw.erpAlert = drawErpAlert;
 
@@ -266,6 +369,8 @@
         });
         // 待上架：手機「入庫任務」（即期品待主管核准用紅色）
         listen(db.collection('inboundTasks').where('status', '==', 'pending'), function(rows) {
+            otherStat.tasks = rows.filter(function(t) { return isOther(t.locationId); }).length; drawOther();
+            rows = rows.filter(function(t) { return isMine(t.locationId); });
             rows.sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
             render('l-tasks', 'c-tasks', rows, function(t) {
                 var hold = t.expiryApproval === 'pending', a = ageClass('tasks', t, hold ? 'red' : '');
@@ -273,27 +378,65 @@
                     '<div class="sub"><span>' + (hold ? '🔴 即期品待主管核准' : esc(t.orderNo || t.palletId || '')) + '　' + a.age + '</span><span class="loc">→ ' + esc(t.locationId || '待指定') + '</span></div></div>';
             }, '目前沒有待上架的貨', 'tasks');
         });
-        // 揀貨波次：待揀、揀貨中、待分貨
-        listen(db.collection('waves').where('status', 'in', ['pending', 'picking', 'sorting']), function(rows) {
+        // 揀貨波次：待揀、揀貨中、待分貨。用跟手機一樣的揀貨清單算出每一項在哪一庫，只顯示這一庫要揀的
+        var openWaves = [], allPallets = [], consigns = [], palletsReady = false;
+        listen(db.collection('waves').where('status', 'in', ['pending', 'picking', 'sorting']), function(rows) { openWaves = rows; drawWaves(); });
+        listen(db.collection('consignments').where('status', '==', 'active'), function(rows) { consigns = rows; drawWaves(); });
+        listen(db.collection('pallets'), function(rows) {
+            allPallets = rows.map(function(p) { return window.normalizeStockRecord ? window.normalizeStockRecord(p) : p; })
+                .filter(function(p) { return (parseFloat(p.quantity) || 0) > 0 || (parseFloat(p.totalWeight) || 0) > 0; });
+            palletsReady = true;
+            drawWaves(); drawExpiry();
+        });
+        // 練習模式（不看庫存、照訂單揀）跟手機一樣
+        if (window.watchPracticeMode) unsubs.push(window.watchPracticeMode(function() { drawWaves(); }));
+        function mineOfWave(w) {
+            var list = [];
+            try { list = window.buildWavePickingList(w, allPallets, consigns) || []; } catch (e) { console.warn('揀貨清單算不出來', w.waveNo, e); }
+            if (!list.length) return MAIN ? { items: [], all: w.itemCount || (w.summary || []).length || 0, done: (w.completedItems || []).length, keys: null } : null;
+            var mine = list.filter(function(i) { return isMine(i.locationId); });
+            if (!mine.length) return null;
+            var q = 0; mine.forEach(function(i) { if (i.type !== 'return' && !i.shortage) q += parseFloat(i.pickQty) || 0; });
+            return { items: mine, all: mine.length, done: mine.filter(function(i) { return i.completed; }).length, qty: Math.round(q * 1000) / 1000, both: mine.length < list.length,
+                keys: mine.map(function(i) { return i.key; }), allKeys: list.map(function(i) { return i.key; }) };
+        }
+        function drawWaves() {
+            if (!palletsReady) return;
+            var rows = [], op = 0, oq = 0;
+            openWaves.forEach(function(w) {
+                var m = mineOfWave(w); if (m) rows.push(Object.assign({}, w, { _mine: m }));
+                if (w.status === 'sorting') return;
+                var list = []; try { list = window.buildWavePickingList(w, allPallets, consigns) || []; } catch (e) {}
+                var o = list.filter(function(i) { return isOther(i.locationId) && !i.completed; });
+                if (o.length) { if (w.status === 'picking') op++; else oq++; }
+            });
+            otherStat.picking = op; otherStat.pending = oq; drawOther();
             // 揀貨中的排最前面，其次待揀貨、待分貨；同狀態先來先做（等最久的在上面）
             waveRets = rows.map(function(w) { return { waveNo: w.waveNo, rets: waveReturns(w) }; }).filter(function(x) { return x.rets.length; });
             drawErpAlert();
             var rank = { picking: 0, pending: 1, sorting: 2 };
             rows.sort(function(a, b) { return (rank[a.status] - rank[b.status]) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.waveNo || '').localeCompare(String(b.waveNo || '')); });
             render('l-waves', 'c-waves', rows, function(w) {
-                var done = (w.completedItems || []).length, all = w.itemCount || (w.summary || []).length || 0;
+                var done = w._mine.done, all = w._mine.all;
                 var pct = all ? Math.min(100, Math.round(done / all * 100)) : 0;
                 var st = w.status === 'picking' ? '揀貨中' : w.status === 'sorting' ? '待分貨' : '待揀貨';
                 var a = ageClass('waves', w);
-                return '<div class="card' + a.cls + '" style="--c:#ea580c"><div class="t"><span class="name">' + esc(w.waveNo) + '　' + esc(w.logistics || '') + '</span><span class="qty">' + esc(w.totalQty || 0) + ' 件</span></div>' +
+                return '<div class="card' + a.cls + '" style="--c:#ea580c"><div class="t"><span class="name">' + esc(w.waveNo) + '　' + esc(w.logistics || '') + '</span><span class="qty">' + esc(w._mine.qty != null ? w._mine.qty : (w.totalQty || 0)) + ' 件</span></div>' +
                     '<div class="sub"><span>' + st + '　' + (w.orderCount || (w.orders || []).length) + ' 單　' + a.age + '</span><span>' + done + '/' + all + ' 項</span></div>' +
+                    (w._mine.both ? '<div class="sub" style="color:#7dd3fc">🔀 ' + OTHER_NAME + '也有貨要揀，這裡只算本庫的</div>' : '') +
                     waveAsk(w) +
                     (waveReturns(w).length ? '<div class="sub" style="color:#f87171;font-weight:700">↩️ 要放回：' + esc(waveReturns(w).join('、')) + '</div>' : '') +
                     '<div class="bar"><div style="width:' + pct + '%"></div></div></div>';
             }, '目前沒有要揀的波次', 'waves');
-        });
+        }
         // 調度工單（手機「調度工單」）
         listen(db.collection('dispatchOrders').where('status', 'in', ['pending', 'in_progress']), function(rows) {
+            // 移板的儲位有這一庫的才顯示（看不出哪一庫的放 I、J 庫）
+            rows = rows.filter(function(o) {
+                var locs = [];
+                (o.operations || []).forEach(function(op) { [op.from, op.to].forEach(function(l) { if (whOf(l)) locs.push(l); }); });
+                return locs.length ? locs.some(isMine) : MAIN;
+            });
             $('cols').classList.toggle('with-dispatch', rows.length > 0);
             rows.sort(function(a, b) { return String(a.createdAt || '').localeCompare(String(b.createdAt || '')); });
             render('l-dispatch', 'c-dispatch', rows, function(o) {
@@ -315,6 +458,7 @@
         listen(db.collection('inventoryLogs').where('timestamp', '>=', window.localDayStartISO(today)), function(rows) {
             var waves = {}, inN = 0, outQty = 0, moveN = 0;
             rows.forEach(function(l) {
+                if (!isMine(l.locationId)) return;
                 if (l.type === 'inbound') inN++;
                 else if (l.type === 'move') moveN++;
                 else if (l.type === 'outbound') {
@@ -327,14 +471,22 @@
             drawStats();
         });
         listen(db.collection('waves').where('completedAt', '>=', window.localDayStartISO(today)), function(rows) {
-            practiceDone = rows.filter(function(w) { return w.status === 'done' && w.practice; });
+            practiceDone = MAIN ? rows.filter(function(w) { return w.status === 'done' && w.practice; }) : [];
             drawStats();
         });
-        // 7 天內到期（含已過期）的板數
-        var limit = new Date(); limit.setDate(limit.getDate() + 7);
-        listen(db.collection('pallets').where('expiryDate', '<=', limit.toLocalYMD()), function(rows) {
-            $('s-exp').textContent = rows.filter(function(p) { return p.expiryDate && (parseFloat(p.quantity) || 0) > 0; }).length;
-        });
+        // 7 天內到期（含已過期）的板數：這一庫的
+        drawExpiry = function() {
+            var limit = new Date(); limit.setDate(limit.getDate() + 7);
+            var lim = limit.toLocalYMD();
+            $('s-exp').textContent = allPallets.filter(function(p) { return p.expiryDate && p.expiryDate <= lim && (parseFloat(p.quantity) || 0) > 0 && isMine(p.locationId); }).length;
+        };
+    }
+    var drawExpiry = function() {};
+    // 另一個倉庫忙不忙：最上面一行摘要（主要畫面只放自己倉庫的工作）
+    var otherStat = { picking: 0, pending: 0, tasks: 0 };
+    function drawOther() {
+        var n = function(v) { return '<b>' + v + '</b>'; };
+        $('other-wh').innerHTML = '🏭 ' + OTHER_NAME + '：揀貨中 ' + n(otherStat.picking) + ' 波・待揀 ' + n(otherStat.pending) + ' 波・待上架 ' + n(otherStat.tasks) + ' 板';
     }
 
     // ---------- 時鐘、夜間調暗、過午夜重新整理（今天的統計重新開始算）----------

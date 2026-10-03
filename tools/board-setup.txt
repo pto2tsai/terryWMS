@@ -1,0 +1,40 @@
+# WMS board kiosk setup (Windows PowerShell; served as .txt so it downloads as plain text). Usage (Win+R):
+#   powershell -NoExit -ep bypass -c "$u='https://<site>/';$w='K';irm ($u+'tools/board-setup.txt')|iex"
+# $w: which warehouse board (K = K warehouse; empty = I/J).
+# Creates a desktop + startup shortcut that opens board.html full-screen on the TV (second screen),
+# with sound allowed without a click, and stops the laptop from sleeping while plugged in.
+# (Keep this file ASCII-only: Windows PowerShell may download it with the wrong text encoding.)
+$ErrorActionPreference = 'Stop'
+function Say($s) { Write-Host ([regex]::Unescape($s)) }
+if (-not $u) { $u = 'https://' }
+$board = $u.TrimEnd('/') + '/board.html'
+if ($w) { $board = $board + '?wh=' + $w }
+
+$cands = @("$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+           "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+           "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe",
+           "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+           "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe")
+$browser = $cands | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+if (-not $browser) { Write-Host ([regex]::Unescape('\u274c \u627e\u4e0d\u5230 Chrome \u6216 Edge \u700f\u89bd\u5668\uff0c\u8acb\u5148\u5b89\u88dd Google Chrome \u518d\u505a\u4e00\u6b21\u3002')); exit 1 }
+
+# TV = the screen that is not the laptop's own (extended mode); only one screen -> top-left
+Add-Type -AssemblyName System.Windows.Forms
+$tv = [System.Windows.Forms.Screen]::AllScreens | Where-Object { -not $_.Primary } | Select-Object -First 1
+if ($tv) { $x = $tv.Bounds.X; $y = $tv.Bounds.Y } else { $x = 0; $y = 0; Write-Host ([regex]::Unescape('\u26a0\ufe0f \u53ea\u627e\u5230\u4e00\u500b\u87a2\u5e55\uff1a\u770b\u677f\u6703\u958b\u5728\u7b46\u96fb\u87a2\u5e55\u4e0a\u3002\u63a5\u597d\u96fb\u8996\u3001\u6309 Windows \u9375+P \u9078\u300c\u5ef6\u4f38\u300d\uff0c\u518d\u505a\u4e00\u6b21\u5c31\u6703\u958b\u5728\u96fb\u8996\u4e0a\u3002')) }
+
+$flags = "--kiosk --window-position=$x,$y --autoplay-policy=no-user-gesture-required --no-first-run --disable-session-crashed-bubble --user-data-dir=`"$env:LOCALAPPDATA\wms-board`" $board"
+$name = [regex]::Unescape('\u73fe\u5834\u770b\u677f')
+$ws = New-Object -ComObject WScript.Shell
+foreach ($dir in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Startup'))) {
+    $lnk = $ws.CreateShortcut((Join-Path $dir ($name + '.lnk')))
+    $lnk.TargetPath = $browser; $lnk.Arguments = $flags; $lnk.WorkingDirectory = Split-Path $browser
+    $lnk.Description = $board; $lnk.Save()
+}
+# plugged in: never turn off the screen or sleep
+try { powercfg /change monitor-timeout-ac 0; powercfg /change standby-timeout-ac 0 } catch {}
+
+Write-Host ([regex]::Unescape('\u2705 \u684c\u9762\u548c\u958b\u6a5f\u81ea\u52d5\u555f\u52d5\u90fd\u653e\u597d\u300c\u73fe\u5834\u770b\u677f\u300d\u4e86\uff0c\u4ee5\u5f8c\u958b\u6a5f\u6703\u81ea\u5df1\u6253\u958b\u3002'))
+Write-Host ([regex]::Unescape('\u2705 \u63d2\u96fb\u6642\u87a2\u5e55\u4e0d\u95dc\u3001\u4e0d\u7761\u7720\u3002'))
+Write-Host ([regex]::Unescape('\u1f449 \u770b\u677f\u6b63\u5728\u96fb\u8996\u4e0a\u6253\u958b\uff1a\u7b2c\u4e00\u6b21\u8acb\u7528\u770b\u677f\u5e33\u865f\u767b\u5165\u3002\u8981\u95dc\u6389\u770b\u677f\u6309 Alt+F4\u3002'))
+Start-Process -FilePath $browser -ArgumentList $flags
