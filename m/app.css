@@ -649,6 +649,10 @@ body {
 .ef-done { background: #1b2844; color: #cbd5e1; border: 1px solid #33456b !important; }
 .ef-sent .ef-send { background: #1b2844; color: #86efac; border: 1px solid #33456b !important; }
 .pk-go.ef-send-all:disabled { background: #1b2844; color: #94a3b8; }
+#ef-undo { position: fixed; left: 12px; right: 12px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 10001; display: none; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 12px; background: #1e293b; border: 1px solid #475569; color: #fff; font-size: 16px; font-weight: 700; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+#ef-undo.show { display: flex; }
+#ef-undo span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ef-undo button { -webkit-appearance: none; appearance: none; flex: none; min-height: 40px; padding: 0 18px; border-radius: 10px; border: 0; background: #fbbf24; color: #111827; font-size: 16px; font-weight: 800; }
 .ef-all { padding: 4px 16px 24px; }
 .pk-go.ef-send-all { background: #06c755; font-size: 20px; min-height: 56px; }
 

@@ -1,6 +1,6 @@
 // ============================================================
 // 業務要改鼎新（手機）：缺貨少出、出貨後鼎新對不上的單
-// 庫管在手機按「傳給業務」叫出 LINE 傳給業務；業務改好後按「已經改好了」
+// 庫管在手機按「傳業務」叫出 LINE 傳給業務；業務改好後按「改好了」（不問，按錯可以復原）
 // 傳過的記下來（卡片寫「已傳 10:32」），大按鈕只傳還沒傳過的，不會一直重複傳
 // 清單由 core.js 一直盯著（window.erpFixList），讀法、文字在 js/shared/erp-fix.js（電腦版也用同一份）
 // ============================================================
@@ -47,12 +47,24 @@ window.sendErpFix = async function(i) {
     try { await mark(); } catch (e) { toast('⚠️ 沒記到「已傳」：' + e.message); }
 };
 
+// 改好了：不用再問，按了就拿掉；下面出現幾秒「已拿掉［復原］」，按錯點復原就回來
+let undoTimer = null;
 window.markErpFixDone = async function(i) {
     const o = (window.erpFixList || [])[i];
     if (!o || !o.id) return;
-    if (!confirm('「' + (o.customer || '') + ' ' + (o.orderNo || '') + '」業務已經在鼎新改好了（或說不用改）？\n\n按確定就從清單拿掉。')) return;
+    const prev = { erpFixNeeded: !!o.erpFixNeeded, erpReturnNeeded: !!o.erpReturnNeeded, erpSentKey: o.erpSentKey || '' };
     try {
         await window.markErpFixedDoc(db, o.id, window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : '');
-        toast('✅ 已拿掉：' + (o.customer || o.orderNo));
-    } catch (e) { alert('❌ 儲存失敗：' + e.message); }
+    } catch (e) { alert('❌ 儲存失敗：' + e.message); return; }
+    let bar = $('ef-undo');
+    if (!bar) { bar = document.createElement('div'); bar.id = 'ef-undo'; document.body.appendChild(bar); }
+    bar.innerHTML = '<span>✅ 已拿掉：' + esc(o.customer || o.orderNo || '') + '</span><button>復原</button>';
+    bar.querySelector('button').onclick = async function() {
+        clearTimeout(undoTimer); bar.classList.remove('show');
+        try { await db.collection('salesOrders').doc(o.id).update(prev); toast('↩️ 已復原：' + (o.customer || o.orderNo)); }
+        catch (e) { alert('❌ 復原失敗：' + e.message); }
+    };
+    bar.classList.add('show');
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(function() { bar.classList.remove('show'); }, 6000);
 };
