@@ -17,6 +17,7 @@
     <script src="js/shared/firebase-config.js"></script>
     <script src="js/shared/data-format.js"></script>
     <script src="js/shared/erp-schedule.js"></script>
+    <script src="js/shared/erp-fix.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; background: #0b1120; color: #e2e8f0; font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif; overflow: hidden; }
@@ -214,6 +215,15 @@
         return Object.keys(net).filter(function(k) { return net[k] - (need[k] || 0) > 0.0001; })
             .map(function(k) { return names[k].productName + ' ' + (Math.round((net[k] - (need[k] || 0)) * 1000) / 1000) + ' 件'; });
     }
+    // 揀貨時按「不夠」的品項：問過業務了沒（手機按「傳 LINE 問業務」會記在波次 salesAsked）
+    function waveAsk(w) {
+        var keys = {}, asked = w.salesAsked || [];
+        (w.shortLog || []).forEach(function(x) { if (x.key) keys[x.key] = true; });
+        var all = Object.keys(keys), n = all.length;
+        if (!n) return '';
+        var not = all.filter(function(k) { return asked.indexOf(k) < 0; }).length;
+        return '<div class="sub" style="color:#fb923c;font-weight:700">⚠️ 缺 ' + n + ' 項・' + (not ? (not === n ? '還沒問業務' : not + ' 項還沒問業務') : '已問業務') + '</div>';
+    }
     function drawErpAlert() {
         var msgs = [];
         var bad = erpDocs.filter(function(r) { return r.status === 'attention' || r.status === 'error'; }).length;
@@ -225,6 +235,11 @@
         waveRets.forEach(function(x) { msgs.push('↩️ ' + x.waveNo + ' 鼎新改單，要放回：' + x.rets.join('、') + '（揀貨員照手機做）'); });
         if (noLogistics) msgs.push('🚚 ' + noLogistics + ' 張訂單沒有物流商，還沒排波次');
         // 缺貨少出的銷貨單：這次不出、之後不補，要請業務在鼎新改數量（鼎新改好、匯入後自動消失）
+        // 還沒傳給業務的張數（手機「業務要改鼎新」按傳給業務後就不算）
+        var byId = {};
+        erpFix.concat(erpRet).forEach(function(o) { byId[o.id] = o; });
+        var unsent = Object.keys(byId).filter(function(k) { return !window.erpIsSent(byId[k]); }).length;
+        if (unsent) msgs.push('📲 業務要改鼎新：' + unsent + ' 張還沒傳給業務，請用手機「業務要改鼎新」傳');
         if (erpFix.length) msgs.push('🧾 缺貨少出 ' + erpFix.length + ' 張，請業務在鼎新改銷貨單：' + erpFix.slice(0, 3).map(function(o) {
             return o.customer + ' ' + (o.shortShipped || []).filter(function(x) { return (x.want - x.got) >= 0.001; }).map(function(x) { return x.productName + ' ' + Math.round(x.want * 1000) / 1000 + '→' + Math.round(x.got * 1000) / 1000; }).join('、');
         }).join('；') + (erpFix.length > 3 ? ' 等' : ''));
@@ -270,6 +285,7 @@
                 var a = ageClass('waves', w);
                 return '<div class="card' + a.cls + '" style="--c:#ea580c"><div class="t"><span class="name">' + esc(w.waveNo) + '　' + esc(w.logistics || '') + '</span><span class="qty">' + esc(w.totalQty || 0) + ' 件</span></div>' +
                     '<div class="sub"><span>' + st + '　' + (w.orderCount || (w.orders || []).length) + ' 單　' + a.age + '</span><span>' + done + '/' + all + ' 項</span></div>' +
+                    waveAsk(w) +
                     (waveReturns(w).length ? '<div class="sub" style="color:#f87171;font-weight:700">↩️ 要放回：' + esc(waveReturns(w).join('、')) + '</div>' : '') +
                     '<div class="bar"><div style="width:' + pct + '%"></div></div></div>';
             }, '目前沒有要揀的波次', 'waves');
