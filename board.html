@@ -73,6 +73,18 @@
         .card.late .age { color: #fca5a5; animation: blink 1.2s step-end infinite; }
         .card.fresh { animation: fresh 2.5s ease-out; }
         @keyframes blink { 50% { opacity: .35; } }
+        /* 剛出現的紅色小方塊：外框紅光一閃一閃約 30 秒，之後停在紅色 */
+        #erp-alert .chip.pulse { animation: chipPulse 1s ease-in-out infinite; }
+        @keyframes chipPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } 50% { box-shadow: 0 0 0 .7vw rgba(239,68,68,.85), 0 0 2.5vw .8vw rgba(239,68,68,.6); background: #dc2626; border-color: #fecaca; } }
+        /* 整個螢幕外框閃紅光 3 下（倉庫另一頭也看得到） */
+        #edge { position: fixed; inset: 0; pointer-events: none; z-index: 50; box-shadow: inset 0 0 0 1.2vw #ef4444, inset 0 0 6vw 2vw rgba(239,68,68,.7); opacity: 0; }
+        #edge.on { animation: edgeFlash .6s ease-in-out 3; }
+        @keyframes edgeFlash { 50% { opacity: 1; } }
+        /* 波次卡片「還沒問業務」：慢慢閃，問過就停 */
+        .ask-not { animation: blink 1.6s ease-in-out infinite; }
+        /* 開聲音的小按鈕（網頁規定要先按一下才能出聲） */
+        #snd { margin-left: 1vw; font-size: 1.2vw; padding: .3vw .9vw; border-radius: 99px; border: .15vw solid #475569; background: #1e293b; color: #cbd5e1; cursor: pointer; }
+        #snd.on { border-color: #16a34a; color: #86efac; }
         @keyframes fresh { 0% { box-shadow: 0 0 0 .4vw #fff; } 100% { box-shadow: 0 0 0 0 transparent; } }
         .more { text-align: center; color: #94a3b8; font-size: 1.3vw; }
         #login { position: fixed; inset: 0; background: #0b1120; display: flex; align-items: center; justify-content: center; z-index: 10; }
@@ -100,12 +112,14 @@
         <header>
             <h1>📋 倉庫現場看板</h1>
             <span id="conn">● 即時更新中</span>
+            <button id="snd" onclick="toggleBoardSound()">🔇 點一下開聲音</button>
             <div style="margin-left:auto;text-align:right">
                 <div id="clock">--:--</div>
                 <div id="date"></div>
             </div>
         </header>
         <div id="erp-alert"></div>
+        <div id="edge"></div>
         <div class="stats">
             <div class="stat" style="--c:#f97316"><div class="n" id="s-wave">0</div><div class="l">今天完成波次</div></div>
             <div class="stat" style="--c:#fb923c"><div class="n" id="s-out">0</div><div class="l">今天出貨（件）</div></div>
@@ -228,29 +242,75 @@
         var all = Object.keys(keys), n = all.length;
         if (!n) return '';
         var not = all.filter(function(k) { return asked.indexOf(k) < 0; }).length;
-        return '<div class="sub" style="color:#fb923c;font-weight:700">⚠️ 缺 ' + n + ' 項・' + (not ? (not === n ? '還沒問業務' : not + ' 項還沒問業務') : '已問業務') + '</div>';
+        return '<div class="sub' + (not ? ' ask-not' : '') + '" style="color:#fb923c;font-weight:700">⚠️ 缺 ' + n + ' 項・' + (not ? (not === n ? '還沒問業務' : not + ' 項還沒問業務') : '已問業務') + '</div>';
+    }
+    // ---------- 剛發生的紅色提醒：閃、外框閃、響一聲 ----------
+    var pulseUntil = {}, seenRed = {}, lastUnsent = 0, pulseTimer = null, boardStart = Date.now();
+    function attention() {
+        var e = $('edge'); e.classList.remove('on'); void e.offsetWidth; e.classList.add('on');
+        if (soundOn) chime();
+    }
+    var soundOn = false, actx = null;
+    try { soundOn = localStorage.getItem('board-sound') === '1'; } catch (e) {}
+    window.toggleBoardSound = function() {
+        soundOn = !soundOn;
+        try { localStorage.setItem('board-sound', soundOn ? '1' : '0'); } catch (e) {}
+        drawSndBtn(); if (soundOn) chime();
+    };
+    setTimeout(function() { drawSndBtn(); }, 0);
+    function drawSndBtn() { var b = $('snd'); b.textContent = soundOn ? '🔊 聲音開著' : '🔇 點一下開聲音'; b.classList.toggle('on', soundOn); }
+    // 叮咚（兩個音）：跟手機鐘聲同一種感覺
+    function chime() {
+        try {
+            actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+            if (actx.state === 'suspended') actx.resume();
+            [[880, 0], [660, .35]].forEach(function(n) {
+                var o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + n[1];
+                o.type = 'sine'; o.frequency.value = n[0]; o.connect(g); g.connect(actx.destination);
+                g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.6, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+                o.start(t); o.stop(t + 1.3);
+            });
+        } catch (e) {}
     }
     // 上方提醒：一件事一個小方塊（紅＝現在要處理、橙＝要注意、灰＝處理了在等別人），明細在手機、電腦看
     function drawErpAlert() {
-        var chips = [];
-        var chip = function(lvl, icon, html) { chips.push('<span class="chip ' + lvl + '">' + icon + ' ' + html + '</span>'); };
+        var items = [];
+        // key：同一件事同一個 key（紅色的新 key＝剛發生，要閃）
+        var chip = function(lvl, icon, html, key) { items.push({ lvl: lvl, icon: icon, html: html, key: key || '' }); };
         var num = function(n) { return '<b>' + esc(n) + '</b>'; };
         var bad = erpDocs.filter(function(r) { return r.status === 'attention' || r.status === 'error'; }).length;
         var waiting = erpDocs.filter(function(r) { return r.status === 'pending' && Date.now() - Date.parse(r.receivedAt) > 15 * 60000; }).length;
         var missed = window.erpMissedSlot(erpDocs, erpSched, new Date());
-        if (missed) chip('red', '📭', num(missed) + ' 訂單檔沒收到');
+        if (missed) chip('red', '📭', num(missed) + ' 訂單檔沒收到', 'missed:' + missed);
         if (waiting) chip('org', '⏳', '訂單檔超過 ' + num(15) + ' 分沒匯入');
-        if (bad) chip('red', '⚠️', '鼎新匯入 ' + num(bad) + ' 份要處理');
+        if (bad) chip('red', '⚠️', '鼎新匯入 ' + num(bad) + ' 份要處理', 'bad:' + bad);
         // 鼎新改單，已經揀了要放回架上的（揀貨員照手機做）
-        waveRets.forEach(function(x) { chip('red', '↩️', esc(x.waveNo) + ' 要放回：' + esc(x.rets.join('、'))); });
+        waveRets.forEach(function(x) { chip('red', '↩️', esc(x.waveNo) + ' 要放回：' + esc(x.rets.join('、')), 'ret:' + x.waveNo + ':' + x.rets.join('、')); });
         if (noLogistics) chip('org', '🚚', num(noLogistics) + ' 張訂單沒有物流商');
         // 業務要改鼎新（缺貨少出＋出貨後鼎新對不上）：還沒傳給業務的紅色，都傳了灰色（等業務改好、匯入後自動消失）
         var byId = {};
         erpFix.concat(erpRet).forEach(function(o) { byId[o.id] = o; });
         var ids = Object.keys(byId), unsent = ids.filter(function(k) { return !window.erpIsSent(byId[k]); }).length;
-        if (ids.length) chip(unsent ? 'red' : 'gray', '🧾', '要改鼎新 ' + num(ids.length) + ' 張・' + (unsent ? num(unsent) + ' 張還沒傳給業務' : '都傳了，等業務改'));
-        $('erp-alert').innerHTML = chips.join('');
-        $('erp-alert').classList.toggle('show', chips.length > 0);
+        if (ids.length) chip(unsent ? 'red' : 'gray', '🧾', '要改鼎新 ' + num(ids.length) + ' 張・' + (unsent ? num(unsent) + ' 張還沒傳給業務' : '都傳了，等業務改'), unsent ? 'erp-unsent' : '');
+        // 剛發生的紅色（新出現、或還沒傳的張數變多）：閃 30 秒＋螢幕外框閃 3 下＋（開了聲音）響一聲
+        // 剛打開看板的前幾秒是在載入舊資料，不算
+        var reds = {}, fresh = [];
+        items.forEach(function(c) { if (c.lvl === 'red' && c.key) { reds[c.key] = true; if (c.key !== 'erp-unsent' && !seenRed[c.key]) fresh.push(c.key); } });
+        if (unsent > lastUnsent) fresh.push('erp-unsent');
+        seenRed = reds; lastUnsent = unsent;
+        if (Date.now() - boardStart > 8000 && fresh.length) {
+            fresh.forEach(function(k) { pulseUntil[k] = Date.now() + 30000; });
+            attention();
+        }
+        var now = Date.now();
+        $('erp-alert').innerHTML = items.map(function(c) {
+            return '<span class="chip ' + c.lvl + (c.key && pulseUntil[c.key] > now ? ' pulse' : '') + '">' + c.icon + ' ' + c.html + '</span>';
+        }).join('');
+        $('erp-alert').classList.toggle('show', items.length > 0);
+        // 閃完 30 秒重畫一次（停在紅色）
+        clearTimeout(pulseTimer);
+        var left = Object.keys(pulseUntil).map(function(k) { return pulseUntil[k] - now; }).filter(function(t) { return t > 0; });
+        if (left.length) pulseTimer = setTimeout(drawErpAlert, Math.min.apply(null, left) + 200);
     }
     lastDraw.erpAlert = drawErpAlert;
 
