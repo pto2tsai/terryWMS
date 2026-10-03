@@ -24,7 +24,7 @@ H.check('按「不夠」（白蝦 要 3 只有 1）：最上面出現橘色提�
 H.check('提示不擋畫面：下面照樣顯示下一項可以繼續揀', !(await mp.$('#ask-sales')) && top.includes('透抽'), top.slice(0, 300));
 await mp.click('#picking-next .ask-send'); await mp.waitForTimeout(500);
 let sent = await mp.evaluate(() => window._shared.splice(0));
-H.check('傳出去的文字很短：⚠️ 缺貨・黑貓／白蝦 50/60｜要 3 有 1（少 2）／海霸王 2 件／好市多 1 件／要怎麼處理？', sent[0] === '⚠️ 缺貨・黑貓\n白蝦 50/60｜要 3 有 1（少 2）\n海霸王 2 件\n好市多 1 件\n要怎麼處理？', JSON.stringify(sent));
+H.check('傳出去的文字很短：⚠️ 缺貨・黑貓／白蝦 50/60｜要 3 有 1（少 2）／海霸王 S-1 2 件／好市多 S-2 1 件／要怎麼處理？', sent[0] === '⚠️ 缺貨・黑貓\n白蝦 50/60｜要 3 有 1（少 2）\n海霸王 S-1　2 件\n好市多 S-2　1 件\n要怎麼處理？', JSON.stringify(sent));
 H.check('傳完提示就收起來', !(await mp.textContent('#picking-next')).includes('傳 LINE 問業務'));
 // 透抽揀完 → 完成：有 1 項不夠，可以一起問
 await mp.fill('#picking-scan', 'P3'); await mp.press('#picking-scan', 'Enter'); await mp.waitForTimeout(1500);
@@ -32,6 +32,6 @@ await mp.evaluate(() => completePickingWave()); await mp.waitForTimeout(1500);
 H.check('完成前「有 1 項不夠」畫面有「傳 LINE 問業務」', !!(await mp.$('#short-ask-btn')));
 await mp.click('#short-ask-btn'); await mp.waitForTimeout(500);
 sent = await mp.evaluate(() => window._shared.splice(0));
-H.check('一起問：白蝦 50/60｜有 1、哪一家訂幾給幾', sent[0] && sent[0].startsWith('⚠️ 缺貨・黑貓\n白蝦 50/60｜有 1') && /訂 \d → 給 \d/.test(sent[0]) && sent[0].endsWith('要怎麼處理？'), JSON.stringify(sent));
+H.check('一起問：白蝦 50/60｜有 1、哪一家訂幾給幾', sent[0] && sent[0].startsWith('⚠️ 缺貨・黑貓\n白蝦 50/60｜有 1') && /S-\d　訂 \d → 給 \d/.test(sent[0]) && sent[0].endsWith('要怎麼處理？'), JSON.stringify(sent));
 H.check('沒有頁面錯誤', M.log.errors.length === 0 && D.log.errors.length === 0, JSON.stringify(M.log.errors.concat(D.log.errors)));
 await H.close(); process.exit(0);

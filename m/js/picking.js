@@ -587,7 +587,7 @@ function custName(c) { return window.shortCustomer ? window.shortCustomer(c || '
 function askSalesBox(n, want, got) {
     const orders = (n.orders || []).filter(function(o) { return parseFloat(o.quantity) > 0; });
     const head = shortItemName(n.productName, n.spec) + '｜要 ' + want + ' 有 ' + got + '（少 ' + Math.round((want - got) * 1000) / 1000 + '）';
-    const lines = [head].concat(orders.map(function(o) { return custName(o.customer) + ' ' + o.quantity + ' 件'; }));
+    const lines = [head].concat(orders.map(function(o) { return custName(o.customer) + (o.orderNo ? ' ' + o.orderNo : '') + '　' + o.quantity + ' 件'; }));
     window._askPending = { waveId: currentWave.id, head: head, text: askSalesText(lines) };
     renderPickingList();
 }
@@ -615,7 +615,7 @@ window.askSalesAll = function() {
         const short = a.orders.filter(function(o) { return o.got < o.want; });
         if (!short.length) return;
         lines.push((lines.length ? '\n' : '') + shortItemName(a.productName, a.spec) + '｜有 ' + a.picked);
-        short.forEach(function(o) { lines.push(custName(o.customer) + ' 訂 ' + o.want + ' → 給 ' + o.got); });
+        short.forEach(function(o) { lines.push(custName(o.customer) + (o.orderNo ? ' ' + o.orderNo : '') + '　訂 ' + o.want + ' → 給 ' + o.got); });
     });
     if (!lines.length) return;
     window.sendAskSales(askSalesText(lines));
