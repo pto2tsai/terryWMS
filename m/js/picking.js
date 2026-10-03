@@ -578,9 +578,9 @@ async function saveShort(n, got) {
 // ---------- 問業務：揀貨時不夠，當下一鍵傳 LINE 問業務要怎麼處理 ----------
 function pickerName() { return window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : ''; }
 // 傳給業務的文字：越短越好，一眼看懂（物流、品項、要幾有幾、哪幾家）
-// blocks：一塊一塊（第一塊是缺什麼，接著每張單：單號／客戶），中間空一行
+// blocks：一塊一塊（第一塊是缺什麼，緊接在標題下面；接著每張單：單號／客戶／訂幾件 →），中間空一行
 function askSalesText(blocks) {
-    return '⚠️ 缺貨・' + (currentWave.logistics || '').replace(/宅急便|貨運|物流$/g, '') + '\n\n' +
+    return '⚠️ 缺貨・' + (currentWave.logistics || '').replace(/宅急便|貨運|物流$/g, '') + '\n' +
         blocks.map(function(b) { return b.filter(Boolean).join('\n'); }).join('\n\n') + '\n\n要怎麼處理？';
 }
 function shortItemName(name, spec) { return name + (spec ? ' ' + String(spec).split(/[*＊(（\s]/)[0] : ''); }
@@ -590,10 +590,9 @@ function askSalesBox(n, want, got) {
     const orders = (n.orders || []).filter(function(o) { return parseFloat(o.quantity) > 0; });
     const item = shortItemName(n.productName, n.spec), short = Math.round((want - got) * 1000) / 1000;
     const head = item + '｜要 ' + want + ' 有 ' + got + '（少 ' + short + '）';
-    // 先寫缺什麼，再寫影響哪幾張單（單號／客戶）；好幾家時每家寫訂幾件
-    const text = orders.length <= 1
-        ? askSalesText([[head]].concat(orders.map(function(o) { return [o.orderNo, custName(o.customer)]; })))
-        : askSalesText([[item + ' 共要 ' + want + ' 有 ' + got + '（少 ' + short + '）']].concat(orders.map(function(o) { return [o.orderNo, custName(o.customer), '訂 ' + o.quantity + ' 件']; })));
+    // 先寫缺什麼，再寫影響哪幾張單（單號／客戶／訂幾件 →：業務直接在箭頭後面回要給幾件）
+    const first = orders.length <= 1 ? head : item + ' 共要 ' + want + ' 有 ' + got + '（少 ' + short + '）';
+    const text = askSalesText([[first]].concat(orders.map(function(o) { return [o.orderNo, custName(o.customer), '訂 ' + o.quantity + ' 件 →']; })));
     window._askPending = { waveId: currentWave.id, head: head, text: text };
     renderPickingList();
 }
@@ -615,14 +614,14 @@ window.sendAskSales = async function(textIn) {
 // 完成前「有 N 項不夠」：全部一起問
 window.askSalesAll = function() {
     const alloc = window.waveShortAllocation(currentWave, pickingItems);
-    // 每一樣缺的：先一行「品項 有幾件」，下面每張少給的單一塊（單號／客戶／訂幾 給幾）
+    // 每一樣缺的：先一行「品項 有幾件」，下面每張少給的單一塊（單號／客戶／訂幾件 → 給幾）
     const blocks = [];
     Object.keys(alloc).forEach(function(k) {
         const a = alloc[k];
         const short = a.orders.filter(function(o) { return o.got < o.want; });
         if (!short.length) return;
         blocks.push([shortItemName(a.productName, a.spec) + ' 只有 ' + a.picked + ' 件']);
-        short.forEach(function(o) { blocks.push([o.orderNo, custName(o.customer), '訂 ' + o.want + ' 給 ' + o.got]); });
+        short.forEach(function(o) { blocks.push([o.orderNo, custName(o.customer), '訂 ' + o.want + ' 件 → 給 ' + o.got]); });
     });
     if (!blocks.length) return;
     window.sendAskSales(askSalesText(blocks));
