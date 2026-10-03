@@ -16,18 +16,40 @@
         }) : [];
         return a.concat(o.erpReturnNeeded ? (o.erpReturnLines || []).map(newWording) : []);
     };
-    // 複製／傳給業務的文字（分兩段：缺貨少出、出貨後鼎新對不上）
+    // 傳給業務時規格只留前面一段（31/40*1KG*10包 → 31/40），短一點好讀
+    const shortSpec = function(spec) { return spec ? ' ' + String(spec).split(/[*＊(（\s]/)[0] : ''; };
+    const fixRows = function(o) {
+        return (o.shortShipped || []).filter(function(x) { return r3(x.want) - r3(x.got) >= 0.001; }).map(function(x) {
+            return (x.productName || '') + shortSpec(x.spec) + '：訂 ' + r3(x.want) + ' → 出 ' + r3(x.got) + '（少 ' + r3(x.want - x.got) + '）';
+        });
+    };
+    const LINE = '──────────';
+    // 複製／傳給業務的文字（分兩段：缺貨少出、出貨後鼎新對不上）；每張單上面一條分隔線，單號／客戶／要改什麼
     window.erpFixText = function(list) {
         const group = function(title, rows) {
             return rows.length ? title + '\n' + rows.map(function(o) {
-                return '\n' + (o.customer || '') + '　' + (o.orderNo || '') + '\n' + o.lines.map(function(l) { return '・' + l; }).join('\n');
+                return LINE + '\n' + (o.orderNo || '') + '\n' + (o.customer || '') + '\n' + o.lines.join('\n');
             }).join('\n') : '';
         };
         const fix = list.filter(function(o) { return o.erpFixNeeded; })
-            .map(function(o) { return { customer: o.customer, orderNo: o.orderNo, lines: window.erpFixLines(Object.assign({}, o, { erpReturnNeeded: false })) }; })
+            .map(function(o) { return { customer: o.customer, orderNo: o.orderNo, lines: fixRows(o) }; })
             .filter(function(o) { return o.lines.length; });
         const ret = list.filter(function(o) { return o.erpReturnNeeded; }).map(function(o) { return { customer: o.customer, orderNo: o.orderNo, lines: (o.erpReturnLines || []).map(newWording) }; });
         return [group('【缺貨少出，請在鼎新改成實際出貨的數量】', fix), group('【出貨後鼎新又改了，跟實際出貨對不上：請確認鼎新是不是改錯】', ret)].filter(Boolean).join('\n\n');
+    };
+    // 已經傳給業務了沒：記下傳的時候要改的內容，內容變了（又多缺一樣、鼎新又改）就算還沒傳
+    const sentKey = function(o) { return window.erpFixLines(o).join('|'); };
+    window.erpIsSent = function(o) { return !!o.erpSentKey && o.erpSentKey === sentKey(o); };
+    // 「已傳 10:32」（不是今天的寫日期）
+    window.erpSentLabel = function(o) {
+        if (!window.erpIsSent(o) || !o.erpSentAt) return '';
+        const d = new Date(o.erpSentAt), hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        return '已傳 ' + (d.toDateString() === new Date().toDateString() ? '' : (d.getMonth() + 1) + '/' + d.getDate() + ' ') + hm;
+    };
+    window.markErpSent = function(db, list, who) {
+        const b = db.batch(), at = new Date().toISOString();
+        list.forEach(function(o) { if (o && o.id) b.update(db.collection('salesOrders').doc(o.id), { erpSentAt: at, erpSentKey: sentKey(o), erpSentBy: who || '' }); });
+        return b.commit();
     };
     function merge(a, b) {
         const byId = {};
@@ -53,16 +75,17 @@
     };
     // 業務改好了（或說不用改）：從清單拿掉
     window.markErpFixedDoc = function(db, id, who) {
-        return db.collection('salesOrders').doc(id).update({ erpFixNeeded: false, erpReturnNeeded: false, erpFixedAt: new Date().toISOString(), erpFixedBy: who || '' });
+        return db.collection('salesOrders').doc(id).update({ erpFixNeeded: false, erpReturnNeeded: false, erpSentKey: '', erpFixedAt: new Date().toISOString(), erpFixedBy: who || '' });
     };
     // 傳給業務：手機叫出分享（選 LINE）；不支援分享的直接開 LINE；電腦複製到剪貼簿
-    window.sendToSales = async function(text) {
+    // beforeLeave：直接開 LINE 會離開這頁，要先做完的事（例如記下已傳）
+    window.sendToSales = async function(text, beforeLeave) {
         const phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
         if (phone && navigator.share) {
             try { await navigator.share({ text: text }); return 'shared'; }
             catch (e) { if (e && e.name === 'AbortError') return 'cancel'; }
         }
-        if (phone) { location.href = 'https://line.me/R/share?text=' + encodeURIComponent(text); return 'line'; }
+        if (phone) { if (beforeLeave) { try { await beforeLeave(); } catch (e) {} } location.href = 'https://line.me/R/share?text=' + encodeURIComponent(text); return 'line'; }
         try { await navigator.clipboard.writeText(text); return 'copied'; }
         catch (e) { window.prompt('請全選複製這段文字：', text); return 'prompt'; }
     };
