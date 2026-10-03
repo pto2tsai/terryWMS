@@ -41,7 +41,8 @@ await mp.click('#erpfix-list .ef-card .ef-done'); await mp.waitForTimeout(1500);
 const a = await H.one('salesOrders', 'A');
 H.check('按「已經改好了」：從清單拿掉（海霸王）', a.erpFixNeeded === false && !(await mp.textContent('#erpfix-list')).includes('海霸王'), JSON.stringify(a));
 H.check('不用再問（沒有確認視窗），下面出現「已拿掉［復原］」', M.log.dialogs.length === 0 && (await mp.isVisible('#ef-undo')) && (await mp.textContent('#ef-undo')).includes('已拿掉：海霸王'), JSON.stringify(M.log.dialogs));
-await mp.click('#ef-undo button'); await mp.waitForTimeout(1500);
+await mp.click('#ef-undo button');
+for (let i = 0; i < 30 && !(await mp.textContent('#erpfix-list')).includes('海霸王'); i++) await mp.waitForTimeout(200);   // 畫面跟著資料庫更新（機器忙時會慢一點）
 const a2 = await H.one('salesOrders', 'A');
 H.check('按「復原」：海霸王回到清單（還是要改鼎新、已傳記錄也在）', a2.erpFixNeeded === true && (await mp.textContent('#erpfix-list')).includes('海霸王') && !!a2.erpSentKey, JSON.stringify(a2));
 const D = await H.openApp(base, USERS.op); await D.page.waitForTimeout(1500);
