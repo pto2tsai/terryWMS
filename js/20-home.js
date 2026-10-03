@@ -154,28 +154,38 @@ window.openErpFixList = async function() {
     if (list === null) { alert('❌ 讀取失敗，請稍後再試'); return; }
     window._erpFixList = list;
     var cards = list.length ? list.map(function(o, i) {
-        return '<div class="ds-pick-row" style="cursor:default;align-items:flex-start">' +
-            '<div style="flex:1;min-width:0"><div style="color:var(--ds-text);font-weight:700;font-size:16px">' + erpEsc(o.customer) + '</div>' +
+        var sent = window.erpSentLabel(o);
+        return '<div class="ds-pick-row" style="cursor:default;align-items:flex-start' + (sent ? ';opacity:.75' : '') + '">' +
+            '<div style="flex:1;min-width:0"><div style="color:var(--ds-text);font-weight:700;font-size:16px">' + erpEsc(o.customer) +
+            (sent ? ' <span class="erp-sent-tag" style="font-size:12px;font-weight:400;color:var(--ds-text-3);background:var(--ds-surface-2);border-radius:6px;padding:1px 6px;margin-left:6px">' + erpEsc(sent) + '</span>' : '') + '</div>' +
             '<div style="font-size:12px;color:var(--ds-text-3);margin:2px 0 8px">' + erpEsc(o.orderNo) + (o.waveNo ? '・波次 ' + erpEsc(o.waveNo) : '') + '</div>' +
             shortLines(o).map(function(l) { return '<div style="font-size:14px;color:var(--ds-text-2);line-height:1.7"><i class="fa-solid ' + (/確認|不見|沒有這張/.test(l) ? 'fa-circle-question' : 'fa-arrow-trend-down') + '" style="color:var(--c-red);margin-right:6px"></i>' + erpEsc(l) + '</div>'; }).join('') + '</div>' +
-            '<div style="display:flex;flex-direction:column;gap:6px"><button class="ds-btn ds-btn-secondary ds-btn-sm" onclick="copyErpFix(' + i + ')"><i class="fa-regular fa-copy"></i>複製這張</button>' +
+            '<div style="display:flex;flex-direction:column;gap:6px"><button class="ds-btn ds-btn-secondary ds-btn-sm" onclick="copyErpFix(' + i + ')"><i class="fa-regular fa-copy"></i>' + (sent ? '再複製一次' : '複製這張') + '</button>' +
             '<button class="ds-btn ds-btn-ghost ds-btn-sm" onclick="markErpFixed(' + i + ')"><i class="fa-solid fa-check"></i>已經改好了</button></div></div>';
     }).join('') : '<div class="ds-empty" style="padding:32px"><div class="ds-empty-icon"><i class="fa-solid fa-check"></i></div><div class="ds-empty-title">沒有要改的單</div></div>';
+    var fresh = list.filter(function(o) { return !window.erpIsSent(o); }).length;
     WMS.closeModal('modal-erp-fix');
     WMS.createModal('modal-erp-fix', {
         title: '業務要改鼎新（' + list.length + ' 張）', icon: 'fa-solid fa-arrow-trend-down', width: '720px', maxHeight: '88vh',
         content: '<div style="font-size:14px;color:var(--ds-text-2);line-height:1.7;margin-bottom:14px;padding:12px 14px;border-radius:10px;background:var(--ds-surface-2)">' +
             '<b style="color:var(--ds-text)">要做的事：</b><br>・<b style="color:var(--ds-text)">缺貨少出</b>：請業務在鼎新把銷貨單改成實際出貨的數量（缺的這次不出、之後也不補）。改好、重新匯入後會<b style="color:var(--ds-text)">自動消失</b>。<br>' +
             '・<b style="color:var(--ds-text)">出貨後鼎新又改了</b>：我們都是改好才出貨，這種通常是鼎新改錯或刪錯，請業務<b style="color:var(--ds-text)">確認鼎新</b>。確認好後按「已經改好了」。<br>' +
-            '業務說不用改的，按「已經改好了」也會消失。</div>' + cards,
-        footer: list.length ? '<button class="ds-btn ds-btn-secondary" onclick="WMS.closeModal(\'modal-erp-fix\')">關閉</button><button class="ds-btn ds-btn-primary" onclick="copyErpFix()"><i class="fa-regular fa-copy"></i>全部複製給業務（貼到 LINE）</button>' : ''
+            '業務說不用改的，按「已經改好了」也會消失。傳過的會寫「已傳」，「複製新的」只複製還沒傳過的。</div>' + cards,
+        footer: list.length ? '<button class="ds-btn ds-btn-secondary" onclick="WMS.closeModal(\'modal-erp-fix\')">關閉</button>' + (fresh
+            ? '<button class="ds-btn ds-btn-primary" onclick="copyErpFix()"><i class="fa-regular fa-copy"></i>複製新的給業務（' + fresh + ' 張，貼到 LINE）</button>'
+            : '<button class="ds-btn ds-btn-primary" disabled><i class="fa-solid fa-check"></i>都傳過了，等業務改</button>') : ''
     });
 };
 window.copyErpFix = async function(i) {
+    // i 沒給＝還沒傳過的全部；複製了就記下已傳
     var list = window._erpFixList || [];
-    var text = window.erpFixText(i == null ? list : [list[i]]);
+    var pick = i == null ? list.filter(function(o) { return !window.erpIsSent(o); }) : [list[i]];
+    if (!pick.length || !pick[0]) return;
+    var text = window.erpFixText(pick);
     try { await navigator.clipboard.writeText(text); if (window.showToast) window.showToast('✅ 已複製，可以貼到 LINE 給業務'); else alert('✅ 已複製，可以貼到 LINE 給業務'); }
     catch (e) { window.prompt('請全選複製這段文字：', text); }
+    try { await window.markErpSent(window.db, pick, window.getOperatorName ? window.getOperatorName() : ''); } catch (e) { console.warn('記下已傳失敗', e); return; }
+    window.openErpFixList();
 };
 window.markErpFixed = async function(i) {
     var o = (window._erpFixList || [])[i];

@@ -18,7 +18,19 @@ H.check('清單：海霸王 白蝦 訂 5 → 出 3（少 2）、展欣偉群 舊
 await mp.evaluate(() => { window._shared = []; navigator.share = t => { window._shared.push(t.text); return Promise.resolve(); }; Object.defineProperty(navigator, 'userAgent', { get: () => 'iPhone' }); });
 await mp.click('#erpfix-all .ef-send-all'); await mp.waitForTimeout(400);
 const sent = await mp.evaluate(() => window._shared[0] || '');
-H.check('全部傳給業務：叫出分享，文字分兩段（缺貨少出、出貨後鼎新對不上）', sent.includes('【缺貨少出') && sent.includes('海霸王　A-1') && sent.includes('【出貨後鼎新又改了') && sent.includes('展欣偉群'), sent);
+H.check('傳新的給業務（2 張）：叫出分享，文字分兩段（缺貨少出、出貨後鼎新對不上），每張單上面一條線、單號／客戶', sent.includes('【缺貨少出') && sent.includes('──────────\nA-1\n海霸王\n白蝦 50/60：訂 5 → 出 3（少 2）') && sent.includes('【出貨後鼎新又改了') && sent.includes('展欣偉群'), sent);
+let ef = '';
+for (let i = 0; i < 20 && !ef.includes('都傳過了'); i++) { await mp.waitForTimeout(300); ef = await mp.textContent('#page-erpfix'); }
+H.check('傳完：卡片寫「已傳 時:分」、按鈕變「再傳一次」，大按鈕變「都傳過了」', /已傳 \d\d:\d\d/.test(ef) && ef.includes('再傳一次') && ef.includes('都傳過了') && await mp.isDisabled('#erpfix-all .ef-send-all'), ef.slice(0, 400));
+const a0 = await H.one('salesOrders', 'A');
+H.check('資料庫記下已傳（時間、內容）', !!a0.erpSentAt && a0.erpSentKey === '白蝦 50/60：訂 5 → 出 3（少 2）', JSON.stringify(a0));
+// 鼎新又改、多一樣缺貨：內容變了＝算新的，要再傳
+await H.admin(async d => H.setDoc(H.doc(d, 'salesOrders', 'C'), { erpReturnLines: ['魷魚圈 多出 2 件（已經出貨，鼎新改少了）→ 請開銷退', '整張單在鼎新不見了，但貨已經出了 → 請開銷退'] }, { merge: true }));
+for (let i = 0; i < 20 && !ef.includes('傳新的給業務（1 張）'); i++) { await mp.waitForTimeout(300); ef = await mp.textContent('#page-erpfix'); }
+await mp.evaluate(() => { window._shared = []; });
+await mp.click('#erpfix-all .ef-send-all'); await mp.waitForTimeout(600);
+const sent2 = await mp.evaluate(() => window._shared[0] || '');
+H.check('內容變了的單又算新的：大按鈕只傳這 1 張（展欣偉群），海霸王不會重複傳', ef.includes('傳新的給業務（1 張）') && sent2.includes('展欣偉群') && !sent2.includes('海霸王'), sent2);
 await mp.click('#erpfix-list .ef-card:nth-child(1) .ef-done'); await mp.waitForTimeout(1500);
 const a = await H.one('salesOrders', 'A');
 H.check('按「已經改好了」：從清單拿掉（海霸王）', a.erpFixNeeded === false && !(await mp.textContent('#erpfix-list')).includes('海霸王'), JSON.stringify(a));

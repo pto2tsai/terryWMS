@@ -639,6 +639,12 @@ body {
 .ef-btns button { -webkit-appearance: none; appearance: none; min-height: 48px; border-radius: 12px; font-size: 16px; font-weight: 700; border: 0; }
 .ef-send { background: #06c755; color: #fff; }
 .ef-done { background: #1b2844; color: #cbd5e1; border: 1px solid #33456b !important; }
+.ef-card { position: relative; }
+.ef-card.ef-sent { border-left-color: #64748b; }
+.ef-sent .ef-name { padding-right: 100px; }
+.ef-sent-tag { position: absolute; top: 12px; right: 12px; font-size: 13px; color: #94a3b8; background: #1b2844; border-radius: 8px; padding: 2px 8px; }
+.ef-sent .ef-send { background: #1b2844; color: #86efac; border: 1px solid #33456b !important; }
+.pk-go.ef-send-all:disabled { background: #1b2844; color: #94a3b8; }
 .ef-all { padding: 4px 16px 24px; }
 .pk-go.ef-send-all { background: #06c755; font-size: 22px; min-height: 64px; }
 

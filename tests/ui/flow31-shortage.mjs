@@ -115,8 +115,8 @@ H.check('首頁待辦：業務要改鼎新 1（海霸王 白蝦 5→3）', /業�
 await D.page.click('#home-todos > div:has-text("業務要改鼎新")'); await D.page.waitForTimeout(1200);
 const fx = await D.page.innerText('#modal-erp-fix').catch(() => '');
 if (process.env.SHOT_DIR) await D.page.screenshot({ path: process.env.SHOT_DIR + '/erp-fix.png' });
-H.check('按「業務要改鼎新」：跳出清單，寫要做什麼、海霸王 A-1 白蝦 訂 5 → 出 3（少 2）、可以全部複製給業務', fx.includes('要做的事') && fx.includes('海霸王') && fx.includes('A-1') && fx.includes('訂 5 → 出 3（少 2）') && fx.includes('全部複製給業務'), fx.slice(0, 300));
-H.check('複製的文字可以直接貼給業務', (await D.page.evaluate(() => { window._copied = null; return erpFixText(window._erpFixList); })).includes('海霸王　A-1\n・白蝦 50/60：訂 5 → 出 3（少 2）'));
+H.check('按「業務要改鼎新」：跳出清單，寫要做什麼、海霸王 A-1 白蝦 訂 5 → 出 3（少 2）、可以複製新的給業務', fx.includes('要做的事') && fx.includes('海霸王') && fx.includes('A-1') && fx.includes('訂 5 → 出 3（少 2）') && fx.includes('複製新的給業務（'), fx.slice(0, 300));
+H.check('複製的文字可以直接貼給業務', (await D.page.evaluate(() => { window._copied = null; return erpFixText(window._erpFixList); })).includes('──────────\nA-1\n海霸王\n白蝦 50/60：訂 5 → 出 3（少 2）'));
 await D.page.evaluate(() => WMS.closeModal('modal-erp-fix'));
 
 // ---------- 缺的不補；鼎新改好匯入後提醒消失 ----------
