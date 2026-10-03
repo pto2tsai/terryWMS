@@ -21,44 +21,22 @@ const LOGISTICS_KEYWORDS = {
     '上泰貨運': ['上泰貨運', '上泰'],
     '自取': ['自取']
 };
-// 每家物流幾點來取貨（波次清單照這個排：最早要交貨的在最上面）；自家司機一天兩班
-// 07:30 那班是前一天先揀好的貨：下午才建的波次就排到隔天 07:30
-const LOGISTICS_PICKUP = {
-    '崇文自送': ['07:30', '13:00'], '裕鵬物流': ['10:00'], '黑貓宅急便': ['13:00'], '大榮貨運': ['14:00'],
-    '全日物流': ['15:00'], '科技物流': ['15:00'], '金東石': ['15:00'], '文生': ['15:30'], '阿誠': ['16:30'], '裕寶饕': ['17:00']
-};
+// 每家物流幾點來取貨：時間表和算法在 js/shared/pickup.js（手機選波次也用同一份）
+const LOGISTICS_PICKUP = window.LOGISTICS_PICKUP;
 // 主管在「波次揀貨 → 設定 → 物流商」存過名單（settings/logistics）就用存的，沒存過用上面這份
 const DEFAULT_LOGISTICS = JSON.parse(JSON.stringify(LOGISTICS_KEYWORDS));
-const DEFAULT_PICKUP = JSON.parse(JSON.stringify(LOGISTICS_PICKUP));
+const DEFAULT_PICKUP = window.PICKUP_DEFAULT;
 function applyLogisticsList(list) {
     Object.keys(LOGISTICS_KEYWORDS).forEach(k => { delete LOGISTICS_KEYWORDS[k]; });
-    Object.keys(LOGISTICS_PICKUP).forEach(k => { delete LOGISTICS_PICKUP[k]; });
     list.forEach(x => {
         const name = String(x.name || '').trim();
         if (!name) return;
         const kws = (x.keywords || []).map(k => String(k).trim()).filter(Boolean);
         LOGISTICS_KEYWORDS[name] = kws.length ? kws : [name];
-        // 舊的名單沒有取貨時間：用預設的
-        const pk = Array.isArray(x.pickup) ? x.pickup : (DEFAULT_PICKUP[name] || []);
-        if (pk.length) LOGISTICS_PICKUP[name] = pk.slice();
     });
+    window.applyPickupList(list);   // 取貨時間（舊的名單沒有就用預設的）
 }
 function logisticsListFromMap(m) { return Object.keys(m).map(k => ({ name: k, keywords: m[k].slice(), pickup: (DEFAULT_PICKUP[k] || []).slice() })); }
-// 這個波次的物流下一次來取貨是什麼時候（波次建立之後的第一班）；沒設定取貨時間＝null
-window.wavePickupTime = function(wave) {
-    const times = LOGISTICS_PICKUP[wave && wave.logistics] || [];
-    if (!times.length) return null;
-    const from = wave.createdAt ? new Date(wave.createdAt) : new Date();
-    for (let day = 0; day < 3; day++) {
-        const slots = times.map(t => {
-            const m = /^(\d{1,2}):(\d{2})$/.exec(t); if (!m) return null;
-            const d = new Date(from); d.setDate(d.getDate() + day); d.setHours(+m[1], +m[2], 0, 0); return d;
-        }).filter(Boolean).sort((a, b) => a - b);
-        const hit = slots.find(d => d >= from);
-        if (hit) return hit;
-    }
-    return null;
-};
 window.watchLogisticsList = function() {
     return window.db.collection('settings').doc('logistics').onSnapshot(d => {
         const list = d.exists && Array.isArray(d.data().list) && d.data().list.length ? d.data().list : logisticsListFromMap(DEFAULT_LOGISTICS);

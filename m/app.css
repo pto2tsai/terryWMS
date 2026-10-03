@@ -650,3 +650,16 @@ body {
 .ask-btns button { -webkit-appearance: none; appearance: none; min-height: 44px; border-radius: 10px; font-size: 16px; font-weight: 700; border: 0; }
 .ask-send { background: #06c755; color: #fff; }
 .ask-x { background: transparent; color: #fdba74; border: 1px solid #9a3412 !important; }
+
+/* 選波次：大按鈕（原本的下拉選單字小、會斷行，藏起來） */
+.sr-select { position: absolute !important; width: 1px !important; height: 1px !important; opacity: 0; pointer-events: none; overflow: hidden; }
+.wave-btn { -webkit-appearance: none; appearance: none; width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 64px; padding: 10px 16px; border-radius: 14px; background: #111a2c; border: 1px solid #2f6fe8; color: #fff; text-align: left; font-size: 18px; }
+.wave-btn .wb-main { display: flex; flex-direction: column; min-width: 0; }
+.wave-btn .wb-main b { font-size: 22px; font-weight: 900; }
+.wave-btn .wb-main small { font-size: 14px; color: #8ea0bf; margin-top: 2px; }
+.wave-btn .wb-main i { color: #5b9bff; margin-right: 6px; }
+.wave-btn .wb-side { flex-shrink: 0; font-size: 15px; color: #8db8ff; font-weight: 700; }
+.wave-btn em, .sw-pickup { font-style: normal; }
+.wave-btn em.soon, .sw-pickup.soon { color: #fb923c; font-weight: 700; }
+.wave-btn em.late, .sw-pickup.late { color: #f87171; font-weight: 700; }
+.sw-pickup { margin-top: 4px; font-size: 17px; color: #cbd5e1; }
