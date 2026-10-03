@@ -258,13 +258,26 @@
     }
     var soundOn = false, actx = null;
     try { soundOn = localStorage.getItem('board-sound') === '1'; } catch (e) {}
+    // 網頁規定：打開後要先有人點一下才能出聲（看板電腦用「不用點也能出聲」的捷徑打開就不受限）
+    // 按鈕照「現在真的能不能出聲」寫：記得要開、但還不能出聲 → 寫「點一下開聲音」
+    function audioReady() {
+        try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return false; }
+        return actx.state === 'running';
+    }
     window.toggleBoardSound = function() {
+        if (soundOn && !audioReady()) { actx.resume().then(function() { drawSndBtn(); chime(); }); return; }
         soundOn = !soundOn;
         try { localStorage.setItem('board-sound', soundOn ? '1' : '0'); } catch (e) {}
-        drawSndBtn(); if (soundOn) chime();
+        if (soundOn) { audioReady(); actx.resume().then(function() { drawSndBtn(); chime(); }); }
+        drawSndBtn();
     };
-    setTimeout(function() { drawSndBtn(); }, 0);
-    function drawSndBtn() { var b = $('snd'); b.textContent = soundOn ? '🔊 聲音開著' : '🔇 點一下開聲音'; b.classList.toggle('on', soundOn); }
+    setTimeout(drawSndBtn, 0);
+    setTimeout(drawSndBtn, 1500);
+    function drawSndBtn() {
+        var on = soundOn && audioReady(), b = $('snd');
+        b.textContent = on ? '🔊 聲音開著' : '🔇 點一下開聲音';
+        b.classList.toggle('on', on);
+    }
     // 叮咚（兩個音）：跟手機鐘聲同一種感覺
     function chime() {
         try {

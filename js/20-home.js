@@ -216,6 +216,34 @@ function drawMobileQr(url) {
     document.head.appendChild(sc);
 }
 
+// 倉庫電視的現場看板：在接電視的筆電上，Windows 鍵＋R 貼上這行，就自動建好捷徑、開機自動開、電視全螢幕、可出聲、不睡眠
+// （自動設定的小程式在 tools/board-setup.txt）
+window.boardSetupCommand = function() {
+    var base = location.origin + location.pathname.replace(/[^/]*$/, '');
+    return 'powershell -NoExit -ep bypass -c "$u=\'' + base + '\';irm ($u+\'tools/board-setup.txt\')|iex"';
+};
+window.openBoardSetup = function() {
+    var step = function(n, html) { return '<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px"><span style="flex:none;width:28px;height:28px;border-radius:50%;background:var(--ds-primary,#2563eb);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">' + n + '</span><div style="font-size:15px;line-height:1.7;color:var(--ds-text-2)">' + html + '</div></div>'; };
+    WMS.closeModal('modal-board-setup');
+    WMS.createModal('modal-board-setup', {
+        title: '設定看板電腦', icon: 'fa-solid fa-tv', width: '640px',
+        content: '<div style="font-size:14px;color:var(--ds-text-3);margin-bottom:14px">這些步驟要在<b style="color:var(--ds-text)">接電視的那台筆電</b>上做。</div>' +
+            step(1, '筆電用 HDMI 線接好電視，按 <b style="color:var(--ds-text)">Windows 鍵 + P</b> 選「<b style="color:var(--ds-text)">延伸</b>」。') +
+            step(2, '按下面的「<b style="color:var(--ds-text)">複製設定指令</b>」。') +
+            step(3, '按 <b style="color:var(--ds-text)">Windows 鍵 + R</b>，跳出「執行」小視窗，按 <b style="color:var(--ds-text)">Ctrl + V</b> 貼上，再按 <b style="color:var(--ds-text)">Enter</b>。') +
+            step(4, '等藍色視窗跑完，電視會自動打開看板。用<b style="color:var(--ds-text)">看板帳號</b>登入，就完成了。以後筆電開機會自己打開。') +
+            '<div style="font-size:13px;color:var(--ds-text-3);margin-top:4px">要關掉看板：點一下電視畫面，按 Alt + F4。</div>',
+        footer: '<button class="ds-btn ds-btn-secondary" onclick="WMS.closeModal(\'modal-board-setup\')">關閉</button><button class="ds-btn ds-btn-primary" id="board-setup-copy" onclick="copyBoardSetup()"><i class="fa-regular fa-copy"></i>複製設定指令</button>'
+    });
+};
+window.copyBoardSetup = async function() {
+    var cmd = window.boardSetupCommand();
+    try { await navigator.clipboard.writeText(cmd); }
+    catch (e) { window.prompt('請全選複製這段文字：', cmd); return; }
+    var b = document.getElementById('board-setup-copy');
+    if (b) b.innerHTML = '<i class="fa-solid fa-check"></i>已複製，到第 3 步貼上';
+};
+
 // 切到今日工作時更新數字
 (function() {
     var orig = window.switchTab;
