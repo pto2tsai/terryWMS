@@ -84,7 +84,7 @@ H.check('完成：照現場分法出貨（海霸王白蝦 3、好市多白蝦 3�
   JSON.stringify((wd.shipped || []).map(x => x.orderNo + ':' + x.items.map(i => i.productName + i.qty).join('+'))) === JSON.stringify(['A-1:白蝦3', 'A-2:白蝦3+透抽2']), JSON.stringify([wd.shipped, so['A-1'], so['A-2']]));
 H.check('海霸王標「要改鼎新」（白蝦 5→3）；好市多出齊不用改', so['A-1'].erpFixNeeded === true && so['A-1'].shortShipped[0].want === 5 && so['A-1'].shortShipped[0].got === 3 && !so['A-2'].erpFixNeeded, JSON.stringify([so['A-1'].shortShipped, so['A-2'].erpFixNeeded]));
 H.check('波次記下現場的分法和誰少出', wd.allocOverride && (wd.shortOrders || []).length === 1 && wd.shortOrders[0].customer === '海霸王' && wd.shortOrders[0].got === 3, JSON.stringify([wd.allocOverride, wd.shortOrders]));
-H.check('兩家一起揀：完成後直接進分貨畫面（不用再按「分貨」）', /分貨\s*0\s*\/ 2 家/.test(await mp.innerText('#picking-next')), await mp.innerText('#picking-next'));
+H.check('兩家一起揀：完成後直接進分貨・核對畫面（不用再按「分貨」）', /分貨・核對\s*0\s*\/ 2 張/.test(await mp.innerText('#picking-next')), await mp.innerText('#picking-next'));
 await mp.click('#picking-next button:has-text("回上一頁")'); await mp.waitForTimeout(400);
 const fin = await mp.innerText('#picking-next');
 H.check('完成畫面：大字「完成」、「印標籤（2 張）」大按鈕、小字寫缺的不補', fin.includes('完成') && fin.includes('缺的不補') && fin.includes('印標籤（2 張）'), fin);
@@ -142,6 +142,7 @@ await mp.selectOption('#picking-wave-select', W2.waveNo); await mp.waitForTimeou
 await tapPad(3);   // 透抽要 4 只拿到 3
 await mp.click('#picking-next .pk-go'); await mp.waitForTimeout(800);   // 完成出貨
 await mp.click('#short-edit-btn'); await mp.waitForTimeout(300); await mp.click('#short-done-btn'); await mp.waitForTimeout(3000);   // 改分法裡照預設分法，好，完成
+await mp.click('#picking-next button:has-text("這張對了")'); await mp.waitForTimeout(1200);   // 只有一家：核對完
 const fin2 = await mp.innerText('#picking-next');
 H.check('辦公室模式：手機完成後寫「標籤在辦公室自動印出」，沒有手機列印按鈕', fin2.includes('辦公室自動印出') && !fin2.includes('印標籤（'), fin2);
 const w2 = await H.one('waves', W2.waveNo);

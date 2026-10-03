@@ -41,6 +41,7 @@ await mp.evaluate(() => openPage('picking')); await mp.waitForTimeout(1500);
 const first = await mp.$eval('#picking-wave-select', e => e.value);
 await mp.click('#picking-next .pk-take'); await mp.waitForTimeout(1200);
 await mp.click('#picking-next button:has-text("完成出貨")'); await mp.waitForTimeout(2500);
+await mp.click('#picking-next button:has-text("這張對了")'); await mp.waitForTimeout(1200);   // 核對完
 const fz = await mp.innerText('#picking-next');
 H.check('揀完一個波次：沒有「回到選單」，換成「下一個波次」大按鈕', fz.includes('下一個波次') && !fz.includes('回到選單'), fz);
 await mp.click('#picking-next button:has-text("下一個波次")'); await mp.waitForTimeout(1500);
