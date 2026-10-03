@@ -40,4 +40,36 @@
             });
         });
     };
+
+    // ---------- 第二關核對：揀完、分好以後，一張單一張單對（只有一家的波次也要對） ----------
+    //   wave.checkedOrders[單號] = { by, at, issue }；銷貨單 checkStatus：'ok' 對了／'issue' 數量不對（送業務）／'printed' 辦公室印好給司機了
+    window.waveCheckList = function(wave) { return ((wave && wave.shipped) || []).filter(function(o) { return (o.items || []).length; }); };
+    window.waveChecked = function(wave) { return (wave && wave.checkedOrders) || {}; };
+    window.waveCheckProgress = function(wave) {
+        const list = window.waveCheckList(wave), c = window.waveChecked(wave);
+        return { all: list.length, done: list.filter(function(o) { return c[o.orderNo]; }).length };
+    };
+    // 可以從鼎新印給司機：對過了、鼎新也沒有要改的（數量不對的要等鼎新改好、重新匯入後才可以印）
+    window.orderPrintable = function(o) {
+        return (o.checkStatus === 'ok' || o.checkStatus === 'issue') && o.status === 'shipped' && !o.erpFixNeeded && !o.erpReturnNeeded;
+    };
+    // 核對發現不對：把實際件數寫進銷貨單（跟揀貨時的缺貨記在同一個地方），送業務看板
+    //   items：[{ productName, spec, qty（應該給）, got（實際給） }]
+    window.saveCheckIssue = function(db, orderId, waveNo, items, who) {
+        const ref = db.collection('salesOrders').doc(orderId), at = new Date().toISOString();
+        return db.runTransaction(function(tx) {
+            return tx.get(ref).then(function(s) {
+                const cur = s.data() || {};
+                const list = (cur.shortShipped || []).map(function(x) { return Object.assign({}, x); });
+                items.forEach(function(it) {
+                    const e = list.find(function(x) { return x.productName === it.productName && (x.spec || '') === (it.spec || ''); });
+                    if (e) e.got = it.got;
+                    else list.push({ productName: it.productName, spec: it.spec || '', want: it.qty, got: it.got, waveNo: waveNo || '', from: 'check' });
+                });
+                list.forEach(function(x) { x.short = Math.round((x.want - x.got) * 1000) / 1000; });
+                const keep = list.filter(function(x) { return Math.abs(x.want - x.got) >= 0.001; });
+                tx.update(ref, { shortShipped: keep, erpFixNeeded: keep.length > 0, checkStatus: 'issue', checkedAt: at, checkedBy: who || '' });
+            });
+        });
+    };
 })();

@@ -434,9 +434,37 @@ window.openWaveSwitcher = function() {
                 (pk ? '<div class="sw-pickup' + (pk.level ? ' ' + pk.level : '') + '"><i class="fa-regular fa-clock"></i> ' + esc(pk.text) + '</div>' : '') +
                 '<div class="sw-sub">' + esc(w.waveNo) + '　' + esc(w.totalQty || 0) + ' 件' + (all ? '　・　' + done + ' / ' + all + ' 項' : '') + '</div></button>';
         }).join('') : '<div class="empty-state"><i class="fa-solid fa-circle-check"></i><p>目前沒有要揀的波次</p></div>') +
+        checkWavesHtml() +
         (cur ? '<button class="pk-link" onclick="switchToWave(\'' + esc(cur) + '\')">← 不換，繼續揀這個</button>' : '');
     pickFocus(true);
     window.scrollTo(0, 0);
+};
+// 揀完了、還沒對完的（最近兩天）：點進去接著核對（換手機、關掉 App 也找得回來）
+function waitingCheckWaves() {
+    const since = Date.now() - 2 * 864e5;
+    return (window.waves || []).filter(function(w) {
+        if (w.status !== 'done' || !w.completedAt || Date.parse(w.completedAt) < since) return false;
+        const p = window.waveCheckProgress(w);
+        return p.all && p.done < p.all;
+    }).sort(byPickup);
+}
+function checkWavesHtml() {
+    const list = waitingCheckWaves();
+    if (!list.length) return '';
+    return '<div class="pk-top" style="margin-top:14px"><span><i class="fa-solid fa-clipboard-check"></i> 揀完了、還沒核對完</span><span>' + list.length + ' 個</span></div>' +
+        list.map(function(w) {
+            const p = window.waveCheckProgress(w), pk = window.pickupInfo ? window.pickupInfo(w) : null;
+            return '<button class="sw-wave" onclick="openCheckWave(\'' + esc(w.id) + '\')"><div class="sw-top"><b>' + esc(w.logistics || '') + '</b><span class="sw-tag pause">待核對 ' + p.done + ' / ' + p.all + ' 張</span></div>' +
+                (pk ? '<div class="sw-pickup' + (pk.level ? ' ' + pk.level : '') + '"><i class="fa-regular fa-clock"></i> ' + esc(pk.text) + '</div>' : '') +
+                '<div class="sw-sub">' + esc(w.waveNo) + '</div></button>';
+        }).join('');
+}
+window.openCheckWave = function(id) {
+    const w = (window.waves || []).find(function(x) { return x.id === id; });
+    if (!w) return;
+    window._finishedWave = w;
+    window._chk = null;
+    window.openSortPanel();
 };
 // 上面那顆選波次的大按鈕：寫現在揀哪一個、幾點取貨
 window.renderWaveButton = function() {
@@ -824,7 +852,7 @@ function renderFinishPanel(wave) {
     const sorted = sortList(wave).filter(function(o) { return sortedOrders(wave).indexOf(o.orderNo) >= 0; }).length;
     $('picking-next').innerHTML = '<div class="pk-card pk-done"><div class="big"><i class="fa-solid fa-circle-check"></i> 完成</div>' +
         // 好幾家的貨一起揀的：要分成一家一堆
-        (nSort > 1 ? '<button class="pk-go" style="background:#2563eb" onclick="openSortPanel()"><i class="fa-solid fa-boxes-stacked"></i> 分貨（' + nSort + ' 家）' + (sorted ? ' ' + sorted + '/' + nSort : '') + '</button>' : '') +
+        (nSort ? '<button class="pk-go" style="background:#2563eb" onclick="openSortPanel()"><i class="fa-solid fa-clipboard-check"></i> ' + (nSort > 1 ? '分貨・核對' : '核對') + '（' + window.waveCheckProgress(wave).done + ' / ' + nSort + ' 張）</button>' : '') +
         (!needLb ? '<div class="pk-sub" style="font-size:20px"><i class="fa-solid fa-truck"></i> ' + esc(wave.logistics || '') + '：貼托運單就好，不用印標籤</div>'
             : (lb.skipped.length ? '<div class="pk-sub">不用貼標籤：' + esc(lb.skipped.join('、')) + '</div>' : '') +
               (office ? '<div class="pk-sub" style="font-size:20px"><i class="fa-solid fa-tags"></i> 標籤在辦公室自動印出（' + lb.count + ' 張）</div>'
@@ -837,56 +865,128 @@ function renderFinishPanel(wave) {
 }
 window.renderFinishPanel = renderFinishPanel;
 
-// 分貨：一家一張卡片，寫這家要幾件（實際出貨的），分好一家按一下
-function sortList(wave) { return (wave.shipped || []).filter(function(o) { return (o.items || []).length; }); }
+// 分貨・核對：一張單一張卡片，寫這家要幾件（實際出貨的）；分好、對完按「這張對了」，不對按「有不對」
+//   對完的：辦公室在電腦「業務看板 → 可以印給司機」看到，從鼎新印三聯；不對的：送業務看板請業務改鼎新
+function sortList(wave) { return window.waveCheckList(wave); }
+function who() { return window.currentUser ? (window.currentUser.name || window.currentUser.email || '') : ''; }
 window.openSortPanel = function(justDone) {
     const wave = window._finishedWave;
     if (!wave) return;
     pickFocus(true);
-    const list = sortList(wave), done = sortedOrders(wave);
-    const left = list.filter(function(o) { return done.indexOf(o.orderNo) < 0; }).length;
-    // 全部分好：最上面寫「全部分好了」＋下一步的大按鈕（印標籤／回到選單），不用往下找
+    const list = sortList(wave), chk = window.waveChecked(wave), multi = list.length > 1;
+    const left = list.filter(function(o) { return !chk[o.orderNo]; }).length;
+    // 全部對完：最上面寫「全部對完了」＋下一步的大按鈕（印標籤／下一個波次）
     let top;
     if (!left) {
         const lb = window.buildSortingLabelsHtml(wave);
         const office = window.labelPrintMode() === 'office';
         const needLb = window.waveNeedsLabels(wave);
-        top = '<div class="sort-allok"><i class="fa-solid fa-circle-check"></i><div><b>全部分好了</b><span>' + list.length + ' 家都分好了，下一步：</span></div></div>' +
+        const bad = list.filter(function(o) { return chk[o.orderNo].issue; }).length;
+        top = '<div class="sort-allok"><i class="fa-solid fa-circle-check"></i><div><b>全部對完了</b><span>' +
+            (bad ? bad + ' 張數量不對，已送業務；其他的' : list.length + ' 張都對了，') + '辦公室可以從鼎新印給司機</span></div></div>' +
             (needLb && !office && lb.count ? '<button class="pk-go" onclick="printLabelsOnPhone()"><i class="fa-solid fa-print"></i> 印標籤（' + lb.count + ' 張）</button>' : '') +
             (needLb && office ? '<div class="pk-sub" style="font-size:18px;margin:6px 0 10px"><i class="fa-solid fa-tags"></i> 標籤在辦公室自動印出</div>' : '') +
             nextWaveButton(wave.id).replace('class="pk-link"', 'class="pk-go sort-home"');
     } else {
-        top = '<div class="pk-top"><span><i class="fa-solid fa-boxes-stacked"></i> 分貨　<b>' + (list.length - left) + '</b> / ' + list.length + ' 家</span></div>';
+        top = '<div class="pk-top"><span><i class="fa-solid fa-clipboard-check"></i> ' + (multi ? '分貨・核對' : '核對') + '　<b>' + (list.length - left) + '</b> / ' + list.length + ' 張</span></div>' +
+            '<div class="pk-sub" style="margin:-4px 0 10px">' + (multi ? '一家分一堆，' : '') + '對著貨一張一張對，對了按「這張對了」</div>';
     }
+    const ed = window._chk;
     $('picking-next').innerHTML = top +
         list.map(function(o, i) {
-            const ok = done.indexOf(o.orderNo) >= 0;
+            const c = chk[o.orderNo];
             const sn = window.shortCustomer(o.customer || o.orderNo);
-            return '<div class="pk-card sort-card' + (ok ? ' ok' : '') + (justDone === i ? ' flash' : '') + '"><div class="pk-name" style="font-size:30px">' + esc(sn) + '</div>' +
-                (sn !== (o.customer || '') && o.customer ? '<div class="pk-sub" style="font-size:14px;margin-top:-4px">' + esc(o.customer) + '</div>' : '') +
-                (ok ? '<div class="pk-sub"><i class="fa-solid fa-check"></i> ' + ((wave.sortedOrders || []).indexOf(o.orderNo) < 0 ? '揀的時候已經放好了' : '分好了') + '</div>'
-                    : o.items.map(function(it) { return '<div class="sort-line"><span>' + esc(it.productName) + ' ' + esc(it.spec || '') + '</span><b>' + esc(it.qty) + ' 件</b></div>'; }).join('') +
-                      '<button class="pk-go" onclick="markSorted(' + i + ')"><i class="fa-solid fa-check"></i> 這家分好了</button>') + '</div>';
+            const head = '<div class="pk-name" style="font-size:30px">' + esc(sn) + '</div>' +
+                '<div class="pk-sub" style="font-size:14px;margin-top:-4px">' + esc(o.orderNo || '') + (sn !== (o.customer || '') && o.customer ? '　' + esc(o.customer) : '') + '</div>';
+            if (c) return '<div class="pk-card sort-card ok' + (c.issue ? ' bad' : '') + (justDone === i ? ' flash' : '') + '">' + head +
+                '<div class="pk-sub">' + (c.issue ? '⚠️ 數量不對，已送業務看板' : '<i class="fa-solid fa-check"></i> 對了') + '（' + esc(c.by || '') + '）</div></div>';
+            if (ed && ed.i === i) return '<div class="pk-card sort-card editing">' + head +
+                '<div class="pk-sub" style="margin-bottom:6px">按 －／＋ 改成實際的件數</div>' +
+                o.items.map(function(it, j) {
+                    const v = ed.vals[j], d = v - it.qty;
+                    return '<div class="sort-line chk-line"><span>' + esc(it.productName) + ' ' + esc(it.spec || '') + '<small>應該 ' + esc(it.qty) + ' 件' + (d ? '・<b class="' + (d < 0 ? 'neg' : 'pos') + '">' + (d < 0 ? '少 ' + (-d) : '多 ' + d) + '</b>' : '') + '</small></span>' +
+                        '<span class="chk-step"><button onclick="chkStep(' + j + ',-1)" aria-label="少一件">－</button><b>' + v + '</b><button onclick="chkStep(' + j + ',1)" aria-label="多一件">＋</button></span></div>';
+                }).join('') + chkButtons(o, ed) + '</div>';
+            return '<div class="pk-card sort-card' + (justDone === i ? ' flash' : '') + '">' + head +
+                (multi && exclusiveOrder(wave, o) ? '<div class="pk-sub" style="font-size:15px"><i class="fa-solid fa-check"></i> 揀的時候已經放好了，對一下就好</div>' : '') +
+                o.items.map(function(it) { return '<div class="sort-line"><span>' + esc(it.productName) + ' ' + esc(it.spec || '') + '</span><b>' + esc(it.qty) + ' 件</b></div>'; }).join('') +
+                '<button class="pk-go" onclick="markChecked(' + i + ')"><i class="fa-solid fa-check"></i> 這張對了</button>' +
+                '<button class="pk-short chk-bad" onclick="checkIssue(' + i + ')"><i class="fa-solid fa-triangle-exclamation"></i> 有不對</button></div>';
         }).join('') +
         (left ? '<button class="pk-link" onclick="renderFinishPanel(window._finishedWave)">← 回上一頁</button>' : '');
-    if (!left && justDone != null) window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (ed) { const el = document.querySelector('#picking-next .sort-card.editing'); if (el && justDone === 'edit') el.scrollIntoView({ block: 'center' }); }
+    else if (!left && justDone != null) window.scrollTo({ top: 0, behavior: 'smooth' });
     else if (justDone != null) {
-        // 下一家還沒分的（優先找剛剛那家後面的）移到螢幕中間
+        // 下一張還沒對的（優先找剛剛那張後面的）移到螢幕中間
         const cards = [].slice.call(document.querySelectorAll('#picking-next .sort-card'));
         const next = cards.slice(justDone + 1).concat(cards.slice(0, justDone)).find(function(c) { return !c.classList.contains('ok'); });
         if (next) next.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 };
-window.markSorted = async function(i) {
+// 有不對：多的可以放回架上（不用改鼎新），或多給客戶（請業務改鼎新）；少的一律送業務
+function chkButtons(o, ed) {
+    const diffs = o.items.map(function(it, j) { return ed.vals[j] - it.qty; });
+    const more = diffs.some(function(d) { return d > 0; }), less = diffs.some(function(d) { return d < 0; });
+    const cancel = '<button class="pk-link" onclick="chkCancel()">取消</button>';
+    if (!more && !less) return '<button class="pk-go" onclick="submitCheck(\'send\')"><i class="fa-solid fa-check"></i> 數量都一樣＝這張對了</button>' + cancel;
+    if (!more) return '<button class="pk-go chk-send" onclick="submitCheck(\'send\')"><i class="fa-solid fa-paper-plane"></i> 送給業務（少的請業務改鼎新）</button>' + cancel;
+    return '<button class="pk-go" onclick="submitCheck(\'back\')"><i class="fa-solid fa-rotate-left"></i> 多的放回架上' + (less ? '，少的送業務' : '（不用改鼎新）') + '</button>' +
+        '<button class="pk-go chk-send" onclick="submitCheck(\'give\')"><i class="fa-solid fa-paper-plane"></i> 多的也給客戶（送業務改鼎新）</button>' + cancel;
+}
+window.checkIssue = function(i) {
+    const o = sortList(window._finishedWave)[i];
+    if (!o) return;
+    window._chk = { i: i, vals: o.items.map(function(it) { return parseFloat(it.qty) || 0; }) };
+    window.openSortPanel('edit');
+};
+window.chkStep = function(j, d) {
+    const ed = window._chk;
+    if (!ed) return;
+    ed.vals[j] = Math.max(0, Math.round((ed.vals[j] + d) * 1000) / 1000);
+    window.openSortPanel();
+};
+window.chkCancel = function() { window._chk = null; window.openSortPanel(); };
+// 這張對了：記在波次（誰對的），銷貨單標「對了」→ 辦公室可以從鼎新印給司機
+function recordChecked(wave, o, issue) {
+    const at = new Date().toISOString(), rec = { by: who(), at: at, issue: !!issue };
+    wave.checkedOrders = Object.assign({}, wave.checkedOrders || {});
+    wave.checkedOrders[o.orderNo] = rec;
+    wave.sortedOrders = (wave.sortedOrders || []).concat([o.orderNo]);
+    return db.collection('waves').doc(wave.id).update(new firebase.firestore.FieldPath('checkedOrders', o.orderNo), rec, 'sortedOrders', FieldValue.arrayUnion(o.orderNo));
+}
+window.markChecked = async function(i) {
     const wave = window._finishedWave, o = wave && sortList(wave)[i];
     if (!o) return;
-    wave.sortedOrders = (wave.sortedOrders || []).concat([o.orderNo]);
-    const all = sortedOrders(wave).length >= sortList(wave).length;
-    window.sfx(all ? 'finish' : 'sorted');   // 這家分好了：輕的叮；全部分好：叮咚咚
-    if (all) window.speak('全部分好了');
+    window._chk = null;
+    const p = recordChecked(wave, o, false);
+    const all = window.waveCheckProgress(wave).done >= sortList(wave).length;
+    window.sfx(all ? 'finish' : 'sorted');   // 這張對了：輕的叮；全部對完：叮咚咚
+    if (all) window.speak('全部對完了');
     window.openSortPanel(i);
-    try { await db.collection('waves').doc(wave.id).update({ sortedOrders: FieldValue.arrayUnion(o.orderNo) }); }
-    catch (e) { console.warn('記錄分貨失敗', e); }
+    try {
+        await p;
+        if (o.orderId) await db.collection('salesOrders').doc(o.orderId).update({ checkStatus: 'ok', checkedAt: new Date().toISOString(), checkedBy: who() });
+    } catch (e) { console.warn('記錄核對失敗', e); toast('⚠️ 沒記到「對了」：' + e.message); }
+};
+// 送出不對的：mode＝send（只有少的）、back（多的放回架上）、give（多的也給客戶）
+window.submitCheck = async function(mode) {
+    const wave = window._finishedWave, ed = window._chk, o = wave && ed && sortList(wave)[ed.i];
+    if (!o) return;
+    const items = o.items.map(function(it, j) {
+        const q = parseFloat(it.qty) || 0;
+        return { productName: it.productName, spec: it.spec || '', qty: q, got: mode === 'back' ? Math.min(ed.vals[j], q) : ed.vals[j] };
+    }).filter(function(x) { return Math.abs(x.got - x.qty) >= 0.001; });
+    if (!items.length) return window.markChecked(ed.i);
+    const i = ed.i;
+    window._chk = null;
+    try {
+        if (!o.orderId) throw new Error('找不到這張銷貨單');
+        await window.saveCheckIssue(db, o.orderId, wave.waveNo, items, who());
+        await recordChecked(wave, o, true);
+    } catch (e) { alert('❌ 儲存失敗：' + e.message); return window.openSortPanel(); }
+    window.sfx('short');
+    toast('📨 已送業務看板：' + window.shortCustomer(o.customer || o.orderNo) + ' ' + items.map(function(x) { return x.productName + (x.got < x.qty ? ' 少 ' + (x.qty - x.got) : ' 多 ' + (x.got - x.qty)); }).join('、'));
+    window.openSortPanel(i);
 };
 window.printLabelsOnPhone = async function() {
     const wave = window._finishedWave;
@@ -941,7 +1041,9 @@ window.completePickingWave = async function(labelsFixed) {
         renderFinishPanel(currentWave);
         // 好幾家一起揀的：直接進分貨（不用再按一次「分貨」）
         // 每一家都只有獨有品項（揀的時候已經放好了）就不用分，停在完成畫面
-        if (sortList(currentWave).length > 1 && sortedOrders(currentWave).length < sortList(currentWave).length) window.openSortPanel();
+        // 揀完直接進「核對」（好幾家的一起分貨）：一張單一張單對，只有一家也要對
+        window._chk = null;
+        if (sortList(currentWave).length) window.openSortPanel();
     } catch (e) {
         window._justCompleted = null;
         alert('❌ 完成波次失敗：' + e.message + '\n\n庫存與訂單都沒有變動。');

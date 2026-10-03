@@ -378,7 +378,7 @@
         var ym = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 7);   // 台灣時間的年-月（跟 Google 自動程式寫入的 month 一致）
         listen(db.collection('erpInbox').where('month', '==', ym).where('sensitive', '==', false), function(rows) { erpDocs = rows; drawErpAlert(); });
         unsubs.push(db.collection('settings').doc('erpImport').onSnapshot(function(d) { erpSched = d.exists ? d.data() : null; drawErpAlert(); }, function() {}));
-        listen(db.collection('salesOrders').where('erpFixNeeded', '==', true), function(rows) { erpFix = rows.filter(function(o) { return (o.shortShipped || []).some(function(x) { return (x.want - x.got) >= 0.001; }); }); drawErpAlert(); });
+        listen(db.collection('salesOrders').where('erpFixNeeded', '==', true), function(rows) { erpFix = rows.filter(function(o) { return (o.shortShipped || []).some(function(x) { return Math.abs(x.want - x.got) >= 0.001; }); }); drawErpAlert(); });
         listen(db.collection('salesOrders').where('erpReturnNeeded', '==', true), function(rows) { erpRet = rows; drawErpAlert(); });
         listen(db.collection('salesOrders').where('logistics', '==', '未指定'), function(rows) {
             noLogistics = rows.filter(function(o) { return ['pending', 'confirmed', 'partial'].indexOf(o.status) >= 0 && !o.waveNo; }).length;
@@ -396,7 +396,7 @@
             }, '目前沒有待上架的貨', 'tasks');
         });
         // 揀貨波次：待揀、揀貨中、待分貨。用跟手機一樣的揀貨清單算出每一項在哪一庫，只顯示這一庫要揀的
-        var openWaves = [], allPallets = [], consigns = [], palletsReady = false;
+        var openWaves = [], checkWaves = [], allPallets = [], consigns = [], palletsReady = false;
         listen(db.collection('waves').where('status', 'in', ['pending', 'picking', 'sorting']), function(rows) { openWaves = rows; drawWaves(); });
         listen(db.collection('consignments').where('status', '==', 'active'), function(rows) { consigns = rows; drawWaves(); });
         listen(db.collection('pallets'), function(rows) {
@@ -421,6 +421,8 @@
         function drawWaves() {
             if (!palletsReady) return;
             var rows = [], op = 0, oq = 0;
+            // 揀完了、還沒核對完的：顯示「待核對 2 / 5 張」（對完就消失）
+            checkWaves.forEach(function(w) { var m = mineOfWave(w); if (m) rows.push(Object.assign({}, w, { _mine: m, _check: window.waveCheckProgress(w) })); });
             openWaves.forEach(function(w) {
                 var m = mineOfWave(w); if (m) rows.push(Object.assign({}, w, { _mine: m }));
                 if (w.status === 'sorting') return;
@@ -432,15 +434,15 @@
             // 揀貨中的排最前面，其次待揀貨、待分貨；同狀態先來先做（等最久的在上面）
             waveRets = rows.map(function(w) { return { waveNo: w.waveNo, rets: waveReturns(w) }; }).filter(function(x) { return x.rets.length; });
             drawErpAlert();
-            var rank = { picking: 0, pending: 1, sorting: 2 };
+            var rank = { picking: 0, pending: 1, sorting: 2, done: 3 };
             rows.sort(function(a, b) { return (rank[a.status] - rank[b.status]) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.waveNo || '').localeCompare(String(b.waveNo || '')); });
             render('l-waves', 'c-waves', rows, function(w) {
-                var done = w._mine.done, all = w._mine.all;
+                var ck = w._check, done = ck ? ck.done : w._mine.done, all = ck ? ck.all : w._mine.all;
                 var pct = all ? Math.min(100, Math.round(done / all * 100)) : 0;
-                var st = w.status === 'picking' ? '揀貨中' : w.status === 'sorting' ? '待分貨' : '待揀貨';
+                var st = ck ? '<b style="color:#7dd3fc">揀完・待核對</b>' : w.status === 'picking' ? '揀貨中' : w.status === 'sorting' ? '待分貨' : '待揀貨';
                 var a = ageClass('waves', w);
                 return '<div class="card' + a.cls + '" style="--c:#ea580c"><div class="t"><span class="name">' + esc(w.waveNo) + '　' + esc(w.logistics || '') + '</span><span class="qty">' + esc(w._mine.qty != null ? w._mine.qty : (w.totalQty || 0)) + ' 件</span></div>' +
-                    '<div class="sub"><span>' + st + '　' + (w.orderCount || (w.orders || []).length) + ' 單　' + a.age + '</span><span>' + done + '/' + all + ' 項</span></div>' +
+                    '<div class="sub"><span>' + st + '　' + (w.orderCount || (w.orders || []).length) + ' 單　' + a.age + '</span><span>' + done + '/' + all + (ck ? ' 張' : ' 項') + '</span></div>' +
                     (w._mine.both ? '<div class="sub" style="color:#7dd3fc">🔀 ' + OTHER_NAME + '也有貨要揀，這裡只算本庫的</div>' : '') +
                     waveAsk(w) +
                     (waveReturns(w).length ? '<div class="sub" style="color:#f87171;font-weight:700">↩️ 要放回：' + esc(waveReturns(w).join('、')) + '</div>' : '') +
@@ -490,6 +492,8 @@
         });
         listen(db.collection('waves').where('completedAt', '>=', window.localDayStartISO(today)), function(rows) {
             practiceDone = MAIN ? rows.filter(function(w) { return w.status === 'done' && w.practice; }) : [];
+            checkWaves = rows.filter(function(w) { if (w.status !== 'done') return false; var p = window.waveCheckProgress(w); return p.all && p.done < p.all; });
+            if (typeof drawWaves === 'function') drawWaves();
             drawStats();
         });
         // 7 天內到期（含已過期）的板數：這一庫的

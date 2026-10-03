@@ -9,25 +9,28 @@
         return String(l).replace(/（已經出貨，鼎新改少了）→ 請開銷退$/, ' → 跟實際出貨對不上，請業務確認鼎新是不是改錯')
             .replace(/^整張單在鼎新不見了，但貨已經出了 → .*$/, '貨已經出了，鼎新卻沒有這張單 → 請業務確認鼎新是不是刪錯');
     };
-    // 一張單要改的每一行（少 0 的不算：以前小數誤差留下來的「訂 2 → 出 1.9999999」）
+    // 訂幾、出幾：少的寫「少」、核對時多給客戶的寫「多」
+    const diffText = function(x) { const d = r3(r3(x.want) - r3(x.got)); return d > 0 ? '（少 ' + d + '）' : '（多 ' + (-d) + '）'; };
+    const differs = function(x) { return Math.abs(r3(x.want) - r3(x.got)) >= 0.001; };
+    // 一張單要改的每一行（差 0 的不算：以前小數誤差留下來的「訂 2 → 出 1.9999999」）
     window.erpFixLines = function(o) {
-        const a = o.erpFixNeeded ? (o.shortShipped || []).filter(function(x) { return r3(x.want) - r3(x.got) >= 0.001; }).map(function(x) {
-            return (x.productName || '') + (x.spec ? ' ' + x.spec : '') + '：訂 ' + r3(x.want) + ' → 出 ' + r3(x.got) + '（少 ' + r3(x.want - x.got) + '）';
+        const a = o.erpFixNeeded ? (o.shortShipped || []).filter(differs).map(function(x) {
+            return (x.productName || '') + (x.spec ? ' ' + x.spec : '') + '：訂 ' + r3(x.want) + ' → 出 ' + r3(x.got) + diffText(x);
         }) : [];
         return a.concat(o.erpReturnNeeded ? (o.erpReturnLines || []).map(newWording) : []);
     };
     // 傳給業務時規格只留前面一段（31/40*1KG*10包 → 31/40），短一點好讀
     const shortSpec = function(spec) { return spec ? ' ' + String(spec).split(/[*＊(（\s]/)[0] : ''; };
     const fixRows = function(o) {
-        return (o.shortShipped || []).filter(function(x) { return r3(x.want) - r3(x.got) >= 0.001; }).map(function(x) {
-            return (x.productName || '') + shortSpec(x.spec) + '：訂 ' + r3(x.want) + ' → 出 ' + r3(x.got) + '（少 ' + r3(x.want - x.got) + '）';
+        return (o.shortShipped || []).filter(differs).map(function(x) {
+            return (x.productName || '') + shortSpec(x.spec) + '：訂 ' + r3(x.want) + ' → 出 ' + r3(x.got) + diffText(x);
         });
     };
     const LINE = '──────────';
     // 手機卡片用的短句：{ text, short }（規格只留前段；對不上的拿掉後面「請業務確認…」那串，標題已經寫了）
     window.erpFixCardLines = function(o) {
-        const a = o.erpFixNeeded ? (o.shortShipped || []).filter(function(x) { return r3(x.want) - r3(x.got) >= 0.001; }).map(function(x) {
-            return { text: (x.productName || '') + shortSpec(x.spec) + '　訂 ' + r3(x.want) + ' → 出 ' + r3(x.got), short: '少 ' + r3(x.want - x.got) };
+        const a = o.erpFixNeeded ? (o.shortShipped || []).filter(differs).map(function(x) {
+            return { text: (x.productName || '') + shortSpec(x.spec) + '　訂 ' + r3(x.want) + ' → 出 ' + r3(x.got), short: diffText(x).replace(/[（）]/g, '') };
         }) : [];
         const b = o.erpReturnNeeded ? (o.erpReturnLines || []).map(newWording).map(function(l) {
             if (/鼎新卻沒有這張單/.test(l)) return { text: '鼎新沒有這張單（貨已出）', short: '' };

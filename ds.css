@@ -508,3 +508,11 @@ header.ds-header #page-title { font-size: 18px; font-weight: 600; color: var(--d
 .sb-meta { font-size: 13px; color: var(--ds-text-3); margin-top: 8px; }
 .sb-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 #sb-undo { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60; align-items: center; gap: 14px; padding: 10px 14px 10px 18px; border-radius: 12px; background: var(--ds-surface-2); border: 1px solid var(--ds-border-strong); color: var(--ds-text); font-weight: 600; box-shadow: var(--ds-shadow); }
+
+.sb-print { background: var(--ds-surface); border: 1px solid var(--ds-border); border-left: 5px solid var(--ds-success); border-radius: var(--ds-radius); padding: 12px 16px; margin-bottom: 16px; }
+.sb-print-head { font-size: 17px; font-weight: 700; color: var(--ds-text); margin-bottom: 8px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.sb-print-head span { font-size: 13px; font-weight: 400; color: var(--ds-text-3); }
+.sb-print-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--ds-border); font-size: 15px; color: var(--ds-text-2); flex-wrap: wrap; }
+.sb-print-row b { color: var(--ds-text); min-width: 48px; }
+.sb-print-row .sb-print-no { font-family: 'Inter', var(--ds-font); color: var(--ds-text); }
+.sb-print-row button { margin-left: auto; }

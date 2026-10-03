@@ -43,6 +43,8 @@ const w1p = await H.one('waves', W1._id);
 H.check('全日的進度還在（白蝦已拿），也不再顯示我在揀', (w1p.completedItems || []).length === 1 && !Object.keys(w1p.pickers || {}).length, JSON.stringify([w1p.completedItems, w1p.pickers]));
 await mp.click('#picking-next .pk-take'); await mp.waitForTimeout(1200);
 await mp.click('#picking-next button:has-text("完成出貨")'); await mp.waitForTimeout(2500);
+H.check('自取完成：直接進「核對」（只有一家也要對）', /^\s*核對\s*0\s*\/ 1 張/.test(await card()), await card());
+await mp.click('#picking-next button:has-text("這張對了")'); await mp.waitForTimeout(1200);
 const f2 = await card();
 H.check('自取做完：大按鈕是「回到暫停的波次（全日）」', f2.includes('回到暫停的波次') && f2.includes(W1.waveNo), f2);
 await mp.click('#picking-next button:has-text("回到暫停的波次")'); await mp.waitForTimeout(1500);
@@ -53,7 +55,7 @@ for (let i = 0; i < 2; i++) { await mp.click('#picking-next .pk-take'); await mp
 await mp.click('#picking-next button:has-text("開始分貨")'); await mp.waitForTimeout(2500);
 const sp = await card();
 if (process.env.SHOT_DIR) await mp.screenshot({ path: process.env.SHOT_DIR + '/sort-auto.png', fullPage: true });
-H.check('分貨：開心麵館（只有獨有的干貝）寫「揀的時候已經放好了」，算 1 / 3 家', /分貨\s*1\s*\/ 3 家/.test(sp) && /開心麵館[\s\S]*揀的時候已經放好了/.test(sp), sp);
+H.check('分貨・核對：開心麵館（只有獨有的干貝）寫「揀的時候已經放好了」，還是要對（0 / 3 張）', /分貨・核對\s*0\s*\/ 3 張/.test(sp) && /開心麵館[\s\S]*揀的時候已經放好了/.test(sp), sp);
 // ---------- 客戶簡稱 ----------
 H.check('名字長的自動簡稱：「開心麵館企業有限公司-3」在分貨寫「開心麵館」，下面小字寫完整名稱', sp.includes('開心麵館企業有限公司-3'));
 await D.page.evaluate(() => loadOrdersFromFirebase()); await D.page.waitForTimeout(800);

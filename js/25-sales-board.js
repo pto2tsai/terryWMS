@@ -5,7 +5,7 @@
 //   資料：揀貨中的在波次上（wave.shortLog／salesCases，js/shared/sales-case.js），波次完成後在銷貨單（erpFixNeeded／salesCase）
 // ============================================================
 (function() {
-    var waves = [], fixList = [], seen = null, unsubs = [], undoTimer = null;
+    var waves = [], fixList = [], printList = [], seen = null, unsubs = [], undoTimer = null;
     var esc = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
     var r3 = function(n) { return Math.round((parseFloat(n) || 0) * 1000) / 1000; };
     function me() { return window.getOperatorName ? window.getOperatorName() : ((window.currentUser || {}).name || ''); }
@@ -84,7 +84,7 @@
             head = '<b>已出貨・等鼎新改</b><span class="sb-wave">' + esc(o.waveNo || '') + '</span>';
             body = '<div class="sb-order" style="color:var(--ds-text);font-weight:600">' + esc(o.orderNo || '') + '　' + esc(o.customer || '') + '</div>' +
                 window.erpFixLines(o).map(function(l) { return '<div class="sb-item" style="font-size:15px">' + esc(l) + '</div>'; }).join('');
-            meta = '鼎新改好、重新匯入後會自動消失';
+            meta = (o.checkStatus === 'issue' ? '第二關核對發現數量不對（' + esc(o.checkedBy || '') + ' ' + hm(o.checkedAt) + '）・' : '') + '鼎新改好、重新匯入後會自動消失';
             btns = (st === 'new' ? '<button class="ds-btn ds-btn-primary ds-btn-sm" onclick="salesClaimOrder(\'' + o.id + '\')"><i class="fa-solid fa-hand"></i>我來處理</button>' : '') +
                 '<button class="ds-btn ds-btn-secondary ds-btn-sm" onclick="salesOrderDone(\'' + o.id + '\')"><i class="fa-solid fa-check"></i>已經改好了</button>';
         }
@@ -105,9 +105,42 @@
             '<button class="ds-btn ' + (on ? 'ds-btn-primary' : 'ds-btn-secondary') + ' ds-btn-sm" onclick="toggleSalesNotify()"><i class="fa-solid ' + (on ? 'fa-bell' : 'fa-bell-slash') + '"></i>' + (on ? '這台電腦會響、跳通知' : '這台電腦不通知') + '</button>' +
             (on && perm === 'default' ? '<button class="ds-btn ds-btn-secondary ds-btn-sm" onclick="Notification.requestPermission().then(renderSalesBoard)">允許 Windows 通知</button>' : '') +
             (on && perm === 'denied' ? '<span style="font-size:13px;color:var(--ds-warn)">瀏覽器擋了通知：只會響、不會跳 Windows 通知</span>' : '');
+        var pl = document.getElementById('sales-print-list');
+        if (pl) pl.innerHTML = printHtml();
         box.innerHTML = list.length ? list.map(cardHtml).join('') :
             '<div class="ds-empty" style="padding:48px"><div class="ds-empty-icon"><i class="fa-solid fa-check"></i></div><div class="ds-empty-title">目前沒有要處理的</div><div style="font-size:14px;color:var(--ds-text-3);margin-top:6px">現場一按「不夠」就會出現在這裡，會響、跳通知</div></div>';
     };
+
+    // ---------- 可以從鼎新印給司機：現場核對過、鼎新也對了（數量不對的要等鼎新改好、重新匯入） ----------
+    function printHtml() {
+        if (!printList.length) return '';
+        var rows = printList.slice().sort(function(a, b) { return String(a.logistics || '').localeCompare(String(b.logistics || '')) || String(a.orderNo || '').localeCompare(String(b.orderNo || '')); });
+        return '<div class="sb-print"><div class="sb-print-head"><i class="fa-solid fa-print"></i> 可以從鼎新印給司機（' + rows.length + ' 張）<span>印三聯、放進信封，印好按「印好了」</span></div>' +
+            rows.map(function(o) {
+                var again = o.checkStatus === 'issue';
+                return '<div class="sb-print-row"><b>' + esc(String(o.logistics || '').replace(/宅急便|貨運|物流$/g, '')) + '</b><span class="sb-print-no">' + esc(o.orderNo || '') + '</span><span>' + esc(o.customer || '') + '</span>' +
+                    '<span class="ds-pill ' + (again ? 'ds-pill-warn">鼎新改好了・重印' : 'ds-pill-success">核對好了') + '</span>' +
+                    '<button class="ds-btn ds-btn-secondary ds-btn-sm" onclick="salesPrinted(\'' + o.id + '\')"><i class="fa-solid fa-check"></i>印好了</button></div>';
+            }).join('') + '</div>';
+    }
+    window.salesPrinted = async function(id) {
+        var o = printList.find(function(x) { return x.id === id; });
+        if (!o) return;
+        var prev = { checkStatus: o.checkStatus };
+        try { await window.db.collection('salesOrders').doc(id).update({ checkStatus: 'printed', printedAt: new Date().toISOString(), printedBy: me() }); }
+        catch (e) { alert('❌ 儲存失敗：' + e.message); return; }
+        showUndo('✅ 印好了：' + (o.customer || o.orderNo), function() { return window.db.collection('salesOrders').doc(id).update(prev); });
+    };
+    function showUndo(text, undo) {
+        var bar = document.getElementById('sb-undo');
+        bar.innerHTML = '<span>' + esc(text) + '</span><button class="ds-btn ds-btn-secondary ds-btn-sm">復原</button>';
+        bar.querySelector('button').onclick = async function() {
+            clearTimeout(undoTimer); bar.style.display = 'none';
+            try { await undo(); } catch (e) { alert('❌ 復原失敗：' + e.message); }
+        };
+        bar.style.display = 'flex';
+        clearTimeout(undoTimer); undoTimer = setTimeout(function() { bar.style.display = 'none'; }, 6000);
+    }
 
     // ---------- 業務的動作 ----------
     window.salesClaim = async function(waveId, caseId) {
@@ -136,14 +169,7 @@
         if (!o) return;
         var prev = { erpFixNeeded: !!o.erpFixNeeded, erpReturnNeeded: !!o.erpReturnNeeded, erpSentKey: o.erpSentKey || '' };
         try { await window.markErpFixedDoc(window.db, id, me()); } catch (e) { alert('❌ 儲存失敗：' + e.message); return; }
-        var bar = document.getElementById('sb-undo');
-        bar.innerHTML = '<span>✅ 已拿掉：' + esc(o.customer || o.orderNo) + '</span><button class="ds-btn ds-btn-secondary ds-btn-sm">復原</button>';
-        bar.querySelector('button').onclick = async function() {
-            clearTimeout(undoTimer); bar.style.display = 'none';
-            try { await window.db.collection('salesOrders').doc(id).update(prev); } catch (e) { alert('❌ 復原失敗：' + e.message); }
-        };
-        bar.style.display = 'flex';
-        clearTimeout(undoTimer); undoTimer = setTimeout(function() { bar.style.display = 'none'; }, 6000);
+        showUndo('✅ 已拿掉：' + (o.customer || o.orderNo), function() { return window.db.collection('salesOrders').doc(id).update(prev); });
     };
 
     // ---------- 一直盯著：揀貨中的波次、等鼎新改的銷貨單 ----------
@@ -169,6 +195,10 @@
             ready.w = true; if (ready.o) onData();
         }, function(e) { console.warn('業務看板讀取波次失敗', e); }));
         unsubs.push(window.watchErpFix(db, function(list) { fixList = list; ready.o = true; if (ready.w) onData(); }));
+        unsubs.push(db.collection('salesOrders').where('checkStatus', 'in', ['ok', 'issue']).onSnapshot(function(snap) {
+            printList = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); }).filter(window.orderPrintable);
+            if (seen) window.renderSalesBoard();
+        }, function(e) { console.warn('業務看板讀取可以印的單失敗', e); }));
     }
     // 每分鐘更新「還有幾分」
     setInterval(function() { if (seen) window.renderSalesBoard(); }, 60000);

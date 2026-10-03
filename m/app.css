@@ -681,3 +681,16 @@ body {
 .wave-btn em.soon, .sw-pickup.soon { color: #fb923c; font-weight: 700; }
 .wave-btn em.late, .sw-pickup.late { color: #f87171; font-weight: 700; }
 .sw-pickup { margin-top: 4px; font-size: 17px; color: #cbd5e1; }
+
+/* 分貨・核對：有不對時用 －／＋ 改成實際件數（按鈕要大，戴手套也按得到） */
+.sort-line.chk-line { align-items: center; }
+.chk-line > span:first-child { display: flex; flex-direction: column; text-align: left; }
+.chk-line small { font-size: 15px; color: #94a3b8; margin-top: 2px; }
+.chk-line small b.neg { color: #f87171; }
+.chk-line small b.pos { color: #fbbf24; }
+.chk-step { display: flex; align-items: center; gap: 10px; flex: none; }
+.chk-step button { -webkit-appearance: none; appearance: none; width: 52px; height: 52px; border-radius: 12px; border: 1px solid #33456b; background: #1b2844; color: #fff; font-size: 28px; font-weight: 800; line-height: 1; }
+.chk-step b { min-width: 44px; text-align: center; font-size: 30px; color: #fde047; }
+.pk-go.chk-send { background: #2563eb; }
+.sort-card .pk-short.chk-bad { margin-top: 10px; }
+.sort-card.ok.bad { border-color: #f97316; }

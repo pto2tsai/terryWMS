@@ -61,27 +61,27 @@ H.check('兩間都拿完：I庫出現「開始分貨」（兩家一起揀）', a
 await B.page.click('#picking-next .pk-go'); await B.page.waitForTimeout(2500);
 const wd = await H.one('waves', W._id);
 H.check('波次完成、兩張單都出貨', wd.status === 'done' && (wd.shipped || []).length === 2, JSON.stringify([wd.status, wd.shipped]));
-H.check('完成後直接進分貨畫面', /分貨\s*0\s*\/ 2 家/.test(await card(B)), await card(B));
+H.check('完成後直接進分貨・核對畫面', /分貨・核對\s*0\s*\/ 2 張/.test(await card(B)), await card(B));
 await B.page.click('#picking-next button:has-text("回上一頁")'); await B.page.waitForTimeout(400);
 const fin = await card(B);
-H.check('黑貓：完成畫面寫「貼托運單就好，不用印標籤」，沒有印標籤按鈕；有「分貨（2 家）」', fin.includes('貼托運單就好') && !fin.includes('印標籤（') && fin.includes('分貨（2 家）'), fin);
+H.check('黑貓：完成畫面寫「貼托運單就好，不用印標籤」，沒有印標籤按鈕；有「分貨・核對（0 / 2 張）」', fin.includes('貼托運單就好') && !fin.includes('印標籤（') && fin.includes('分貨・核對（0 / 2 張）'), fin);
 if (process.env.SHOT_DIR) await B.page.screenshot({ path: process.env.SHOT_DIR + '/h3-B-finish.png' });
 await A.page.waitForTimeout(800);
 H.check('J庫的手機：顯示「此波次已在其他裝置完成」', (await A.page.innerText('#picking-scan-result')).includes('其他裝置完成'));
 
 // 分貨：一家一張卡片
-await B.page.click('text=分貨（'); await B.page.waitForTimeout(500);
+await B.page.click('text=分貨・核對（'); await B.page.waitForTimeout(500);
 const s1 = await card(B);
 H.check('分貨畫面：海霸王 白蝦 5 件、透抽 2 件；好市多 白蝦 3 件、魷魚 4 件', /海霸王[\s\S]*白蝦 50\/60\s*5 件[\s\S]*透抽 L\s*2 件[\s\S]*好市多[\s\S]*白蝦 50\/60\s*3 件[\s\S]*魷魚 M\s*4 件/.test(s1), s1);
 if (process.env.SHOT_DIR) await B.page.screenshot({ path: process.env.SHOT_DIR + '/h4-sort.png', fullPage: true });
-await B.page.click('text=這家分好了'); await B.page.waitForTimeout(800);
-H.check('按「這家分好了」：1 / 2 家，記在波次上', /1\s*\/ 2 家/.test(await card(B)) && ((await H.one('waves', W._id)).sortedOrders || []).length === 1);
+await B.page.click('#picking-next button:has-text("這張對了")'); await B.page.waitForTimeout(800);
+H.check('按「這張對了」：1 / 2 張，記在波次上（誰對的）', /1\s*\/ 2 張/.test(await card(B)) && ((await H.one('waves', W._id)).sortedOrders || []).length === 1 && Object.keys((await H.one('waves', W._id)).checkedOrders || {}).length === 1);
 await B.page.waitForTimeout(700);
 const mid = await B.page.evaluate(() => { const c = [].slice.call(document.querySelectorAll('#picking-next .sort-card:not(.ok)'))[0]; const r = c.getBoundingClientRect(); return Math.abs((r.top + r.bottom) / 2 - innerHeight / 2) < innerHeight * 0.25; });
 H.check('按完一家：下一家還沒分的卡片自動移到螢幕中間', mid);
-await B.page.click('text=這家分好了'); await B.page.waitForTimeout(800);
+await B.page.click('#picking-next button:has-text("這張對了")'); await B.page.waitForTimeout(800);
 const allok = await card(B);
-H.check('兩家都分好：最上面寫「全部分好了」，下面直接有下一步的大按鈕（下一個波次／回到選單）', allok.trim().startsWith('全部分好了') && (await B.page.$$('#picking-next .sort-allok')).length === 1 && (await B.page.isVisible('#picking-next button.sort-home') || await B.page.isVisible('#picking-next button:has-text("下一個波次")')), allok.slice(0, 120));
+H.check('兩家都對完：最上面寫「全部對完了」，下面直接有下一步的大按鈕（下一個波次／回到選單）', allok.trim().startsWith('全部對完了') && (await B.page.$$('#picking-next .sort-allok')).length === 1 && (await B.page.isVisible('#picking-next button.sort-home') || await B.page.isVisible('#picking-next button:has-text("下一個波次")')), allok.slice(0, 120));
 if (process.env.SHOT_DIR) await B.page.screenshot({ path: process.env.SHOT_DIR + '/h4b-sort-done.png' });
 
 // 電腦：揀貨單分兩間；商品在哪一間可以改
@@ -108,7 +108,9 @@ await N.page.click('button.pk-go:has-text("I庫")'); await N.page.waitForTimeout
 H.check('點 I庫：記住，開始揀（蝦仁 拿 1 件）', (await N.page.evaluate(() => localStorage.getItem('wms_pick_house'))) === 'I' && (await card(N)).includes('拿 1'), await card(N));
 await N.page.click('#picking-next .pk-go'); await N.page.waitForTimeout(1200);
 await N.page.click('#picking-next .pk-go'); await N.page.waitForTimeout(2500);
-H.check('大榮只有一家：完成畫面不用分貨、不用印標籤', (await card(N)).includes('貼托運單就好') && !(await card(N)).includes('分貨（'), await card(N));
+H.check('大榮只有一家：完成後也要核對（不用分貨）', /^\s*核對\s*0\s*\/ 1 張/.test(await card(N)) && !(await card(N)).includes('分貨'), await card(N));
+await N.page.click('#picking-next button:has-text("回上一頁")'); await N.page.waitForTimeout(400);
+H.check('大榮只有一家：完成畫面不用印標籤', (await card(N)).includes('貼托運單就好') && !(await card(N)).includes('印標籤（'), await card(N));
 
 H.check('沒有頁面錯誤', [D, A, B, N].every(X => X.log.errors.length === 0), JSON.stringify([D, A, B, N].map(X => X.log.errors)));
 await H.close(); process.exit(0);
